@@ -1,0 +1,1762 @@
+"""De gereedschappen van het 2D-werkblad: selecteren, verplaatsen, draaien, schalen
+en de tekengereedschappen (lijn, rechthoek, afgeronde rechthoek, cirkel,
+ellips, boog, veelhoek, tekst en verschuiving).
+
+Elk gereedschap is een kleine klasse met een eigen basisklasse `SheetTool`;
+`SHEET_TOOLS` is het register dat `volura.sheetview` inbouwt. De tekengereedschappen
+erven van `DrawSheetTool`, dat snappen (`volura.sheetsnap`), het voorbeeld tekenen en
+het vastleggen als nieuwe paden voor zijn rekening neemt. Onderaan staan de
+bewerkingen op de selectie: samenvoegen, aftrekken, snijpunt, aaneenrijgen,
+opsplitsen, uitlijnen, gelijk verdelen en dupliceren in een rij of raster.
+
+Een gereedschap werkt op `doc.sheet` (het gedeelde `vector2d.Drawing`) en doet elke
+bewerking als één undo-stap: eerst `doc.checkpoint()`, dan de paden aanpassen, dan
+`doc.notify()`. Maten zijn millimeters met Y omhoog; de muisposities die het venster
+doorgeeft zijn pixels van het widget, die het gereedschap met `view.to_world_xy`
+omrekent.
+"""
+from __future__ import annotations
+
+import math
+
+import numpy as np
+import manifold3d as mf
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import QColor, QPen
+
+from .fonts import default_family, text_loops
+from .sheetsnap import paint_snap
+from .tools import MEASURE_LABEL, format_length, parse_length, parse_number, split_values
+from .vector2d import (TOL, VPath, arc_points, ellipse_arc_points, join_open_paths,
+                       next_src, path_segments, polygon_area)
+
+PICK_PX = 4.0            # pixels rond een lijn die nog als klik op die lijn tellen
+DRAG_PX = 3.0            # pas vanaf deze afstand is een slepen een kader
+SELECT_COLOR = "#2f6fd6"
+
+
+# --------------------------------------------------------------------------
+#  meten en rekenen
+# --------------------------------------------------------------------------
+
+def seg_distance(p, a, b) -> float:
+    """Afstand van punt `p` tot lijnstuk `a`-`b`."""
+    d = b - a
+    L2 = float(d @ d)
+    t = 0.0 if L2 <= 1e-30 else max(0.0, min(1.0, float((p - a) @ d) / L2))
+    return float(np.hypot(*(p - (a + t * d))))
+
+
+def path_distance(path, p) -> float:
+    """Afstand van punt `p` tot polylijn `path` (naar het dichtste lijnstuk)."""
+    pts = np.asarray(path.pts, dtype=float)
+    if not len(pts):
+        return np.inf
+    if len(pts) == 1:
+        return float(np.hypot(*(p - pts[0])))
+    segs = list(zip(pts[:-1], pts[1:]))
+    if path.closed:
+        segs.append((pts[-1], pts[0]))
+    return min((seg_distance(p, a, b) for a, b in segs), default=np.inf)
+
+
+def paths_bbox(paths):
+    """(xmin, ymin, xmax, ymax) van een lijst paden, of None als die leeg is."""
+    pts = [np.asarray(p.pts, dtype=float) for p in paths if len(p.pts)]
+    if not pts:
+        return None
+    P = np.concatenate(pts)
+    return (float(P[:, 0].min()), float(P[:, 1].min()),
+            float(P[:, 0].max()), float(P[:, 1].max()))
+
+
+def _seg_hits_seg(p1, p2, p3, p4) -> bool:
+    """Snijden twee lijnstukken elkaar (ook als ze elkaar in een eindpunt raken)?"""
+    r, s = p2 - p1, p4 - p3
+    den = float(r[0] * s[1] - r[1] * s[0])
+    q = p3 - p1
+    if abs(den) <= 1e-12:
+        return False
+    t = float(q[0] * s[1] - q[1] * s[0]) / den
+    u = float(q[0] * r[1] - q[1] * r[0]) / den
+    return -1e-12 <= t <= 1.0 + 1e-12 and -1e-12 <= u <= 1.0 + 1e-12
+
+
+def rect_edges(rect):
+    """De vier hoeken van (xmin, ymin, xmax, ymax) met de klok tegenin."""
+    xmin, ymin, xmax, ymax = rect
+    return [np.array([xmin, ymin]), np.array([xmax, ymin]),
+            np.array([xmax, ymax]), np.array([xmin, ymax])]
+
+
+def path_touches_rect(path, rect):
+    """Raakt `path` het rechthoek `rect`: erin, erdoor of er tegenaan."""
+    pts = np.asarray(path.pts, dtype=float)
+    if not len(pts):
+        return False
+    xmin, ymin, xmax, ymax = rect
+
+    def inside(q):
+        return xmin - 1e-9 <= q[0] <= xmax + 1e-9 and ymin - 1e-9 <= q[1] <= ymax + 1e-9
+
+    if any(inside(q) for q in pts):
+        return True
+    segs = list(zip(pts[:-1], pts[1:]))
+    if path.closed:
+        segs.append((pts[-1], pts[0]))
+    corners = rect_edges(rect)
+    for a, b in segs:
+        for i, c in enumerate(corners):
+            if _seg_hits_seg(a, b, c, corners[(i + 1) % 4]):
+                return True
+    return False
+
+
+def path_in_rect(path, rect):
+    """Ligt `path` helemaal binnen rechthoek `rect`?"""
+    pts = np.asarray(path.pts, dtype=float)
+    if not len(pts):
+        return False
+    xmin, ymin, xmax, ymax = rect
+    return (float(pts[:, 0].min()) >= xmin - 1e-9 and float(pts[:, 0].max()) <= xmax + 1e-9
+            and float(pts[:, 1].min()) >= ymin - 1e-9 and float(pts[:, 1].max()) <= ymax + 1e-9)
+
+
+def translation(delta) -> np.ndarray:
+    dx, dy = float(delta[0]), float(delta[1])
+    return np.array([[1.0, 0.0, dx], [0.0, 1.0, dy], [0.0, 0.0, 1.0]])
+
+
+def rotation(center, angle) -> np.ndarray:
+    c, s = math.cos(float(angle)), math.sin(float(angle))
+    cx, cy = float(center[0]), float(center[1])
+    return np.array([[c, -s, cx - c * cx + s * cy],
+                     [s, c, cy - s * cx - c * cy],
+                     [0.0, 0.0, 1.0]])
+
+
+def scaling(center, factor) -> np.ndarray:
+    k = float(factor)
+    cx, cy = float(center[0]), float(center[1])
+    return np.array([[k, 0.0, cx - k * cx], [0.0, k, cy - k * cy], [0.0, 0.0, 1.0]])
+
+
+def mirror_matrix(horizontal: bool, center) -> np.ndarray:
+    """Spiegelen rond de verticale as door `center` (horizontaal) of de horizontale."""
+    cx, cy = float(center[0]), float(center[1])
+    if horizontal:
+        return np.array([[-1.0, 0.0, 2.0 * cx], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    return np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 2.0 * cy], [0.0, 0.0, 1.0]])
+
+
+def transformed_points(pts, M) -> np.ndarray:
+    p = np.asarray(pts, dtype=float)
+    if not len(p):
+        return np.ascontiguousarray(p, dtype=float)
+    return np.ascontiguousarray(p @ M[:2, :2].T + M[:2, 2], dtype=float)
+
+
+def copy_of(path: VPath) -> VPath:
+    return VPath(np.asarray(path.pts, dtype=float).copy(), path.closed, path.layer,
+                 path.filled, path.rule, path.src, dict(path.meta))
+
+
+def parse_offset(text, direction=None) -> np.ndarray:
+    """Het getypte verschil: één afstand langs `direction`, of `x;y`."""
+    parts = split_values(text, counts=(1, 2))
+    if len(parts) == 1:
+        d = parse_length(parts[0])
+        v = np.asarray(direction, dtype=float) if direction is not None else np.array([1.0, 0.0])
+        n = float(np.hypot(*v))
+        if n <= 1e-12:
+            v, n = np.array([1.0, 0.0]), 1.0
+        return v / n * d
+    if len(parts) == 2:
+        return np.array([parse_length(parts[0]), parse_length(parts[1])])
+    raise ValueError(text)
+
+
+# --------------------------------------------------------------------------
+#  basisklasse
+# --------------------------------------------------------------------------
+
+class SheetTool:
+    """Een gereedschap van het 2D-werkblad: muis, toetsen, meetvak en tekening."""
+
+    name = ""
+    status = ""                     # de tekst in de statusbalk
+    measure_label = MEASURE_LABEL   # het label van het meetvak
+    cursor_shape = Qt.ArrowCursor
+
+    def __init__(self, view):
+        self.view = view
+        self.vcb_value = ""           # wat het gereedschap in het meetvak zet
+        self.reset()                  # elke stap van het gereedschap heeft zijn eigen staat
+
+    # -- bij het document -----------------------------------------------
+
+    @property
+    def doc(self):
+        return self.view.doc
+
+    @property
+    def sheet(self):
+        return self.view.doc.sheet
+
+    def selected(self) -> list[VPath]:
+        return self.view.selected_paths()
+
+    def edit(self, change):
+        """Eén undo-stap: checkpoint, de paden aanpassen, alles melden."""
+        self.view.edit(change)
+
+    # -- leven -----------------------------------------------------------
+
+    def activate(self):
+        self.reset()
+
+    def deactivate(self):
+        pass
+
+    def reset(self):
+        pass
+
+    def cancel(self):
+        self.reset()
+
+    def status_text(self) -> str:
+        return self.status
+
+    def vcb_label(self) -> str:
+        return self.measure_label
+
+    # -- invoer ----------------------------------------------------------
+
+    def mouse_press(self, e, x, y):
+        pass
+
+    def mouse_move(self, e, x, y):
+        pass
+
+    def mouse_release(self, e, x, y):
+        pass
+
+    def double_click(self, e, x, y):
+        pass
+
+    def finish_input(self):
+        """Enter zonder tekst: de tekengereedschappen zijn dan klaar."""
+        pass
+
+    def key_press(self, e) -> bool:
+        return False
+
+    def vcb_enter(self, text):
+        raise ValueError(text)
+
+    # -- tekenen ---------------------------------------------------------
+
+    def paint(self, p):
+        pass
+
+    def set_vcb(self, value):
+        self.view.set_vcb(value)
+
+    def warn(self, text):
+        self.view.set_status(text)
+        self.reset()
+        self.view.update()
+
+
+# --------------------------------------------------------------------------
+#  selecteren
+# --------------------------------------------------------------------------
+
+class SelectSheetTool(SheetTool):
+    """Klik een lijn aan of sleep een kader: rechts naar links raakt ook wat erbij ligt."""
+
+    name = "select"
+    status = "Klik een lijn om te selecteren, of sleep een kader"
+
+    def reset(self):
+        self.start = None
+        self.cur = None
+        self.dragging = False
+
+    def activate(self):
+        self.reset()
+        self.view.setCursor(Qt.ArrowCursor)
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        self.start = (float(x), float(y))
+        self.cur = (float(x), float(y))
+        self.dragging = False
+        self.view.update()
+
+    def mouse_move(self, e, x, y):
+        if self.start is not None:
+            self.cur = (float(x), float(y))
+            if (abs(self.cur[0] - self.start[0]) > DRAG_PX
+                    or abs(self.cur[1] - self.start[1]) > DRAG_PX):
+                self.dragging = True
+                self.view.hover = None
+            self.view.update()
+            return
+        self.view.hover = self.view.path_at(x, y)
+        self.view.update()
+
+    def mouse_release(self, e, x, y):
+        if self.start is None:
+            return
+        shift = bool(e.modifiers() & Qt.ShiftModifier)
+        if self.dragging:
+            self.cur = (float(x), float(y))
+            paths = self.view.paths_in_band(self.start, self.cur)
+            if shift:
+                self.view.add_to_selection(paths)
+            else:
+                self.view.set_selection(paths)
+        else:
+            path = self.view.path_at(x, y)
+            if path is None:
+                if not shift:
+                    self.view.clear_selection()
+            elif shift:
+                self.view.toggle_selection(path)
+            else:
+                self.view.set_selection([path])
+        self.reset()
+        self.view.update()
+
+    def paint(self, p):
+        if not self.dragging or self.start is None or self.cur is None:
+            return
+        a, b = QPointF(*self.start), QPointF(*self.cur)
+        rect = QRectF(a, b).normalized()
+        left_to_right = self.cur[0] >= self.start[0]
+        pen = QPen(QColor("#2ea44f" if left_to_right else SELECT_COLOR))
+        pen.setStyle(Qt.SolidLine if left_to_right else Qt.DashLine)
+        p.setPen(pen)
+        # SketchUp: groen en vol = alles wat erin ligt, blauw gestippeld = ook wat het raakt
+        p.setBrush(QColor(46, 164, 79, 28) if left_to_right else QColor(47, 111, 214, 28))
+        p.drawRect(rect)
+        p.setBrush(Qt.NoBrush)
+
+
+# --------------------------------------------------------------------------
+#  verplaatsen
+# --------------------------------------------------------------------------
+
+class MoveSheetTool(SheetTool):
+    """Basispunt klikken, doel klikken of een afstand typen ("30" of "10;5")."""
+
+    name = "move"
+    status = "Klik een basispunt en daarna het doel; typ een afstand of x;y"
+    measure_label = "Afstand"
+    cursor_shape = Qt.SizeAllCursor
+
+    def reset(self):
+        self.base = None
+        self.cursor = None
+        self.copy = False
+
+    def activate(self):
+        self.reset()
+        self.view.setCursor(self.cursor_shape)
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        p = self.view.to_world_xy(x, y)
+        if self.base is None:
+            if not self.selected():
+                self.warn("Selecteer eerst wat u wilt verplaatsen.")
+                return
+            self.base = p
+            self.copy = bool(e.modifiers() & Qt.ControlModifier)
+            self.cursor = p
+            self.set_vcb("0 mm")
+            return
+        self.finish(p - self.base)
+
+    def mouse_move(self, e, x, y):
+        self.cursor = self.view.to_world_xy(x, y)
+        if self.base is not None:
+            self.set_vcb(format_length(float(np.hypot(*(self.cursor - self.base)))))
+        self.view.update()
+
+    def finish(self, delta):
+        paths = self.selected()
+        delta = np.asarray(delta, dtype=float)
+        if not paths:
+            self.warn("Selecteer eerst wat u wilt verplaatsen.")
+            return
+        if float(np.hypot(*delta)) <= 1e-9:
+            self.reset()
+            self.view.update()
+            return
+        self.edit(lambda: self.view.transform_paths(paths, translation(delta), copy=self.copy))
+        self.reset()
+        self.view.update()
+
+    def vcb_enter(self, text):
+        if self.base is None:
+            self.warn("Klik eerst het basispunt van de verplaatsing.")
+            return
+        direction = None
+        if self.cursor is not None:
+            direction = self.cursor - self.base
+        self.finish(parse_offset(text, direction))
+
+    def paint(self, p):
+        if self.base is None or self.cursor is None:
+            return
+        a, b = self.view.to_screen(self.base), self.view.to_screen(self.cursor)
+        pen = QPen(QColor("#d23b3b"))
+        p.setPen(pen)
+        p.drawLine(a, b)
+        p.setBrush(QColor("#d23b3b"))
+        p.drawEllipse(a, 2.5, 2.5)
+        p.setBrush(Qt.NoBrush)
+
+
+# --------------------------------------------------------------------------
+#  draaien
+# --------------------------------------------------------------------------
+
+class RotateSheetTool(SheetTool):
+    """Middelpunt klikken, daarna de hoek klikken of in graden typen (positief = linksom)."""
+
+    name = "rotate"
+    status = "Klik het middelpunt van de draaiing en daarna de hoek; typ bijvoorbeeld 90"
+    measure_label = "Hoek"
+    cursor_shape = Qt.CrossCursor
+
+    def reset(self):
+        self.center = None
+        self.ref_angle = 0.0
+        self.cursor = None
+
+    def activate(self):
+        self.reset()
+        self.view.setCursor(self.cursor_shape)
+
+    def _angle_at(self, p) -> float:
+        d = np.asarray(p, dtype=float) - self.center
+        if float(np.hypot(*d)) <= 1e-9:
+            return self.ref_angle
+        return math.atan2(float(d[1]), float(d[0]))
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        p = self.view.to_world_xy(x, y)
+        if self.center is None:
+            if not self.selected():
+                self.warn("Selecteer eerst wat u wilt draaien.")
+                return
+            self.center = np.asarray(p, dtype=float)
+            self.ref_angle = self._angle_at(p)
+            self.cursor = p
+            self.set_vcb("0°")
+            return
+        self.finish(self._angle_at(p) - self.ref_angle)
+
+    def mouse_move(self, e, x, y):
+        self.cursor = self.view.to_world_xy(x, y)
+        if self.center is not None:
+            deg = math.degrees(self._angle_at(self.cursor) - self.ref_angle)
+            self.set_vcb(f"{deg:.1f}°")
+        self.view.update()
+
+    def finish(self, angle):
+        paths = self.selected()
+        if not paths:
+            self.warn("Selecteer eerst wat u wilt draaien.")
+            return
+        center = self.center if self.center is not None else self.view.selection_center()
+        if center is None:
+            self.warn("Er is geen selectie om te draaien.")
+            return
+        if abs(float(angle)) <= 1e-9:
+            self.reset()
+            self.view.update()
+            return
+        self.edit(lambda: self.view.transform_paths(paths, rotation(center, angle)))
+        self.reset()
+        self.view.update()
+
+    def vcb_enter(self, text):
+        deg = parse_number(text)
+        self.finish(math.radians(deg))
+
+    def paint(self, p):
+        if self.center is None or self.cursor is None:
+            return
+        c = self.view.to_screen(self.center)
+        r = float(np.hypot(*(self.cursor - self.center))) * self.view.scale
+        pen = QPen(QColor("#d23b3b"))
+        p.setPen(pen)
+        if r > 2.0:
+            p.setBrush(Qt.NoBrush)
+            p.drawEllipse(c, r, r)
+        p.drawLine(c, self.view.to_screen(self.cursor))
+        p.setBrush(QColor("#d23b3b"))
+        p.drawEllipse(c, 2.5, 2.5)
+        p.setBrush(Qt.NoBrush)
+
+
+# --------------------------------------------------------------------------
+#  schalen
+# --------------------------------------------------------------------------
+
+class ScaleSheetTool(SheetTool):
+    """Uniform schalen: slepen vanaf het middelpunt van de selectie, of een factor typen."""
+
+    name = "scale"
+    status = "Sleep vanaf het middelpunt van de selectie, of typ een factor zoals 2"
+    measure_label = "Factor"
+    cursor_shape = Qt.SizeFDiagCursor
+
+    def reset(self):
+        self.base = None
+        self.cursor = None
+
+    def activate(self):
+        self.reset()
+        self.view.setCursor(self.cursor_shape)
+
+    def center(self):
+        return self.view.selection_center()
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        if not self.selected():
+            self.warn("Selecteer eerst wat u wilt schalen.")
+            return
+        p = self.view.to_world_xy(x, y)
+        if self.center() is None:
+            self.warn("Er is geen selectie om te schalen.")
+            return
+        self.base = p
+        self.cursor = p
+        self.set_vcb("1.00")
+        self.view.update()
+
+    def mouse_release(self, e, x, y):
+        if e.button() != Qt.LeftButton or self.base is None:
+            return
+        self.finish_at(self.view.to_world_xy(x, y))
+
+    def mouse_move(self, e, x, y):
+        self.cursor = self.view.to_world_xy(x, y)
+        if self.base is not None:
+            self.set_vcb(f"{self.factor_at(self.cursor):.2f}")
+        self.view.update()
+
+    def factor_at(self, p) -> float:
+        c = self.center()
+        r0 = float(np.hypot(*(np.asarray(self.base, dtype=float) - c)))
+        r1 = float(np.hypot(*(np.asarray(p, dtype=float) - c)))
+        return r1 / r0 if r0 > 1e-9 else 1.0
+
+    def finish_at(self, p):
+        factor = self.factor_at(p)
+        self.apply(factor)
+
+    def apply(self, factor):
+        paths = self.selected()
+        c = self.center()
+        if not paths or c is None:
+            self.warn("Selecteer eerst wat u wilt schalen.")
+            return
+        if abs(float(factor) - 1.0) <= 1e-12 or float(factor) <= 0.0:
+            self.reset()
+            self.view.update()
+            return
+        self.edit(lambda: self.view.transform_paths(paths, scaling(c, factor)))
+        self.reset()
+        self.view.update()
+
+    def vcb_enter(self, text):
+        self.apply(parse_number(text))
+
+    def paint(self, p):
+        if self.base is None or self.cursor is None:
+            return
+        c = self.center()
+        if c is None:
+            return
+        box = paths_bbox(self.selected())
+        if box is None:
+            return
+        k = self.factor_at(self.cursor)
+        a = self.view.to_screen((c[0] + (box[0] - c[0]) * k, c[1] + (box[1] - c[1]) * k))
+        b = self.view.to_screen((c[0] + (box[2] - c[0]) * k, c[1] + (box[3] - c[1]) * k))
+        pen = QPen(QColor("#d23b3b"))
+        pen.setStyle(Qt.DashLine)
+        p.setPen(pen)
+        p.drawRect(QRectF(a, b).normalized())
+
+
+# --------------------------------------------------------------------------
+#  krommen en vormen bouwen
+# --------------------------------------------------------------------------
+
+#: krommen op het werkblad worden fijner afgevlakt dan de standaard 0,01 mm: bij een
+#: cirkel is het oppervlak van de polygoon anders ruim 0,1 % kleiner dan pi r^2
+CURVE_TOL = TOL / 4.0
+
+
+def circle_loop(center, r, segments=None, tol=CURVE_TOL) -> np.ndarray:
+    """Een cirkel als gesloten polylijn: afgevlakt met `tol`, of met `segments` zijden."""
+    c = np.asarray(center, dtype=float)
+    r = abs(float(r))
+    if r <= 0.0:
+        return np.zeros((0, 2))
+    if segments:
+        n = max(3, int(segments))
+        t = np.linspace(0.0, 2.0 * math.pi, n + 1)[:-1]
+        return np.ascontiguousarray(c + np.column_stack([r * np.cos(t), r * np.sin(t)]))
+    return np.ascontiguousarray(arc_points(c, r, 0.0, 2.0 * math.pi, tol)[:-1], dtype=float)
+
+
+def ellipse_loop(center, rx, ry, rot=0.0, segments=None, tol=CURVE_TOL) -> np.ndarray:
+    """Een ellips als gesloten polylijn (met `segments` zijden als die er zijn)."""
+    rx, ry = abs(float(rx)), abs(float(ry))
+    if rx <= 0.0 or ry <= 0.0:
+        return np.zeros((0, 2))
+    if segments:
+        n = max(3, int(segments))
+        t = np.linspace(0.0, 2.0 * math.pi, n + 1)[:-1]
+        pts = np.column_stack([rx * np.cos(t), ry * np.sin(t)])
+    else:
+        pts = ellipse_arc_points(np.zeros(2), rx, ry, 0.0, 2.0 * math.pi, tol, rot)[:-1]
+        rot = 0.0
+    pts = np.asarray(pts, dtype=float)
+    if rot:
+        co, si = math.cos(rot), math.sin(rot)
+        pts = pts @ np.array([[co, -si], [si, co]]).T
+    return np.ascontiguousarray(pts + np.asarray(center, dtype=float), dtype=float)
+
+
+def rounded_rect_loop(a, b, r, tol=CURVE_TOL):
+    """Rechthoek met afgeronde hoeken: `r` is de straal, tegen de klok in."""
+    p0, p1 = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    x0, x1 = sorted((float(p0[0]), float(p1[0])))
+    y0, y1 = sorted((float(p0[1]), float(p1[1])))
+    w, h = x1 - x0, y1 - y0
+    if w <= 1e-9 or h <= 1e-9:
+        return None
+    r = max(0.0, min(float(r), 0.5 * min(w, h)))
+    if r <= 1e-9:
+        return np.array([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], dtype=float)
+    corners = (((x0 + r), (y0 + r)), math.pi, 1.5 * math.pi), \
+              (((x1 - r), (y0 + r)), 1.5 * math.pi, 2.0 * math.pi), \
+              (((x1 - r), (y1 - r)), 0.0, 0.5 * math.pi), \
+              (((x0 + r), (y1 - r)), 0.5 * math.pi, math.pi)
+    pts = []
+    for c, a0, a1 in corners:
+        for q in arc_points(np.array(c, dtype=float), r, a0, a1, tol):
+            q = np.asarray(q, dtype=float)
+            if pts and float(np.hypot(*(q - pts[-1]))) <= 1e-9:
+                continue
+            pts.append(q)
+    while len(pts) > 1 and float(np.hypot(*(pts[0] - pts[-1]))) <= 1e-9:
+        pts.pop()
+    return np.ascontiguousarray(np.asarray(pts, dtype=float).reshape(-1, 2), dtype=float)
+
+
+def rect_loop(a, b) -> np.ndarray:
+    """De vier hoeken van een rechthoek door twee tegenoverliggende hoekpunten."""
+    p0, p1 = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    x0, x1 = sorted((float(p0[0]), float(p1[0])))
+    y0, y1 = sorted((float(p0[1]), float(p1[1])))
+    return np.array([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], dtype=float)
+
+
+def arc_through_3(a, b, c) -> tuple | None:
+    """Middelpunt, straal en de twee hoeken van de boog door drie punten."""
+    a, b, c = (np.asarray(q, dtype=float) for q in (a, b, c))
+    d = 2.0 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]))
+    if abs(d) < 1e-12:
+        return None
+    a2, b2, c2 = float(a @ a), float(b @ b), float(c @ c)
+    ux = (a2 * (b[1] - c[1]) + b2 * (c[1] - a[1]) + c2 * (a[1] - b[1])) / d
+    uy = (a2 * (c[0] - b[0]) + b2 * (a[0] - c[0]) + c2 * (b[0] - a[0])) / d
+    center = np.array([ux, uy])
+    r = float(np.hypot(*(a - center)))
+    if r <= 1e-9:
+        return None
+    ang = lambda q: math.atan2(float(q[1] - center[1]), float(q[0] - center[0]))
+    a0, am, a1 = ang(a), ang(b), ang(c)
+    return center, r, a0, am, a1
+
+
+def arc_span(a0, am, a1) -> float:
+    """De hoek van `a0` naar `a1` die langs `am` gaat, in radialen (met teken)."""
+    two = 2.0 * math.pi
+
+    def delta(from_a, to_a):
+        d = to_a - from_a
+        while d <= -math.pi:
+            d += two
+        while d > math.pi:
+            d -= two
+        return d
+    d0, d1 = delta(a0, am), delta(am, a1)
+    if d0 * d1 <= 0.0:                       # geen boog via het midden: de lange weg
+        return d0 + d1 + (two if d0 + d1 < 0.0 else -two)
+    return d0 + d1
+
+
+def parse_angle_value(text):
+    """`"30"`, `"30<45"` of `"45<30"`: lengte en hoek in graden, in welke volgorde ook."""
+    if "<" not in text:
+        return parse_length(text), None
+    parts = text.split("<", 1)
+    first, second = parse_length(parts[0]), parse_number(parts[1])
+    return first, second
+
+
+# --------------------------------------------------------------------------
+#  basisklasse van de tekengereedschappen
+# --------------------------------------------------------------------------
+
+class DrawSheetTool(SheetTool):
+    """Gereedschap dat iets nieuws tekent: snappen, voorbeeld en één undo-stap."""
+
+    cursor_shape = Qt.CrossCursor
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.snap = None
+        self.cursor = None
+
+    def reset(self):
+        self.snap = None
+        self.cursor = None
+
+    # -- snappen -----------------------------------------------------------
+
+    def snap_at(self, x, y, anchor=None, allow_grid=True):
+        self.snap = self.view.snap_engine.snap(x, y, anchor=anchor, allow_grid=allow_grid)
+        self.cursor = np.asarray(self.snap.point, dtype=float)
+        return self.snap
+
+    def raw_at(self, x, y):
+        return self.view.to_world_xy(x, y)
+
+    # -- vastleggen --------------------------------------------------------
+
+    def add_shapes(self, shapes):
+        """Nieuwe paden als één undo-stap; de nieuwe paden worden geselecteerd."""
+        shapes = list(shapes)
+        if not shapes:
+            return []
+        sheet = self.sheet
+        src = next_src(sheet.paths)
+        layer = self.view.draw_layer()
+        made: list[VPath] = []
+
+        def change():
+            for pts, closed, meta, filled in shapes:
+                made.append(sheet.add_path(np.asarray(pts, dtype=float), closed, layer,
+                                           bool(filled), "nonzero", src, dict(meta or {})))
+        self.edit(change)
+        self.view.set_selection(made)
+        return made
+
+    def finish_input(self):
+        """Enter zonder tekst: voor de tekengereedschappen is dat klaar."""
+        self.reset()
+        self.view.update()
+
+    def double_click(self, e, x, y):
+        self.finish_input()
+
+    # -- tekenen -----------------------------------------------------------
+
+    def preview(self, p):
+        pass
+
+    def paint(self, p):
+        self.preview(p)
+        paint_snap(p, self.view, self.snap)
+
+    def draw_line(self, p, pts, closed=False, color="#1f3b63"):
+        if len(pts) < 1:
+            return
+        pen = QPen(QColor(color))
+        pen.setWidthF(1.6)
+        p.setPen(pen)
+        screen = [self.view.to_screen(q) for q in pts]
+        for a, b in zip(screen[:-1], screen[1:]):
+            p.drawLine(a, b)
+        if closed and len(screen) > 1:
+            p.drawLine(screen[-1], screen[0])
+
+    def draw_rubber(self, p, a, b, color="#8a8a8a"):
+        pen = QPen(QColor(color))
+        pen.setStyle(Qt.DashLine)
+        pen.setWidthF(1.0)
+        p.setPen(pen)
+        p.drawLine(self.view.to_screen(a), self.view.to_screen(b))
+
+
+# --------------------------------------------------------------------------
+#  lijn en polylijn
+# --------------------------------------------------------------------------
+
+class LineSheetTool(DrawSheetTool):
+    """Punten klikken; klik op het startpunt sluit de lijn, Enter of dubbelklik eindigt."""
+
+    name = "line"
+    status = "Klik het beginpunt van de lijn"
+    measure_label = "Lengte"
+
+    def reset(self):
+        super().reset()
+        self.pts: list[np.ndarray] = []
+
+    def status_text(self):
+        if not self.pts:
+            return "Klik het beginpunt van de lijn, of typ een lengte"
+        return ("Klik het volgende punt; klik op het startpunt om te sluiten. "
+                "Typ een lengte of lengte<hoek; Enter of dubbelklik eindigt de lijn.")
+
+    def mouse_move(self, e, x, y):
+        anchor = self.pts[-1] if self.pts else None
+        self.snap_at(x, y, anchor=anchor)
+        if anchor is not None:
+            self.set_vcb(format_length(float(np.hypot(*(self.cursor - anchor)))))
+        self.view.update()
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        self.mouse_move(e, x, y)
+        self.add_point(self.cursor)
+        self.view.update()
+
+    def add_point(self, p):
+        p = np.asarray(p, dtype=float)
+        if not self.pts:
+            self.pts = [p]
+            return
+        if float(np.hypot(*(p - self.pts[-1]))) <= 1e-6:
+            return
+        if len(self.pts) >= 2 and float(np.hypot(*(p - self.pts[0]))) <= 1e-6:
+            self.finish(closed=True)
+            return
+        self.pts.append(p)
+
+    def finish(self, closed=False):
+        pts = list(self.pts)
+        self.reset()
+        if len(pts) >= 2:
+            if closed:
+                self.add_shapes([(pts, True, {}, False)])
+            else:
+                self.add_shapes([(pts, False, {}, False)])
+
+    def finish_input(self):
+        if len(self.pts) >= 2:
+            self.finish(closed=False)
+        else:
+            self.reset()
+            self.view.update()
+
+    def double_click(self, e, x, y):
+        """De tweede klik van een dubbelklik telt niet als extra punt."""
+        if len(self.pts) >= 2:
+            tol = 3.0 / max(self.view.scale, 1e-9)
+            if float(np.hypot(*(self.pts[-1] - self.pts[-2]))) <= tol:
+                self.pts = self.pts[:-1]
+        self.finish_input()
+
+    def vcb_enter(self, text):
+        if not self.pts:
+            raise ValueError("klik eerst het beginpunt van de lijn")
+        L, angle = parse_angle_value(text)
+        anchor = self.pts[-1]
+        if angle is not None:
+            a = math.radians(float(angle))
+            d = np.array([math.cos(a), math.sin(a)])
+        else:
+            raw = self.snap.raw if self.snap is not None else self.cursor
+            d = np.asarray(raw, dtype=float) - anchor
+            if float(np.hypot(*d)) <= 1e-9:
+                d = np.array([1.0, 0.0])
+            d = d / float(np.hypot(*d))
+        self.add_point(anchor + d * float(L))
+        self.view.update()
+
+    def preview(self, p):
+        if not self.pts:
+            return
+        pts = list(self.pts) + ([self.cursor] if self.cursor is not None else [])
+        self.draw_line(p, pts, color="#1f3b63")
+        if len(self.pts) >= 2 and self.cursor is not None:
+            self.draw_rubber(p, self.pts[0], self.cursor, "#2e7d32")
+
+
+# --------------------------------------------------------------------------
+#  rechthoek en afgeronde rechthoek
+# --------------------------------------------------------------------------
+
+class RectangleSheetTool(DrawSheetTool):
+    """Twee tegenoverliggende hoeken klikken, of de maten typen ("30;20")."""
+
+    name = "rectangle"
+    status = "Klik de eerste hoek van de rechthoek"
+    measure_label = "Afmetingen"
+
+    def reset(self):
+        super().reset()
+        self.p0 = None
+
+    def status_text(self):
+        if self.p0 is None:
+            return "Klik de eerste hoek van de rechthoek"
+        return "Klik de tegenoverliggende hoek, of typ breedte;hoogte zoals 30;20"
+
+    def mouse_move(self, e, x, y):
+        self.snap_at(x, y, anchor=self.p0)
+        if self.p0 is not None:
+            w, h = self.size()
+            self.set_vcb(f"{w:.2f}; {h:.2f}")
+        self.view.update()
+
+    def size(self):
+        d = np.asarray(self.cursor, dtype=float) - np.asarray(self.p0, dtype=float)
+        return abs(float(d[0])), abs(float(d[1]))
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        self.mouse_move(e, x, y)
+        if self.p0 is None:
+            self.p0 = np.asarray(self.cursor, dtype=float)
+        else:
+            self.finish()
+        self.view.update()
+
+    def loop(self):
+        if self.p0 is None or self.cursor is None:
+            return None
+        return rect_loop(self.p0, self.cursor)
+
+    def finish(self, size=None):
+        if self.p0 is None:
+            return
+        p0 = np.asarray(self.p0, dtype=float)
+        if size is not None:
+            w, h = float(size[0]), float(size[1])
+            cur = np.asarray(self.cursor, dtype=float) - p0 if self.cursor is not None \
+                else np.array([1.0, 1.0])
+            sx = -1.0 if cur[0] < 0 else 1.0
+            sy = -1.0 if cur[1] < 0 else 1.0
+            p1 = p0 + np.array([w * sx, h * sy])
+        else:
+            p1 = np.asarray(self.cursor, dtype=float)
+        loop = rect_loop(p0, p1)
+        self.reset()
+        if abs(polygon_area(loop)) > 1e-9:
+            self.add_shapes([(loop, True, {}, False)])
+
+    def vcb_enter(self, text):
+        if self.p0 is None:
+            raise ValueError("klik eerst de eerste hoek van de rechthoek")
+        vals = split_values(text, (2,))
+        if len(vals) != 2:
+            raise ValueError("geef breedte;hoogte, bijvoorbeeld 30;20")
+        self.finish((parse_length(vals[0]), parse_length(vals[1])))
+
+    def preview(self, p):
+        loop = self.loop()
+        if loop is not None:
+            self.draw_line(p, loop, closed=True)
+
+
+class RoundedRectSheetTool(RectangleSheetTool):
+    """Rechthoek met afgeronde hoeken: de straal sleep je mee, of je typt "r5"."""
+
+    name = "roundrect"
+    status = "Klik de eerste hoek van de afgeronde rechthoek"
+    measure_label = "Straal"
+
+    def reset(self):
+        super().reset()
+        self.box = None
+        self.radius = 0.0
+
+    def status_text(self):
+        if self.p0 is None:
+            return "Klik de eerste hoek van de afgeronde rechthoek"
+        if self.box is None:
+            return "Klik de tegenoverliggende hoek, of typ breedte;hoogte zoals 30;20"
+        return "Sleep de straal van de hoeken, klik hem aan, of typ een straal zoals r5"
+
+    def vcb_label(self):
+        return "Afmetingen" if self.box is None else "Straal"
+
+    def mouse_move(self, e, x, y):
+        self.snap_at(x, y, anchor=self.p0)
+        if self.p0 is not None and self.box is None:
+            w, h = self.size()
+            self.set_vcb(f"{w:.2f}; {h:.2f}")
+        elif self.box is not None:
+            self.radius = self.radius_at(x, y)
+            self.set_vcb(format_length(self.radius))
+        self.view.update()
+
+    def radius_at(self, x, y) -> float:
+        """De straal is de afstand van de muis naar de dichtstbijzijnde hoek."""
+        raw = self.view.to_world_xy(x, y)
+        x0, y0, x1, y1 = self.box
+        best = min(math.hypot(raw[0] - cx, raw[1] - cy)
+                   for cx, cy in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)))
+        return max(0.0, min(best, 0.5 * min(x1 - x0, y1 - y0)))
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        if self.box is not None:
+            self.finish(self.radius)
+            self.view.update()
+            return
+        self.mouse_move(e, x, y)
+        if self.p0 is None:
+            self.p0 = np.asarray(self.cursor, dtype=float)
+        else:
+            self.set_box(self.p0, self.cursor)
+        self.view.update()
+
+    def set_box(self, a, b):
+        self.box = (min(float(a[0]), float(b[0])), min(float(a[1]), float(b[1])),
+                    max(float(a[0]), float(b[0])), max(float(a[1]), float(b[1])))
+        self.radius = 0.0
+
+    def finish(self, radius=None):
+        if self.box is None:
+            RectangleSheetTool.finish(self, radius)
+            return
+        x0, y0, x1, y1 = self.box
+        r = float(self.radius if radius is None else radius)
+        loop = rounded_rect_loop((x0, y0), (x1, y1), r)
+        self.reset()
+        if loop is not None and abs(polygon_area(loop)) > 1e-9:
+            self.add_shapes([(loop, True, {}, False)])
+
+    def vcb_enter(self, text):
+        t = text.strip().lower()
+        if t.startswith("r"):
+            r = parse_length(t[1:])
+            if self.box is None:
+                raise ValueError("klik eerst de rechthoek, daarna de straal")
+            self.finish(r)
+            return
+        if self.box is None:
+            RectangleSheetTool.vcb_enter(self, text)
+            return
+        self.finish(parse_length(t))
+
+    def loop(self):
+        if self.box is None:
+            return RectangleSheetTool.loop(self)
+        x0, y0, x1, y1 = self.box
+        return rounded_rect_loop((x0, y0), (x1, y1), self.radius)
+
+
+# --------------------------------------------------------------------------
+#  cirkel, ellips, veelhoek
+# --------------------------------------------------------------------------
+
+class CircleSheetTool(DrawSheetTool):
+    """Middelpunt klikken en de straal klikken of typen; "12s" zet het aantal zijden."""
+
+    name = "circle"
+    status = "Klik het middelpunt van de cirkel"
+    measure_label = "Straal"
+    default_segments = None
+
+    def reset(self):
+        super().reset()
+        self.center = None
+        self.radius = None
+        if not hasattr(self, "segments"):
+            self.segments = self.default_segments
+
+    def status_text(self):
+        if self.center is None:
+            return "Klik het middelpunt van de cirkel, of typ het aantal zijden zoals 12s"
+        return "Klik de straal van de cirkel, of typ een straal"
+
+    def vcb_label(self):
+        return "Zijden" if self.center is None else "Straal"
+
+    def mouse_move(self, e, x, y):
+        self.snap_at(x, y, anchor=self.center)
+        if self.center is not None:
+            self.radius = float(np.hypot(*(self.cursor - self.center)))
+            self.set_vcb(format_length(self.radius))
+        self.view.update()
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        self.mouse_move(e, x, y)
+        if self.center is None:
+            self.center = np.asarray(self.cursor, dtype=float)
+        else:
+            self.finish()
+        self.view.update()
+
+    def loop(self):
+        if self.center is None or not self.radius:
+            return None
+        return circle_loop(self.center, self.radius, self.segments)
+
+    def finish(self, radius=None):
+        if self.center is None:
+            return
+        r = float(self.radius if radius is None else radius)
+        center = np.asarray(self.center, dtype=float)
+        segs = self.segments
+        self.reset()
+        if r > 1e-9:
+            self.add_shapes([(circle_loop(center, r, segs), True,
+                              {"kind": "circle", "center": center.tolist(),
+                               "radius": r}, True)])
+
+    def vcb_enter(self, text):
+        t = text.strip().lower()
+        if t.endswith("s"):
+            n = int(parse_number(t[:-1]))
+            if n < 3:
+                raise ValueError("minimaal 3 zijden")
+            self.segments = n
+            self.view.set_status(f"{n} zijden; de cirkel wordt ermee afgevlakt.")
+            return
+        if self.center is None:
+            raise ValueError("klik eerst het middelpunt van de cirkel")
+        self.finish(abs(parse_length(t)))
+
+    def preview(self, p):
+        loop = self.loop()
+        if loop is not None:
+            self.draw_line(p, loop, closed=True)
+        if self.center is not None and self.cursor is not None:
+            self.draw_rubber(p, self.center, self.cursor)
+            p.setBrush(QColor("#1f3b63"))
+            p.drawEllipse(self.view.to_screen(self.center), 2.0, 2.0)
+            p.setBrush(Qt.NoBrush)
+
+
+class EllipseSheetTool(CircleSheetTool):
+    """Middelpunt klikken en de halvemaat slepen; "30;20" zijn de twee halvematen."""
+
+    name = "ellipse"
+    status = "Klik het middelpunt van de ellips"
+    measure_label = "Halvemaat"
+
+    def reset(self):
+        super().reset()
+        self.rx = self.ry = None
+
+    def status_text(self):
+        if self.center is None:
+            return "Klik het middelpunt van de ellips"
+        return "Sleep de ellips of typ de twee halvematen, bijvoorbeeld 30;20"
+
+    def vcb_label(self):
+        return "Halvemaat"
+
+    def mouse_move(self, e, x, y):
+        self.snap_at(x, y, anchor=self.center)
+        if self.center is not None:
+            self.rx, self.ry = self.radii()
+            self.set_vcb(f"{self.rx:.2f}; {self.ry:.2f}")
+        self.view.update()
+
+    def radii(self):
+        d = np.asarray(self.cursor, dtype=float) - np.asarray(self.center, dtype=float)
+        return abs(float(d[0])), abs(float(d[1]))
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        self.mouse_move(e, x, y)
+        if self.center is None:
+            self.center = np.asarray(self.cursor, dtype=float)
+        else:
+            self.finish()
+        self.view.update()
+
+    def loop(self):
+        if self.center is None or not self.rx or not self.ry:
+            return None
+        return ellipse_loop(self.center, self.rx, self.ry, 0.0, self.segments)
+
+    def finish(self, radii=None):
+        if self.center is None:
+            return
+        rx, ry = (self.rx, self.ry) if radii is None else (abs(float(radii[0])),
+                                                           abs(float(radii[1])))
+        center = np.asarray(self.center, dtype=float)
+        segs = self.segments
+        self.reset()
+        if rx > 1e-9 and ry > 1e-9:
+            self.add_shapes([(ellipse_loop(center, rx, ry, 0.0, segs), True,
+                              {"kind": "ellipse", "center": center.tolist(),
+                               "rx": rx, "ry": ry, "rot": 0.0}, True)])
+
+    def vcb_enter(self, text):
+        if self.center is None:
+            raise ValueError("klik eerst het middelpunt van de ellips")
+        vals = split_values(text, (2,))
+        if len(vals) != 2:
+            raise ValueError("geef de twee halvematen, bijvoorbeeld 30;20")
+        self.finish((abs(parse_length(vals[0])), abs(parse_length(vals[1]))))
+
+
+class PolygonSheetTool(CircleSheetTool):
+    """Gelijkzijdige veelhoek: aantal zijden met "6s", straal klikken of typen."""
+
+    name = "polygon"
+    status = "Klik het middelpunt van de veelhoek"
+    measure_label = "Straal"
+    default_segments = 6
+
+    def status_text(self):
+        if self.center is None:
+            return "Klik het middelpunt van de veelhoek, of typ het aantal zijden zoals 6s"
+        return "Klik een hoekpunt van de veelhoek, of typ een straal"
+
+    def vcb_label(self):
+        return "Zijden" if self.center is None else "Straal"
+
+
+# --------------------------------------------------------------------------
+#  bogen
+# --------------------------------------------------------------------------
+
+class ArcSheetTool(DrawSheetTool):
+    """Boog door drie punten: begin, een punt op de boog en het eindpunt."""
+
+    name = "arc"
+    status = "Klik het beginpunt van de boog"
+    measure_label = "Straal"
+
+    def reset(self):
+        super().reset()
+        self.pts: list[np.ndarray] = []
+
+    def status_text(self):
+        if not self.pts:
+            return "Klik het beginpunt van de boog"
+        if len(self.pts) == 1:
+            return "Klik een punt op de boog"
+        return "Klik het eindpunt van de boog"
+
+    def mouse_move(self, e, x, y):
+        self.snap_at(x, y, anchor=self.pts[-1] if self.pts else None)
+        got = self.points()
+        if got is not None:
+            self.set_vcb(format_length(got[1]))
+        self.view.update()
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        self.mouse_move(e, x, y)
+        if self.pts and float(np.hypot(*(self.cursor - self.pts[-1]))) <= 1e-6:
+            return
+        self.pts.append(np.asarray(self.cursor, dtype=float))
+        if len(self.pts) == 3:
+            self.finish()
+        self.view.update()
+
+    def points(self):
+        if len(self.pts) < 2:
+            return None
+        third = self.cursor if len(self.pts) == 2 else None
+        trio = list(self.pts) + ([third] if third is not None else [])
+        if len(trio) < 3:
+            return None
+        return arc_through_3(trio[0], trio[1], trio[2])
+
+    def loop(self):
+        got = self.points()
+        if got is None:
+            return None
+        center, r, a0, am, a1 = got
+        span = arc_span(a0, am, a1)
+        if abs(span) < 1e-9:
+            return None
+        pts = arc_points(center, r, a0, a0 + span, CURVE_TOL)
+        return np.ascontiguousarray(pts, dtype=float), center, r, a0, a0 + span
+
+    def finish(self):
+        got = self.loop()
+        self.reset()
+        if got is None:
+            return
+        pts, center, r, a0, a1 = got
+        self.add_shapes([(pts, False, {"kind": "arc", "center": center.tolist(),
+                                       "radius": r, "a0": float(a0), "a1": float(a1)},
+                          False)])
+
+    def preview(self, p):
+        got = self.loop()
+        if got is not None:
+            self.draw_line(p, got[0])
+        elif self.pts:
+            pts = list(self.pts) + ([self.cursor] if self.cursor is not None else [])
+            self.draw_line(p, pts)
+
+
+class CenterArcSheetTool(DrawSheetTool):
+    """Middelpunt-boog: middelpunt, straal en daarna de hoek (klik of typ graden)."""
+
+    name = "centerarc"
+    status = "Klik het middelpunt van de boog"
+    measure_label = "Straal"
+    default_segments = None
+
+    def reset(self):
+        super().reset()
+        self.center = None
+        self.start = None
+        self.angle = 0.0
+        if not hasattr(self, "segments"):
+            self.segments = self.default_segments
+
+    def status_text(self):
+        if self.center is None:
+            return "Klik het middelpunt van de boog"
+        if self.start is None:
+            return "Klik het beginpunt van de boog, of typ een straal"
+        return "Klik het eindpunt van de boog, of typ een hoek in graden (linksom positief)"
+
+    def vcb_label(self):
+        return "Straal" if self.start is None else "Hoek"
+
+    def radius(self):
+        return None if self.start is None else float(np.hypot(*(self.start - self.center)))
+
+    def angle_at(self, p) -> float:
+        ref = np.asarray(self.start, dtype=float) - self.center
+        v = np.asarray(p, dtype=float) - self.center
+        if float(np.hypot(*ref)) <= 1e-9 or float(np.hypot(*v)) <= 1e-9:
+            return self.angle
+        a = math.atan2(float(ref[0] * v[1] - ref[1] * v[0]), float(ref @ v))
+        return math.degrees(a)
+
+    def mouse_move(self, e, x, y):
+        self.snap_at(x, y, anchor=self.center)
+        if self.center is not None and self.start is None:
+            self.set_vcb(format_length(float(np.hypot(*(self.cursor - self.center)))))
+        elif self.center is not None:
+            self.angle = self.angle_at(self.cursor)
+            self.set_vcb(f"{self.angle:.1f}°")
+        self.view.update()
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        self.mouse_move(e, x, y)
+        if self.center is None:
+            self.center = np.asarray(self.cursor, dtype=float)
+        elif self.start is None:
+            if float(np.hypot(*(self.cursor - self.center))) <= 1e-9:
+                return
+            self.start = np.asarray(self.cursor, dtype=float)
+        else:
+            self.finish()
+        self.view.update()
+
+    def loop(self):
+        r = self.radius()
+        if self.center is None or r is None or abs(self.angle) < 1e-9:
+            return None
+        a0 = math.atan2(float(self.start[1] - self.center[1]),
+                        float(self.start[0] - self.center[0]))
+        span = math.radians(self.angle)
+        if self.segments:
+            n = max(2, int(self.segments))
+            t = a0 + np.linspace(0.0, span, n + 1)
+            pts = self.center + np.column_stack([r * np.cos(t), r * np.sin(t)])
+        else:
+            pts = arc_points(self.center, r, a0, a0 + span, CURVE_TOL)
+        return np.ascontiguousarray(pts, dtype=float), a0, a0 + span
+
+    def finish(self, angle=None):
+        if angle is not None:
+            self.angle = float(angle)
+        got = self.loop()
+        center = None if self.center is None else np.asarray(self.center, dtype=float)
+        r = self.radius()
+        self.reset()
+        if got is None or center is None:
+            return
+        pts, a0, a1 = got
+        self.add_shapes([(pts, False, {"kind": "arc", "center": center.tolist(),
+                                       "radius": r, "a0": float(a0), "a1": float(a1)},
+                          False)])
+
+    def vcb_enter(self, text):
+        t = text.strip().lower()
+        if t.endswith("s"):
+            n = int(parse_number(t[:-1]))
+            if n < 2:
+                raise ValueError("minimaal 2 segmenten")
+            self.segments = n
+            self.view.set_status(f"{n} segmenten.")
+            return
+        if self.center is None:
+            raise ValueError("klik eerst het middelpunt van de boog")
+        if self.start is None:
+            raw = self.snap.raw if self.snap is not None else self.cursor
+            d = np.asarray(raw, dtype=float) - self.center
+            if float(np.hypot(*d)) <= 1e-9:
+                d = np.array([1.0, 0.0])
+            self.start = self.center + d / float(np.hypot(*d)) * abs(parse_length(t))
+            return
+        self.finish(parse_number(t.replace("°", "")))
+
+    def preview(self, p):
+        got = self.loop()
+        if got is not None:
+            self.draw_line(p, got[0])
+        if self.center is not None and self.cursor is not None:
+            self.draw_rubber(p, self.center, self.cursor)
+
+
+# --------------------------------------------------------------------------
+#  tekst
+# --------------------------------------------------------------------------
+
+class TextSheetTool(DrawSheetTool):
+    """Tekst als contouren op het werkblad: één undo-stap, met de gaten van o en a."""
+
+    name = "text"
+    status = "Klik waar de tekst beginnen moet"
+    measure_label = "Hoogte"
+
+    def reset(self):
+        super().reset()
+        self.preview_loops = None
+
+    def __init__(self, view):
+        super().__init__(view)
+        self.loops = None
+        self.text = ""
+        self.family = ""
+        self.height = 10.0
+        self.bold = False
+
+    def status_text(self):
+        if not self.loops:
+            return "Kies eerst de tekst (knop Tekst of het dialoog), klik daarna de plek"
+        return f"Klik de plek voor “{self.text}” (hoofdletters {self.height:g} mm)"
+
+    def set_text(self, text, family=None, height=10.0, bold=False):
+        """De contouren van `text`; hoofdletterhoogte in millimeters."""
+        self.text = str(text or "")
+        self.family = family or default_family()
+        self.height = max(0.1, float(height))
+        self.bold = bool(bold)
+        self.loops = text_loops(self.text, self.family, self.height, self.bold)
+        self.preview_loops = None
+        return bool(self.loops)
+
+    def ask_text(self):
+        win = self.view.window()
+        if hasattr(win, "ask_sheet_text"):
+            win.ask_sheet_text()
+        return bool(self.loops)
+
+    def mouse_move(self, e, x, y):
+        self.snap_at(x, y)
+        self.preview_loops = None
+        if self.loops:
+            off = np.asarray(self.cursor, dtype=float)
+            self.preview_loops = [L + off for L in self.loops]
+        self.view.update()
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        if not self.loops:
+            self.ask_text()
+            self.view.update()
+            return
+        self.mouse_move(e, x, y)
+        off = np.asarray(self.cursor, dtype=float)
+        shapes = [(L + off, True, {}, True) for L in self.loops]
+        self.add_shapes(shapes)
+        self.view.set_status(f"tekst “{self.text}” geplaatst")
+        self.view.update()
+
+    def vcb_enter(self, text):
+        h = abs(parse_length(text))
+        if not self.text:
+            raise ValueError("kies eerst de tekst die u wilt plaatsen")
+        self.set_text(self.text, self.family, h, self.bold)
+        self.view.set_status(f"teksthoogte {h:g} mm")
+
+    def preview(self, p):
+        for L in self.preview_loops or ():
+            self.draw_line(p, L, closed=True, color="#1f3b63")
+
+
+# --------------------------------------------------------------------------
+#  verschuiving (offset)
+# --------------------------------------------------------------------------
+
+class OffsetSheetTool(DrawSheetTool):
+    """Een gesloten pad naar binnen of buiten schuiven met `mf.CrossSection.offset`."""
+
+    name = "offset"
+    status = "Klik een gesloten contour die u wilt verschuiven"
+    measure_label = "Afstand"
+
+    def reset(self):
+        super().reset()
+        self.target = None
+        self.distance = 0.0
+
+    def status_text(self):
+        if self.target is None:
+            return "Klik een gesloten contour die u wilt verschuiven"
+        return ("Sleep de verschuiving of typ een afstand "
+                f"({self.view.join_type_name().lower()}e hoeken)")
+
+    def mouse_move(self, e, x, y):
+        if self.target is None:
+            self.view.hover = self.view.path_at(x, y)
+            self.view.update()
+            return
+        p = self.view.to_world_xy(x, y)
+        self.cursor = p
+        self.distance = self.signed_distance(p)
+        self.set_vcb(format_length(abs(self.distance)))
+        self.view.update()
+
+    def signed_distance(self, p):
+        """Posief buiten de contour, negatief ervinnen (zoals in 3D)."""
+        from .vector2d import _point_in_poly
+        pts = np.asarray(p, dtype=float)
+        best = np.inf
+        for a, b in path_segments(self.target.pts, True):
+            d = b - a
+            L2 = float(d @ d)
+            t = 0.0 if L2 <= 1e-30 else max(0.0, min(1.0, float((pts - a) @ d) / L2))
+            best = min(best, float(np.hypot(*(a + t * d - pts))))
+        inside = _point_in_poly(np.asarray(self.target.pts, dtype=float), pts)
+        return -best if inside else best
+
+    def mouse_press(self, e, x, y):
+        if e.button() != Qt.LeftButton:
+            return
+        if self.target is None:
+            path = self.view.path_at(x, y)
+            if path is None:
+                self.warn("Klik een gesloten contour om die te verschuiven.")
+                return
+            if not path.closed or len(path.pts) < 3:
+                self.warn("Alleen een gesloten contour kan verschoven worden.")
+                return
+            self.target = path
+            self.distance = 0.0
+            self.view.set_status(self.status_text())
+            self.view.update()
+            return
+        self.apply(self.distance)
+
+    def cross_section(self):
+        return mf.CrossSection([np.ascontiguousarray(np.asarray(self.target.pts, float))],
+                               mf.FillRule.NonZero)
+
+    def shape(self, off):
+        join = mf.JoinType.Round if self.view.offset_round else mf.JoinType.Miter
+        cs = self.cross_section().offset(float(off), join, 2.0)
+        return [np.asarray(q, dtype=float) for q in cs.to_polygons()]
+
+    def apply(self, off):
+        target = self.target
+        off = float(off)
+        if target is None or abs(off) < 1e-6:
+            self.warn("Geef een afstand groter dan nul om te verschuiven.")
+            return
+        try:
+            loops = self.shape(off)
+        except Exception as exc:                    # manifold3d kan een te grote afstand weigeren
+            self.warn(f"Verschuiven lukt niet: {exc}")
+            return
+        layer, src = target.layer, next_src(self.sheet.paths)
+        made: list[VPath] = []
+
+        def change():
+            for loop in loops:
+                made.append(self.sheet.add_path(loop, True, layer, True, "nonzero", src))
+        self.edit(change)
+        self.reset()
+        self.view.set_selection(made)
+        self.view.set_status(f"contour {abs(off):.2f} mm "
+                             f"{'naar binnen' if off < 0 else 'naar buiten'} verschoven")
+        self.view.update()
+
+    def vcb_enter(self, text):
+        if self.target is None:
+            raise ValueError("klik eerst een gesloten contour aan")
+        v = parse_length(text)
+        self.apply(-abs(v) if self.distance < 0 else abs(v))
+
+    def preview(self, p):
+        if self.target is None or abs(self.distance) < 1e-6:
+            return
+        try:
+            loops = self.shape(self.distance)
+        except Exception:
+            return
+        for loop in loops:
+            self.draw_line(p, loop, closed=True, color="#1f3b63")
+
+
+SHEET_TOOLS = [SelectSheetTool, MoveSheetTool, RotateSheetTool, ScaleSheetTool,
+               LineSheetTool, RectangleSheetTool, RoundedRectSheetTool, CircleSheetTool,
+               EllipseSheetTool, ArcSheetTool, CenterArcSheetTool, PolygonSheetTool,
+               TextSheetTool, OffsetSheetTool]
+
+
+# --------------------------------------------------------------------------
+#  bewerkingen op de selectie
+# --------------------------------------------------------------------------
+
+BOOLEAN_OPS = {"union": mf.OpType.Add, "subtract": mf.OpType.Subtract,
+               "intersect": mf.OpType.Intersect}
+
+ALIGN_MODES = ("left", "center", "right", "top", "bottom")
+ALIGN_LABELS = {"left": "links", "center": "midden", "right": "rechts",
+                "top": "boven", "bottom": "onder"}
+
+
+def closed_paths(paths):
+    """De paden die een vorm kunnen zijn: gesloten en met minstens drie punten."""
+    return [p for p in paths if p.closed and len(p.pts) >= 3]
+
+
+def boolean_loops(paths, op) -> list[np.ndarray]:
+    """Gesloten paden samenvoegen, aftrekken of snijden met `mf.CrossSection`.
+
+    Bij `subtract` is het eerste pad het geheel en de rest het gat. De lussen komen
+    eruit met de buitenrand tegen de klok in en de gaten met de klok mee, precies
+    zoals `vector2d.regions` en de gereedschappen dat verwachten.
+    """
+    if op not in BOOLEAN_OPS:
+        raise ValueError(op)
+    ps = closed_paths(paths)
+    if len(ps) < (2 if op != "union" else 1):
+        raise ValueError("eerst twee gesloten contouren selecteren")
+    sections = []
+    for p in ps:
+        cs = mf.CrossSection([np.ascontiguousarray(np.asarray(p.pts, float))],
+                             mf.FillRule.NonZero)
+        if not cs.is_empty():
+            sections.append(cs)
+    if len(sections) < (2 if op != "union" else 1):
+        raise ValueError("er is niets om van te snijden")
+    if op == "subtract":
+        whole = sections[0]
+        for other in sections[1:]:
+            whole = mf.CrossSection.batch_boolean([whole, other], BOOLEAN_OPS[op])
+    elif len(sections) == 1:
+        whole = sections[0]
+    else:
+        whole = mf.CrossSection.batch_boolean(sections, BOOLEAN_OPS[op])
+    if whole.is_empty():
+        return []
+    loops = [np.asarray(q, dtype=float) for q in whole.to_polygons()]
+    return [L for L in loops if len(L) >= 3 and abs(polygon_area(L)) > 1e-9]
+
+
+def split_into_segments(paths) -> list[tuple[np.ndarray, bool]]:
+    """Elk lijnstuk van de paden apart: (punten, gesloten)."""
+    out = []
+    for p in paths:
+        for a, b in path_segments(np.asarray(p.pts, dtype=float), p.closed):
+            out.append((np.array([a, b], dtype=float), False))
+    return out
+
+
+def joined_paths(paths) -> list[VPath]:
+    """Open lijnstukken aaneenrijgen tot polylijnen en vormen."""
+    return join_open_paths(paths)
+
+
+def align_deltas(paths, mode) -> list[np.ndarray]:
+    """De verplaatsing per pad zodat ze op één lijn liggen (links, midden, rechts, boven, onder)."""
+    if mode not in ALIGN_MODES:
+        raise ValueError(mode)
+    box = paths_bbox(paths)
+    if box is None or len(paths) < 2:
+        return [np.zeros(2) for _ in paths]
+    xmin, ymin, xmax, ymax = box
+    target = {"left": xmin, "right": xmax, "bottom": ymin, "top": ymax,
+              "center": 0.5 * (xmin + xmax)}[mode]
+    out = []
+    for p in paths:
+        b = paths_bbox([p])
+        if b is None:
+            out.append(np.zeros(2))
+            continue
+        if mode == "left":
+            out.append(np.array([target - b[0], 0.0]))
+        elif mode == "right":
+            out.append(np.array([target - b[2], 0.0]))
+        elif mode == "bottom":
+            out.append(np.array([0.0, target - b[1]]))
+        elif mode == "top":
+            out.append(np.array([0.0, target - b[3]]))
+        else:
+            out.append(np.array([target - 0.5 * (b[0] + b[2]),
+                                 0.5 * (ymin + ymax) - 0.5 * (b[1] + b[3])]))
+    return out
+
+
+def distribute_deltas(paths, axis="x") -> list[np.ndarray]:
+    """Gelijk verdelen: de middenpunten krijgen overal dezelfde tussenafstand."""
+    axis = "x" if str(axis).lower().startswith("x") else "y"
+    i = 0 if axis == "x" else 1
+    boxes = [(p, paths_bbox([p])) for p in paths]
+    if len(paths) < 3 or any(b is None for _p, b in boxes):
+        return [np.zeros(2) for _ in paths]
+    order = sorted(range(len(paths)), key=lambda k: 0.5 * (boxes[k][1][i] + boxes[k][1][i + 2]))
+    first, last = order[0], order[-1]
+    a = 0.5 * (boxes[first][1][i] + boxes[first][1][i + 2])
+    b = 0.5 * (boxes[last][1][i] + boxes[last][1][i + 2])
+    step = (b - a) / (len(paths) - 1)
+    out = [np.zeros(2) for _ in paths]
+    for rank, k in enumerate(order):
+        mid = 0.5 * (boxes[k][1][i] + boxes[k][1][i + 2])
+        delta = (a + step * rank) - mid
+        out[k][i] = delta
+    return out
+
+
+def grid_offsets(cols, rows, dx, dy) -> list[np.ndarray]:
+    """De verschuivingen van een rij of raster, zonder de plek van het origineel."""
+    cols, rows = max(1, int(cols)), max(1, int(rows))
+    out = []
+    for j in range(rows):
+        for i in range(cols):
+            if i == 0 and j == 0:
+                continue
+            out.append(np.array([i * float(dx), j * float(dy)]))
+    return out

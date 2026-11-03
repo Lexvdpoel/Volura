@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Volura
+GenericName=3D modeller for 3D printing
+GenericName[nl]=3D-modeller voor 3D-printen
+Comment=SketchUp-like 3D modelling with clean STL and multicolour 3MF export
+Comment[nl]=SketchUp-achtig 3D-modelleren met foutloze STL- en meerkleuren-3MF-export
+Exec=volura %f
+Icon=volura
+Terminal=false
+Categories=Graphics;3DGraphics;Engineering;
+Keywords=3D;model;modelleren;STL;3MF;printen;CAD;
+StartupWMClass=Volura
+MimeType=application/x-volura;model/stl;model/3mf;

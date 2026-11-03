@@ -1,0 +1,2 @@
+# Alles staat al in requirements.txt; dit bestand houdt de oude naam werkend.
+-r requirements.txt
