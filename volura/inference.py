@@ -9,6 +9,7 @@ from .model import ROOT
 
 PICK_PX = 10.0
 EDGE_PX = 7.0
+AXIS_PX = 9.0          # the drawing axes: a little wider than an edge, as in SketchUp
 
 _AXES_ON = (tr("On Red Axis"), tr("On Green Axis"), tr("On Blue Axis"))
 LABELS = {
@@ -457,6 +458,21 @@ class InferenceEngine:
                     edge_c = (dist_e, Inference("edge", pe, edge=(A[ke], B[ke]),
                                                 ctx=EC[ke][0], eid=EC[ke][1]))
 
+        # the drawing axes behave like edges, as in SketchUp: "On Red Axis" etc.
+        axisline_c = None
+        for i in range(3):
+            if plane is not None and (abs(np.dot(AXES[i], plane.n)) > 1e-6
+                                      or abs(plane.distance(np.zeros(3))) > 1e-6):
+                continue
+            s_ = closest_on_line_to_ray(np.zeros(3), AXES[i], o, d)
+            if s_ is None:
+                continue
+            p = AXES[i] * s_
+            sp, okp = self.cam.project(p)
+            dd = float(np.linalg.norm(sp[0] - m))
+            if okp[0] and dd < AXIS_PX and visible(p[None])[0]                     and (axisline_c is None or dd < axisline_c[0]):
+                axisline_c = (dd, Inference("axisline", p, axis=i))
+
         guide_c = None
         for g in guides:
             hit = self._on_guide(g, o, d, m)
@@ -497,8 +513,20 @@ class InferenceEngine:
                 return Inference("edge", best[1], edge=(A[kk], B[kk]), axis=axis_c[1],
                                  ctx=EC[kk][0], eid=EC[kk][1])
 
-        if axis_c is not None and (edge_c is None or axis_c[0] <= edge_c[0] + 3):
+        # parallel to an axis from the anchor and on another drawing axis: the exact crossing
+        if axis_c is not None and axisline_c is not None:
+            j = axisline_c[1].axis
+            if j != axis_c[1]:
+                hit = line_line_hit(anchor, AXES[axis_c[1]], np.zeros(3), AXES[j])
+                if hit is not None:
+                    sp, okp = self.cam.project(hit)
+                    if okp[0] and float(np.linalg.norm(sp[0] - m)) < PICK_PX:
+                        return Inference("axisline", hit, axis=j)
+
+        if axis_c is not None and (edge_c is None or axis_c[0] <= edge_c[0] + 3)                 and (axisline_c is None or axis_c[0] <= axisline_c[0] + 3):
             return Inference("axis", axis_c[2], axis=axis_c[1])
+        if axisline_c is not None and (edge_c is None or axisline_c[0] < edge_c[0]):
+            return axisline_c[1]
         if edge_c is not None:
             return edge_c[1]
         if guide_c is not None:
@@ -515,15 +543,6 @@ class InferenceEngine:
             ents = self.doc.ents(ctx)
             return Inference("face", p, ctx=ctx, fid=fid, plane=ents.face_plane(fid))
 
-        # on the drawing axes themselves (no anchor needed)
-        for i in range(3):
-            s = closest_on_line_to_ray(np.zeros(3), AXES[i], o, d)
-            if s is None:
-                continue
-            p = AXES[i] * s
-            sp, okp = self.cam.project(p)
-            if okp[0] and np.linalg.norm(sp[0] - m) < 6:
-                return Inference("axisline", p, axis=i)
         p = GROUND.intersect_ray(o, d)
         if p is not None and np.linalg.norm(p - o) < self.cam.distance * 40:
             return Inference("ground", p, plane=GROUND)

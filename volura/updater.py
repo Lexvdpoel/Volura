@@ -15,7 +15,9 @@ import os
 import re
 import subprocess
 import sys
+import ssl
 import tempfile
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,9 +86,46 @@ def _request(url):
         "Accept": "application/vnd.github+json"})
 
 
+def ssl_contexts():
+    """The ways to check GitHub's certificate, best first.
+
+    Python on Windows reads only the root certificates that are already in the Windows
+    store; Windows itself fetches a missing root the first time it needs one. On a computer
+    that never needed GitHub's root, Python then fails with "unable to get issuer
+    certificate". truststore lets Windows (or macOS) do the check, as a browser would;
+    certifi brings Mozilla's own list of root certificates as a fallback.
+    """
+    out = []
+    try:
+        import truststore
+        out.append(truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT))
+    except Exception:                   # not installed, or the system offers no verifier
+        pass
+    try:
+        import certifi
+        out.append(ssl.create_default_context(cafile=certifi.where()))
+    except Exception:
+        pass
+    out.append(ssl.create_default_context())
+    return out
+
+
+def _open(url, timeout):
+    """urlopen with the first certificate check that works; other errors come out as they are."""
+    error = None
+    for context in ssl_contexts():
+        try:
+            return urllib.request.urlopen(_request(url), timeout=timeout, context=context)
+        except urllib.error.URLError as e:
+            if not isinstance(getattr(e, "reason", None), ssl.SSLError):
+                raise
+            error = e
+    raise error
+
+
 def latest_release(timeout=TIMEOUT) -> Release | None:
     """The newest release on GitHub; a network error raises OSError/ValueError."""
-    with urllib.request.urlopen(_request(API_LATEST), timeout=timeout) as resp:
+    with _open(API_LATEST, timeout) as resp:
         return release_from_json(json.loads(resp.read().decode("utf-8")))
 
 
@@ -110,7 +149,7 @@ def download(release: Release, progress=None, cancelled=None) -> Path:
     path = folder / f"Volura-{release.version}-setup.exe"
     sha = hashlib.sha256()
     done = 0
-    with urllib.request.urlopen(_request(release.setup_url), timeout=TIMEOUT) as resp, \
+    with _open(release.setup_url, TIMEOUT) as resp, \
             open(path, "wb") as out:
         total = int(resp.headers.get("Content-Length") or release.setup_size or 0)
         while True:

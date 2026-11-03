@@ -1,2 +1,2 @@
-# Alles staat al in requirements.txt; dit bestand houdt de oude naam werkend.
+# Everything is in requirements.txt; this file keeps the old name working.
 -r requirements.txt

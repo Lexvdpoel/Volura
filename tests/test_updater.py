@@ -50,7 +50,7 @@ def test_compare_versions():
 
 def test_release_from_the_api(monkeypatch):
     monkeypatch.setattr(updater.urllib.request, "urlopen",
-                        lambda req, timeout=None: FakeResponse(json.dumps(release_json()).encode()))
+                        lambda req, timeout=None, context=None: FakeResponse(json.dumps(release_json()).encode()))
     rel = updater.latest_release()
     assert rel.version == "9.0.0" and rel.setup_url == "https://x/setup"
     assert rel.setup_sha256 == hashlib.sha256(PAYLOAD).hexdigest()
@@ -60,13 +60,13 @@ def test_release_from_the_api(monkeypatch):
 def test_download_checks_size_and_checksum(monkeypatch):
     rel = updater.release_from_json(release_json())
     monkeypatch.setattr(updater.urllib.request, "urlopen",
-                        lambda req, timeout=None: FakeResponse(PAYLOAD))
+                        lambda req, timeout=None, context=None: FakeResponse(PAYLOAD))
     seen = []
     path = updater.download(rel, lambda d, t: seen.append((d, t)))
     assert path.read_bytes() == PAYLOAD and seen[-1] == (len(PAYLOAD), len(PAYLOAD))
     bad = PAYLOAD[:-1] + b"X"
     monkeypatch.setattr(updater.urllib.request, "urlopen",
-                        lambda req, timeout=None: FakeResponse(bad))
+                        lambda req, timeout=None, context=None: FakeResponse(bad))
     with pytest.raises(ValueError):
         updater.download(rel)
     with pytest.raises(InterruptedError):
@@ -113,3 +113,42 @@ def test_notice_for_a_newer_version(monkeypatch):
     finally:
         w.doc.dirty = False
         w.close()
+
+
+def test_certificate_problem_tries_the_next_check(monkeypatch):
+    """Windows without GitHub's root certificate: fall back to the next way of checking."""
+    import ssl
+    import urllib.error
+    tried = []
+
+    def urlopen(req, timeout=None, context=None):
+        tried.append(context)
+        if len(tried) == 1:
+            raise urllib.error.URLError(ssl.SSLCertVerificationError(
+                1, "certificate verify failed: unable to get issuer certificate"))
+        return FakeResponse(json.dumps(release_json()).encode())
+
+    monkeypatch.setattr(updater.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(updater, "ssl_contexts", lambda: ["system", "certifi", "default"])
+    assert updater.latest_release().version == "9.0.0"
+    assert tried == ["system", "certifi"]
+
+
+def test_other_network_errors_are_not_retried(monkeypatch):
+    import urllib.error
+    tried = []
+
+    def urlopen(req, timeout=None, context=None):
+        tried.append(context)
+        raise urllib.error.URLError(OSError("no network"))
+
+    monkeypatch.setattr(updater.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(updater, "ssl_contexts", lambda: ["system", "certifi"])
+    with pytest.raises(urllib.error.URLError):
+        updater.latest_release()
+    assert tried == ["system"]
+
+
+def test_github_is_checked_by_the_system_first():
+    pytest.importorskip("truststore")
+    assert type(updater.ssl_contexts()[0]).__module__.startswith("truststore")
