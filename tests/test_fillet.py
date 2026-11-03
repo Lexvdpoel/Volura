@@ -328,3 +328,45 @@ def test_fillet_rejects_a_zero_radius(win):
     tool.reset()
     with pytest.raises(ValueError):
         tool.vcb_enter("0")
+
+
+class _Click:
+    """A mouse event as the tools see it: only the modifier keys matter."""
+
+    def __init__(self, modifiers=None):
+        from PySide6.QtCore import Qt
+        self._mods = Qt.NoModifier if modifiers is None else modifiers
+
+    def modifiers(self):
+        return self._mods
+
+
+@pytest.mark.parametrize("name, size, expected", (("fillet", "2", 1000 - (4 - math.pi) * 10),
+                                                  ("chamfer", "2", 980.0)))
+def test_hover_click_and_type_like_a_user(win, name, size, expected):
+    """Hover an edge, click it, type the size: the way the tool is really used.
+
+    The edge under the cursor used to be marked as ("e", ctx, edge) next to the
+    (ctx, edge) pairs of the picked edges; drawing that crashed every frame.
+    """
+    g = cube_group(win)
+    v = win.view
+    v.resize(900, 700)
+    v.cam.width, v.cam.height = 900, 700
+    v.cam.set_view("iso")
+    v.cam.fit((np.zeros(3), np.full(3, 10.0)))
+    win.set_tool(name)
+    tool = v.tools[name]
+    tool.reset()
+    a, b = g.ents.edge_points(top_edge_id(g.ents))
+    s, _ok = v.cam.project(0.5 * (np.asarray(a) + np.asarray(b)))
+    x, y = float(s[0][0]), float(s[0][1])
+    tool.mouse_move(_Click(), x, y)
+    assert v.hover[0] == "edges" and v.hover[1]
+    assert all(len(item) == 2 and item[0] == g.id for item in v.hover[1])
+    tool.mouse_press(_Click(), x, y)
+    assert tool.picked == [(g.id, top_edge_id(g.ents))]
+    tool.mouse_move(_Click(), x + 1, y)
+    assert all(len(item) == 2 for item in v.hover[1])
+    tool.vcb_enter(size)
+    assert volume(g.ents.to_manifold()) == pytest.approx(expected, rel=0.01)

@@ -3079,7 +3079,7 @@ class EdgeSizeTool(Tool):
 
     def mouse_move(self, e, x, y):
         it = self._pick(x, y)
-        self._show(it if it and it[0] == "e" else None)
+        self._show((it[1], it[2]) if it and it[0] == "e" else None)      # (ctx, edge), like picked
 
     def mouse_press(self, e, x, y):
         self._toggled = None
