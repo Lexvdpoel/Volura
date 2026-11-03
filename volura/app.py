@@ -252,7 +252,9 @@ class MaterialsPanel(QWidget):
         self.win = win
         lay = QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
-        lay.addWidget(QLabel(tr("Filaments (order = extruder number):")))
+        head = QLabel(tr("Filaments (the colors you use get filament 1, 2, 3… in this order):"))
+        head.setWordWrap(True)
+        lay.addWidget(head)
         self.list = QListWidget()
         self.list.setIconSize(QSize(22, 22))
         self.list.itemClicked.connect(self.pick)
@@ -4352,9 +4354,11 @@ class MainWindow(QMainWindow):
             return
         lines = "\n".join(tr("  extruder {e}: {name}").format(e=e, name=n) for n, e in used)
         QMessageBox.information(self, tr("3MF Exported"),
-                                tr("{path}\n\nParts per filament:\n{lines}\n\n"
+                                tr("{path}\n\nColors per filament:\n{lines}\n\n"
                                    "Open the file in PrusaSlicer, OrcaSlicer or Bambu Studio; "
-                                   "every color part is already on the right extruder.").format(
+                                   "every color is already on the right filament. The slicer shows "
+                                   "its own filament colors: give its filaments these colors to "
+                                   "see the model as in Volura.").format(
                                     path=path, lines=lines))
 
     def export_stl_colors(self):

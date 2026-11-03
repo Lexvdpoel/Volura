@@ -68,12 +68,12 @@ def test_group_and_inlay_export():
         assert sorted(round(x.manifold.volume(), 3) for x in ops.parts(d2)) == vols
         p3 = os.path.join(tmp, "t.3mf")
         used = fileio.export_3mf(p3, parts, doc.materials)
-        assert sorted(u[1] for u in used) == [1, 3]
+        assert sorted(u[1] for u in used) == [1, 2]          # only the used colors, in list order
         with zipfile.ZipFile(p3) as z:
             prusa = z.read("Metadata/Slic3r_PE_model.config").decode()
             bambu = z.read("Metadata/model_settings.config").decode()
         assert prusa.count("<volume ") == 2
-        assert bambu.count("<part ") == 2 and 'key="extruder" value="3"' in bambu
+        assert bambu.count("<part ") == 2 and 'key="extruder" value="2"' in bambu
         ps = os.path.join(tmp, "t.stl")
         fileio.export_stl(ps, parts)
         assert abs(fileio.import_stl(ps).volume() - 4000) < 1e-3

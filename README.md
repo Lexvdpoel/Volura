@@ -51,7 +51,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - Export:
   - **STL**: all (or the selected) parts merged into one watertight object
   - **Multicolor 3MF**: one object with one part per filament color, already assigned to the right
-    extruder (PrusaSlicer, OrcaSlicer, Bambu Studio). Faces painted with the Paint Bucket in another
+    extruder (PrusaSlicer, OrcaSlicer, Bambu Studio); the colors you use are numbered 1, 2, 3, ...
+    in the order of the filament panel. Faces painted with the Paint Bucket in another
     color are exported as painted triangles, which these slicers show and print as their own color
     painting
   - **STL per color**
@@ -202,7 +203,8 @@ to give it a color of its own.
 
 Only the surface needs a color? Paint faces with the Paint Bucket (B): in the slicer those faces get
 the filament of their color, the rest of the part keeps the part's filament. The slicer shows its own
-filament colors; the extruder number is the position of the color in the filament panel.
+filament colors. Only the colors you use get a filament: 1, 2, 3, ... in the order of the
+filament panel, so the file fits a slicer with as many filaments as your model has colors.
 
 ## Project structure
 

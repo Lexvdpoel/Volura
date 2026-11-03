@@ -245,21 +245,29 @@ def export_3mf(path, part_list, materials, name="Volura"):
     both in the PrusaSlicer layout and in the Bambu Studio / OrcaSlicer layout.
     Faces painted in another color than their part become painted triangles, which
     OrcaSlicer, Bambu Studio and PrusaSlicer read as their own color painting.
-    Extruder numbers follow the material order.
+
+    Only the colors that are used get an extruder: 1, 2, 3, ... in the order of the
+    material list (colors that are not in the list come last). The file then fits a
+    slicer with as many filaments as the model has colors. Returns [(name, extruder)].
     """
     parts = print_parts(part_list)
     if not parts:
         raise ValueError(tr("There is nothing to export."))
-    color_order = [c.lower() for _, c in materials]
     names = {c.lower(): n for n, c in materials}
+    tri_colors = [triangle_colors(m) for _, m in parts]
+    present = {color.lower() for color, _ in parts}
+    for colors in tri_colors:
+        present.update(c.lower() for c in colors if c is not None)
+    order = [c.lower() for _, c in materials]
+    order += sorted(present - set(order))
+    numbers = {c: k + 1 for k, c in enumerate(c for c in order if c in present)}
 
     def extruder(color):
-        c = color.lower()
-        if c not in color_order:
-            color_order.append(c)
-        return color_order.index(c) + 1
+        return numbers[color.lower()]
 
-    parts.sort(key=lambda p: extruder(p[0]))
+    paired = sorted(zip(parts, tri_colors), key=lambda pt: extruder(pt[0][0]))
+    parts = [pt[0] for pt in paired]
+    tri_colors = [pt[1] for pt in paired]
     used = [p[0] for p in parts]
     painted = []
 
@@ -273,7 +281,7 @@ def export_3mf(path, part_list, materials, name="Volura"):
         oid = k + 2
         cname = escape(names.get(color.lower(), color))
         tris = []
-        for (a, b, c), tc in zip(t, triangle_colors(m)):
+        for (a, b, c), tc in zip(t, tri_colors[k]):
             paint = ""
             if tc is not None and tc.lower() != color.lower():
                 code = paint_code(extruder(tc))

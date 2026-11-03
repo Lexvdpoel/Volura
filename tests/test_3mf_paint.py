@@ -56,8 +56,9 @@ def test_painted_faces_become_painted_triangles(tmp_path):
     used = fileio.export_3mf(str(path), ops.parts(doc), doc.materials)
     tris = triangles(path)
     assert len(tris) == 12
-    assert painted(tris) == {"0C": 2, "1C": 2}           # red top = filament 3, blue front = 4
-    assert used == [("White", 1), ("Red", 3), ("Blue", 4)]
+    # only the used colors are numbered, in list order: white 1, red 2, blue 3
+    assert painted(tris) == {"8": 2, "0C": 2}
+    assert used == [("White", 1), ("Red", 2), ("Blue", 3)]
 
 
 def test_unpainted_model_has_no_paint(tmp_path):
@@ -88,6 +89,22 @@ def test_face_color_survives_the_color_split(tmp_path):
     path = tmp_path / "split.3mf"
     fileio.export_3mf(str(path), ops.parts(doc), doc.materials)
     codes = painted(triangles(path))
-    assert codes.get("0C", 0) >= 2                        # the red top, now with a notch
+    assert codes.get("8", 0) >= 2                         # the red top (filament 2), with a notch
     assert ops.id_color(ops.color_id("#000000")) == "#000000"
     assert ops.id_color(0) is None
+
+
+def test_only_used_colors_get_a_filament(tmp_path):
+    """Yellow (5th in the list) with black and red painted faces: filaments 1, 2 and 3, so the
+    file fits a slicer with four filaments."""
+    doc = Document()
+    doc.materials = [("White", "#f2f2f2"), ("Black", "#2b2b2b"), ("Red", "#d23b3b"),
+                     ("Blue", "#2f6fd6"), ("Yellow", "#f2c230")]
+    block(doc, top="#d23b3b", front="#2b2b2b", color="#f2c230")
+    path = tmp_path / "three.3mf"
+    used = fileio.export_3mf(str(path), ops.parts(doc), doc.materials)
+    assert used == [("Black", 1), ("Red", 2), ("Yellow", 3)]
+    assert painted(triangles(path)) == {"4": 2, "8": 2}
+    config = zipfile.ZipFile(path).read("Metadata/model_settings.config").decode()
+    assert '<metadata key="extruder" value="3"/>' in config
+    assert 'value="5"' not in config
