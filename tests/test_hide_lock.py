@@ -1,4 +1,4 @@
-"""Verbergen/zichtbaar maken en vergrendelen/ontgrendelen zoals in SketchUp 2017.
+"""Hide/unhide and lock/unlock as in SketchUp 2017.
 
 Runs without a display (Qt offscreen platform), like tests/test_ui_spec.py.
 """
@@ -23,7 +23,7 @@ from volura.geom import Plane  # noqa: E402
 from volura.model import ROOT, Document  # noqa: E402
 
 GROUND = Plane((0, 0, 0), (0, 0, 1))
-LOCKED = "Deze groep is vergrendeld."
+LOCKED = "This group is locked."
 
 
 @pytest.fixture()
@@ -42,7 +42,7 @@ def draw_rect(win, size=(40.0, 30.0)):
     """A loose rectangle in the ground plane; returns (face id, edge ids)."""
     loop = np.array([[0, 0], [size[0], 0], [size[0], size[1]], [0, size[1]]], dtype=float)
     created = win.doc.root.add_shape(GROUND, [loop])
-    assert created, "rechthoek gaf geen vlak"
+    assert created, "rectangle gave no face"
     ents = win.doc.root
     return created[0], ents.face_edges(ents.F[created[0]])
 
@@ -67,7 +67,7 @@ def centre_of(win, item):
     else:
         p = np.mean(ents.edge_points(item[1]), axis=0)
     s, ok = win.view.cam.project(p[None])
-    assert ok[0], "punt valt buiten beeld"
+    assert ok[0], "point is off screen"
     return s[0]
 
 
@@ -85,8 +85,8 @@ def test_hide_face_removes_it_from_picking(win):
     assert win.view.engine.pick_face(o, d) is None
     assert win.view.engine.infer(x, y).kind != "face"
     rc = win.view._render_data(win.doc.root, None)
-    assert not len(rc["pos"]), "een verborgen vlak wordt niet getekend"
-    assert len(rc["hidden"]["pos"]), "het verborgen vlak blijft wel in het model"
+    assert not len(rc["pos"]), "a hidden face is not drawn"
+    assert len(rc["hidden"]["pos"]), "the hidden face stays in the model"
 
 
 def test_show_hidden_makes_faces_pickable_again(win):
@@ -98,7 +98,7 @@ def test_show_hidden_makes_faces_pickable_again(win):
     assert win.view.engine.pick_face(o, d) is None
     win.settings.show_hidden = True
     hit = win.view.engine.pick_face(o, d)
-    assert hit is not None and hit[2] == fid, "met Verborgen geometrie kun je verborgen vlakken kiezen"
+    assert hit is not None and hit[2] == fid, "with Hidden Geometry you can pick hidden faces"
 
 
 def test_hide_edge_removes_it_from_picking_and_snapping(win):
@@ -117,7 +117,7 @@ def test_hide_edge_removes_it_from_picking_and_snapping(win):
 
 
 def test_hidden_geometry_stays_part_of_the_model(win):
-    """Verborgen geometrie telt gewoon mee voor export en printcontrole."""
+    """Hidden geometry still counts for export and the print check."""
     g = box_group(win)
     assert g.ents.to_manifold().volume() == pytest.approx(4000.0)
     g.ents.hide(list(g.ents.F)[:1])
@@ -132,8 +132,8 @@ def test_hide_and_unhide_a_face_through_the_menu(win):
     fid, _ = draw_rect(win)
     win.doc.set_selection([("f", ROOT, fid)])
     win.a_hide.trigger()
-    assert win.doc.root.hidden_f == {fid}, "Bewerken > Verbergen verbergt het geselecteerde vlak"
-    assert win.doc.last_hidden == [("f", ROOT, fid)], "het laatst verborgene wordt onthouden"
+    assert win.doc.root.hidden_f == {fid}, "Edit > Hide hides the selected face"
+    assert win.doc.last_hidden == [("f", ROOT, fid)], "the last hidden items are remembered"
     assert not win.doc.selection
 
     win.a_unhide_last.trigger()
@@ -142,14 +142,14 @@ def test_hide_and_unhide_a_face_through_the_menu(win):
 
     win.doc.set_selection([("f", ROOT, fid)])
     win.a_hide.trigger()
-    win.doc.set_selection([("f", ROOT, fid)])   # selected while Verborgen geometrie stands on
+    win.doc.set_selection([("f", ROOT, fid)])   # selected while Hidden Geometry is on
     win.a_unhide_sel.trigger()
-    assert win.doc.root.hidden_f == set(), "Zichtbaar maken > Geselecteerd"
+    assert win.doc.root.hidden_f == set(), "Unhide > Selected"
 
     win.doc.set_selection([("f", ROOT, fid)])
     win.a_hide.trigger()
     win.a_unhide.trigger()
-    assert win.doc.root.hidden_f == set(), "Zichtbaar maken > Alles"
+    assert win.doc.root.hidden_f == set(), "Unhide > All"
 
 
 def test_hide_and_unhide_a_group_through_the_menu(win):
@@ -157,10 +157,10 @@ def test_hide_and_unhide_a_group_through_the_menu(win):
     win.doc.set_selection([("g", g.id, g.id)])
     win.a_hide.trigger()
     assert not g.visible
-    assert g.id not in [ctx for ctx, _, _ in win.doc.contexts()], "een verborgen groep wordt niet getoond"
+    assert g.id not in [ctx for ctx, _, _ in win.doc.contexts()], "a hidden group is not shown"
 
     win.a_unhide.trigger()
-    assert g.visible, "Zichtbaar maken > Alles maakt ook groepen zichtbaar"
+    assert g.visible, "Unhide > All also unhides groups"
 
 
 def test_unhide_all_shows_hidden_faces_edges_and_groups(win):
@@ -202,12 +202,12 @@ def test_select_all_skips_hidden_geometry(win):
 
 
 def test_hide_lock_actions_are_no_longer_placeholders(win):
-    for attr, text in (("a_unhide_sel", "Geselecteerd"), ("a_unhide_last", "Laatste"),
-                       ("a_unhide", "Alles"), ("a_lock", "Vergrendelen"),
-                       ("a_unlock_sel", "Geselecteerd"), ("a_unlock_all", "Alles")):
+    for attr, text in (("a_unhide_sel", "Selected"), ("a_unhide_last", "Last"),
+                       ("a_unhide", "All"), ("a_lock", "Lock"),
+                       ("a_unlock_sel", "Selected"), ("a_unlock_all", "All")):
         a = getattr(win, attr)
-        assert a.isEnabled(), f"Bewerken > {text} is nog een placeholder"
-        assert text in a.text()
+        assert a.isEnabled(), f"Edit > {text} is still a placeholder"
+        assert text in clean(a.text())
 
 
 # ------------------------------------------------------------------- locking
@@ -223,7 +223,7 @@ def test_lock_and_unlock_through_the_menu(win):
     win.a_unlock_all.trigger()
     assert not any(gr.locked for gr in win.doc.groups)
     win.doc.undo()
-    assert win.doc.group(g.id).locked, "ontgrendelen is één undo-stap"
+    assert win.doc.group(g.id).locked, "unlocking is one undo step"
     win.doc.redo()
     assert not win.doc.group(g.id).locked
 
@@ -233,12 +233,12 @@ def test_transform_selection_leaves_a_locked_group_alone(win):
     g.locked = True
     before = g.bbox().copy()
     ops.transform_selection(win.doc, np.eye(3), np.array([15.0, 0, 0]), items=[("g", g.id, g.id)])
-    assert np.allclose(g.bbox(), before), "een vergrendelde groep kan niet verplaatst worden"
+    assert np.allclose(g.bbox(), before), "a locked group cannot be moved"
     ops.transform_selection(win.doc, np.eye(3), np.array([15.0, 0, 0]), copy=True,
                             items=[("g", g.id, g.id)])
-    assert len(win.doc.groups) == 1, "een vergrendelde groep kan niet gekopieerd worden"
+    assert len(win.doc.groups) == 1, "a locked group cannot be copied"
     ops.resize_group(win.doc, g, np.array([40.0, 40.0, 20.0]))
-    assert np.allclose(g.bbox(), before), "een vergrendelde groep kan niet geschaald worden"
+    assert np.allclose(g.bbox(), before), "a locked group cannot be scaled"
 
 
 def test_transform_selection_still_moves_the_others(win):
@@ -255,20 +255,20 @@ def test_locked_group_cannot_be_edited_painted_or_deleted(win):
     g.locked = True
     win.doc.set_selection([("g", g.id, g.id)])
 
-    assert win.doc.enter_group(g.id) is False, "dubbelklik opent een vergrendelde groep niet"
+    assert win.doc.enter_group(g.id) is False, "double-click does not open a locked group"
     win.edit_group()
     assert win.doc.active == ROOT
     assert win.hint.text() == LOCKED
 
     win.paint_selection("#3fa34d")
-    assert g.color != "#3fa34d", "een vergrendelde groep kan niet geverfd worden"
+    assert g.color != "#3fa34d", "a locked group cannot be painted"
 
     win.delete()
-    assert win.doc.group(g.id) is not None, "een vergrendelde groep kan niet gewist worden"
+    assert win.doc.group(g.id) is not None, "a locked group cannot be deleted"
     assert win.hint.text() == LOCKED
 
     ops.explode(win.doc, g)
-    assert win.doc.group(g.id) is not None, "een vergrendelde groep kan niet geëxplodeerd worden"
+    assert win.doc.group(g.id) is not None, "a locked group cannot be exploded"
 
 
 def test_unlocked_group_still_works(win):
@@ -282,7 +282,7 @@ def test_unlocked_group_still_works(win):
 
 
 def test_hidden_geometry_is_drawn_dashed_and_translucent(win):
-    """Beeld > Verborgen geometrie: randen gestippeld, vlakken halfdoorzichtig."""
+    """View > Hidden Geometry: edges dashed, faces translucent."""
     from OpenGL import GL as real_gl
     from volura import viewport as vp
     fid, eids = draw_rect(win)
@@ -317,22 +317,22 @@ def test_hidden_geometry_is_drawn_dashed_and_translucent(win):
         return sum(1 for n, a in m.calls if n == "glDrawArrays" and a[0] == mode)
 
     off, on = run(False), run(True)
-    assert count(off, real_gl.GL_TRIANGLES) == 0, "een verborgen vlak wordt niet getekend"
-    assert count(on, real_gl.GL_TRIANGLES) > 0, "met Verborgen geometrie worden de vlakken wel getekend"
+    assert count(off, real_gl.GL_TRIANGLES) == 0, "a hidden face is not drawn"
+    assert count(on, real_gl.GL_TRIANGLES) > 0, "with Hidden Geometry the faces are drawn"
     assert count(on, real_gl.GL_LINES) > count(off, real_gl.GL_LINES)
-    assert any(n == "glLineStipple" for n, _ in on.calls), "verborgen randen worden gestippeld"
+    assert any(n == "glLineStipple" for n, _ in on.calls), "hidden edges are dashed"
     assert not any(n == "glLineStipple" for n, _ in off.calls)
 
 
 def test_locked_group_is_drawn_with_a_red_frame(win):
-    """Een geselecteerde vergrendelde groep krijgt rood in plaats van blauw."""
+    """A selected locked group gets red instead of blue."""
     from OpenGL import GL as real_gl
     from volura import viewport as vp
     from volura.viewport import LOCK_COLOR, SELECT_COLOR
     g = box_group(win)
     win.view.zoom_extents()
     win.doc.set_selection([("g", g.id, g.id)])
-    assert [gr.id for gr in win.doc.selected_groups()] == [g.id], "een vergrendelde groep kan wel geselecteerd"
+    assert [gr.id for gr in win.doc.selected_groups()] == [g.id], "a locked group can still be selected"
 
     class Mock:
         def __init__(self):
@@ -359,7 +359,7 @@ def test_locked_group_is_drawn_with_a_red_frame(win):
     assert any(c[:3] == SELECT_COLOR for c in colors())
     g.locked = True
     got = colors()
-    assert any(c[:3] == LOCK_COLOR for c in got), "het selectiekader van een vergrendelde groep is rood"
+    assert any(c[:3] == LOCK_COLOR for c in got), "the selection frame of a locked group is red"
     assert not any(c[:3] == SELECT_COLOR for c in got)
 
 
@@ -371,21 +371,21 @@ def test_move_tool_refuses_a_locked_group(win):
     s, ok = win.view.cam.project(g.bbox().mean(axis=0)[None])
     assert ok[0]
     assert win.view.tools["move"].grab_selection(s[0][0], s[0][1]) == []
-    assert win.hint.text() == LOCKED, "Verplaatsen zegt dat de groep vergrendeld is"
+    assert win.hint.text() == LOCKED, "Move says that the group is locked"
 
 
 def test_context_menu_locks_and_unlocks_groups(win):
     g = box_group(win)
     win.doc.set_selection([("g", g.id, g.id)])
     items = [clean(a.text()) for a in win.build_context_menu().actions()]
-    assert "Vergrendelen" in items, items
+    assert "Lock" in items, items
     g.locked = True
     items = [clean(a.text()) for a in win.build_context_menu().actions()]
-    assert "Ontgrendelen" in items and "Vergrendelen" not in items, items
+    assert "Unlock" in items and "Lock" not in items, items
 
 
 def test_face_context_menu_is_unchanged(win):
-    """De rechtskliktekst van een vlak blijft als in de specificatie beginnen."""
+    """The right-click menu of a face still starts as in the spec."""
     import ui_spec
     fid, _ = draw_rect(win)
     win.doc.set_selection([("f", ROOT, fid)])
@@ -416,7 +416,7 @@ def test_save_and_load_keeps_hidden_and_locked(tmp_path, win):
 def test_old_files_without_these_fields_still_load(tmp_path, win):
     box_group(win)
     draw_rect(win)
-    path = str(tmp_path / "oud.volura")
+    path = str(tmp_path / "old.volura")
     fileio.save_document(win.doc, path)
     with zipfile.ZipFile(path) as z:
         data = json.loads(z.read("document.json"))
@@ -441,7 +441,7 @@ def test_locked_group_survives_undo_of_another_change(win):
     win.doc.checkpoint()
     g.ents.set_face_color(list(g.ents.F)[0], "#3fa34d")
     win.doc.undo()
-    assert win.doc.group(g.id).locked, "vergrendeld blijft na undo van een andere wijziging"
+    assert win.doc.group(g.id).locked, "stays locked after undo of another change"
 
 
 # ------------------------------------------------------------------- settings

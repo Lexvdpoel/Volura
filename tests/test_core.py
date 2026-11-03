@@ -40,7 +40,7 @@ def test_open_box_is_reported():
     doc = box_doc()
     doc.root.erase_faces([top(doc.root)])
     parts = ops.parts(doc)
-    assert parts[0].manifold is None and "niet gesloten" in parts[0].problem
+    assert parts[0].manifold is None and "not closed" in parts[0].problem
 
 
 def test_group_and_inlay_export():

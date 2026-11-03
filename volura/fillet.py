@@ -1,23 +1,22 @@
-"""Afronden (fillet) en afschuinen (chamfer) van randen tussen vlakke vlakken.
+"""Filleting (rounding) and chamfering of edges between planar faces.
 
-Kijk loodrecht op een rand tussen twee vlakken. De twee vlakken snijden daar
-een hoek uit van alpha = 180° - gamma, met gamma de hoek tussen de buiten-
-normalen van de vlakken. Die hoek is het "hoekpunt" van de rand:
+Look perpendicular onto an edge between two faces. The two faces cut out an
+angle of alpha = 180° - gamma there, with gamma the angle between the outward
+normals of the faces. That angle is the "corner" of the edge:
 
-* bij een **bolle** rand (denk aan de bovenrand van een kubus) staat in die hoek
-  het materiaal van het lichaam: afronden haalt er een wig van af;
-* bij een **holle** rand (de binnenhoek van een L-profiel) staat in die hoek
-  lucht: afronden vult die hoek op met een bolle rand.
+* at a **convex** edge (think of the top edge of a cube) the corner holds the
+  material of the solid: filleting removes a wedge from it;
+* at a **concave** edge (the inner corner of an L profile) the corner holds
+  air: filleting fills that corner with a rounded edge.
 
-Beide gevallen gebruiken dezelfde wig en dezelfde formules; alleen de richting
-van de bissectrice en of de wig afgetrokken of opgeteld wordt verschillen.
+Both cases use the same wedge and the same formulas; only the direction of the
+bisector and whether the wedge is subtracted or added differ.
 
-Een keten van randen (de gladde bovenrand van een cilinder is uit 48 randjes
-opgebouwd) wordt per segment afgeronden. De cutter van een segment steekt bij
-een hoekpunt door dat het met een buursegment deelt, en de twee profielen die
-daar in elkaar uitkomen worden met een loft (de convexe omhulling van de twee
-profielvlakken, langs elkaar gelegd) aan elkaar verbonden zodat de afronding
-doorloopt en er in de hoek geen gat of richel overblijft.
+A chain of edges (the smooth top edge of a cylinder is built from 48 small
+edges) is filleted segment by segment. The cutter of a segment extends past a
+vertex it shares with a neighbouring segment, and the two profiles that meet
+there are joined with a loft (the convex hull of the two profile faces, placed
+side by side) so the fillet runs on and no gap or ridge is left in the corner.
 """
 from __future__ import annotations
 
@@ -29,11 +28,12 @@ import numpy as np
 import manifold3d as mf
 
 from .geom import Plane, extrude_cs, manifold_from_mesh, rotation_matrix
+from .i18n import tr
 
-MARGIN = 0.01            # mm: cutters steken voorbij de uiteinden door, geen naden
-MIN_ANGLE = math.radians(0.4)     # vlakker dan dit is de rand al glad
-MAX_ANGLE = math.radians(179.6)   # vrijwel dubbelgevouwen: niets te ronden
-RAY = np.array([1237.13, 917.71, 553.37])   # een richting die nooit op een as ligt
+MARGIN = 0.01            # mm: cutters extend past the ends, no seams
+MIN_ANGLE = math.radians(0.4)     # flatter than this, the edge is already smooth
+MAX_ANGLE = math.radians(179.6)   # almost folded double: nothing to round
+RAY = np.array([1237.13, 917.71, 553.37])   # a direction that never lies on an axis
 
 
 def _unit(v):
@@ -52,21 +52,21 @@ def _union(ms):
 
 
 def arc_segments(segments, sweep):
-    """Aantal lijnstukken voor een boog van `sweep` radialen bij een cirkel van
-    `segments` stukken: de cilinder van een afronding krijgt er 16 tot 32."""
+    """Number of line segments for an arc of `sweep` radians on a circle of
+    `segments` pieces: the cylinder of a fillet gets 16 to 32."""
     full = max(16, int(segments))
     return max(2, int(round(full * abs(float(sweep)) / (2 * math.pi))))
 
 
-# ------------------------------------------------------- het hoekpunt van een rand
+# ------------------------------------------------------- the corner of an edge
 
 def corner_frame(p0, p1, n1, n2, convex=True):
-    """(d, L, r1, r2, b, alpha) van het hoekpunt van een rand, of None.
+    """(d, L, r1, r2, b, alpha) of the corner of an edge, or None.
 
-    r1 en r2 zijn de halve lijnen waarop de twee vlakken van de rand af wijzen en
-    b de bissectrice ertussen; alpha is de hoek tussen r1 en r2 (altijd kleiner
-    dan 180°). Bij een bolle rand (convex) staat binnen die hoek het materiaal,
-    bij een holle rand de lucht."""
+    r1 and r2 are the half-lines along which the two faces point away from the edge
+    and b the bisector between them; alpha is the angle between r1 and r2 (always
+    less than 180°). At a convex edge the material lies inside that angle, at a
+    concave edge the air."""
     p0 = np.asarray(p0, dtype=float)
     p1 = np.asarray(p1, dtype=float)
     d = _unit(p1 - p0)
@@ -98,12 +98,12 @@ def corner_frame(p0, p1, n1, n2, convex=True):
 
 
 def corner_profile(p0, p1, n1, n2, size, mode="fillet", segments=64, convex=True, arc=0):
-    """Het profiel van de cutter in p0, loodrecht op de rand, als 3D punten, en
-    het aantal boogstukken dat daarbij gebruikt is. None als er niets te doen is.
+    """The profile of the cutter at p0, perpendicular to the edge, as 3D points, and
+    the number of arc segments used for it. None when there is nothing to do.
 
-    Bij "chamfer" is dat de driehoek tussen de rand en de twee punten op afstand
-    `size` in de vlakken; bij "fillet" de wig tussen de rand, de twee raakpunten
-    op afstand size/tan(alpha/2) en de cirkelboog met straal `size`."""
+    For "chamfer" that is the triangle between the edge and the two points at
+    distance `size` in the faces; for "fillet" the wedge between the edge, the two
+    tangent points at distance size/tan(alpha/2) and the circular arc of radius `size`."""
     fr = corner_frame(p0, p1, n1, n2, convex)
     if fr is None:
         return None
@@ -111,9 +111,9 @@ def corner_profile(p0, p1, n1, n2, size, mode="fillet", segments=64, convex=True
     p0 = np.asarray(p0, dtype=float)
     if mode == "chamfer":
         return np.array([p0, p0 + r1 * size, p0 + r2 * size], dtype=float), 0
-    T = size / math.tan(alpha / 2.0)              # rand -> raakpunt
+    T = size / math.tan(alpha / 2.0)              # edge -> tangent point
     t1, t2 = p0 + r1 * T, p0 + r2 * T
-    c = p0 + b * (size / math.sin(alpha / 2.0))   # middelpunt van de cirkelboog
+    c = p0 + b * (size / math.sin(alpha / 2.0))   # centre of the circular arc
     a1, a2 = t1 - c, t2 - c
     sweep = math.acos(float(np.clip(np.dot(a1, a2) / (np.linalg.norm(a1) * np.linalg.norm(a2)),
                                     -1.0, 1.0)))
@@ -129,13 +129,13 @@ def corner_profile(p0, p1, n1, n2, size, mode="fillet", segments=64, convex=True
 
 
 def corner_wedge(p0, p1, n1, n2, size, mode="fillet", segments=64, convex=True):
-    """Het vlakke doorsnede-polygoon van het hoekpunt van een rand (3D punten)."""
+    """The planar cross-section polygon of the corner of an edge (3D points)."""
     pr = corner_profile(p0, p1, n1, n2, size, mode, segments, convex)
     return None if pr is None else pr[0]
 
 
 def extrude_profile(p0, d, L, pts, e0=0.0, e1=0.0):
-    """Het prisma van een profiel langs de randrichting, van -e0 tot L + e1."""
+    """The prism of a profile along the edge direction, from -e0 to L + e1."""
     if pts is None or len(pts) < 3:
         return None
     pl = Plane(p0, d, u=pts[1] - pts[0])
@@ -147,12 +147,12 @@ def extrude_profile(p0, d, L, pts, e0=0.0, e1=0.0):
 
 
 def edge_cutter(p0, p1, n1, n2, size, mode="fillet", segments=64, convex=True, extend=0.0):
-    """Het lichaam dat bij een rand van het volume af moet (bolle rand) of erbij
-    opgeteld moet worden (holle rand). None als er niets te doen is.
+    """The solid to subtract from the volume at an edge (convex edge) or to add to it
+    (concave edge). None when there is nothing to do.
 
-    Het lichaam steekt aan beide uiteinden MARGIN mm uit de rand, zodat er bij
-    het snijden geen naden overblijven; `extend` (getal of (voor, na)) steekt
-    verder uit, zodat cutters van een keten van randen elkaar overlappen."""
+    The solid sticks out MARGIN mm past both ends of the edge, so cutting leaves no
+    seams; `extend` (a number or (before, after)) extends it further, so the cutters
+    of a chain of edges overlap each other."""
     pr = corner_profile(p0, p1, n1, n2, size, mode, segments, convex)
     if pr is None:
         return None
@@ -165,18 +165,17 @@ def edge_cutter(p0, p1, n1, n2, size, mode="fillet", segments=64, convex=True, e
     return extrude_profile(p0, d, L, pts, e0, e1)
 
 
-# ------------------------------------------------- twee segmenten aan elkaar zetten
+# ------------------------------------------------- joining two segments
 
 def profile_at(pts, d, L, at_start):
-    """Hetzelfde profiel, maar in het andere uiteinde van de rand."""
+    """The same profile, but at the other end of the edge."""
     return np.asarray(pts, dtype=float) if at_start else np.asarray(pts, dtype=float) + d * L
 
 
 def loft(pa, pb):
-    """Het lichaam tussen twee profielen die in hetzelfde hoekpunt staan: de
-    convexe omhulling van de twee profielvlakken, punt voor punt langs elkaar
-    gelegd. Dat vult de hoek tussen twee opeenvolgende segmenten van een keten
-    zonder er meer af te halen dan de afronding zelf."""
+    """The solid between two profiles at the same vertex: the convex hull of the
+    two profile faces, matched point by point. That fills the corner between two
+    consecutive segments of a chain without removing more than the fillet itself."""
     pa = np.asarray(pa, dtype=float)
     pb = np.asarray(pb, dtype=float)
     n = len(pa)
@@ -184,10 +183,10 @@ def loft(pa, pb):
         return None
     verts = np.vstack([pa, pb])
     tris = []
-    for i in range(1, n - 1):                     # de twee eindvlakken (waaier vanuit het hoekpunt)
+    for i in range(1, n - 1):                     # the two end caps (fan from the corner)
         tris.append((0, i + 1, i))
         tris.append((n, n + i, n + i + 1))
-    for i in range(n):                            # de mantel
+    for i in range(n):                            # the side surface
         j = (i + 1) % n
         tris.append((i, j, n + j))
         tris.append((i, n + j, n + i))
@@ -195,7 +194,7 @@ def loft(pa, pb):
     try:
         m = manifold_from_mesh(verts, tris)
         if m.is_empty() or m.status() != mf.Error.NoError or m.volume() < 0:
-            m = manifold_from_mesh(verts, tris[:, ::-1])     # omgekeerde winding
+            m = manifold_from_mesh(verts, tris[:, ::-1])     # reversed winding
     except Exception:
         return None
     if m.is_empty() or m.status() != mf.Error.NoError or m.volume() <= 0:
@@ -203,7 +202,7 @@ def loft(pa, pb):
     return m
 
 
-# ------------------------------------------------------- bol of hol bepalen
+# ------------------------------------------------------- convex or concave
 
 def _inside(man, q, far):
     hits = man.ray_cast(tuple(np.asarray(q, dtype=float)),
@@ -212,9 +211,9 @@ def _inside(man, q, far):
 
 
 def is_convex(man, p0, p1, n1, n2, size=1.0):
-    """Bol of hol: de twee "zijkanten" van een rand zijn bij een bolle rand lucht,
-    bij een holle rand materiaal. De vlakken van de rand raken die zijkanten niet,
-    dus twee steekproeven zeggen iets; zijn het er maar één, dan is het bol."""
+    """Convex or concave: the two "sides" of an edge are air at a convex edge and
+    material at a concave edge. The faces of the edge do not touch those sides, so
+    two samples tell; if only one is inside, the edge is convex."""
     p0 = np.asarray(p0, dtype=float)
     p1 = np.asarray(p1, dtype=float)
     d = _unit(p1 - p0)
@@ -233,19 +232,18 @@ def is_convex(man, p0, p1, n1, n2, size=1.0):
     return inside != 2
 
 
-# ------------------------------------------------------------------ toepassen
+# ------------------------------------------------------------------ applying
 
 def apply(man, edges, size, mode="fillet", segments=64, join=True):
-    """Rondd of schuin de randen `edges` = [(p0, p1, n1, n2)] af; geeft een nieuwe
-    manifold. Bolle randen worden afgetrokken, holle opgeteld.
+    """Fillet or chamfer the edges `edges` = [(p0, p1, n1, n2)]; returns a new
+    manifold. Convex edges are subtracted, concave ones added.
 
-    Randen die een hoekpunt delen vormen een keten. Bij zo'n hoekpunt wordt het
-    lichaam tussen de twee profielen toegevoegd, zodat de afronding over de hele
-    keten doorloopt en er in de hoek geen richel staat (`join=False` laat dat
-    achterwege)."""
+    Edges that share a vertex form a chain. At such a vertex the solid between the
+    two profiles is added, so the fillet runs along the whole chain and no ridge is
+    left in the corner (`join=False` skips that)."""
     size = float(size)
     if size <= 0:
-        raise ValueError("de maat moet groter dan 0 zijn")
+        raise ValueError(tr("the size must be greater than 0"))
     items = []
     for (p0, p1, n1, n2) in edges:
         p0 = np.asarray(p0, dtype=float)
@@ -293,15 +291,15 @@ def apply(man, edges, size, mode="fillet", segments=64, join=True):
 
 
 def joint(a, b, key, mode, size, segments):
-    """Het lichaam dat de cutters van twee randen die in hetzelfde hoekpunt aan
-    elkaar komen verbindt, zodat de afronding er doorloopt."""
+    """The solid that joins the cutters of two edges meeting at the same vertex, so
+    the fillet runs on there."""
     pa, na = corner_profile(a["p0"], a["p1"], a["n1"], a["n2"], size, mode,
                             segments, a["convex"])
     pb, nb = corner_profile(b["p0"], b["p1"], b["n1"], b["n2"], size, mode,
                             segments, b["convex"])
     if pa is None or pb is None:
         return None
-    if na != nb:                                  # dezelfde bemonstering nodig om te verbinden
+    if na != nb:                                  # joining needs the same sampling
         n = min(na, nb)
         pa, _ = corner_profile(a["p0"], a["p1"], a["n1"], a["n2"], size, mode, segments,
                                a["convex"], n)
@@ -316,10 +314,10 @@ def _vkey(p):
     return tuple(np.round(np.asarray(p, dtype=float), 3))
 
 
-# --------------------------------------------------------- randen van een model
+# --------------------------------------------------------- edges of a model
 
 def edge_normals(ents, eid):
-    """(p0, p1, n1, n2) van een rand met precies twee vlakken, of None."""
+    """(p0, p1, n1, n2) of an edge with exactly two faces, or None."""
     if eid not in ents.E:
         return None
     fs = sorted(f for f in ents.e2f.get(eid, ()) if f in ents.F)
@@ -331,7 +329,7 @@ def edge_normals(ents, eid):
 
 
 def edge_data(ents, eids):
-    """(rij met (eid, p0, p1, n1, n2), rij met randen die overgeslagen zijn)."""
+    """(list of (eid, p0, p1, n1, n2), list of edges that were skipped)."""
     ok, bad = [], []
     for eid in eids:
         d = edge_normals(ents, eid)
@@ -344,8 +342,8 @@ def edge_data(ents, eids):
 
 
 def _continues(ents, e, w, shared, cos_lim):
-    """Gaat rand `w` glad door waar rand `e` ophoudt: ze delen vlak `shared` en de
-    twee vlakken daarachter zijn bijna hetzelfde vlak (de randen van één ronding)."""
+    """Does edge `w` continue smoothly where edge `e` ends: they share face `shared`
+    and the two faces behind them are nearly the same plane (the edges of one rounding)."""
     if e in ents.soft and w in ents.soft:
         return True
     ne = [ents.F[g].normal for g in ents.e2f.get(e, ()) if g != shared and g in ents.F]
@@ -356,14 +354,14 @@ def _continues(ents, e, w, shared, cos_lim):
 
 
 def soft_chain(ents, eid, angle=20.0):
-    """Alle aaneengesloten gladde randen die één keten vormen met `eid`: de wanden
-    van een cilinder zijn bijvoorbeeld uit 48 randjes opgebouwd die samen één
-    ronding zijn. Een rechte hoek (kubus) stopt de keten.
+    """All connected smooth edges that form one chain with `eid`: the wall of a
+    cylinder, for example, is built from 48 small edges that together are one
+    rounding. A right angle (cube) stops the chain.
 
-    Twee gladde randen hoeven elkaar niet in een hoekpunt te raken: bij een cilinder
-    lopen de twee naden van een wand vlak tegenover elkaar, en toch zijn ze dezelfde
-    ronding. Randen die niet glad zijn worden alleen aan elkaar gereken als ze
-    elkaar in een hoekpunt raken en de vlakken achter hen hetzelfde vlak zijn."""
+    Two smooth edges need not touch at a vertex: on a cylinder the two seams of a
+    wall face run right opposite each other, yet they are the same rounding. Edges
+    that are not smooth are only chained when they touch at a vertex and the faces
+    behind them are the same plane."""
     if eid not in ents.E:
         return []
     cos_lim = math.cos(math.radians(float(angle)))
@@ -383,4 +381,4 @@ def soft_chain(ents, eid, angle=20.0):
     return sorted(seen)
 
 
-smooth_chain = soft_chain        # dezelfde keten, andere naam
+smooth_chain = soft_chain        # the same chain, another name

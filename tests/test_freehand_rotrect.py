@@ -1,8 +1,8 @@
-"""Tekenen: "Uit de vrije hand" (Tekenen > Lijnen) en "Gedraaide rechthoek" (Tekenen > Vormen).
+"""Draw: "Freehand" (Draw > Lines) and "Rotated Rectangle" (Draw > Shapes).
 
-De geometrie erachter staat in volura/geom.py (simplify_polyline en rotated_rect);
-de gereedschappen zelf worden hier ook aangeraakt, zoals tests/test_guides.py dat doet.
-Draait zonder scherm (Qt offscreen platform).
+The geometry behind them is in volura/geom.py (simplify_polyline and rotated_rect);
+the tools themselves are exercised here too, as tests/test_guides.py does.
+Runs without a display (Qt offscreen platform).
 """
 import math
 import os
@@ -58,7 +58,7 @@ def test_simplify_keeps_the_corners():
 def test_simplify_drops_segments_shorter_than_min_len():
     pts = np.array([[0, 0, 0], [10, 0, 0], [10.3, 0.1, 0], [10.6, 0, 0],
                     [30, 20, 0], [31.2, 20.8, 0], [50, 20, 0]], dtype=float)
-    assert len(simplify_polyline(pts, 0.05)) == 7, "zonder minimale lengte blijft alles staan"
+    assert len(simplify_polyline(pts, 0.05)) == 7, "without a minimum length everything stays"
     out = simplify_polyline(pts, 0.05, min_len=2.0)
     assert np.allclose(out, [[0, 0, 0], [10, 0, 0], [30, 20, 0], [50, 20, 0]], atol=1e-9)
     assert np.min(np.linalg.norm(np.diff(out, axis=0), axis=1)) >= 2.0
@@ -129,8 +129,8 @@ def test_closed_freehand_shape_gives_exactly_one_face():
     """The tool adds the simplified stroke as edges; a closed one becomes a single face."""
     pts = simplify_polyline(blob(), 0.6, min_len=1.0)
     assert len(pts) > 4
-    assert float(np.linalg.norm(pts[-1] - pts[0])) < 1.0, "begin en eind liggen tegen elkaar"
-    loop = np.concatenate([pts, pts[:1]])                 # laatste punt = eerste punt
+    assert float(np.linalg.norm(pts[-1] - pts[0])) < 1.0, "start and end are close together"
+    loop = np.concatenate([pts, pts[:1]])                 # last point = first point
     ents = Entities()
     for a, b in zip(loop[:-1], loop[1:]):
         ents.add_line(a, b)
@@ -153,8 +153,8 @@ def test_open_freehand_stroke_gives_no_face():
 def test_both_tools_are_registered():
     from volura.tools import TOOL_CLASSES
     tools = {cls.name: cls for cls in TOOL_CLASSES}
-    assert "freehand" in tools, "gereedschap freehand ontbreekt in TOOL_CLASSES"
-    assert "rotrect" in tools, "gereedschap rotrect ontbreekt in TOOL_CLASSES"
+    assert "freehand" in tools, "tool freehand is missing from TOOL_CLASSES"
+    assert "rotrect" in tools, "tool rotrect is missing from TOOL_CLASSES"
 
 
 @pytest.fixture()
@@ -192,7 +192,7 @@ class Ev:
 def px(win, p):
     """The widget pixel of a world point."""
     s, ok = win.view.cam.project(np.asarray(p, dtype=float)[None])
-    assert ok[0], "punt valt buiten beeld"
+    assert ok[0], "point is off screen"
     return float(s[0][0]), float(s[0][1])
 
 
@@ -205,7 +205,7 @@ def click(tool, win, p):
 
 
 def drag(tool, win, points):
-    """Linkermuisknop indrukken, slepen en weer loslaten."""
+    """Press the left mouse button, drag and release."""
     tool.mouse_press(Ev(), *px(win, points[0]))
     for p in points[1:]:
         tool.mouse_move(Ev(buttons=Qt.LeftButton), *px(win, p))
@@ -218,7 +218,7 @@ def corners(win, fid):
 
 
 def the_face(win):
-    assert len(win.doc.root.F) == 1, f"er is precies één vlak verwacht, het werden er {len(win.doc.root.F)}"
+    assert len(win.doc.root.F) == 1, f"exactly one face expected, got {len(win.doc.root.F)}"
     return next(iter(win.doc.root.F))
 
 
@@ -226,11 +226,11 @@ def the_face(win):
 
 def test_menu_items_are_no_longer_placeholders(win):
     menus = {clean(a.text()): a.menu() for a in win.menuBar().actions() if a.menu() is not None}
-    lines = next(a.menu() for a in menus["Tekenen"].actions() if clean(a.text()) == "Lijnen")
-    shapes = next(a.menu() for a in menus["Tekenen"].actions() if clean(a.text()) == "Vormen")
-    free = next(a for a in lines.actions() if clean(a.text()) == "Uit de vrije hand")
-    rot = next(a for a in shapes.actions() if clean(a.text()) == "Gedraaide rechthoek")
-    assert free.isEnabled() and rot.isEnabled(), "beide gereedschappen moeten werken"
+    lines = next(a.menu() for a in menus["Draw"].actions() if clean(a.text()) == "Lines")
+    shapes = next(a.menu() for a in menus["Draw"].actions() if clean(a.text()) == "Shapes")
+    free = next(a for a in lines.actions() if clean(a.text()) == "Freehand")
+    rot = next(a for a in shapes.actions() if clean(a.text()) == "Rotated Rectangle")
+    assert free.isEnabled() and rot.isEnabled(), "both tools must work"
     assert free is win.a_freehand and rot is win.a_rotrect
     free.trigger()
     assert win.view.tool.name == "freehand"
@@ -240,7 +240,7 @@ def test_menu_items_are_no_longer_placeholders(win):
 
 def test_toolbar_dropdowns_offer_both_tools(win):
     tb = [b for b in win.findChildren(QToolBar) if win.toolBarArea(b).name == "TopToolBarArea"][0]
-    for label, action in (("Lijn", win.a_freehand), ("Rechthoek", win.a_rotrect)):
+    for label, action in (("Line", win.a_freehand), ("Rectangle", win.a_rotrect)):
         act = next(a for a in tb.actions() if clean(a.text()) == label)
         btn = tb.widgetForAction(act)
         assert isinstance(btn, QToolButton) and btn.menu() is not None
@@ -248,7 +248,7 @@ def test_toolbar_dropdowns_offer_both_tools(win):
         assert items and items[0].isEnabled() and items[0] is action
 
 
-# ------------------------------------------------------------------ uit de vrije hand
+# ------------------------------------------------------------------ freehand
 
 def test_freehand_drag_makes_one_face(win):
     win.set_tool("freehand")
@@ -256,8 +256,8 @@ def test_freehand_drag_makes_one_face(win):
     drag(tool, win, [P(*p) for p in blob()])
     fid = the_face(win)
     assert len(win.doc.root.E) >= 4
-    assert abs(GROUND.distance(win.doc.root.face_plane(fid).origin)) < 1e-6, "in het vlak onder de cursor"
-    assert not tool.busy(), "na het loslaten is het gereedschap klaar"
+    assert abs(GROUND.distance(win.doc.root.face_plane(fid).origin)) < 1e-6, "in the plane under the cursor"
+    assert not tool.busy(), "after the release the tool is done"
 
 
 def test_freehand_simplifies_the_stroke(win):
@@ -269,16 +269,16 @@ def test_freehand_simplifies_the_stroke(win):
         tool.mouse_move(Ev(buttons=Qt.LeftButton), *px(win, p))
     assert len(tool.samples) == 90
     pts = tool.points()
-    assert 3 < len(pts) < 30, "de lijn wordt vereenvoudigd"
-    assert np.allclose(pts[0], pts[-1], atol=1e-9), "begin en eind vallen samen: de vorm sluit"
+    assert 3 < len(pts) < 30, "the stroke is simplified"
+    assert np.allclose(pts[0], pts[-1], atol=1e-9), "start and end coincide: the shape closes"
 
 
 def test_freehand_open_stroke_stays_open(win):
     win.set_tool("freehand")
     tool = win.view.tools["freehand"]
     drag(tool, win, [P(x, 40 + 0.2 * np.sin(x), 0) for x in np.linspace(0, 60, 70)])
-    assert len(win.doc.root.F) == 0, "een open lijn wordt geen vlak"
-    assert len(win.doc.root.E) == 1, "een rechte streep blijft één rand"
+    assert len(win.doc.root.F) == 0, "an open stroke does not become a face"
+    assert len(win.doc.root.E) == 1, "a straight stroke stays one edge"
 
 
 def test_freehand_draws_in_the_plane_under_the_cursor(win):
@@ -291,10 +291,10 @@ def test_freehand_draws_in_the_plane_under_the_cursor(win):
     drag(tool, win, [wall.to_world(np.array([20 + 6 * math.cos(a), 15 + 6 * math.sin(a)]))
                      for a in np.linspace(0, 2 * np.pi, 60)])
     assert np.max(np.abs([wall.distance(v) for v in win.doc.root.V.values()])) < 1e-6
-    assert len(win.doc.root.F) == 2, "de gesloten vorm op de wand is een tweede vlak"
+    assert len(win.doc.root.F) == 2, "the closed shape on the wall is a second face"
 
 
-# ------------------------------------------------------------------ gedraaide rechthoek
+# ------------------------------------------------------------------ rotated rectangle
 
 def test_rotrect_three_clicks_make_a_rotated_face(win):
     win.set_tool("rotrect")
@@ -302,11 +302,11 @@ def test_rotrect_three_clicks_make_a_rotated_face(win):
     click(tool, win, P(0, 0))
     assert tool.plane is not None and abs(tool.plane.n[2]) > 0.99
     move(tool, win, P(30, 40))
-    assert tool.vcb_value == "50 mm", "tijdens stap 2 staat de lengte in de maten"
+    assert tool.vcb_value == "50 mm", "during step 2 the Measurements show the length"
     click(tool, win, P(30, 40))
     assert np.allclose(tool.p1, (30, 40, 0), atol=1e-9)
     move(tool, win, P(30, 30))
-    assert tool.vcb_value == "6 mm", "tijdens stap 3 staat de breedte in de maten"
+    assert tool.vcb_value == "6 mm", "during step 3 the Measurements show the width"
     click(tool, win, P(30, 30))
     fid = the_face(win)
     assert corners(win, fid) == sorted([tuple(np.round(p, 3)) for p in
@@ -322,7 +322,7 @@ def test_rotrect_first_side_can_be_any_direction(win):
                           (P(60, 8), P(12, 44), 9)):
         click(tool, win, p0)
         click(tool, win, p1)
-        assert np.allclose(tool.p1, p1, atol=1e-6), "de eerste zijde mag elke richting hebben"
+        assert np.allclose(tool.p1, p1, atol=1e-6), "the first side may have any direction"
         tool.width = width
         tool.finish()
         fid = the_face(win)
@@ -333,12 +333,12 @@ def test_rotrect_first_side_can_be_any_direction(win):
 
 
 def test_rotrect_drag_from_corner_to_corner(win):
-    """Ook slepen van de eerste naar de tweede hoek geeft de eerste zijde."""
+    """Dragging from the first to the second corner also gives the first side."""
     win.set_tool("rotrect")
     tool = win.view.tools["rotrect"]
     drag(tool, win, [P(0, 0), P(40, 0)])
     assert np.allclose(tool.p1, (40, 0, 0), atol=1e-9)
-    assert tool.p0 is not None, "na de sleep wordt alleen de breedte nog geklikt"
+    assert tool.p0 is not None, "after the drag only the width is still clicked"
     drag(tool, win, [P(40, 0), P(40, 25)])
     fid = the_face(win)
     assert corners(win, fid) == sorted([tuple(np.round(p, 3)) for p in
@@ -352,7 +352,7 @@ def test_rotrect_typed_length_angle_and_width(win):
     move(tool, win, P(60, 10))
     tool.vcb_enter("50;30")
     p1 = (10 + 50 * math.cos(math.radians(30)), 10 + 50 * math.sin(math.radians(30)), 0.0)
-    assert np.allclose(tool.p1, p1, atol=1e-9), "lengte;hoek zet de eerste zijde"
+    assert np.allclose(tool.p1, p1, atol=1e-9), "length;angle sets the first side"
     move(tool, win, P(40, 30))
     tool.vcb_enter("20")
     fid = the_face(win)
@@ -366,7 +366,7 @@ def test_rotrect_typed_length_only_keeps_the_mouse_direction(win):
     click(tool, win, P(0, 0))
     move(tool, win, P(30, 40))
     tool.vcb_enter("25")
-    assert np.allclose(tool.p1, (15, 20, 0), atol=1e-9), "25 mm langs de richting van de muis"
+    assert np.allclose(tool.p1, (15, 20, 0), atol=1e-9), "25 mm along the direction of the mouse"
     tool.vcb_enter("10")
     assert the_face(win) is not None
 
@@ -374,7 +374,7 @@ def test_rotrect_typed_length_only_keeps_the_mouse_direction(win):
 def test_rotrect_arrow_keys_choose_the_drawing_plane(win):
     win.set_tool("rotrect")
     tool = win.view.tools["rotrect"]
-    assert tool.key_press(Ev(Qt.Key_Right)), "pijltje rechts kiest het vlak loodrecht op de rode as"
+    assert tool.key_press(Ev(Qt.Key_Right)), "right arrow chooses the plane perpendicular to the red axis"
     click(tool, win, P(20, 20))
     assert np.allclose(np.abs(tool.plane.n), (1, 0, 0), atol=1e-9)
     click(tool, win, P(20, 55))
@@ -382,7 +382,7 @@ def test_rotrect_arrow_keys_choose_the_drawing_plane(win):
     tool.finish()
     the_face(win)
     xs = [v[0] for v in win.doc.root.V.values()]
-    assert max(xs) - min(xs) < 1e-6, "de rechthoek staat in het gekozen tekenvlak"
+    assert max(xs) - min(xs) < 1e-6, "the rectangle is in the chosen drawing plane"
 
 
 def test_rotrect_esc_stops_without_drawing(win):

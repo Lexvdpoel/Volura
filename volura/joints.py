@@ -1,13 +1,13 @@
-"""De rekenkern voor het doorsnijden van een model en het verbinden van de delen.
+"""The computational core for cutting a model in two and joining the parts.
 
-Een groot model wordt met een vlak in twee delen gesneden (``cut``) zodat het in
-delen geprint kan worden. Op het snijvlak komen verbindingen die de delen weer in
-elkaar klikken: pennen, gaten voor losse pennen of een zwaluwstaart. De speling
-(``clearance``) staat altijd aan de gat-kant, zodat de delen na het printen passen.
+A large model is cut in two parts with a plane (``cut``) so it can be printed in
+parts. On the cut plane come joints that click the parts back together: pins,
+holes for loose pins or a dovetail. The clearance (``clearance``) is always on the
+hole side, so the parts fit after printing.
 
-Alles gebeurt in ``manifold3d.Manifold``-volumes; de posities worden berekend in het
-lokale assenstelsel (u, v) van het snijvlak en daarna met ``Plane.matrix()`` terug
-naar de wereld getransformeerd.
+Everything happens in ``manifold3d.Manifold`` volumes; the positions are computed in
+the local coordinate system (u, v) of the cut plane and then transformed back to the
+world with ``Plane.matrix()``.
 """
 from __future__ import annotations
 
@@ -17,9 +17,10 @@ import numpy as np
 import manifold3d as mf
 
 from .geom import Plane, normalize, point_in_polys, rotation_matrix
+from .i18n import tr
 
-CHAMFER = 0.3          # mm afschuining aan de top van een pen
-EXTRA_DEPTH = 0.5      # mm: gaten zijn iets dieper dan de pen erin gaat
+CHAMFER = 0.3          # mm chamfer at the tip of a pin
+EXTRA_DEPTH = 0.5      # mm: holes are a little deeper than the pin goes in
 
 DEFAULTS = {
     "pin_diameter": 5.0,
@@ -33,6 +34,7 @@ DEFAULTS = {
     "segments": 48,
 }
 
+# Joint kinds: identifiers used in code (the dialog shows its own labels), not translated.
 KINDS = ("geen", "pennen", "losse pennen", "zwaluwstaart")
 
 
@@ -92,7 +94,7 @@ def _cs(polys):
 # --------------------------------------------------------------------- cut / section
 
 def cut(manifold, origin, normal):
-    """Splits met ``split_by_plane``; deel_a ligt aan de kant van de normaal."""
+    """Split with ``split_by_plane``; part_a lies on the side of the normal."""
     n = normalize(normal)
     off = float(np.dot(np.asarray(origin, dtype=float), n))
     a, b = manifold.split_by_plane(n, off)
@@ -100,10 +102,10 @@ def cut(manifold, origin, normal):
 
 
 def section(manifold, origin, normal):
-    """De doorsnedeloodrecht op ``normal``: (2D-veelhoeken in (u, v), transformatie).
+    """The cross-section perpendicular to ``normal``: (2D polygons in (u, v), transform).
 
-    De veelhoeken liggen in het lokale assenstelsel van het snijvlak; het tweede
-    element is de ``Plane`` waarmee je punten (u, v) terugrekent naar de wereld."""
+    The polygons lie in the local coordinate system of the cut plane; the second
+    element is the ``Plane`` with which points (u, v) are mapped back to the world."""
     plane = Plane(origin, normal)
     R = np.column_stack([plane.u, plane.v, plane.n])
     Rinv = R.T
@@ -123,7 +125,7 @@ def _to_crosssection(section_arg):
         return _cs(section_arg[0])
     if isinstance(section_arg, (list, tuple)):
         return _cs(section_arg)
-    raise TypeError("section moet (polys, plane), een lijst veelhoeken of een CrossSection zijn")
+    raise TypeError("section must be (polys, plane), a list of polygons or a CrossSection")
 
 
 def _polygon_centroid(poly):
@@ -139,7 +141,7 @@ def _polygon_centroid(poly):
 
 
 def _principal(points):
-    """(zwaartepunt, hoofdas) van een puntenwolk."""
+    """(centroid, principal axis) of a point cloud."""
     P = np.asarray(points, dtype=float).reshape(-1, 2)
     c = P.mean(axis=0)
     Q = P - c
@@ -165,7 +167,7 @@ def _nearest_vertex(region, p):
 
 
 def _auto_pins(region, radius):
-    """1 pen in het midden van een kleine regio, 2 pennen uit elkaar bij een lange."""
+    """1 pin in the middle of a small region, 2 pins apart for a long one."""
     outer = np.asarray(region.to_polygons()[0], dtype=float)
     if len(outer) < 3:
         return []
@@ -182,7 +184,7 @@ def _auto_pins(region, radius):
 
 
 def _spread_pins(shrunk, n):
-    """N pennen zo gelijkmatig mogelijk langs de lengteas van de hele doorsnede."""
+    """N pins spread as evenly as possible along the long axis of the whole cross-section."""
     if n <= 0:
         return []
     polys = [np.asarray(p, dtype=float) for p in shrunk.to_polygons()]
@@ -202,18 +204,18 @@ def _spread_pins(shrunk, n):
 
 
 def pin_positions(section, radius, wall, count="auto"):
-    """Puntposities (in (u, v)) waar een pen met minstens ``wall`` mm rondom past.
+    """Point positions (in (u, v)) where a pin fits with at least ``wall`` mm around it.
 
-    Geeft ``(punten, waarschuwingen)``; zonder ruimte zijn er geen punten en staat
-    er een waarschuwing bij."""
+    Returns ``(points, warnings)``; without room there are no points and there is a
+    warning."""
     cs = _to_crosssection(section)
     if cs.is_empty() or cs.area() <= 1e-9:
-        return [], ["De doorsnede is leeg: er kan geen pen geplaatst worden."]
+        return [], [tr("The cross-section is empty: no pin can be placed.")]
     margin = radius + wall
     shrunk = cs.offset(-margin)
     if shrunk.is_empty() or shrunk.area() <= 1e-9:
-        return [], [f"De doorsnede is te smal voor pennen van {2 * radius:g} mm "
-                    f"met {wall:g} mm wanddikte."]
+        return [], [tr("The cross-section is too narrow for pins of {d:g} mm "
+                       "with {wall:g} mm wall thickness.").format(d=2 * radius, wall=wall)]
     if isinstance(count, str) and count.lower() == "auto":
         points = []
         for region in shrunk.decompose():
@@ -221,14 +223,14 @@ def pin_positions(section, radius, wall, count="auto"):
     else:
         points = _spread_pins(shrunk, int(count))
     if not points:
-        return [], ["Er is te weinig materiaal voor het gekozen aantal pennen."]
+        return [], [tr("There is too little material for the chosen number of pins.")]
     return points, []
 
 
 # --------------------------------------------------------------------- solids
 
 def _pin_solid(plane, uv, radius, length, chamfer, segments):
-    """Een pen die uit het snijvlak de -normaal in steekt (zit aan deel_a)."""
+    """A pin sticking out of the cut plane along -normal (attached to part_a)."""
     chamfer = max(0.0, min(chamfer, radius * 0.5, length * 0.5))
     body = mf.Manifold.cylinder(length - chamfer, radius, radius, segments)
     body = body.translate((0.0, 0.0, -(length - chamfer)))
@@ -243,7 +245,7 @@ def _pin_solid(plane, uv, radius, length, chamfer, segments):
 
 
 def _hole_solid(plane, uv, radius, depth, sign, segments):
-    """Een gat vanaf het snijvlak; sign=-1 de -normaal in, +1 de +normaal in."""
+    """A hole from the cut plane; sign=-1 along -normal, +1 along +normal."""
     cyl = mf.Manifold.cylinder(depth, radius, radius, segments)
     if sign < 0:
         cyl = cyl.translate((0.0, 0.0, -depth))
@@ -263,7 +265,7 @@ def _cyl_between(p, q, radius, segments):
 
 
 def _dovetail_solids(cs, plane, width, depth, angle_deg, clearance, segments):
-    """(staart, sleuf): een trapeziumvormige zwaluwstaart over de hele doorsnede."""
+    """(tail, slot): a trapezoidal dovetail across the whole cross-section."""
     regions = [r for r in cs.decompose() if r.area() > 1e-9]
     if not regions:
         return mf.Manifold(), mf.Manifold()
@@ -290,7 +292,7 @@ def _dovetail_solids(cs, plane, width, depth, angle_deg, clearance, segments):
     slot = mf.Manifold.extrude(slot_cs, length + 2 * clearance)
     slot = slot.translate((0.0, 0.0, dmin - clearance)).transform(M)
 
-    # binnen de doorsnede houden
+    # keep within the cross-section
     clip_depth = depth + 2 * clearance + 1.0
     se = mf.Manifold.extrude(cs, clip_depth).translate((0.0, 0.0, -clip_depth))
     se = se.transform(plane.matrix())
@@ -305,14 +307,14 @@ def _dovetail_solids(cs, plane, width, depth, angle_deg, clearance, segments):
 # --------------------------------------------------------------------- top level
 
 def split_with_joint(manifold, origin, normal, kind, params=None):
-    """Snijdt ``manifold`` en bouwt de verbinding. -> (deel_a, deel_b, extra_onderdelen).
+    """Cut ``manifold`` and build the joint. -> (part_a, part_b, extra_parts).
 
-    ``kind`` is een van "geen", "pennen", "losse pennen", "zwaluwstaart".
-    ``extra_onderdelen`` bevat de losse pennen (bij "losse pennen")."""
+    ``kind`` is one of "geen" (none), "pennen" (pins), "losse pennen" (loose pins),
+    "zwaluwstaart" (dovetail). ``extra_parts`` holds the loose pins (with "losse pennen")."""
     if kind not in KINDS:
-        raise ValueError(f"onbekende verbinding: {kind}")
+        raise ValueError(tr("unknown joint: {kind}").format(kind=kind))
     if manifold.is_empty() or manifold.status() != mf.Error.NoError:
-        raise ValueError("Het model is geen geldig gesloten volume.")
+        raise ValueError(tr("The model is not a valid closed volume."))
     p = _params(params)
     a, b = cut(manifold, origin, normal)
     extras = []
@@ -352,7 +354,7 @@ def split_with_joint(manifold, origin, normal, kind, params=None):
 
 
 def _loose_pins(manifold, pts, plane, radius, length, segments):
-    """Losse pennen (diameter d, lengte L) die plat op het bed liggen, naast het model."""
+    """Loose pins (diameter d, length L) lying flat on the bed, next to the model."""
     if not pts:
         return []
     bb = np.asarray(manifold.bounding_box())

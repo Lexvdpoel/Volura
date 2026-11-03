@@ -63,7 +63,7 @@ class WheelEv:
     """A scroll wheel that raises as soon as the handler reads it."""
 
     def angleDelta(self):
-        raise RuntimeError("scrollwiel mislukt")
+        raise RuntimeError("scroll wheel failed")
 
     def position(self):
         return QPointF(10.0, 10.0)
@@ -76,53 +76,53 @@ class BadEvent(QEvent):
         super().__init__(QEvent.ShortcutOverride)
 
     def type(self):
-        raise RuntimeError("event mislukt")
+        raise RuntimeError("event failed")
 
 
 class BoomTool(Tool):
     name = "boom"
-    status = "Kapot gereedschap"
+    status = "Broken tool"
 
     def mouse_press(self, e, x, y):
-        raise RuntimeError("muisdruk mislukt")
+        raise RuntimeError("mouse press failed")
 
 
 class HalfEditTool(Tool):
     """Draws a rectangle and then crashes: the edit is only half finished."""
 
     name = "half"
-    status = "Halve bewerking"
+    status = "Half an edit"
 
     def mouse_press(self, e, x, y):
         self.doc.checkpoint()
         self.doc.root.add_shape(GROUND, [RECT])
-        assert self.doc.root.F, "rechthoek gaf geen vlak"
-        raise RuntimeError("mislukt halverwege")
+        assert self.doc.root.F, "rectangle gave no face"
+        raise RuntimeError("failed halfway")
 
 
 class PaintTool(Tool):
     name = "paintboom"
-    status = "Tekenen mislukt"
+    status = "Drawing failed"
 
     def draw(self, view):
-        raise RuntimeError("tekenen mislukt")
+        raise RuntimeError("drawing failed")
 
 
 class MoveTool(Tool):
     name = "moveboom"
-    status = "Bewegen mislukt"
+    status = "Moving failed"
 
     def mouse_move(self, e, x, y):
-        raise RuntimeError("bewegen mislukt")
+        raise RuntimeError("moving failed")
 
     def mouse_release(self, e, x, y):
-        raise RuntimeError("loslaten mislukt")
+        raise RuntimeError("release failed")
 
     def double_click(self, e, x, y):
-        raise RuntimeError("dubbelklik mislukt")
+        raise RuntimeError("double click failed")
 
     def key_press(self, e):
-        raise RuntimeError("toets mislukt")
+        raise RuntimeError("key failed")
 
 
 class FakeBox:
@@ -170,7 +170,7 @@ def install(win, tool):
 
 def draw_rect(doc):
     created = doc.root.add_shape(GROUND, [RECT])
-    assert created, "rechthoek gaf geen vlak"
+    assert created, "rectangle gave no face"
     return created[0]
 
 
@@ -192,14 +192,14 @@ def test_failing_mouse_press_is_logged(win):
     install(win, BoomTool(win.view))
     win.view.mousePressEvent(Ev())
     text = log_text()
-    assert "RuntimeError" in text and "muisdruk mislukt" in text
+    assert "RuntimeError" in text and "mouse press failed" in text
 
 
 def test_half_finished_edit_is_undone(win):
     install(win, HalfEditTool(win.view))
     win.view.mousePressEvent(Ev())
-    assert not win.doc.root.F, "de halve bewerking is achtergelaten"
-    assert not win.doc.undo_stack, "het checkpoint van de mislukte bewerking is gebleven"
+    assert not win.doc.root.F, "the half edit was left behind"
+    assert not win.doc.undo_stack, "the checkpoint of the failed edit remained"
 
 
 def test_tool_is_reset_after_a_failure(win):
@@ -236,11 +236,11 @@ def test_excepthook_logs_and_asks_nothing_offscreen(win, monkeypatch):
     box = FakeBox()
     monkeypatch.setattr(app_module, "QMessageBox", box)
     try:
-        raise ValueError("buiten de handlers mislukt")
+        raise ValueError("failed outside the handlers")
     except ValueError:
         app_module.excepthook(*sys.exc_info())
-    assert "buiten de handlers mislukt" in log_text()
-    assert not box.asked, "offscreen hoort geen melding te tonen"
+    assert "failed outside the handlers" in log_text()
+    assert not box.asked, "offscreen must not show a message"
 
 
 # ------------------------------------------------------------------ OpenGL
@@ -267,7 +267,7 @@ def fake_gl(monkeypatch, errors_to_return):
 def test_initialize_gl_empties_the_error_queue(monkeypatch):
     calls = fake_gl(monkeypatch, [1282, 1280, 1286])
     assert errors.clear_gl_errors() == 3
-    assert len(calls) == 4, "er wordt te veel of te weinig glGetError gedaan"
+    assert len(calls) == 4, "glGetError is called too often or too rarely"
 
 
 def test_initialize_gl_drains_at_most_ten_errors(monkeypatch):
@@ -285,7 +285,7 @@ def test_clearing_gl_errors_survives_a_broken_gl(monkeypatch):
         @staticmethod
         def glGetError():
             calls.append(1)
-            raise RuntimeError("geen GL-context")
+            raise RuntimeError("no GL context")
 
     sys.modules["OpenGL"].GL = Boom
     assert errors.clear_gl_errors() == 0
@@ -302,14 +302,14 @@ def test_failed_save_keeps_the_old_file(win, monkeypatch, tmp_path):
     with open(win.doc.path, "rb") as f:
         before = f.read()
 
-    def kapot(path, files):
-        raise OSError("schijf vol")
+    def broken(path, files):
+        raise OSError("disk full")
 
-    monkeypatch.setattr(fileio, "write_zip", kapot)
+    monkeypatch.setattr(fileio, "write_zip", broken)
     assert win.file_save() is False
     with open(win.doc.path, "rb") as f:
-        assert f.read() == before, "het bestaande model is beschadigd"
-    assert not [n for n in os.listdir(tmp_path) if n.endswith(".tmp")], "tijdelijk bestand achtergelaten"
+        assert f.read() == before, "the existing model is damaged"
+    assert not [n for n in os.listdir(tmp_path) if n.endswith(".tmp")], "temporary file left behind"
     assert any(kind == "critical" for kind, *_ in box.asked)
 
 
@@ -356,7 +356,7 @@ def test_restore_autosave_loads_the_model(win, tmp_path):
     win.doc.notify()
     assert not win.doc.root.F
     assert win.restore_autosave() is True
-    assert win.doc.root.F, "het automatisch opgeslagen model is niet geladen"
+    assert win.doc.root.F, "the autosaved model was not loaded"
 
 
 if __name__ == "__main__":

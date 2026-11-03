@@ -1,11 +1,11 @@
-"""Tekengereedschappen en bewerkingen op het 2D-werkblad, met snappen.
+"""Drawing tools and operations on the 2D worksheet, with snapping.
 
-De gereedschappen uit `volura.sheettools` worden aangestuurd via hun muis- en
-meetvakfuncties op een offscreen `SheetView`, met een hulpje dat wereldmillimeters
-naar muisgebeurtenissen omzet. `volura.sheetsnap` laat de cursor naar eindpunten,
-middens, middelpunten, snijpunten, paden en het raster trekken en lijnt horizontaal
-of verticaal uit; de bewerkingen (samenvoegen, aftrekken, snijpunt, aaneenrijgen,
-opsplitsen, uitlijnen, gelijk verdelen, dupliceren) zijn steeds één undo-stap.
+The tools from `volura.sheettools` are driven through their mouse and
+Measurements functions on an offscreen `SheetView`, with a helper that turns world millimetres
+into mouse events. `volura.sheetsnap` pulls the cursor to endpoints,
+midpoints, centres, intersections, paths and the grid and aligns horizontally
+or vertically; the operations (union, subtract, intersect, join,
+split, align, distribute, duplicate) are always one undo step.
 
 Run with:  python -m pytest tests
 """
@@ -32,7 +32,7 @@ from volura.vector2d import polygon_area, regions  # noqa: E402
 _app = QApplication.instance() or QApplication(sys.argv[:1])
 
 SCALE = 4.0                 # pixels per mm
-ORIGIN = (200.0, 400.0)     # de schermplek van wereld (0, 0)
+ORIGIN = (200.0, 400.0)     # the screen position of world (0, 0)
 
 
 # ------------------------------------------------------------------ helpers
@@ -51,7 +51,7 @@ def win():
 
 
 def view_of(doc, size=(900, 600)):
-    """Een werkblad met bekende schaal, zodat millimeters precies op pixels vallen."""
+    """A worksheet with a known scale, so millimetres fall exactly on pixels."""
     v = SheetView(doc)
     v.resize(*size)
     v.show()
@@ -99,14 +99,14 @@ def dblclick(view, x, y):
 
 
 def type_in(view, text):
-    """Typen in het meetvak zoals in het venster: toetsen, daarna Enter."""
+    """Type in the Measurements box as in the window: keys, then Enter."""
     for ch in text:
         view.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_unknown, Qt.NoModifier, ch))
     view.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Return, Qt.NoModifier, "\r"))
 
 
 def W(view, x, y):
-    """Wereldmillimeters naar het schermpunt dat eronder staat."""
+    """World millimetres to the screen point under them."""
     s = view.to_screen((float(x), float(y)))
     return s.x(), s.y()
 
@@ -136,13 +136,13 @@ def total_area(paths) -> float:
 
 
 def new_paths(doc, before):
-    """De paden die er sinds `before` bij zijn gekomen."""
+    """The paths added since `before`."""
     return doc.sheet.paths[before:]
 
 
-# ------------------------------------------------------------------ 1. gereedschappen
+# ------------------------------------------------------------------ 1. tools
 
-def test_rechthoek_30_20_is_gesloten_met_oppervlakte_600():
+def test_rectangle_30_20_is_closed_with_area_600():
     v = sheet_view()
     doc = v.doc
     v.set_tool("rectangle")
@@ -157,7 +157,7 @@ def test_rechthoek_30_20_is_gesloten_met_oppervlakte_600():
                        np.sort(np.array([[0, 0], [30, 0], [30, 20], [0, 20]], float), axis=0))
 
 
-def test_rechthoek_door_twee_hoeken_te_klikken():
+def test_rectangle_by_clicking_two_corners():
     v = sheet_view()
     v.set_tool("rectangle")
     wclick(v, 4.0, 4.0)
@@ -166,7 +166,7 @@ def test_rechthoek_door_twee_hoeken_te_klikken():
     assert abs(area_of(v.doc.sheet.paths[0]) - 200.0) < 1e-6
 
 
-def test_afgeronde_rechthoek_r5():
+def test_rounded_rectangle_r5():
     v = sheet_view()
     doc = v.doc
     v.set_tool("roundrect")
@@ -178,10 +178,10 @@ def test_afgeronde_rechthoek_r5():
     want = 600.0 - (4.0 - math.pi) * 25.0
     assert path.closed
     assert abs(area_of(path) - want) / want < 0.005
-    assert len(path.pts) > 8, "de hoeken zijn afgevlakt"
+    assert len(path.pts) > 8, "the corners are rounded off"
 
 
-def test_cirkel_r10_met_middelpunt_en_straal_in_meta():
+def test_circle_r10_with_center_and_radius_in_meta():
     v = sheet_view()
     doc = v.doc
     v.set_tool("circle")
@@ -195,7 +195,7 @@ def test_cirkel_r10_met_middelpunt_en_straal_in_meta():
     assert abs(path.meta["radius"] - 10.0) < 1e-9
 
 
-def test_cirkel_zijden_met_12s():
+def test_circle_sides_with_12s():
     v = sheet_view()
     v.set_tool("circle")
     wtype(v, "12s")
@@ -204,10 +204,10 @@ def test_cirkel_zijden_met_12s():
     wtype(v, "10")
     path = v.doc.sheet.paths[-1]
     assert len(path.pts) == 12
-    assert abs(total_area([path]) - 300.0) < 1.0, "twaalfhoek met straal 10"
+    assert abs(total_area([path]) - 300.0) < 1.0, "dodecagon with radius 10"
 
 
-def test_ellips_met_halvematen():
+def test_ellipse_with_semi_axes():
     v = sheet_view()
     v.set_tool("ellipse")
     wclick(v, 0.0, 0.0)
@@ -218,7 +218,7 @@ def test_ellips_met_halvematen():
     assert path.meta["rx"] == 20.0 and path.meta["ry"] == 10.0
 
 
-def test_veelhoek_6_zijden():
+def test_polygon_6_sides():
     v = sheet_view()
     v.set_tool("polygon")
     assert v.tool.segments == 6
@@ -232,7 +232,7 @@ def test_veelhoek_6_zijden():
     assert abs(area_of(path) - want) < 1e-6
 
 
-def test_boog_door_drie_punten_krijgt_middelpunt_en_straal():
+def test_three_point_arc_gets_center_and_radius():
     v = sheet_view()
     v.set_tool("arc")
     wclick(v, 0.0, 0.0)
@@ -247,7 +247,7 @@ def test_boog_door_drie_punten_krijgt_middelpunt_en_straal():
     assert np.allclose(pts_of(path)[-1], [20.0, 0.0], atol=1e-6)
 
 
-def test_boog_om_middelpunt_met_hoek_uit_het_meetvak():
+def test_arc_around_center_with_angle_from_the_measurements_box():
     v = sheet_view()
     v.set_tool("centerarc")
     wclick(v, 0.0, 0.0)
@@ -263,7 +263,7 @@ def test_boog_om_middelpunt_met_hoek_uit_het_meetvak():
     assert abs(length - quarter) / quarter < 0.01
 
 
-def test_polylijn_sluit_door_op_het_startpunt_te_klikken():
+def test_polyline_closes_by_clicking_the_start_point():
     v = sheet_view()
     doc = v.doc
     v.set_tool("line")
@@ -275,10 +275,10 @@ def test_polylijn_sluit_door_op_het_startpunt_te_klikken():
     made = new_paths(doc, 0)
     assert len(made) == 1 and made[0].closed
     assert len(made[0].pts) == 3
-    assert abs(area_of(made[0]) - 100.0) < 1e-6, "de driehoek is gesloten"
+    assert abs(area_of(made[0]) - 100.0) < 1e-6, "the triangle is closed"
 
 
-def test_polylijn_met_enter_en_met_dubbelklik():
+def test_polyline_with_enter_and_with_double_click():
     v = sheet_view()
     doc = v.doc
     v.set_tool("line")
@@ -291,10 +291,10 @@ def test_polylijn_met_enter_en_met_dubbelklik():
     wclick(v, 50.0, 0.0)
     dblclick(v, *W(v, 50.0, 0.0))
     assert len(doc.sheet.paths) == 2
-    assert len(doc.sheet.paths[1].pts) == 2, "de dubbelklik telt niet als extra punt"
+    assert len(doc.sheet.paths[1].pts) == 2, "the double click does not count as an extra point"
 
 
-def test_lijn_lengte_en_hoek_uit_het_meetvak():
+def test_line_length_and_angle_from_the_measurements_box():
     v = sheet_view()
     v.set_tool("line")
     wclick(v, 0.0, 0.0)
@@ -308,7 +308,7 @@ def test_lijn_lengte_en_hoek_uit_het_meetvak():
     assert np.allclose(pts_of(path), [[0, 0], [25, 0], [25, 10]], atol=1e-9)
 
 
-def test_verschuiving_met_afgeronde_hoeken():
+def test_offset_with_rounded_corners():
     v = sheet_view()
     doc = v.doc
     doc.sheet.add_path([[0, 0], [10, 0], [10, 10], [0, 10]], closed=True)
@@ -324,7 +324,7 @@ def test_verschuiving_met_afgeronde_hoeken():
     assert abs(total_area(made) - want) / want < 0.01
 
 
-def test_verschuiving_scherp_en_naar_binnen():
+def test_offset_sharp_and_inward():
     v = sheet_view()
     v.offset_round = False
     doc = v.doc
@@ -332,86 +332,86 @@ def test_verschuiving_scherp_en_naar_binnen():
     v.set_tool("offset")
     wclick(v, 5.0, 10.0)
     wmove(v, 5.0, 8.0)
-    assert v.tool.distance < 0.0, "binnen de contour is de afstand negatief"
+    assert v.tool.distance < 0.0, "inside the contour the distance is negative"
     wtype(v, "2")
     made = new_paths(doc, 1)
     assert abs(total_area(made) - 36.0) < 1e-6
 
 
-# ------------------------------------------------------------------ 2. snappen
+# ------------------------------------------------------------------ 2. snapping
 
-def test_snappen_naar_eindpunt_en_midden_van_een_lijnstuk():
+def test_snap_to_endpoint_and_midpoint_of_a_segment():
     doc = Document()
     doc.sheet.add_path([[0, 0], [20, 0]])
     v = sheet_view(doc)
     got = v.snap_engine.snap(*W(v, 20.6, 0.4))
-    assert got.kind == "endpoint" and got.label == "Eindpunt"
+    assert got.kind == "endpoint" and got.label == "Endpoint"
     assert np.allclose(got.point, [20.0, 0.0])
     got = v.snap_engine.snap(*W(v, 9.6, 0.5))
-    assert got.kind == "midpoint" and got.label == "Middelpunt"
+    assert got.kind == "midpoint" and got.label == "Midpoint"
     assert np.allclose(got.point, [10.0, 0.0])
     got = v.snap_engine.snap(*W(v, 4.0, 1.2))
-    assert got.kind == "onpath" and got.label == "Op pad"
+    assert got.kind == "onpath" and got.label == "On Path"
     assert abs(got.point[1]) < 1e-9
 
 
-def test_snappen_naar_middelpunt_van_cirkel_en_boog():
+def test_snap_to_center_of_circle_and_arc():
     doc = Document()
     loop = circle_loop([40.0, 20.0], 10.0)
     doc.sheet.add_path(loop, closed=True, meta={"kind": "circle",
                                                 "center": [40.0, 20.0], "radius": 10.0})
     v = sheet_view(doc)
     got = v.snap_engine.snap(*W(v, 40.7, 19.4))
-    assert got.kind == "center" and got.label == "Middelpunt"
+    assert got.kind == "center" and got.label == "Center"
     assert np.allclose(got.point, [40.0, 20.0])
 
 
-def test_snijpunt_van_twee_lijnen_wordt_gevonden():
+def test_intersection_of_two_lines_is_found():
     doc = Document()
     doc.sheet.add_path([[0, 0], [20, 0]])
     doc.sheet.add_path([[10, -10], [10, 10]])
     v = sheet_view(doc)
     got = v.snap_engine.snap(*W(v, 10.4, 0.6))
-    assert got.kind == "intersection" and got.label == "Snijpunt"
+    assert got.kind == "intersection" and got.label == "Intersection"
     assert np.allclose(got.point, [10.0, 0.0])
 
 
-def test_raster_aan_uit_op_de_werkbalk():
+def test_grid_on_off_on_the_toolbar():
     doc = Document()
     v = sheet_view(doc, grid=True)
     got = v.snap_engine.snap(*W(v, 50.7, 49.6))
-    assert got.kind == "grid" and got.label == "Raster"
+    assert got.kind == "grid" and got.label == "Grid"
     assert np.allclose(got.point, [50.0, 50.0])
     v.set_grid_snap(False)
     got = v.snap_engine.snap(*W(v, 50.7, 49.6))
     assert got.kind == "" and np.allclose(got.point, [50.7, 49.6], atol=1e-9)
 
 
-def test_uitlijnen_met_hulplijn_hoek_aan_hoek():
+def test_alignment_with_guide_corner_to_corner():
     doc = Document()
     doc.sheet.add_path([[0, 0], [20, 0]])
     v = sheet_view(doc)
     got = v.snap_engine.snap(*W(v, 30.0, 0.6), anchor=np.array([25.0, 0.0]))
     assert got.kind == "align"
-    assert abs(got.point[1]) < 1e-9, "horizontaal op één lijn met de vorige klik"
+    assert abs(got.point[1]) < 1e-9, "horizontally in line with the previous click"
     assert got.guide and got.guide[0] == "h"
     got = v.snap_engine.snap(*W(v, 20.4, 8.0))
     assert got.kind == "align" and got.guide[0] == "v"
-    assert abs(got.point[0] - 20.0) < 1e-9, "verticaal op één lijn met het eindpunt"
+    assert abs(got.point[0] - 20.0) < 1e-9, "vertically in line with the endpoint"
 
 
-def test_het_gereedschap_gebruikt_het_snap_punt():
+def test_the_tool_uses_the_snap_point():
     doc = Document()
     doc.sheet.add_path([[0, 0], [20, 0]])
     v = sheet_view(doc)
     v.set_tool("line")
-    wclick(v, 20.4, 0.5)                       # naast het eindpunt
+    wclick(v, 20.4, 0.5)                       # next to the endpoint
     assert np.allclose(v.tool.pts[0], [20.0, 0.0])
     wclick(v, 0.6, -0.4)
     assert np.allclose(v.tool.pts[1], [0.0, 0.0])
 
 
-def test_markering_wordt_getekend():
+def test_marker_is_drawn():
     from PySide6.QtGui import QImage
     doc = Document()
     doc.sheet.add_path([[0, 0], [20, 0]])
@@ -424,14 +424,14 @@ def test_markering_wordt_getekend():
     v.render(image)
     reds = sum(1 for y in range(0, 600, 2) for x in range(0, 900, 2)
                if image.pixelColor(x, y).red() > 150 and image.pixelColor(x, y).green() < 130)
-    assert reds > 4, "de snap-markering is niet te zien"
+    assert reds > 4, "the snap marker is not visible"
 
 
-# ------------------------------------------------------------------ 3. tekst
+# ------------------------------------------------------------------ 3. text
 
-def test_tekst_Ao_met_minstens_twee_gaten():
+def test_text_Ao_with_at_least_two_holes():
     if not fonts.has_fonts():
-        pytest.skip("dit systeem heeft geen lettertypen")
+        pytest.skip("this system has no fonts")
     v = sheet_view()
     doc = v.doc
     tool = v.tools["text"]
@@ -439,11 +439,11 @@ def test_tekst_Ao_met_minstens_twee_gaten():
     v.set_tool("text")
     wclick(v, 0.0, 0.0)
     made = new_paths(doc, 0)
-    assert len(made) >= 4, "buitenranden en gaten"
+    assert len(made) >= 4, "outer edges and holes"
     assert all(p.closed for p in made)
-    assert len({int(p.src) for p in made}) == 1, "één bronelement"
+    assert len({int(p.src) for p in made}) == 1, "one source element"
     holes = [p for p in made if area_of(p) < 0.0]
-    assert len(holes) >= 2, "de gaten van A en o"
+    assert len(holes) >= 2, "the holes of A and o"
     outsides = [p for p in made if area_of(p) > 0.0]
     a = min(outsides, key=lambda p: float(pts_of(p)[:, 0].min()))
     height = float(pts_of(a)[:, 1].max() - pts_of(a)[:, 1].min())
@@ -452,9 +452,9 @@ def test_tekst_Ao_met_minstens_twee_gaten():
     assert abs(total_area(made) - filled) < 1e-6
 
 
-def test_tekst_hoogte_wijzigen_uit_het_meetvak():
+def test_text_height_change_from_the_measurements_box():
     if not fonts.has_fonts():
-        pytest.skip("dit systeem heeft geen lettertypen")
+        pytest.skip("this system has no fonts")
     v = sheet_view()
     tool = v.tools["text"]
     tool.set_text("A", fonts.default_family(), 10.0, False)
@@ -462,11 +462,11 @@ def test_tekst_hoogte_wijzigen_uit_het_meetvak():
     wtype(v, "20")
     assert tool.height == pytest.approx(20.0)
     top = max(float(p[:, 1].max()) for p in tool.loops)
-    assert abs(top - 20.0) / 20.0 < 0.10, "de hoofdletterhoogte volgt het meetvak"
-    assert min(float(p[:, 1].min()) for p in tool.loops) > -1.0, "de tekst staat op de basislijn"
+    assert abs(top - 20.0) / 20.0 < 0.10, "the cap height follows the Measurements box"
+    assert min(float(p[:, 1].min()) for p in tool.loops) > -1.0, "the text sits on the baseline"
 
 
-# ------------------------------------------------------------------ 4. bewerkingen
+# ------------------------------------------------------------------ 4. operations
 
 def two_squares():
     doc = Document()
@@ -477,7 +477,7 @@ def two_squares():
     return doc, a, b
 
 
-def test_union_aftrekken_en_intersect_van_twee_vierkanten():
+def test_union_subtract_and_intersect_of_two_squares():
     doc, a, b = two_squares()
     v = sheet_view(doc)
     v.set_selection([a, b])
@@ -495,19 +495,19 @@ def test_union_aftrekken_en_intersect_van_twee_vierkanten():
     assert len(doc.sheet.paths) == 2
 
 
-def test_booleaanse_bewerking_zonder_selectie_geeft_melding():
+def test_boolean_operation_without_selection_gives_message():
     doc, a, _b = two_squares()
     v = sheet_view(doc)
     v.clear_selection()
     assert not v.sheet_boolean("union")
-    assert "selecteer" in v._status_shown.lower()
+    assert "select" in v._status_shown.lower()
     assert len(doc.sheet.paths) == 2
     v.set_selection([a])
     assert not v.sheet_boolean("subtract")
     assert len(doc.sheet.paths) == 2
 
 
-def test_bewerking_met_gaten_blijft_een_vorm():
+def test_operation_with_holes_stays_one_shape():
     doc = Document()
     outer = doc.sheet.add_path([[0, 0], [20, 0], [20, 20], [0, 20]], closed=True,
                                filled=True, src=1)
@@ -521,7 +521,7 @@ def test_bewerking_met_gaten_blijft_een_vorm():
     assert abs(total_area(paths) - 300.0) < 1e-6
 
 
-def test_aaneenrijgen_en_opsplitsen():
+def test_join_and_split():
     doc = Document()
     for seg in ([[0, 0], [10, 0]], [[10, 0], [10, 10]], [[10, 10], [0, 10]], [[0, 10], [0, 0]]):
         doc.sheet.add_path(seg)
@@ -534,7 +534,7 @@ def test_aaneenrijgen_en_opsplitsen():
     assert all(len(p.pts) == 2 and not p.closed for p in doc.sheet.paths)
 
 
-def test_uitlijnen_links_midden_en_rechts():
+def test_align_left_center_and_right():
     doc = Document()
     a = doc.sheet.add_path([[0, 0], [4, 0], [4, 2], [0, 2]], closed=True)
     b = doc.sheet.add_path([[10, 5], [14, 5], [14, 7], [10, 7]], closed=True)
@@ -555,7 +555,7 @@ def test_uitlijnen_links_midden_en_rechts():
                        np.mean(pts_of(doc.sheet.paths[1]), axis=0), atol=1e-9)
 
 
-def test_gelijk_verdelen():
+def test_distribute():
     doc = Document()
     for x in (0.0, 11.0, 30.0):
         doc.sheet.add_path([[x, 0], [x + 2, 0], [x + 2, 2], [x, 2]], closed=True)
@@ -564,11 +564,11 @@ def test_gelijk_verdelen():
     assert v.distribute_selected("x")
     mids = sorted(float(pts_of(p)[:, 0].mean()) for p in doc.sheet.paths)
     assert mids[0] == pytest.approx(1.0) and mids[-1] == pytest.approx(31.0)
-    assert mids[1] == pytest.approx(16.0), "het middenpunt gaat precies in het midden"
+    assert mids[1] == pytest.approx(16.0), "the middle one goes exactly in the middle"
     assert np.allclose(distribute_deltas([doc.sheet.paths[0]], "x")[0], [0.0, 0.0])
 
 
-def test_dupliceren_in_raster_3_bij_2_met_15_mm():
+def test_duplicate_in_grid_3_by_2_with_15_mm():
     doc = Document()
     doc.sheet.add_path([[0, 0], [4, 0], [4, 2], [0, 2]], closed=True)
     v = sheet_view(doc)
@@ -581,7 +581,7 @@ def test_dupliceren_in_raster_3_bij_2_met_15_mm():
     assert grid_offsets(1, 1, 10.0, 10.0) == []
 
 
-def test_dupliceren_in_rij_met_cirkel_houdt_het_middelpunt():
+def test_duplicate_in_row_with_circle_keeps_the_center():
     doc = Document()
     doc.sheet.add_path(circle_loop([0.0, 0.0], 5.0), closed=True, filled=True,
                        meta={"kind": "circle", "center": [0.0, 0.0], "radius": 5.0})
@@ -596,7 +596,7 @@ def test_dupliceren_in_rij_met_cirkel_houdt_het_middelpunt():
 
 # ------------------------------------------------------------------ 5. undo
 
-def test_elke_gereedschap_bewerking_is_one_undo_stap():
+def test_every_tool_operation_is_one_undo_step():
     v = sheet_view()
     doc = v.doc
     steps = len(doc.undo_stack)
@@ -618,7 +618,7 @@ def test_elke_gereedschap_bewerking_is_one_undo_stap():
     assert len(doc.sheet.paths) == 2
 
 
-def test_bewerkingen_zijn_ongedaan_te_maken():
+def test_operations_can_be_undone():
     doc, a, b = two_squares()
     v = sheet_view(doc)
     v.set_selection([a, b])
@@ -641,7 +641,7 @@ def test_bewerkingen_zijn_ongedaan_te_maken():
     assert len(doc2.sheet.paths) == 1 and len(doc2.sheet.paths[0].pts) == 4
 
 
-def test_snappen_en_gereedschap_veranderen_het_document_niet():
+def test_snapping_and_tool_do_not_change_the_document():
     doc = Document()
     doc.sheet.add_path([[0, 0], [20, 0]])
     v = sheet_view(doc)
@@ -654,9 +654,9 @@ def test_snappen_en_gereedschap_veranderen_het_document_niet():
     assert len(doc.sheet.paths) == 1
 
 
-# ------------------------------------------------------------------ 6. bediening
+# ------------------------------------------------------------------ 6. controls
 
-def test_SHEET_TOOLS_heeft_de_tekengereedschappen():
+def test_SHEET_TOOLS_has_the_drawing_tools():
     names = [cls.name for cls in SHEET_TOOLS]
     for want in ("line", "rectangle", "roundrect", "circle", "ellipse", "arc", "centerarc",
                  "polygon", "text", "offset"):
@@ -665,62 +665,62 @@ def test_SHEET_TOOLS_heeft_de_tekengereedschappen():
     assert set(v.tools) == set(names)
     for name in names:
         tool = v.tools[name]
-        assert tool.status_text().strip(), f"{name}: geen statustekst"
+        assert tool.status_text().strip(), f"{name}: no status text"
         assert isinstance(tool.vcb_label(), str)
 
 
-def test_sneltoetsen_zijn_dezelfde_als_in_3d():
+def test_shortcuts_are_the_same_as_in_3d():
     v = sheet_view()
     for key, name in ((Qt.Key_L, "line"), (Qt.Key_R, "rectangle"), (Qt.Key_C, "circle"),
                       (Qt.Key_A, "arc"), (Qt.Key_F, "offset"), (Qt.Key_T, "text"),
                       (Qt.Key_E, "ellipse"), (Qt.Key_P, "polygon"), (Qt.Key_N, "roundrect"),
                       (Qt.Key_M, "move"), (Qt.Key_Q, "rotate"), (Qt.Key_S, "scale")):
         v.keyPressEvent(QKeyEvent(QEvent.KeyPress, key, Qt.NoModifier, ""))
-        assert v.tool.name == name, f"toets {key} geeft {v.tool.name}"
+        assert v.tool.name == name, f"key {key} gives {v.tool.name}"
 
 
-def test_ongeldige_invoer_in_het_meetvak_geeft_melding():
+def test_invalid_input_in_the_measurements_box_gives_message():
     v = sheet_view()
     v.set_tool("rectangle")
     wtype(v, "30;20")
-    assert "klik eerst" in v._status_shown
+    assert "first click" in v._status_shown
     wclick(v, 0.0, 0.0)
-    v.submit_vcb("nee")
-    assert "Ongeldige invoer" in v._status_shown
+    v.submit_vcb("no")
+    assert "Invalid input" in v._status_shown
     assert v.doc.sheet.paths == []
 
 
-def test_rechtsklikmenu_met_de_bewerkingen():
+def test_context_menu_with_the_operations():
     doc, a, b = two_squares()
     v = sheet_view(doc)
     menu = v.build_context_menu()
     assert isinstance(menu, QMenu)
     labels = [a.text().replace("&", "") for a in menu.actions()]
-    assert {"Samenvoegen", "Aftrekken", "Snijpunt", "Aaneenrijgen",
-            "Opsplitsen in lijnstukken"} <= set(labels)
-    assert "Dupliceren in rij of raster…" in labels
+    assert {"Union", "Subtract", "Intersect", "Join",
+            "Split into Segments"} <= set(labels)
+    assert "Duplicate in Row or Grid…" in labels
     submenus = [a.menu() for a in menu.actions() if a.menu() is not None]
-    align = [sorted(x.text() for x in m.actions()) for m in submenus if m.title() == "Uitlijnen"]
-    assert align and set(align[0]) == {"Links", "Midden", "Rechts", "Boven", "Onder"}
+    align = [sorted(x.text() for x in m.actions()) for m in submenus if m.title() == "Align"]
+    assert align and set(align[0]) == {"Left", "Middle", "Right", "Top", "Bottom"}
 
 
-def test_werkbalk_sheettoolbar_heeft_de_nieuwe_knoppen(win):
+def test_sheettoolbar_has_the_new_buttons(win):
     bar = next((b for b in win.findChildren(QToolBar)
                 if b.objectName() == "SheetToolbar"), None)
     assert bar is not None
     labels = [a.text().replace("&", "") for a in bar.actions() if not a.isSeparator()]
-    for want in ("Lijn", "Rechthoek", "Afgeronde rechthoek", "Cirkel", "Ellips", "Boog",
-                 "Veelhoek", "Tekst", "Verschuiving", "Contouren samenvoegen",
-                 "Contouren aftrekken", "Snijpunt van contouren", "Lijnen aaneenrijgen",
-                 "Opsplitsen in lijnstukken", "Dupliceren in rij of raster…",
-                 "Raster vastzetten"):
-        assert want in labels, f"knop {want} ontbreekt op de werkbalk"
-    assert bar.isHidden(), "in 3D is de werkbalk van het werkblad niet te zien"
+    for want in ("Line", "Rectangle", "Rounded Rectangle", "Circle", "Ellipse", "Arc",
+                 "Polygon", "Text", "Offset", "Union Outlines",
+                 "Subtract Outlines", "Intersect Outlines", "Join Lines",
+                 "Split into Segments", "Duplicate in Row or Grid…",
+                 "Snap to Grid"):
+        assert want in labels, f"button {want} is missing from the toolbar"
+    assert bar.isHidden(), "in 3D the worksheet toolbar is not visible"
     win.set_mode("2d")
     assert not bar.isHidden()
 
 
-def test_werkbalkknoppen_werken_in_het_venster(win):
+def test_toolbar_buttons_work_in_the_window(win):
     win.set_mode("2d")
     sv = win.sheet_view
     win.sheet_tool_actions["circle"].trigger()
@@ -738,41 +738,41 @@ def test_werkbalkknoppen_werken_in_het_venster(win):
     assert win.mode == "2d"
 
 
-def test_tekst_gereedschap_vraagt_om_tekst_als_die_er_nog_niet_is(win, monkeypatch):
+def test_text_tool_asks_for_text_when_there_is_none_yet(win, monkeypatch):
     asked = []
     monkeypatch.setattr(win, "ask_sheet_text", lambda: asked.append(1) or False)
     win.set_mode("2d")
     sv = win.sheet_view
     sv.set_tool("text")
     wclick(sv, 0.0, 0.0)
-    assert asked, "zonder contouren vraagt het gereedschap eerst om tekst"
+    assert asked, "without outlines the tool asks for text first"
     assert sv.doc.sheet.paths == []
 
 
-def test_hulpmiddelen_staan_aan():
+def test_aids_are_on():
     v = sheet_view()
     assert v.snap_to_grid and v.offset_round
-    assert v.join_type_name() == "Afgerond"
+    assert v.join_type_name() == "Rounded"
     v.set_offset_round(False)
-    assert v.join_type_name() == "Scherp"
-    assert v.draw_layer() == "Snijden", "een nieuw werkblad tekent op de snijlaag"
-    v.doc.sheet.ensure_layer("snij")
-    v.doc.sheet.layers["snij"].locked = True
-    v.current_layer = "snij"
-    assert v.draw_layer() == "0", "op een vergrendelde laag teken je niet"
+    assert v.join_type_name() == "Sharp"
+    assert v.draw_layer() == "Cut", "a new worksheet draws on the cut layer"
+    v.doc.sheet.ensure_layer("cutting")
+    v.doc.sheet.layers["cutting"].locked = True
+    v.current_layer = "cutting"
+    assert v.draw_layer() == "0", "you do not draw on a locked layer"
 
 
-def test_nieuwe_paden_krijgen_de_actieve_laag():
+def test_new_paths_get_the_active_layer():
     v = sheet_view()
-    v.doc.sheet.ensure_layer("snij")
-    v.current_layer = "snij"
+    v.doc.sheet.ensure_layer("cutting")
+    v.current_layer = "cutting"
     v.set_tool("rectangle")
     wclick(v, 0.0, 0.0)
     wtype(v, "10;10")
-    assert v.doc.sheet.paths[0].layer == "snij"
+    assert v.doc.sheet.paths[0].layer == "cutting"
 
 
-def test_gebouwde_vormen_zelf():
+def test_built_shapes_themselves():
     loop = rounded_rect_loop([0, 0], [30, 20], 5.0)
     want = 600.0 - (4.0 - math.pi) * 25.0
     assert abs(polygon_area(loop) - want) / want < 0.005
@@ -780,9 +780,9 @@ def test_gebouwde_vormen_zelf():
     assert abs(polygon_area(circle) - math.pi * 100.0) / (math.pi * 100.0) < 0.001
 
 
-# ------------------------------------------------------------------ 7. meta van krommen
+# ------------------------------------------------------------------ 7. meta of curves
 
-def test_meta_cirkel_mee_naar_het_bestand_en_terug(tmp_path):
+def test_meta_circle_to_the_file_and_back(tmp_path):
     from volura import fileio
     v = sheet_view()
     doc = v.doc
@@ -790,7 +790,7 @@ def test_meta_cirkel_mee_naar_het_bestand_en_terug(tmp_path):
     wclick(v, 10.0, 10.0)
     wtype(v, "6")
     circle = doc.sheet.paths[0]
-    path = str(tmp_path / "blad.volura")
+    path = str(tmp_path / "sheet.volura")
     fileio.save_document(doc, path)
     back = Document()
     fileio.load_document(back, path)
@@ -799,7 +799,7 @@ def test_meta_cirkel_mee_naar_het_bestand_en_terug(tmp_path):
     assert np.allclose(back.sheet.paths[0].pts, circle.pts)
 
 
-def test_meta_blijft_bij_undo_redo_en_kopieeren():
+def test_meta_survives_undo_redo_and_copying():
     v = sheet_view()
     doc = v.doc
     v.set_tool("circle")
@@ -818,7 +818,7 @@ def test_meta_blijft_bij_undo_redo_en_kopieeren():
     assert doc.sheet.paths[0].meta["radius"] == pytest.approx(meta["radius"])
 
 
-def test_meta_gaat_mee_als_de_tekening_verplaatst_wordt():
+def test_meta_follows_when_the_drawing_is_moved():
     from volura.vector2d import Drawing
     d = Drawing()
     d.add_path(circle_loop([0.0, 0.0], 5.0), closed=True, filled=True,
@@ -827,7 +827,7 @@ def test_meta_gaat_mee_als_de_tekening_verplaatst_wordt():
     assert np.allclose(moved.paths[0].meta["center"], [12.0, -3.0])
     assert moved.paths[0].meta["radius"] == pytest.approx(5.0)
     assert d.copy().paths[0].meta == d.paths[0].meta
-    assert d.paths[0].meta["center"] == [0.0, 0.0], "het origineel blijft"
+    assert d.paths[0].meta["center"] == [0.0, 0.0], "the original stays"
 
 
 if __name__ == "__main__":

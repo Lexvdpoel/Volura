@@ -1,11 +1,11 @@
-"""Schrijft LICENSE.txt en THIRD_PARTY_LICENSES.txt naast de zelfstandige versie.
+"""Writes LICENSE.txt and THIRD_PARTY_LICENSES.txt next to the standalone version.
 
     python packaging/licenses.py dist/Volura
 
-Wordt door build.py aangeroepen. De licenties van wat PyInstaller meelevert (Qt en
-PySide6, manifold3d, numpy, PyOpenGL en Python zelf) moeten bij de verspreiding zitten.
-De teksten komen uit de geïnstalleerde pakketten; wat daar niet in zit (LGPL/GPL voor
-Qt, de licentie van PyOpenGL) staat in packaging/licenses/.
+Called by build.py. The licenses of what PyInstaller bundles (Qt and PySide6,
+manifold3d, numpy, PyOpenGL and Python itself) must ship with the distribution. The
+texts come from the installed packages; what is not in there (LGPL/GPL for Qt, the
+PyOpenGL license) is in packaging/licenses/.
 """
 from __future__ import annotations
 
@@ -19,19 +19,19 @@ HERE = Path(__file__).resolve().parent / "licenses"
 RULE = "=" * 78
 
 QT_NOTICE = """\
-Volura gebruikt Qt 6 via PySide6 en shiboken6 onder de GNU Lesser General Public
-License versie 3 (LGPL v3). Qt is (c) The Qt Company Ltd. en andere bijdragers.
+Volura uses Qt 6 through PySide6 and shiboken6 under the GNU Lesser General Public
+License version 3 (LGPL v3). Qt is (c) The Qt Company Ltd. and other contributors.
 
-- De Qt-, PySide6- en shiboken6-bibliotheken staan als losse gedeelde bibliotheken
-  (.dll / .so) in de map _internal en zijn niet statisch gekoppeld. Je mag ze
-  vervangen door een eigen (gewijzigde) versie van dezelfde Qt-versie.
-- Broncode van Qt:          https://code.qt.io  en  https://download.qt.io
-- Broncode van PySide6:     https://code.qt.io/cgit/pyside/pyside-setup.git
-- Qt bevat zelf onderdelen van derden; het overzicht met hun licenties staat op
+- The Qt, PySide6 and shiboken6 libraries are separate shared libraries
+  (.dll / .so) in the _internal folder and are not statically linked. You may
+  replace them with your own (modified) build of the same Qt version.
+- Qt source code:           https://code.qt.io  and  https://download.qt.io
+- PySide6 source code:      https://code.qt.io/cgit/pyside/pyside-setup.git
+- Qt itself contains third-party components; the overview with their licenses is at
   https://doc.qt.io/qt-6/licenses-used-in-qt.html
 
-Hieronder volgt de tekst van de LGPL v3, en daarna de GPL v3 waarop de LGPL v3
-voortbouwt."""
+Below follows the text of the LGPL v3, and after that the GPL v3 that the LGPL v3
+builds on."""
 
 
 def version(dist):
@@ -80,19 +80,19 @@ def python_license():
 def build_text():
     qt = version("PySide6") or version("PySide6_Essentials") or "?"
     parts = [
-        "Volura bevat of gebruikt de volgende open source software van derden.\n"
-        "Volura zelf valt onder de MIT-licentie, zie LICENSE.txt.\n\n",
-        "Onderdeel                  Versie      Licentie\n"
+        "Volura contains or uses the following third-party open source software.\n"
+        "Volura itself is under the MIT license, see LICENSE.txt.\n\n",
+        "Component                  Version     License\n"
         f"Qt 6 / PySide6 / shiboken6 {qt:<11} LGPL-3.0-only\n"
         f"manifold3d                 {version('manifold3d') or '?':<11} Apache-2.0\n"
-        f"NumPy                      {version('numpy') or '?':<11} BSD-3-Clause (met onderdelen onder 0BSD, MIT, Zlib, CC0)\n"
-        f"PyOpenGL                   {version('PyOpenGL') or '?':<11} BSD-stijl\n"
+        f"NumPy                      {version('numpy') or '?':<11} BSD-3-Clause (with parts under 0BSD, MIT, Zlib, CC0)\n"
+        f"PyOpenGL                   {version('PyOpenGL') or '?':<11} BSD-style\n"
         f"Python                     {sys.version.split()[0]:<11} PSF-2.0\n",
     ]
     parts.append(section(f"Qt 6 / PySide6 {qt}", QT_NOTICE))
-    parts.append(section("GNU LESSER GENERAL PUBLIC LICENSE, versie 3",
+    parts.append(section("GNU LESSER GENERAL PUBLIC LICENSE, version 3",
                          (HERE / "LGPL-3.0.txt").read_text(encoding="utf-8")))
-    parts.append(section("GNU GENERAL PUBLIC LICENSE, versie 3",
+    parts.append(section("GNU GENERAL PUBLIC LICENSE, version 3",
                          (HERE / "GPL-3.0.txt").read_text(encoding="utf-8")))
     parts.append(files_section(f"manifold3d {version('manifold3d') or ''}", dist_license_files("manifold3d")))
     parts.append(files_section(f"NumPy {version('numpy') or ''}", dist_license_files("numpy")))

@@ -1,14 +1,14 @@
-"""Lettertypen voor tekst in 2D en 3D.
+"""Fonts for text in 2D and 3D.
 
-Qt haalt zijn lettertypen van het systeem; op sommige systemen (een kaal Linux,
-een afgeschermde Windows-installatie, of het offscreen-platform zonder
-lettertype-bibliotheek) is de databank leeg en tekent `QPainterPath.addText`
-vierhoeken in plaats van letters. `ensure_fonts()` meldt dan de lettertypebestanden
-van het systeem zelf aan, zodat tekst op het werkblad overal hetzelfde werkt.
+Qt gets its fonts from the system; on some systems (a bare Linux, a locked-down
+Windows installation, or the offscreen platform without a font library) the
+database is empty and `QPainterPath.addText` draws boxes instead of letters.
+`ensure_fonts()` then registers the system's font files itself, so text on the
+worksheet works the same everywhere.
 
-`text_loops()` maakt van een tekst de contouren: gesloten lussen in millimeters met
-Y omhoog, met de basislijn op y = 0 en de buitenrand tegen de klok in, zodat de
-gaten van o, a en e als negatieve lussen meegaan.
+`text_loops()` turns a text into its outlines: closed loops in millimetres with
+Y up, the baseline at y = 0 and the outer boundary counter clockwise, so the
+holes of o, a and e come along as negative loops.
 """
 from __future__ import annotations
 
@@ -19,20 +19,20 @@ from pathlib import Path
 import numpy as np
 import manifold3d as mf
 
-#: wat het werkblad het liefst tekent, in volgorde van voorkeur
+#: what the worksheet prefers to draw with, in order of preference
 PREFERRED = ("Arial", "Helvetica", "DejaVu Sans", "Liberation Sans", "Noto Sans",
              "FreeSans", "Segoe UI", "Verdana", "Tahoma")
 
-#: bestanden die het eerst geprobeerd worden als de lettertype-databank leeg is
+#: files tried first when the font database is empty
 PREFERRED_FILES = ("arial", "helvetica", "dejavusans", "liberationsans", "notosans",
                    "freesans", "segoeui", "verdana", "tahoma")
 
 FONT_SUFFIXES = (".ttf", ".otf")
-MAX_FILES = 16          # niet het hele lettertypeboek aanmelden, dat duurt te lang
+MAX_FILES = 16          # don't register the whole font collection, that takes too long
 
 
 def font_dirs() -> list[Path]:
-    """De mappen waar op dit platform lettertypen staan."""
+    """The folders that hold fonts on this platform."""
     if os.name == "nt":
         root = os.environ.get("WINDIR") or os.environ.get("SystemRoot") or ""
         dirs = [Path(root) / "Fonts"] if root else []
@@ -64,7 +64,7 @@ def _font_files() -> list[Path]:
 
 
 def families() -> list[str]:
-    """De lettertypen die Qt nu kent (leeg zonder QApplication of zonder lettertypen)."""
+    """The fonts Qt knows now (empty without a QApplication or without fonts)."""
     from PySide6.QtGui import QFontDatabase, QGuiApplication
     if QGuiApplication.instance() is None:
         return []
@@ -75,7 +75,7 @@ def families() -> list[str]:
 
 
 def ensure_fonts() -> list[str]:
-    """De beschikbare lettertypen; meldt bestanden van het systeem aan als er geen zijn."""
+    """The available fonts; registers the system's files when there are none."""
     got = families()
     if got:
         return got
@@ -92,7 +92,7 @@ def ensure_fonts() -> list[str]:
 
 
 def default_family(preferred=PREFERRED) -> str:
-    """De eerste beschikbare lettertype-naam uit `preferred`, of wat er wél is."""
+    """The first available font name from `preferred`, or whatever there is."""
     got = ensure_fonts()
     if not got:
         return ""
@@ -108,11 +108,11 @@ def has_fonts() -> bool:
 
 
 def text_loops(text, family=None, height=10.0, bold=False) -> list[np.ndarray]:
-    """De contouren van `text` in millimeters: hoofdletterhoogte `height`, Y omhoog.
+    """The outlines of `text` in millimetres: cap height `height`, Y up.
 
-    Eén lus per buitenrand of gat; de buitenrand loopt tegen de klok in, gaten met
-    de klok mee (dezelfde afspraak als `vector2d.regions`). Leeg als de tekst of het
-    lettertype niets oplevert.
+    One loop per outer boundary or hole; the outer boundary runs counter clockwise,
+    holes clockwise (the same convention as `vector2d.regions`). Empty when the text
+    or the font yields nothing.
     """
     from PySide6.QtGui import QFont, QFontMetricsF, QPainterPath
     text = str(text or "")
@@ -142,7 +142,7 @@ def text_loops(text, family=None, height=10.0, bold=False) -> list[np.ndarray]:
     allp = np.concatenate(loops)
     x0 = float(allp[:, 0].min())
     out = [np.ascontiguousarray(L - np.array([x0, 0.0]), dtype=float) for L in loops]
-    if sum(_area(L) for L in out) < 0.0:        # alles omgekeerd: spiegel de whole tekst
+    if sum(_area(L) for L in out) < 0.0:        # all reversed: flip the whole text
         out = [np.ascontiguousarray(L[::-1].copy(), dtype=float) for L in out]
     return out
 

@@ -48,7 +48,7 @@ def win():
 def draw_rect(win):
     loop = np.array([[0, 0], [40, 0], [40, 30], [0, 30]], dtype=float)
     created = win.doc.root.add_shape(Plane((0, 0, 0), (0, 0, 1)), [loop])
-    assert created, "rechthoek gaf geen vlak"
+    assert created, "rectangle gave no face"
     return created[0]
 
 
@@ -65,13 +65,13 @@ def test_face_context_menu_submenus(win):
     menu = win.build_context_menu()
     subs = {clean(a.text()): [clean(x.text()) for x in a.menu().actions() if not x.isSeparator()]
             for a in menu.actions() if a.menu() is not None}
-    assert subs["Selecteren"] == ["Begrenzende randen", "Verbonden vlakken",
-                                  "Alles wat verbonden is", "Alles met hetzelfde materiaal"]
-    assert subs["Oppervlakte"] == ["Selectie", "Materiaal"]
-    assert subs["Vlakken snijden"] == ["Met model", "Met selectie"]
-    assert subs["Spiegelen langs"] == ["Rode as", "Groene as", "Blauwe as"]
-    cut = next(a.menu() for a in menu.actions() if clean(a.text()) == "Vlakken snijden")
-    assert all(a.isEnabled() for a in cut.actions()), "Vlakken snijden moet werken"
+    assert subs["Select"] == ["Bounding Edges", "Connected Faces",
+                              "All Connected", "All with Same Material"]
+    assert subs["Area"] == ["Selection", "Material"]
+    assert subs["Intersect Faces"] == ["With Model", "With Selection"]
+    assert subs["Flip Along"] == ["Red Axis", "Green Axis", "Blue Axis"]
+    cut = next(a.menu() for a in menu.actions() if clean(a.text()) == "Intersect Faces")
+    assert all(a.isEnabled() for a in cut.actions()), "Intersect Faces must work"
 
 
 def test_edge_context_menu_starts_with_info_delete_hide(win):
@@ -79,5 +79,5 @@ def test_edge_context_menu_starts_with_info_delete_hide(win):
     eid = sorted(win.doc.root.E)[0]
     win.doc.set_selection([("e", ROOT, eid)])
     items = menu_items(win.build_context_menu())
-    assert items[:3] == ["Entiteitsinfo", "Wissen", "Verbergen"]
-    assert "Vlakken omkeren" not in items
+    assert items[:3] == ["Entity Info", "Delete", "Hide"]
+    assert "Reverse Faces" not in items

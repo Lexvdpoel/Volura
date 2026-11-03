@@ -1,13 +1,13 @@
-"""SVG lezen en schrijven naar het gedeelde 2D-model (`volura.vector2d`).
+"""Read and write SVG to and from the shared 2D model (`volura.vector2d`).
 
-Bij het lezen wordt de pagina in millimeters gezet met Y omhoog en de onderkant
-van de pagina als y = 0 (SVG zelf heeft Y omlaag), blijven de Inkscape-lagen of
-de lijnkleuren als lagen bewaard en onthoudt elk pad de vulregel van zijn
-bronelement. Bij het schrijven krijgt elke laag een `<g>` met
-`inkscape:groupmode="layer"`, de laagkleur als lijnkleur en de bewerking in
-`data-volura-op` met de instellingen in `data-volura-param-*`, zodat Volura de
-lagen van een laser of frees terugvindt, en krijgt elk bronelement één `<path>` met
-al zijn deelwegen, zodat gaten (een cirkel in een cirkel) ook teruglezen als één vorm.
+When reading, the page is put in millimetres with Y up and the bottom of the page
+as y = 0 (SVG itself has Y down), Inkscape layers or stroke colours are kept as
+layers, and every path remembers the fill rule of its source element. When
+writing, every layer gets a `<g>` with `inkscape:groupmode="layer"`, the layer
+colour as stroke colour and the operation in `data-volura-op` with the settings in
+`data-volura-param-*`, so Volura finds the layers of a laser or mill again, and
+every source element gets one `<path>` with all its subpaths, so holes (a circle
+in a circle) also read back as one shape.
 """
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from xml.sax.saxutils import escape
 import numpy as np
 
 from . import fileio
+from .i18n import tr
 from .vector2d import (Drawing, TOL, ellipse_arc_points, flatten_cubic, flatten_quad,
                        svg_arc)
 
@@ -28,11 +29,11 @@ INK_NS = "http://www.inkscape.org/namespaces/inkscape"
 SODIPODI_NS = "http://sodipodi.sourceforge.net/DTD/sodipodi-0.0.dtd"
 XLINK_NS = "http://www.w3.org/1999/xlink"
 
-# Eenheden uit de SVG-specificatie, omgerekend naar millimeters.
+# Units from the SVG specification, converted to millimetres.
 UNIT_MM = {"mm": 1.0, "cm": 10.0, "in": 25.4, "pt": 25.4 / 72.0, "pc": 25.4 / 6.0}
-EM_MM = 25.4 / 72.0 * 16.0        # 1 em = 16 px, px bij 96 dpi
+EM_MM = 25.4 / 72.0 * 16.0        # 1 em = 16 px, px at 96 dpi
 
-# Elementen zonder zichtbare vorm (inhoud van defs, alleen bereikbaar via use).
+# Elements without a visible shape (contents of defs, only reachable via use).
 SKIP_TAGS = {"style", "metadata", "title", "desc", "defs", "clippath", "mask", "pattern",
              "filter", "marker", "symbol", "solidcolor", "lineargradient", "radialgradient",
              "stop", "link", "font", "font-face", "namedview", "editorinfo", "page",
@@ -41,7 +42,7 @@ TEXT_TAGS = {"text", "tspan", "textpath", "altglyph", "tref", "textarea"}
 RASTER_TAGS = {"image", "video", "audio", "canvas"}
 GROUP_TAGS = {"g", "a", "switch", "svg"}
 
-# De gangbare SVG-kleurnamen; onbekende namen leveren geen kleur op.
+# The common SVG colour names; unknown names give no colour.
 COLORS = {
     "black": "#000000", "silver": "#c0c0c0", "gray": "#808080", "grey": "#808080",
     "white": "#ffffff", "maroon": "#800000", "red": "#ff0000", "purple": "#800080",
@@ -96,11 +97,11 @@ _STYLE_PROPS = ("fill", "stroke", "fill-rule", "display", "visibility", "stroke-
 
 
 # --------------------------------------------------------------------------
-#  getallen, paden en matrices
+#  numbers, paths and matrices
 # --------------------------------------------------------------------------
 
 class _Scanner:
-    """Leest een padopgave: commando's en getallen, ook zonder scheidingsteken."""
+    """Reads path data: commands and numbers, also without a separator."""
 
     def __init__(self, text):
         self.s = text or ""
@@ -128,12 +129,12 @@ class _Scanner:
         self.skip()
         m = _NUM.match(self.s, self.i)
         if m is None or m.end() == m.start():
-            raise ValueError("Onjuist getal in de padopgave van een SVG-element.")
+            raise ValueError(tr("Invalid number in the path data of an SVG element."))
         self.i = m.end()
         return float(m.group())
 
     def flag(self):
-        """Een boogvlag is één teken 0 of 1, ook direct achter een ander getal."""
+        """An arc flag is a single character 0 or 1, even directly after another number."""
         self.skip()
         if self.i < len(self.s) and self.s[self.i] in "01":
             f = self.s[self.i] == "1"
@@ -147,12 +148,12 @@ def _numbers(text):
 
 
 def path_subpaths(d, tol=TOL):
-    """De `d`-opgave van een <path> als polylijnen: lijst van (punten, gesloten).
+    """The `d` data of a <path> as polylines: a list of (points, closed).
 
-    Alle commando's van SVG 1.1 (M L H V C S Q T A Z, absoluut en relatief, met
-    impliciete herhaling van het laatste commando) worden ondersteund. Krommen en
-    bogen worden adaptief afgevlakt tot maximaal `tol` millimeter afwijking.
-    Deelwegen van één element vormen samen één vorm (zie `vector2d.regions`).
+    All SVG 1.1 commands (M L H V C S Q T A Z, absolute and relative, with
+    implicit repetition of the last command) are supported. Curves and arcs are
+    flattened adaptively to at most `tol` millimetres deviation. The subpaths of
+    one element together form one shape (see `vector2d.regions`).
     """
     sc = _Scanner(d)
     out = []
@@ -170,7 +171,7 @@ def path_subpaths(d, tol=TOL):
         rel = cmd.islower()
         c = cmd.upper()
         if c not in "MLHVCSQTAZ":
-            raise ValueError(f"onbekend commando '{cmd}' in de padopgave")
+            raise ValueError(tr("unknown command '{command}' in the path data").format(command=cmd))
         first = True
         while True:
             if c == "Z":
@@ -223,7 +224,7 @@ def path_subpaths(d, tol=TOL):
                     pts.append(cur + step)
                 cur = cur + step
                 prev_c = prev_q = None
-            # een moveto met meerdere coordparen herhaalt zich als lijnstuk
+            # a moveto with several coordinate pairs repeats as a line segment
             if first and c == "M":
                 c = "l" if rel else "L"
             first = False
@@ -240,7 +241,7 @@ def _rel(cur, args, rel):
 
 
 def _transform_matrix(attr) -> np.ndarray:
-    """De `transform`-opgave als 3x3 matrix (matrix, translate, scale, rotate, skew)."""
+    """The `transform` attribute as a 3x3 matrix (matrix, translate, scale, rotate, skew)."""
     M = np.eye(3)
     for name, args in re.findall(r"([A-Za-z]+)\s*\(([^()]*)\)", attr or ""):
         v = _numbers(args)
@@ -276,11 +277,11 @@ def _transform_matrix(attr) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------
-#  stijlen
+#  styles
 # --------------------------------------------------------------------------
 
 def _color(value):
-    """Kleur als kleine letters "#rrggbb", of None (none, transparent, onbekend)."""
+    """Colour as lowercase "#rrggbb", or None (none, transparent, unknown)."""
     if not value:
         return None
     s = str(value).strip().lower()
@@ -300,7 +301,7 @@ def _color(value):
 
 
 def _declarations(text):
-    """`style="..."` of het lichaam van een css-regel, als woordenboek."""
+    """`style="..."` or the body of a CSS rule, as a dictionary."""
     out = {}
     for part in (text or "").split(";"):
         if ":" not in part:
@@ -314,7 +315,7 @@ def _declarations(text):
 
 
 def _css_rules(text):
-    """Eenvoudige css-regels: `.klas`, `#id` en `element`, ook gecombineerd."""
+    """Simple CSS rules: `.class`, `#id` and `element`, also combined."""
     rules = []
     text = re.sub(r"/\*.*?\*/", "", text or "", flags=re.S)
     for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", text, flags=re.S):
@@ -343,7 +344,7 @@ def _matches(sel, tag, classes, ident):
 
 
 # --------------------------------------------------------------------------
-#  eenvoudige vormen
+#  simple shapes
 # --------------------------------------------------------------------------
 
 def _points_attr(text):
@@ -354,7 +355,7 @@ def _points_attr(text):
 
 
 def rect_subpaths(x, y, w, h, rx=None, ry=None, tol=TOL):
-    """`<rect>`, ook met afgeronde hoeken (rx/ry), als één gesloten polylijn."""
+    """`<rect>`, also with rounded corners (rx/ry), as one closed polyline."""
     if w <= 0.0 or h <= 0.0:
         return []
     if rx is None and ry is None:
@@ -374,7 +375,7 @@ def rect_subpaths(x, y, w, h, rx=None, ry=None, tol=TOL):
 
 
 def ellipse_subpaths(cx, cy, rx, ry, tol=TOL):
-    """`<circle>` en `<ellipse>` als één gesloten polylijn."""
+    """`<circle>` and `<ellipse>` as one closed polyline."""
     if rx <= 0.0 or ry <= 0.0:
         return []
     pts = ellipse_arc_points((cx, cy), rx, ry, 0.0, 2.0 * math.pi, tol)
@@ -382,7 +383,7 @@ def ellipse_subpaths(cx, cy, rx, ry, tol=TOL):
 
 
 # --------------------------------------------------------------------------
-#  lezen
+#  reading
 # --------------------------------------------------------------------------
 
 def _local(tag):
@@ -390,7 +391,7 @@ def _local(tag):
 
 
 def _length(value, dpi):
-    """Een SVG-lengte in millimeters; None bij percentage, ontbreken of onjuist."""
+    """An SVG length in millimetres; None for a percentage, missing or invalid."""
     if value is None:
         return None
     s = str(value).strip().lower()
@@ -428,33 +429,33 @@ def _data(source) -> bytes:
         with open(s, "rb") as f:
             return f.read()
     except OSError as exc:
-        raise ValueError(f"Kan het SVG-bestand niet openen: {exc}") from exc
+        raise ValueError(tr("Cannot open the SVG file: {error}").format(error=exc)) from exc
 
 
 def read_svg(source, tol=TOL, dpi=96) -> Drawing:
-    """Een SVG-bestand (pad, bytes of tekst) als 2D-tekening in millimeters.
+    """An SVG file (path, bytes or text) as a 2D drawing in millimetres.
 
-    Y wijst omhoog met de onderkant van de pagina als y = 0. Inkscape-lagen
-    worden lagen; zonder lagen krijgt elke lijnkleur een eigen laag, zodat de
-    kleurconventie van lasersoftware (rood = snijden) bewaard blijft. Onbekende
-    of niet-navolgbare inhoud (tekst, afbeeldingen) geeft een melding in
+    Y points up with the bottom of the page as y = 0. Inkscape layers become
+    layers; without layers every stroke colour gets its own layer, so the colour
+    convention of laser software (red = cut) is kept. Unknown content or content
+    that cannot be followed (text, images) gives a message in
     `Drawing.warnings`.
     """
     data = _data(source)
     if b"<!ENTITY" in data:
-        raise ValueError("Een SVG met entiteiten (<!ENTITY) wordt niet gelezen. "
-                         "Sla het bestand opnieuw op als platte SVG.")
+        raise ValueError(tr("An SVG with entities (<!ENTITY) is not read. "
+                            "Save the file again as plain SVG."))
     try:
         root = ET.fromstring(data)
     except ET.ParseError as exc:
-        raise ValueError(f"De SVG kan niet worden gelezen: {exc}") from exc
+        raise ValueError(tr("The SVG cannot be read: {error}").format(error=exc)) from exc
     if _local(root.tag) != "svg":
-        raise ValueError("Dit is geen SVG-bestand: er is geen <svg>-element gevonden.")
+        raise ValueError(tr("This is not an SVG file: no <svg> element was found."))
     return _Reader(root, tol, dpi).run()
 
 
 class _Reader:
-    """Loop door de SVG-boom en zet vormen om naar millimeters met Y omhoog."""
+    """Walk the SVG tree and convert shapes to millimetres with Y up."""
 
     def __init__(self, root, tol, dpi):
         self.root = root
@@ -472,15 +473,14 @@ class _Reader:
             if _local(elem.tag) == "style" and elem.text:
                 self.rules.extend(_css_rules(elem.text))
 
-    # -- pagina ------------------------------------------------------------
+    # -- page --------------------------------------------------------------
 
     def page(self):
-        """Matrix naar millimeters en de onderkant van de pagina (voor de Y-omkering).
+        """Matrix to millimetres and the bottom of the page (for the Y flip).
 
-        De matige houding van `preserveAspectRatio` wordt toegepast, maar de
-        oorsprong van de gebruikerseenheden blijft op zijn plek: een tekening die
-        in het bestand op 50 mm staat, komt op 50 mm binnen. Zo blijft een
-        rondreis door `write_svg` en `read_svg` exact.
+        The scaling of `preserveAspectRatio` is applied, but the origin of the
+        user units stays in place: a drawing at 50 mm in the file comes in at
+        50 mm. That keeps a round trip through `write_svg` and `read_svg` exact.
         """
         root = self.root
         px = 25.4 / self.dpi
@@ -493,7 +493,7 @@ class _Reader:
                 return base, None, None, None
             return base, (h if h is not None else w), w, h
         x0, y0, vw, vh = vb
-        if w is None and h is None:            # geen pagina: viewBox-eenheden zijn px
+        if w is None and h is None:            # no page: viewBox units are px
             return base, px * (y0 + vh), vw * px, vh * px
         if h is None:
             h = w * vh / vw
@@ -512,10 +512,10 @@ class _Reader:
             bottom = s * (y0 + vh) + ty
         return M, bottom, w, h
 
-    # -- stijlen -----------------------------------------------------------
+    # -- styles ------------------------------------------------------------
 
     def style(self, elem, inherited):
-        """Geërfde stijl, presentatie-attributen, css en dan de inline-opgave."""
+        """Inherited style, presentation attributes, CSS and then the inline style."""
         st = dict(inherited)
         for key, val in elem.attrib.items():
             if _local(key) in _STYLE_PROPS and val:
@@ -529,7 +529,7 @@ class _Reader:
         st.update(_declarations(elem.get("style")))
         return st
 
-    # -- omlopen -----------------------------------------------------------
+    # -- walking -----------------------------------------------------------
 
     def run(self):
         base, bottom, pw, ph = self.page()
@@ -554,17 +554,17 @@ class _Reader:
         if st.get("display") == "none" or tag in SKIP_TAGS:
             return
         if tag in TEXT_TAGS:
-            self.notice("text", "Tekst in de SVG is overgeslagen; zet tekst in Inkscape om "
-                                "naar paden (Pad > Object naar pad) om mee te snijden.")
+            self.notice("text", tr("Text in the SVG was skipped; convert text to paths in "
+                                   "Inkscape (Path > Object to Path) to cut it."))
             return
         if tag in RASTER_TAGS:
-            self.notice("image", "Afbeelding in de SVG is overgeslagen; een laser of frees "
-                                 "kan geen plaatje volgen.")
+            self.notice("image", tr("Image in the SVG was skipped; a laser or mill "
+                                    "cannot follow a picture."))
             return
         M = M @ _transform_matrix(elem.get("transform"))
         if tag in GROUP_TAGS:
             if elem.get(f"{{{INK_NS}}}groupmode") == "layer":
-                name = elem.get(f"{{{INK_NS}}}label") or "laag"
+                name = elem.get(f"{{{INK_NS}}}label") or tr("layer")
                 lay = self.drawing.ensure_layer(name, _color(st.get("stroke")) or "#000000",
                                                 elem.get("data-volura-op"))
                 params = layer_params_of(elem)
@@ -580,7 +580,7 @@ class _Reader:
                 return
             target = self.byId.get(ref[1:])
             if target is None:
-                self.drawing.warn(f"De verwijzing {ref} van <use> staat niet in het bestand.")
+                self.drawing.warn(tr("The reference {ref} of <use> is not in the file.").format(ref=ref))
                 return
             x = (_numbers(elem.get("x")) + [0.0])[0]
             y = (_numbers(elem.get("y")) + [0.0])[0]
@@ -592,7 +592,7 @@ class _Reader:
         try:
             self.emit(elem, tag, M, st, ink_layer)
         except ValueError as exc:
-            self.drawing.warn(f"Element <{tag}> is overgeslagen: {exc}")
+            self.drawing.warn(tr("Element <{tag}> was skipped: {error}").format(tag=tag, error=exc))
 
     def emit(self, elem, tag, M, st, ink_layer):
         def num(name, dflt=0.0):
@@ -626,7 +626,7 @@ class _Reader:
         stroke = _color(st.get("stroke"))
         layer = ink_layer or stroke or fill
         if layer is None:
-            return                      # geen lijn en geen vulling: niets te zien
+            return                      # no stroke and no fill: nothing to see
         if ink_layer is None:
             self.drawing.ensure_layer(layer, layer)
         rule = "evenodd" if st.get("fill-rule") == "evenodd" else "nonzero"
@@ -651,7 +651,7 @@ class _Reader:
 
 
 # --------------------------------------------------------------------------
-#  schrijven
+#  writing
 # --------------------------------------------------------------------------
 
 def _fmt(v) -> str:
@@ -661,19 +661,19 @@ def _fmt(v) -> str:
 
 def _safe_id(name):
     s = re.sub(r"[^\w.:-]", "_", str(name))
-    return ("_" + s) if s[:1].isdigit() else (s or "laag")
+    return ("_" + s) if s[:1].isdigit() else (s or "layer")
 
 
 def _attr(value):
     return escape(str(value), {'"': "&quot;"})
 
 
-#: De instellingen van een laag gaan mee in `data-volura-param-<sleutel>`-attributen.
+#: The settings of a layer travel along in `data-volura-param-<key>` attributes.
 PARAM_PREFIX = "data-volura-param-"
 
 
 def _param_text(value) -> str:
-    """Een instelling als tekst: getallen zo dat ze weer als getal terugkomen."""
+    """A setting as text: numbers written so they come back as numbers."""
     if isinstance(value, bool):
         return "1" if value else "0"
     if isinstance(value, int):
@@ -684,7 +684,7 @@ def _param_text(value) -> str:
 
 
 def _param_value(text):
-    """De tekst van een instelling terug als getal of als woord."""
+    """The text of a setting back as a number or as a word."""
     s = str(text).strip()
     if re.fullmatch(r"[-+]?\d+", s):
         return int(s)
@@ -695,7 +695,7 @@ def _param_value(text):
 
 
 def layer_param_attrs(layer) -> list:
-    """`data-volura-param-*-`-attributen bij de instellingen van een laag."""
+    """`data-volura-param-*` attributes for the settings of a layer."""
     out = []
     for key, value in dict(getattr(layer, "params", None) or {}).items():
         name = re.sub(r"[^A-Za-z0-9_-]", "-", str(key))
@@ -706,7 +706,7 @@ def layer_param_attrs(layer) -> list:
 
 
 def layer_params_of(elem) -> dict:
-    """De instellingen die in een `<g>` van een laag staan, terug als woordenboek."""
+    """The settings stored on a layer's `<g>`, back as a dictionary."""
     out = {}
     for key, value in elem.attrib.items():
         name = _local(key)
@@ -718,7 +718,7 @@ def layer_params_of(elem) -> dict:
 
 
 def page_of(drawing):
-    """(x, y, breedte, hoogte) van de pagina: de plaat, of de omtrek plus 1 mm marge."""
+    """(x, y, width, height) of the page: the sheet, or the bounds plus a 1 mm margin."""
     w, h = drawing.sheet_w, drawing.sheet_h
     if w is not None and h is not None and w > 0 and h > 0:
         return 0.0, 0.0, float(w), float(h)
@@ -729,16 +729,15 @@ def page_of(drawing):
 
 
 def write_svg(drawing, path=None, stroke_mm=0.01, layers=None, fill_layers=()):
-    """De tekening als SVG-tekst; ook naar `path` geschreven als die gegeven is.
+    """The drawing as SVG text; also written to `path` when given.
 
-    De pagina is de plaat als `sheet_w`/`sheet_h` gezet zijn, anders de omtrek
-    plus 1 mm marge. Elke laag wordt een `<g>` met `inkscape:groupmode="layer"`,
-    de laagkleur als lijnkleur, de bewerking in `data-volura-op` en de instellingen
-    van de laag in `data-volura-param-*` (kerf, vermogen, freesdiameter, ...); lagen
-    in `fill_layers` krijgen een vulling met `fill-rule="evenodd"` (om te rasteren).
-    Paden die bij één bronelement horen (`src`) komen in één `<path>`, zodat
-    gaten en vulregels behouden blijven. Coördinaten: millimeters, Y omlaag,
-    vier decimalen.
+    The page is the sheet when `sheet_w`/`sheet_h` are set, otherwise the bounds
+    plus a 1 mm margin. Every layer becomes a `<g>` with `inkscape:groupmode="layer"`,
+    the layer colour as stroke colour, the operation in `data-volura-op` and the
+    layer settings in `data-volura-param-*` (kerf, power, bit diameter, ...); layers
+    in `fill_layers` get a fill with `fill-rule="evenodd"` (for rastering).
+    Paths that belong to one source element (`src`) go into one `<path>`, so holes
+    and fill rules are kept. Coordinates: millimetres, Y down, four decimals.
     """
     ox, oy, page_w, page_h = page_of(drawing)
     top = oy + page_h
@@ -794,7 +793,7 @@ def write_svg(drawing, path=None, stroke_mm=0.01, layers=None, fill_layers=()):
 
 
 def _group_by_src(paths):
-    """Opeenvolgende paden die bij één bronelement horen samen in één lijst."""
+    """Consecutive paths that belong to one source element, together in one list."""
     groups = []
     for p in paths:
         if groups and groups[-1][0] == (p.src, p.filled, p.rule):

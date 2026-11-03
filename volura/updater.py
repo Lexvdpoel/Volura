@@ -1,11 +1,11 @@
-"""Controleren op een nieuwere versie op GitHub en die zelf installeren.
+"""Check GitHub for a newer version and install it.
 
-Geen Qt in dit bestand: het hoofdvenster roept `latest_release` in een achtergrond-
-draad aan en toont de uitkomst. Een release op GitHub heeft een tag `vX.Y.Z` en de
-Windows-installatie als bestand `Volura-windows-setup.exe`. Is Volura met die
-installatie geïnstalleerd (er staat dan een `unins000.exe` naast `Volura.exe`), dan
-kan het de nieuwe installatie zelf downloaden en stil laten draaien; die start
-Volura daarna opnieuw. Anders (zip, Linux, broncode) wijst het naar de downloadpagina.
+No Qt in this file: the main window calls `latest_release` in a background thread
+and shows the outcome. A release on GitHub has a tag `vX.Y.Z` and the Windows
+installer as the file `Volura-windows-setup.exe`. When Volura was installed with that
+installer (there is then an `unins000.exe` next to `Volura.exe`), it can download the
+new installer itself and run it silently; the installer then starts Volura again.
+Otherwise (zip, Linux, source code) it points to the download page.
 """
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import __version__
+from .i18n import tr
 
 REPO = "Lexvdpoel/Volura"
 API_LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"
@@ -28,23 +29,23 @@ RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
 SETUP_ASSET = "Volura-windows-setup.exe"
 TIMEOUT = 10.0
 CHUNK = 256 * 1024
-# De installatie met deze opties: geen vragen, programma's die het bestand open hebben
-# netjes sluiten; de installatie start Volura daarna zelf weer.
+# The installer with these options: no questions, programs that have the files open are
+# closed cleanly; the installer then starts Volura again itself.
 SETUP_ARGS = ("/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS")
 
 
 @dataclass
 class Release:
     version: str               # "0.2.0"
-    page: str                  # de releasepagina op GitHub
-    notes: str = ""            # de tekst van de release
+    page: str                  # the release page on GitHub
+    notes: str = ""            # the text of the release
     setup_url: str | None = None
     setup_size: int = 0
     setup_sha256: str | None = None
 
 
 def parse_version(text) -> tuple:
-    """'v1.2.3' / '1.2' / '1.2.3-beta' -> (1, 2, 3); onleesbaar -> ()."""
+    """'v1.2.3' / '1.2' / '1.2.3-beta' -> (1, 2, 3); unreadable -> ()."""
     m = re.match(r"\s*v?(\d+(?:\.\d+)*)", str(text or ""))
     if not m:
         return ()
@@ -60,7 +61,7 @@ def is_newer(latest, current=__version__) -> bool:
 
 
 def release_from_json(data) -> Release | None:
-    """Een Release uit het antwoord van de GitHub-API; None bij een concept of voorversie."""
+    """A Release from the GitHub API response; None for a draft or a pre-release."""
     if not isinstance(data, dict) or data.get("draft") or data.get("prerelease"):
         return None
     version = ".".join(str(n) for n in parse_version(data.get("tag_name")))
@@ -84,13 +85,13 @@ def _request(url):
 
 
 def latest_release(timeout=TIMEOUT) -> Release | None:
-    """De nieuwste release op GitHub; een netwerkfout geeft een OSError/ValueError."""
+    """The newest release on GitHub; a network error raises OSError/ValueError."""
     with urllib.request.urlopen(_request(API_LATEST), timeout=timeout) as resp:
         return release_from_json(json.loads(resp.read().decode("utf-8")))
 
 
 def can_self_install(exe=None) -> bool:
-    """Alleen een met de installatie geïnstalleerde Windows-versie kan zichzelf bijwerken."""
+    """Only a Windows version installed with the installer can update itself."""
     if sys.platform != "win32" or not getattr(sys, "frozen", False):
         return False
     folder = Path(exe or sys.executable).resolve().parent
@@ -98,13 +99,13 @@ def can_self_install(exe=None) -> bool:
 
 
 def download(release: Release, progress=None, cancelled=None) -> Path:
-    """Download de installatie naar een tijdelijke map en controleer de grootte en SHA-256.
+    """Download the installer to a temporary folder and check its size and SHA-256.
 
-    `progress(gedaan, totaal)` wordt per blok aangeroepen; `cancelled()` mag True geven
-    om te stoppen (dan volgt InterruptedError).
+    `progress(done, total)` is called per block; `cancelled()` may return True to stop
+    (InterruptedError follows).
     """
     if not release.setup_url:
-        raise ValueError("Deze release heeft geen Windows-installatie.")
+        raise ValueError(tr("This release has no Windows installer."))
     folder = Path(tempfile.mkdtemp(prefix="volura-update-"))
     path = folder / f"Volura-{release.version}-setup.exe"
     sha = hashlib.sha256()
@@ -114,7 +115,7 @@ def download(release: Release, progress=None, cancelled=None) -> Path:
         total = int(resp.headers.get("Content-Length") or release.setup_size or 0)
         while True:
             if cancelled is not None and cancelled():
-                raise InterruptedError("Download afgebroken")
+                raise InterruptedError(tr("Download cancelled"))
             block = resp.read(CHUNK)
             if not block:
                 break
@@ -124,14 +125,14 @@ def download(release: Release, progress=None, cancelled=None) -> Path:
             if progress is not None:
                 progress(done, total)
     if release.setup_size and done != release.setup_size:
-        raise ValueError("De download is onvolledig; probeer het later opnieuw.")
+        raise ValueError(tr("The download is incomplete; please try again later."))
     if release.setup_sha256 and sha.hexdigest() != release.setup_sha256:
-        raise ValueError("De download klopt niet (controlegetal wijkt af); probeer het opnieuw.")
+        raise ValueError(tr("The download is not correct (checksum differs); please try again."))
     return path
 
 
 def run_installer(path) -> subprocess.Popen:
-    """Start de installatie los van Volura; het venster moet daarna zelf afsluiten."""
+    """Start the installer detached from Volura; the window must then close itself."""
     flags = 0
     if sys.platform == "win32":
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP

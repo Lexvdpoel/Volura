@@ -1,6 +1,6 @@
-"""Printcontrole (zoals de extensie "Solid Inspector"): problemen vinden en repareren.
+"""Print Check (like the "Solid Inspector" extension): finding and repairing problems.
 
-De geometrie-hulpjes `box`, `rect` en `face_at` zijn overgenomen uit tests/test_brep.py.
+The geometry helpers `box`, `rect` and `face_at` are copied from tests/test_brep.py.
 """
 import os
 import sys
@@ -79,7 +79,7 @@ def normals_point_out(ents):
             at = np.asarray(c + n * (0.05 * sign) - 0.02, dtype=float)
             probe = mf.Manifold.cube((0.04, 0.04, 0.04)).translate(at.tolist())
             got = (m ^ probe).volume() > 1e-6
-            assert got is want, f"de normaal van vlak {f} wijst niet naar buiten"
+            assert got is want, f"the normal of face {f} does not point outward"
 
 
 def test_clean_box_has_no_problems():
@@ -143,7 +143,7 @@ def test_a_group_is_reported_with_its_own_context():
     ents.erase_faces([face_at(ents, 20, 15, 10)])
     doc = doc_of(ents, group=True)
     probs = ops.inspect(doc)
-    assert probs, "een groep met een gat hoort een probleem te geven"
+    assert probs, "a group with a hole should give a problem"
     assert probs[0].ctx == doc.groups[0].id
     assert probs[0].part == doc.groups[0].name
     assert probs[0].items()[0][1] == doc.groups[0].id
@@ -166,11 +166,11 @@ def test_panel_marks_and_repairs_problems():
     QApplication.instance() or QApplication(sys.argv[:1])
     win = MainWindow()
     try:
-        assert not win.tray.is_open("Printcontrole"), "het paneel staat standaard uit"
-        assert "Printcontrole" in win.tray.extra_titles
-        assert list(win.tray.panel_titles) == ["Entiteitsinfo", "Materialen", "Overzicht"]
-        win.tray_actions["Printcontrole"].trigger()
-        assert win.tray.is_open("Printcontrole"), "Venster > Standaardvenster zet het paneel aan"
+        assert not win.tray.is_open("Print Check"), "the panel is off by default"
+        assert "Print Check" in win.tray.extra_titles
+        assert list(win.tray.panel_titles) == ["Entity Info", "Materials", "Outliner"]
+        win.tray_actions["Print Check"].trigger()
+        assert win.tray.is_open("Print Check"), "Window > Default Tray turns the panel on"
         ents = box()
         ents.erase_faces([face_at(ents, 20, 15, 10)])
         win.doc.add_group(ents, "#f23b3b")
@@ -178,7 +178,7 @@ def test_panel_marks_and_repairs_problems():
         head = win.print_panel.tree.topLevelItem(0)
         assert head is not None and head.childCount() == 1
         win.print_panel.tree.setCurrentItem(head.child(0))
-        assert win.view.problem_items, "klikken op een probleem markeert de randen"
+        assert win.view.problem_items, "clicking a problem marks the edges"
         assert all(k == "e" for k, _, _ in win.view.problem_items)
         win.print_panel.repair()
         assert win.print_panel.problems == []

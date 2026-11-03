@@ -1,4 +1,4 @@
-"""SVG-import en -export en het 2D-model (zonder GUI). Run with:  python -m pytest tests"""
+"""SVG import and export and the 2D model (without GUI). Run with:  python -m pytest tests"""
 import math
 import os
 import sys
@@ -34,7 +34,7 @@ def area(shape):
 
 
 def seg_dist(poly, q):
-    """Afstand van punt `q` tot de polylijn `poly`."""
+    """Distance from point `q` to the polyline `poly`."""
     a, b = poly[:-1], poly[1:]
     d = b - a
     L2 = np.maximum(np.sum(d * d, axis=1), 1e-30)
@@ -42,7 +42,7 @@ def seg_dist(poly, q):
     return float(np.min(np.linalg.norm(a + t[:, None] * d - q, axis=1)))
 
 
-# ------------------------------------------------------------------ eenheden
+# ------------------------------------------------------------------ units
 
 def test_rect_millimeters_y_up():
     d = doc('<rect x="10" y="10" width="20" height="20" fill="none" stroke="#ff0000"/>',
@@ -54,18 +54,18 @@ def test_rect_millimeters_y_up():
 
 
 def test_viewbox_scaling_and_pixels():
-    # 1000 viewBox-eenheden op 100 mm: alles een tiende, hoogte volgt de verhouding.
+    # 1000 viewBox units on 100 mm: everything a tenth, the height follows the ratio.
     d = doc('<rect x="100" y="100" width="200" height="200" fill="none" stroke="#000"/>',
             'width="100mm" viewBox="0 0 1000 500"')
     assert corners(d) == [(10.0, 20.0), (10.0, 40.0), (30.0, 20.0), (30.0, 40.0)]
     assert d.sheet_w == 100.0 and abs(d.sheet_h - 50.0) < 1e-9
-    # 96 px is 25,4 mm bij 96 dpi
+    # 96 px is 25.4 mm at 96 dpi
     d2 = svg.read_svg((HEAD + 'width="96" height="96">'
                        '<rect width="96" height="96" fill="none" stroke="#000"/>'
                        + TAIL).encode())
     assert abs(d2.sheet_w - 25.4) < 1e-9 and abs(d2.sheet_h - 25.4) < 1e-9
     assert corners(d2) == [(0.0, 0.0), (0.0, 25.4), (25.4, 0.0), (25.4, 25.4)]
-    # inch en centimeter
+    # inch and centimetre
     d3 = svg.read_svg((HEAD + 'width="1in" height="2cm">'
                        '<rect width="10" height="10" fill="none" stroke="#000"/>'
                        + TAIL).encode())
@@ -80,7 +80,7 @@ def test_viewbox_only_uses_px():
     assert abs(d.sheet_h - 50 * 25.4 / 96) < 1e-9
 
 
-# ------------------------------------------------------------------ krommen
+# ------------------------------------------------------------------ curves
 
 def test_circle_from_two_relative_arcs():
     d = doc('<path d="M30 50 a20 20 0 1 0 40 0 a20 20 0 1 0 -40 0 z" fill="#000000"/>')
@@ -110,11 +110,11 @@ def test_quadratic_and_smooth_commands():
     p = pts_of(d)
     assert len(p) > 6
     assert np.allclose(p[0], [0, 100]) and np.allclose(p[-1], [40, 100])
-    assert abs(p[:, 1].min() - 90.0) < 0.02       # eerste boog buigt 10 mm naar beneden
-    assert abs(p[:, 1].max() - 110.0) < 0.02      # T spiegelt de controlepunt: naar boven
+    assert abs(p[:, 1].min() - 90.0) < 0.02       # first arc bends 10 mm down
+    assert abs(p[:, 1].max() - 110.0) < 0.02      # T mirrors the control point: upward
 
 
-# ------------------------------------------------------------------ transformaties
+# ------------------------------------------------------------------ transformations
 
 def test_nested_transforms():
     d = doc('<g transform="rotate(90 50 50)"><g transform="translate(10 0)">'
@@ -133,7 +133,7 @@ def test_matrix_scale_and_skew():
     assert np.allclose(pts_of(d2), [[10.0, 90.0], [20.0, 80.0]], atol=1e-9)
 
 
-# ------------------------------------------------------------------ vulregels
+# ------------------------------------------------------------------ fill rules
 
 def test_evenodd_ring_has_a_hole():
     d = doc('<path fill="#000000" fill-rule="evenodd" d="M50 50 m-30 0 a30 30 0 1 0 60 0 '
@@ -158,7 +158,7 @@ def test_two_elements_are_unioned_too():
     assert abs(abs(area(reg[0])) - 175.0) < 1e-6
 
 
-# ------------------------------------------------------------------ notatie
+# ------------------------------------------------------------------ notation
 
 def test_number_notation_and_implicit_repeat():
     d = doc('<path d="M1.5.5L-.5e1,2" fill="none" stroke="#000000"/>')
@@ -176,23 +176,23 @@ def test_arc_flags_without_separators():
     d = doc('<path d="M30 50a20 20 0 0140 0" fill="none" stroke="#000000"/>')
     p = pts_of(d)
     assert np.allclose(p[0], [30.0, 50.0]) and np.allclose(p[-1], [70.0, 50.0])
-    # sweep=1 loopt in SVG over de bovenkant (kleine y), dus in ons model naar grote y
+    # sweep=1 runs over the top in SVG (small y), so towards large y in our model
     assert abs(p[:, 1].max() - 70.0) < 0.02
     d2 = doc('<path d="M30 50a20 20 0 0 0 40 0" fill="none" stroke="#000000"/>')
     assert abs(pts_of(d2)[:, 1].min() - 30.0) < 0.02
     assert abs(pts_of(d2)[0, 1] - 50.0) < 1e-9
 
 
-# ------------------------------------------------------------------ lagen
+# ------------------------------------------------------------------ layers
 
 def test_inkscape_layers():
-    d = doc('<g inkscape:groupmode="layer" inkscape:label="Snijden">'
+    d = doc('<g inkscape:groupmode="layer" inkscape:label="Cut">'
             '<rect width="10" height="10" fill="none" stroke="#ff0000"/></g>'
-            '<g inkscape:groupmode="layer" inkscape:label="Graveren" stroke="#00ff00">'
+            '<g inkscape:groupmode="layer" inkscape:label="Engrave" stroke="#00ff00">'
             '<rect x="20" width="10" height="10" fill="none"/></g>')
-    assert "Snijden" in d.layers and "Graveren" in d.layers
-    assert d.paths[0].layer == "Snijden" and d.paths[1].layer == "Graveren"
-    assert d.layers["Graveren"].color == "#00ff00"
+    assert "Cut" in d.layers and "Engrave" in d.layers
+    assert d.paths[0].layer == "Cut" and d.paths[1].layer == "Engrave"
+    assert d.layers["Engrave"].color == "#00ff00"
 
 
 def test_color_layers_without_inkscape():
@@ -207,9 +207,9 @@ def test_color_layers_without_inkscape():
 
 def test_style_attribute_class_and_inheritance():
     d = svg.read_svg((HEAD + 'width="100mm" height="100mm" viewBox="0 0 100 100">'
-                      '<style>.snij { stroke: #FF0000; fill: none }</style>'
+                      '<style>.cut { stroke: #FF0000; fill: none }</style>'
                       '<g style="stroke:#00ff00">'
-                      '<rect class="snij" width="10" height="10"/>'
+                      '<rect class="cut" width="10" height="10"/>'
                       '<rect x="20" width="10" height="10"/>'
                       '<rect x="40" width="10" height="10" style="stroke:#0000ff"/>'
                       '<rect x="60" width="10" height="10" display="none"/>'
@@ -224,7 +224,7 @@ def test_hidden_and_empty_are_skipped():
     assert len(d.paths) == 1
 
 
-# ------------------------------------------------------------------ use en defs
+# ------------------------------------------------------------------ use and defs
 
 def test_use_with_offset():
     d = doc('<defs><rect id="r" width="10" height="10" fill="none" stroke="#000000"/></defs>'
@@ -235,45 +235,45 @@ def test_use_with_offset():
 
 def test_defs_are_not_drawn_and_text_warns():
     d = doc('<defs><circle id="c" r="5" fill="#ff0000"/></defs>'
-            '<text x="10" y="10">hallo</text><image x="0" y="0" width="5" height="5"/>')
+            '<text x="10" y="10">hello</text><image x="0" y="0" width="5" height="5"/>')
     assert d.paths == []
-    assert any("tekst" in w.lower() for w in d.warnings)
-    assert any("afbeelding" in w.lower() for w in d.warnings)
+    assert any("text" in w.lower() for w in d.warnings)
+    assert any("image" in w.lower() for w in d.warnings)
 
 
-# ------------------------------------------------------------------ veiligheid
+# ------------------------------------------------------------------ safety
 
 def test_entity_is_refused():
     bad = ('<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY x "M0 0L10 10">]>'
            + HEAD + '><path d="&x;"/>' + TAIL)
     try:
         svg.read_svg(bad.encode())
-        assert False, "bestand met entiteiten zou geweigerd moeten worden"
+        assert False, "a file with entities should be refused"
     except ValueError as exc:
-        assert "en" in str(exc).lower()
+        assert "entities" in str(exc).lower()
 
 
 def test_not_svg():
     try:
-        svg.read_svg(b"<html><body>nee</body></html>")
-        assert False, "geen SVG zou een fout moeten geven"
+        svg.read_svg(b"<html><body>no</body></html>")
+        assert False, "not an SVG should give an error"
     except ValueError:
         pass
 
 
-# ------------------------------------------------------------------ schrijven
+# ------------------------------------------------------------------ writing
 
 def make_drawing():
     d = Drawing()
     d.ensure_layer("#ff0000", "#ff0000", "cut")
-    d.ensure_layer("Graveren", "#00ff00", "engrave")
+    d.ensure_layer("Engrave", "#00ff00", "engrave")
     outer = ellipse_arc_points((30, 20), 10, 10, 0.0, 2 * math.pi, 0.005)[:-1]
     hole = ellipse_arc_points((30, 20), 3, 3, 0.0, 2 * math.pi, 0.005)[:-1]
     d.add_path(outer, closed=True, layer="#ff0000", filled=True, rule="evenodd", src=1)
     d.add_path(hole, closed=True, layer="#ff0000", filled=True, rule="evenodd", src=1)
-    d.add_path(np.array([[5, 5], [15, 5], [15, 12]], float), closed=False, layer="Graveren")
+    d.add_path(np.array([[5, 5], [15, 5], [15, 12]], float), closed=False, layer="Engrave")
     d.add_path(np.array([[40, 40], [50, 40], [50, 50], [40, 50]], float), closed=True,
-               layer="Graveren", src=3)
+               layer="Engrave", src=3)
     return d
 
 
@@ -294,7 +294,7 @@ def test_round_trip():
         assert got.src == orig.src
         assert len(got.pts) == len(orig.pts)
         assert np.max(np.abs(got.pts - orig.pts)) < 1e-3
-    # de gaten blijven een gat
+    # the holes stay a hole
     reg = regions(back.paths)
     ring = [s for s in reg if len(s) == 2]
     assert len(reg) == 2 and len(ring) == 1
@@ -305,7 +305,7 @@ def test_round_trip_with_sheet_and_file():
     d = make_drawing()
     d.sheet_w, d.sheet_h = 200.0, 100.0
     with tempfile.TemporaryDirectory() as tmp:
-        p = os.path.join(tmp, "tekening.svg")
+        p = os.path.join(tmp, "drawing.svg")
         text = svg.write_svg(d, p)
         assert os.path.exists(p)
         with open(p, encoding="utf-8") as f:
@@ -331,18 +331,18 @@ def test_write_svg_page_is_bbox_plus_margin():
 
 def test_write_svg_layers_and_fill():
     d = make_drawing()
-    d.ensure_layer("Verborgen", "#0000ff").visible = False
-    d.add_path(np.array([[1, 1], [2, 1]], float), layer="Verborgen")
-    text = svg.write_svg(d, layers=["Graveren"], fill_layers=("Graveren",))
-    assert 'inkscape:label="Graveren"' in text
+    d.ensure_layer("Hidden", "#0000ff").visible = False
+    d.add_path(np.array([[1, 1], [2, 1]], float), layer="Hidden")
+    text = svg.write_svg(d, layers=["Engrave"], fill_layers=("Engrave",))
+    assert 'inkscape:label="Engrave"' in text
     assert 'data-volura-op="engrave"' in text
-    assert 'inkscape:label="Snijden"' not in text and "Verborgen" not in text
+    assert 'inkscape:label="Cut"' not in text and "Hidden" not in text
     assert 'fill="#00ff00"' in text and 'fill-rule="evenodd"' in text
     back = svg.read_svg(text.encode())
-    assert [p.layer for p in back.paths] == ["Graveren", "Graveren"]
+    assert [p.layer for p in back.paths] == ["Engrave", "Engrave"]
 
 
-# ------------------------------------------------------------------ hulpfuncties
+# ------------------------------------------------------------------ helpers
 
 def test_arc_helpers():
     a = arc_points((0, 0), 30.0, 0.0, math.pi, 0.01)
@@ -350,10 +350,10 @@ def test_arc_helpers():
     assert np.allclose(a[0], [30, 0]) and np.allclose(a[-1], [-30, 0])
     step = np.max(np.linalg.norm(a[1:] - a[:-1], axis=1))
     assert 30.0 * (1.0 - math.cos(step / 60.0)) < 0.01 + 1e-9
-    # te kleine stralen worden opgeschaald: de boog blijft van punt naar punt lopen
+    # radii that are too small are scaled up: the arc still runs from point to point
     p0, p1 = np.array([0.0, 0.0]), np.array([40.0, 0.0])
     arc = svg_arc(p0, 5.0, 5.0, 0.0, 0, 1, p1, 0.01)
-    assert np.allclose(arc[-1], [40.0, 0.0])       # punten na p0 tot en met p1
+    assert np.allclose(arc[-1], [40.0, 0.0])       # points after p0 up to and including p1
     assert np.max(np.abs(arc[:, 1])) > 10.0
 
 
@@ -362,8 +362,8 @@ def test_rounded_rect_and_ellipse():
             'stroke="#000000"/><ellipse cx="50" cy="20" rx="10" ry="5" fill="none" '
             'stroke="#000000"/>')
     outer = regions([d.paths[0]])
-    hoek = 20 * 10 - (4.0 - math.pi) * 25.0        # minus de vier kwartcirkels
-    assert abs(abs(area(outer[0])) - hoek) < 0.02 * hoek
+    want = 20 * 10 - (4.0 - math.pi) * 25.0        # minus the four quarter circles
+    assert abs(abs(area(outer[0])) - want) < 0.02 * want
     reg = regions([d.paths[1]])
     assert abs(abs(area(reg[0])) - math.pi * 10 * 5) < 0.005 * math.pi * 50
 
@@ -379,10 +379,10 @@ def test_broken_path_warns_instead_of_crashing():
     d = doc('<path d="M5 5L15 5WAT" stroke="#ff0000" fill="none"/>'
             '<rect width="4" height="4" fill="none" stroke="#00ff00"/>')
     assert len(d.paths) == 1 and d.paths[0].layer == "#00ff00"
-    assert any("overgeslagen" in w for w in d.warnings)
+    assert any("skipped" in w for w in d.warnings)
 
 
-def test_copy_is_onafhankelijk():
+def test_copy_is_independent():
     d = make_drawing()
     c = d.copy()
     c.paths[0].pts[0] += 5.0
@@ -414,7 +414,7 @@ def test_join_open_paths_keeps_open_and_closed():
 def test_json_round_trip():
     d = make_drawing()
     d.sheet_w, d.sheet_h = 320.0, 200.5
-    d.warnings.append("iets")
+    d.warnings.append("something")
     back = Drawing.from_json(d.to_json())
     assert len(back.paths) == len(d.paths)
     for got, orig in zip(back.paths, d.paths):
@@ -423,7 +423,7 @@ def test_json_round_trip():
         assert np.max(np.abs(got.pts - orig.pts)) <= 1e-6
     assert back.layers == d.layers
     assert back.sheet_w == 320.0 and back.sheet_h == 200.5
-    assert back.warnings == ["iets"]
+    assert back.warnings == ["something"]
     assert abs(back.bounds()[2] - d.bounds()[2]) <= 1e-6
 
 

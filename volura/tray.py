@@ -9,7 +9,10 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QDockWidget, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
-TRAY_TITLE = "Standaardvenster"
+from . import theme
+from .i18n import tr
+
+TRAY_TITLE = tr("Default Tray")
 TRAY_WIDTH = 300
 
 HEADER_STYLE = """
@@ -17,13 +20,20 @@ QToolButton#trayHeader {
     text-align: left;
     padding: 5px 4px;
     border: none;
-    border-top: 1px solid #d8d8d8;
-    border-bottom: 1px solid #c4c4c4;
-    background: #ededed;
+    border-top: 1px solid %(tray_line_top)s;
+    border-bottom: 1px solid %(tray_line_bottom)s;
+    background: %(tray_bg)s;
+    color: %(tray_text)s;
     font-weight: bold;
 }
-QToolButton#trayHeader:hover { background: #e2e2e2; }
+QToolButton#trayHeader:hover { background: %(tray_hover)s; }
 """
+
+
+def header_style(dark=None):
+    """The style of the panel headers in the current theme."""
+    names = ("tray_line_top", "tray_line_bottom", "tray_bg", "tray_text", "tray_hover")
+    return HEADER_STYLE % {n: theme.color(n, dark) for n in names}
 
 
 class TraySection(QWidget):
@@ -91,7 +101,8 @@ class Tray(QDockWidget):
 
         content = QWidget()
         content.setObjectName("trayContent")
-        content.setStyleSheet(HEADER_STYLE)
+        content.setStyleSheet(header_style())
+        self.content = content
         content.setMinimumWidth(TRAY_WIDTH - 40)
         lay = QVBoxLayout(content)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -106,6 +117,10 @@ class Tray(QDockWidget):
             lay.addWidget(section)
         lay.addStretch(1)
         self.setWidget(content)
+
+    def apply_theme(self):
+        """After a theme switch: the panel headers in the new colours."""
+        self.content.setStyleSheet(header_style())
 
     def section(self, title):
         return self.sections[title]
@@ -123,7 +138,7 @@ class Tray(QDockWidget):
         self.section(title).set_open(is_open)
 
     def set_panel_shown(self, title, shown):
-        """Een paneel helemaal weglaten (kop en inhoud), bijvoorbeeld in de andere modus."""
+        """Leave a panel out entirely (header and content), for example in the other mode."""
         self.section(title).setVisible(bool(shown))
 
     def is_shown(self, title):

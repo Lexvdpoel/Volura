@@ -1,18 +1,17 @@
-"""Snappen op het 2D-werkblad, zoals de inferentie in 3D het doet.
+"""Snapping on the 2D worksheet, the way inference does it in 3D.
 
-Het werkblad heeft dezelfde hulp als het tekenen in 3D: de cursor wordt naar een
-punt getrokken dat er echt toe doen — het eindpunt van een lijn, het midden van
-een lijnstuk, het middelpunt van een cirkel of boog, het snijpunt van twee
-lijnstukken, het dichtstbijzijnde punt op een pad of een rasterkruising. Daarnaast
-wordt de cursor horizontaal of verticaal uitgelijnd met een eindpunt, met een
-gestippelde hulplijn erbij.
+The worksheet has the same help as drawing in 3D: the cursor is pulled to a point
+that really matters — the endpoint of a line, the middle of a segment, the centre of
+a circle or arc, the intersection of two segments, the nearest point on a path or a
+grid crossing. In addition the cursor is aligned horizontally or vertically with an
+endpoint, with a dotted guide line along with it.
 
-Alles werkt in millimeters met Y omhoog; de drempels staan in pixels, zodat snappen
-bij elke zoom gelijk voelt (`afstand in mm = pixels / view.scale`).
+Everything works in millimetres with Y up; the thresholds are in pixels, so snapping
+feels the same at every zoom (`distance in mm = pixels / view.scale`).
 
-`SnapEngine` bewaart de punten van de tekening in een cache die omvalt zodra het
-document verandert; `snap()` geeft een `Snap` terug met het punt, de soort, het
-label voor de tooltip en eventueel de hulplijn.
+`SnapEngine` keeps the points of the drawing in a cache that is dropped as soon as
+the document changes; `snap()` returns a `Snap` with the point, the kind, the label
+for the tooltip and optionally the guide line.
 """
 from __future__ import annotations
 
@@ -20,9 +19,10 @@ import numpy as np
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QColor, QFont, QPainterPath, QPen
 
+from .i18n import tr
 from .vector2d import path_segments
 
-GRID_MIN_PX = 8.0            # een rasterlijn moet minstens zo ver uit elkaar liggen
+GRID_MIN_PX = 8.0            # grid lines must be at least this far apart
 
 ENDPOINT_PX = 9.0
 INTERSECT_PX = 9.0
@@ -32,20 +32,20 @@ ONPATH_PX = 6.0
 GRID_PX = 5.0
 ALIGN_PX = 4.0
 
-#: welke soort wint als er meer binnen bereik ligt, zoals in SketchUp
+#: which kind wins when more are within reach, as in SketchUp
 PRIORITY = ("endpoint", "intersection", "center", "midpoint", "onpath")
 
-#: waar de punten van die soort in de cache van `SnapEngine` staan
+#: where the points of that kind are in the cache of `SnapEngine`
 FEATURE_OF = {"endpoint": "ends", "center": "centers", "midpoint": "mids"}
 
 LABELS = {
-    "endpoint": "Eindpunt",
-    "midpoint": "Middelpunt",
-    "center": "Middelpunt",
-    "intersection": "Snijpunt",
-    "onpath": "Op pad",
-    "grid": "Raster",
-    "align": "Uitgelijnd",
+    "endpoint": tr("Endpoint"),
+    "midpoint": tr("Midpoint"),
+    "center": tr("Center"),
+    "intersection": tr("Intersection"),
+    "onpath": tr("On Path"),
+    "grid": tr("Grid"),
+    "align": tr("Aligned"),
 }
 
 COLORS = {
@@ -70,7 +70,7 @@ SHAPES = {
 
 
 def grid_step(scale: float) -> float:
-    """De rasterwijdte in mm bij deze zoom: 1, 5, 10, 50, 100, 500, ... mm."""
+    """The grid spacing in mm at this zoom: 1, 5, 10, 50, 100, 500, ... mm."""
     for e in range(-4, 8):
         for m in (1.0, 5.0):
             step = m * 10 ** e
@@ -80,7 +80,7 @@ def grid_step(scale: float) -> float:
 
 
 class Snap:
-    """Het resultaat van één snap-poging: een punt, de soort en een hulplijn."""
+    """The result of one snap attempt: a point, the kind and a guide line."""
 
     __slots__ = ("point", "kind", "label", "guide", "raw")
 
@@ -106,7 +106,7 @@ def _closest_on_segment(p, a, b):
 
 
 def seg_intersection(p1, p2, p3, p4):
-    """Het punt waar lijnstuk `p1`-`p2` door `p3`-`p4` gaat, of None."""
+    """The point where segment `p1`-`p2` crosses `p3`-`p4`, or None."""
     r, s = p2 - p1, p4 - p3
     den = float(r[0] * s[1] - r[1] * s[0])
     if abs(den) <= 1e-12:
@@ -120,23 +120,23 @@ def seg_intersection(p1, p2, p3, p4):
 
 
 class SnapEngine:
-    """Zoekt het snap-punt bij de cursor: geometrie eerst, daarna raster en uitlijning."""
+    """Finds the snap point at the cursor: geometry first, then grid and alignment."""
 
     def __init__(self, view):
         self.view = view
         self._features = None
         try:
             view.doc.changed.connect(self.invalidate)
-        except Exception:                       # een document zonder signaal (tests)
+        except Exception:                       # a document without a signal (tests)
             pass
 
-    # -- de punten van de tekening ---------------------------------------
+    # -- the points of the drawing ---------------------------------------
 
     def invalidate(self):
         self._features = None
 
     def _paths(self):
-        """Zichtbare paden waar je op mag snappen (een vergrendelde laag mag je wel volgen)."""
+        """Visible paths you may snap to (you may follow a locked layer)."""
         out = []
         for p in self.view.doc.sheet.paths:
             if len(p.pts) < 2 or not self.view._visible(p):
@@ -145,7 +145,7 @@ class SnapEngine:
         return out
 
     def features(self):
-        """Eindpunten, middens, middelpunten en lijnstukken, één keer per tekening."""
+        """Endpoints, midpoints, centres and segments, once per drawing."""
         if self._features is not None:
             return self._features
         ends, mids, centers, segs = [], [], [], []
@@ -169,11 +169,11 @@ class SnapEngine:
         return self._features
 
     def intersections(self, point=None, tol=None):
-        """Snijpunten van de lijnstukken onderling.
+        """Intersections of the segments with each other.
 
-        Met `point` en `tol` alleen die in het vierkant eromheen: een snijpunt binnen
-        `tol` van de cursor ligt op twee lijnstukken waarvan het omhoksel dat
-        vierkant raakt, dus hoeven de rest niet te worden nagekeken.
+        With `point` and `tol` only those in the square around it: an intersection
+        within `tol` of the cursor lies on two segments whose bounding box touches that
+        square, so the rest need not be checked.
         """
         S = self.features()["segs"]
         if len(S) < 2:
@@ -197,11 +197,11 @@ class SnapEngine:
                     pts.append(q.tolist())
         return np.asarray(pts, dtype=float).reshape(-1, 2)
 
-    # -- snappen ----------------------------------------------------------
+    # -- snapping ---------------------------------------------------------
 
     def snap(self, x=None, y=None, point=None, anchor=None, allow_grid=True,
              allow_align=True) -> Snap:
-        """Het snap-punt bij schermpunt (`x`, `y`) of wereldpunt `point`."""
+        """The snap point at screen point (`x`, `y`) or world point `point`."""
         raw = (np.asarray(point, dtype=float) if point is not None
                else self.view.to_world_xy(x, y))
         scale = max(float(self.view.scale), 1e-9)
@@ -245,7 +245,7 @@ class SnapEngine:
 
     @staticmethod
     def _aligned(raw, anchor, ends, tol):
-        """Horizontaal of verticaal op één lijn met de vorige klik of een eindpunt."""
+        """Horizontally or vertically in line with the previous click or an endpoint."""
         refs = [np.asarray(anchor, dtype=float)] if anchor is not None else []
         if len(ends):
             near_y = ends[np.abs(ends[:, 1] - raw[1]) <= tol]
@@ -271,7 +271,7 @@ def _nearest(p, pts, tol):
 
 
 def _shares(a1, a2, b1, b2) -> bool:
-    """Raken de lijnstukken elkaar in een gedeeld punt? Dan is er niets te snappen."""
+    """Do the segments touch in a shared point? Then there is nothing to snap to."""
     for p in (a1, a2):
         for q in (b1, b2):
             if abs(p[0] - q[0]) < 1e-9 and abs(p[1] - q[1]) < 1e-9:
@@ -280,11 +280,11 @@ def _shares(a1, a2, b1, b2) -> bool:
 
 
 # --------------------------------------------------------------------------
-#  de markering bij het snap-punt
+#  the marker at the snap point
 # --------------------------------------------------------------------------
 
 def paint_snap(p, view, snap):
-    """De gekleurde markering met tooltip en de gestippelde hulplijn, als in 3D."""
+    """The coloured marker with tooltip and the dotted guide line, as in 3D."""
     if snap is None or not getattr(snap, "kind", ""):
         return
     if snap.guide:
@@ -335,7 +335,7 @@ def _paint_guide(p, view, guide, point):
 
 
 def _paint_tip(p, pos, text):
-    """Het kleine label naast het snap-punt, zoals de tooltip van de inferentie."""
+    """The small label next to the snap point, like the tooltip of inference."""
     font = QFont(p.font())
     font.setPointSizeF(max(7.5, font.pointSizeF() * 0.9))
     p.setFont(font)

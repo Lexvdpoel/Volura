@@ -1,15 +1,15 @@
-"""Het gedeelde 2D-datamodel voor vectorwerk: lagen, paden en tekeningen.
+"""The shared 2D data model for vector work: layers, paths and drawings.
 
-Alle 2D-coördinaten zijn millimeters met Y omhoog (wiskundige richting) en staan
-als numpy-arrays ``(N, 2)`` float64. SVG en DXF, het 2D-werkblad, het nesten op
-een plaat en de bewerkingen voor lasersnijder en CNC-frees delen dit model; er is
-bewust geen tweede model.
+All 2D coordinates are millimetres with Y up (mathematical orientation) and are stored
+as numpy arrays ``(N, 2)`` float64. SVG and DXF, the 2D worksheet, nesting on a
+sheet and the operations for laser cutter and CNC mill share this model; there is
+deliberately no second model.
 
-Een tekening is een lijst paden met een laagnaam. De laag draagt de bedoeling
-(snijden, graveren, frezen) en de kleur, zodat de kleurconventie van lasersoftware
-(rood = snijden) bewaard blijft. Paden met hetzelfde volgnummer ``src`` komen uit
-hetzelfde bronelement en vormen samen een gevulde vorm; dat is nodig om gaten
-(een cirkel in een cirkel) goed te kunnen vullen.
+A drawing is a list of paths with a layer name. The layer carries the intent
+(cut, engrave, mill) and the colour, so the colour convention of laser software
+(red = cut) is preserved. Paths with the same sequence number ``src`` come from
+the same source element and together form a filled shape; that is needed to fill
+holes (a circle inside a circle) correctly.
 """
 from __future__ import annotations
 
@@ -19,45 +19,47 @@ from dataclasses import dataclass, field, replace
 import numpy as np
 import manifold3d as mf
 
-# Wat een laag voor de machine betekent. "none" is alleen ter informatie.
+from .i18n import tr
+
+# What a layer means to the machine. "none" is for information only.
 OPS = ("cut", "engrave", "raster", "mill_outside", "mill_inside", "pocket", "drill", "none")
 
-# De Nederlandse namen van die bewerkingen, zoals het lagenpaneel ze toont.
-OP_LABELS = {"cut": "Snijden", "engrave": "Graveren", "raster": "Rasteren",
-             "mill_outside": "Frezen buiten", "mill_inside": "Frezen binnen",
-             "pocket": "Uitkameren", "drill": "Boren", "none": "Geen (niet exporteren)"}
+# The names of those operations, as the layers panel shows them.
+OP_LABELS = {"cut": tr("Cut"), "engrave": tr("Engrave"), "raster": tr("Raster"),
+             "mill_outside": tr("Mill outside"), "mill_inside": tr("Mill inside"),
+             "pocket": tr("Pocket"), "drill": tr("Drill"), "none": tr("None (do not export)")}
 
 LASER_OPS = ("cut", "engrave", "raster", "drill")
 MILL_OPS = ("mill_outside", "mill_inside", "pocket")
 
-TOL = 0.01          # standaard afwijking van de afgevlakte kromme, in mm
-MAX_DEPTH = 48      # diepte van de adaptieve verfijning
-JSON_DECIMALS = 6   # verliesvrij op 1e-6 mm
+TOL = 0.01          # default deviation of the flattened curve, in mm
+MAX_DEPTH = 48      # depth of the adaptive refinement
+JSON_DECIMALS = 6   # lossless to 1e-6 mm
 
-# Het plaatformaat: marge langs de rand, tussenruimte tussen onderdelen,
-# aantal platen naast elkaar en de afstand tussen twee platen op het werkblad.
+# The sheet format: margin along the edge, gap between parts,
+# number of sheets side by side and the distance between two sheets on the worksheet.
 DEFAULT_SHEET_MARGIN = 5.0
 DEFAULT_SHEET_GAP = 2.0
 DEFAULT_SHEET_COUNT = 1
 SHEET_SPACING = 50.0
 
-# De instellingen per bewerking, met de standaardwaarde erbij.
-DEFAULT_KERF = 0.15        # breedte van de snedespleet van een laser, in mm
-DEFAULT_TOOL_D = 3.175     # freesdiameter (1/8 inch), in mm
+# The settings per operation, with their default value.
+DEFAULT_KERF = 0.15        # width of the kerf of a laser, in mm
+DEFAULT_TOOL_D = 3.175     # cutter diameter (1/8 inch), in mm
 CORNER_STYLES = ("none", "dogbone", "tbone")
-CORNER_LABELS = {"none": "Geen", "dogbone": "Dogbone", "tbone": "T-bone"}
+CORNER_LABELS = {"none": tr("None"), "dogbone": tr("Dogbone"), "tbone": tr("T-bone")}
 LASER_PARAMS = (("power", 100.0), ("speed", 20.0), ("passes", 1), ("kerf", DEFAULT_KERF))
 MILL_PARAMS = (("tool_d", DEFAULT_TOOL_D), ("depth", 3.0), ("step_depth", 1.0),
                ("stepover", 50.0), ("corner", "none"))
-PARAM_LABELS = {"power": "Vermogen (%)", "speed": "Snelheid (mm/s)",
-                "passes": "Aantal doorgangen", "kerf": "Kerf (mm)",
-                "tool_d": "Freesdiameter (mm)", "depth": "Diepte (mm)",
-                "step_depth": "Stapdiepte (mm)", "stepover": "Stapover (%)",
-                "corner": "Hoekuitsparing"}
+PARAM_LABELS = {"power": tr("Power (%)"), "speed": tr("Speed (mm/s)"),
+                "passes": tr("Number of passes"), "kerf": tr("Kerf (mm)"),
+                "tool_d": tr("Cutter diameter (mm)"), "depth": tr("Depth (mm)"),
+                "step_depth": tr("Step depth (mm)"), "stepover": tr("Stepover (%)"),
+                "corner": tr("Corner relief")}
 
 
 def default_params(op) -> dict:
-    """De instellingen die bij een bewerking horen, met de standaardwaarden."""
+    """The settings that belong to an operation, with their default values."""
     if op in MILL_OPS:
         return {key: value for key, value in MILL_PARAMS}
     if op in LASER_OPS:
@@ -66,7 +68,7 @@ def default_params(op) -> dict:
 
 
 def layer_param(layer, key, default=None):
-    """Een instelling van een laag; ontbrekend of onbruikbaar geeft de standaardwaarde."""
+    """A setting of a layer; missing or unusable gives the default value."""
     if default is None:
         default = default_params(layer.op if layer is not None else "").get(key)
     value = dict(layer.params or {}).get(key, None) if layer is not None else None
@@ -83,28 +85,47 @@ def layer_param(layer, key, default=None):
     return value
 
 
-# De standaardlagen van een nieuw werkblad, in de kleurconventie van LightBurn:
-# rood snijdt, blauw graveert, zwart rastert, groen en oranje frezen, cyaan kameren uit.
-DEFAULT_LAYERS = (("Snijden", "#ff0000", "cut"),
-                  ("Graveren", "#0000ff", "engrave"),
-                  ("Rasteren", "#000000", "raster"),
-                  ("Frezen buiten", "#00e000", "mill_outside"),
-                  ("Frezen binnen", "#ff8000", "mill_inside"),
-                  ("Uitkameren", "#00e0e0", "pocket"),
-                  ("Boren", "#ff00ff", "drill"),
-                  ("Hulplijnen", "#a0a0a0", "none"))
+# The default layers of a new worksheet, in the colour convention of LightBurn:
+# red cuts, blue engraves, black rasters, green and orange mill, cyan pockets.
+# The names are in the current language; they are document data once a sheet is made.
+DEFAULT_LAYERS = ((tr("Cut"), "#ff0000", "cut"),
+                  (tr("Engrave"), "#0000ff", "engrave"),
+                  (tr("Raster"), "#000000", "raster"),
+                  (tr("Mill outside"), "#00e000", "mill_outside"),
+                  (tr("Mill inside"), "#ff8000", "mill_inside"),
+                  (tr("Pocket"), "#00e0e0", "pocket"),
+                  (tr("Drill"), "#ff00ff", "drill"),
+                  (tr("Guides"), "#a0a0a0", "none"))
+
+#: The English names of the default layers, per operation.
+DEFAULT_LAYER_NAMES_EN = {"cut": "Cut", "engrave": "Engrave", "raster": "Raster",
+                          "mill_outside": "Mill outside", "mill_inside": "Mill inside",
+                          "pocket": "Pocket", "drill": "Drill", "none": "Guides"}
+#: The names of the default layers in files from Volura 0.1.0 (always Dutch then).
+LEGACY_LAYER_NAMES = {"cut": "Snijden", "engrave": "Graveren", "raster": "Rasteren",
+                      "mill_outside": "Frezen buiten", "mill_inside": "Frezen binnen",
+                      "pocket": "Uitkameren", "drill": "Boren", "none": "Hulplijnen"}
 
 
 def default_layers() -> dict:
-    """De lagen van een leeg werkblad: "0" plus de standaardlagen (in die volgorde)."""
+    """The layers of an empty worksheet: "0" plus the default layers (in that order)."""
     out = {"0": Layer("0", "#000000", "cut", params=default_params("cut"))}
     for name, color, op in DEFAULT_LAYERS:
         out[name] = Layer(name, color, op, params=default_params(op))
     return out
 
 
-#: Een laag die zo heet krijgt die kleur en bewerking alvast mee (LightBurn-conventie).
-DEFAULT_BY_NAME = {name: (color, op) for name, color, op in DEFAULT_LAYERS}
+def default_layer_names(op) -> tuple:
+    """Every name the default layer of `op` can have: current language, English, old Dutch."""
+    names = [tr(DEFAULT_LAYER_NAMES_EN.get(op, "")), DEFAULT_LAYER_NAMES_EN.get(op),
+             LEGACY_LAYER_NAMES.get(op)]
+    return tuple(dict.fromkeys(n for n in names if n))
+
+
+#: A layer with this name gets that colour and operation right away (LightBurn convention).
+#: Known in every language, so an old file or an import with Dutch names behaves the same.
+DEFAULT_BY_NAME = {name: (color, op) for _name, color, op in DEFAULT_LAYERS
+                   for name in default_layer_names(op)}
 
 
 def _arr(pts) -> np.ndarray:
@@ -115,12 +136,12 @@ def _arr(pts) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------
-#  het model
+#  the model
 # --------------------------------------------------------------------------
 
 @dataclass
 class Layer:
-    """Een laag: een kleur, een bedoeling en de vrije instellingen daarbij."""
+    """A layer: a colour, an intent and the free settings that go with it."""
 
     name: str
     color: str
@@ -143,8 +164,8 @@ class Layer:
 
 
 def _clean_meta(meta) -> dict:
-    """De extra gegevens van een pad (middelpunt en straal van een cirkel of boog),
-    netjes als gewone waarden zodat ze in een bestand kunnen."""
+    """The extra data of a path (centre and radius of a circle or arc),
+    cleaned up as plain values so they can go into a file."""
     out = {}
     for k, v in dict(meta or {}).items():
         if isinstance(v, (list, tuple)):
@@ -156,12 +177,12 @@ def _clean_meta(meta) -> dict:
     return out
 
 
-META_POINTS = ("center",)        # sleutels met een punt in de meta van een pad
+META_POINTS = ("center",)        # keys holding a point in the meta of a path
 META_LENGTHS = ("radius", "r", "rx", "ry")
 
 
 def _transform_meta(meta, lin, off):
-    """Meta mee met een transformatie: punten erdoorheen, stralen met de maat mee."""
+    """Meta along with a transformation: points through it, radii scaled with it."""
     if not meta:
         return {}
     out = dict(meta)
@@ -181,11 +202,11 @@ def _transform_meta(meta, lin, off):
 
 @dataclass
 class VPath:
-    """Een polylijn: open of gesloten, met de laag en de herkomst uit de bron.
+    """A polyline: open or closed, with the layer and its origin in the source.
 
-    `meta` bewaart wat de afgevlakte punten kwijt zijn: bij een cirkel of boog het
-    middelpunt en de straal, zodat het werkblad ze als cirkel kan snappen en de
-    gereedschappen ermee kunnen rekenen.
+    `meta` keeps what the flattened points have lost: for a circle or arc the
+    centre and the radius, so the worksheet can snap to it as a circle and the
+    tools can calculate with it.
     """
 
     pts: np.ndarray
@@ -231,7 +252,7 @@ class VPath:
 
 
 class Drawing:
-    """Een 2D-tekening: paden, de lagen die ze gebruiken en eventueel een plaat."""
+    """A 2D drawing: paths, the layers they use and optionally a sheet."""
 
     def __init__(self, paths=None, layers=None, sheet_w=None, sheet_h=None, warnings=None,
                  thickness=None, margin=None, gap=None, sheet_count=None):
@@ -240,18 +261,18 @@ class Drawing:
         self.sheet_w = None if sheet_w is None else float(sheet_w)
         self.sheet_h = None if sheet_h is None else float(sheet_h)
         self.warnings: list[str] = list(warnings) if warnings else []
-        # plaatinstellingen: materiaaldikte, marge, tussenruimte en aantal platen
+        # sheet settings: material thickness, margin, gap and number of sheets
         self.sheet_thickness = None if thickness is None else float(thickness)
         self.sheet_margin = DEFAULT_SHEET_MARGIN if margin is None else float(margin)
         self.sheet_gap = DEFAULT_SHEET_GAP if gap is None else float(gap)
         self.sheet_count = DEFAULT_SHEET_COUNT if sheet_count is None else max(1, int(sheet_count))
         self.ensure_layer("0")
 
-    # -- opbouwen ----------------------------------------------------------
+    # -- building ----------------------------------------------------------
 
     def add_path(self, pts, closed=False, layer="0", filled=False, rule="nonzero",
                  src=0, meta=None) -> VPath:
-        """Voeg een polylijn toe; de laag wordt zo nodig aangelegd."""
+        """Add a polyline; the layer is created when needed."""
         p = VPath(_arr(pts), bool(closed), layer, bool(filled),
                   rule if rule in ("nonzero", "evenodd") else "nonzero", int(src),
                   dict(meta or {}))
@@ -260,10 +281,10 @@ class Drawing:
         return p
 
     def ensure_layer(self, name, color="#000000", op=None) -> Layer:
-        """De laag met `name`, bestaand of nieuw (bestaanden laten we zo).
+        """The layer with `name`, existing or new (existing ones are left as they are).
 
-        Een laag met de naam van een standaardlaag ("Snijden", "Boren", ...) krijgt
-        diens kleur en bewerking mee, tenzij de aanroeper die zelf geeft.
+        A layer with the name of a default layer ("Cut", "Drill", ...) in any language
+        gets its colour and operation, unless the caller gives them.
         """
         lay = self.layers.get(name)
         if lay is None:
@@ -277,21 +298,40 @@ class Drawing:
             lay.op = op
         return lay
 
+    def default_layer(self, op) -> str | None:
+        """The name of the default layer for `op` in this drawing, else the first layer
+        with that operation, else None.
+
+        Default layer names are document data: a new sheet has them in the current
+        language, a file from Volura 0.1.0 has the Dutch ones. Look a layer up by its
+        operation through here, never by a fixed name.
+        """
+        for name in default_layer_names(op):
+            lay = self.layers.get(name)
+            if lay is not None and lay.op == op:
+                return name
+        for name, lay in self.layers.items():
+            if lay.op == op and name != "0":
+                return name
+        return None
+
     def warn(self, text):
         if text and text not in self.warnings:
             self.warnings.append(text)
         return text
 
     def _sheet_kwargs(self) -> dict:
-        """De plaatinstellingen als trefwoorden, zodat een kopie ze meekrijgt."""
+        """The sheet settings as keywords, so a copy gets them too."""
         return {"sheet_w": self.sheet_w, "sheet_h": self.sheet_h,
                 "thickness": self.sheet_thickness, "margin": self.sheet_margin,
                 "gap": self.sheet_gap, "sheet_count": self.sheet_count}
 
-    # -- lagen bewerken ------------------------------------------------------
+    # -- editing layers ------------------------------------------------------
 
-    def free_layer_name(self, base="Laag") -> str:
-        """Een laagnaam die nog niet in gebruik is: "Laag 2", "Laag 3", ..."""
+    def free_layer_name(self, base=None) -> str:
+        """A layer name that is not in use yet: "Layer 2", "Layer 3", ..."""
+        if base is None:
+            base = tr("Layer")
         name = f"{base} 2"
         while name in self.layers:
             n = int("".join(c for c in name if c.isdigit()) or 0)
@@ -299,7 +339,7 @@ class Drawing:
         return name
 
     def rename_layer(self, name, new_name) -> bool:
-        """Een laag hernoemen; de paden en de kleur blijven, de volgorde ook."""
+        """Rename a layer; the paths and the colour stay, and so does the order."""
         new_name = str(new_name or "").strip()
         if not new_name or new_name == name or name not in self.layers:
             return False
@@ -316,7 +356,7 @@ class Drawing:
         return True
 
     def remove_layer(self, name, move_paths=True, target="0") -> bool:
-        """Een laag verwijderen; de paden naar `target` zetten of mee wissen."""
+        """Remove a layer; move its paths to `target` or delete them along with it."""
         if name not in self.layers or name == target:
             return False
         if move_paths:
@@ -330,10 +370,10 @@ class Drawing:
         self.ensure_layer(target)
         return True
 
-    # -- meten -------------------------------------------------------------
+    # -- measuring ---------------------------------------------------------
 
     def bounds(self):
-        """(xmin, ymin, xmax, ymax) of None als er niets ligt."""
+        """(xmin, ymin, xmax, ymax) or None when there is nothing."""
         if not self.paths:
             return None
         lo = np.full(2, np.inf)
@@ -352,13 +392,13 @@ class Drawing:
     def layer_names(self):
         return list(self.layers)
 
-    # -- omzetten ----------------------------------------------------------
+    # -- converting --------------------------------------------------------
 
     def transformed(self, M) -> "Drawing":
-        """Een nieuwe tekening met de affine 3x3 matrix `M` erop."""
+        """A new drawing with the affine 3x3 matrix `M` applied."""
         M = np.asarray(M, dtype=float)
         if M.shape != (3, 3):
-            raise ValueError("transformatie moet een 3x3 matrix zijn")
+            raise ValueError("transformation must be a 3x3 matrix")
         out = Drawing(layers={n: replace(l, params=dict(l.params))
                               for n, l in self.layers.items()},
                       warnings=list(self.warnings), **self._sheet_kwargs())
@@ -378,13 +418,13 @@ class Drawing:
         return out
 
     def merge(self, other: "Drawing") -> list[VPath]:
-        """De paden van `other` hierbij zetten; lagen samenvoegen op naam.
+        """Add the paths of `other` to this one; layers are merged by name.
 
-        Bestanden die naast elkaar gelegd of in een werkblad geïmporteerd worden,
-        gebruiken allebei `src`-nummers vanaf 1; die nummers gaan hier boven het
-        hoogste nummer van deze tekening, zodat vormen uit verschillende bronnen
-        niet aan elkaar geplakt worden. De laagkleur van een laag die er al is
-        blijft zoals hij was. Geeft de nieuw toegevoegde paden terug.
+        Files laid side by side or imported into a worksheet both use `src`
+        numbers from 1; here those numbers move above the highest number of this
+        drawing, so shapes from different sources are not glued together. The
+        colour of a layer that already exists stays as it was. Returns the newly
+        added paths.
         """
         for name, lay in other.layers.items():
             if name in self.layers:
@@ -404,7 +444,7 @@ class Drawing:
         return added
 
     def visible_drawing(self) -> "Drawing":
-        """Een kopie met alleen de paden van de zichtbare lagen (voor export)."""
+        """A copy with only the paths of the visible layers (for export)."""
         out = Drawing(layers={n: replace(l, params=dict(l.params))
                               for n, l in self.layers.items() if l.visible},
                       warnings=list(self.warnings), **self._sheet_kwargs())
@@ -431,7 +471,7 @@ class Drawing:
     def from_json(d) -> "Drawing":
         layers = {n: Layer.from_json(ld) for n, ld in (d.get("layers") or {}).items()}
         sheet = list(d.get("sheet") or [])
-        sheet += [None] * (6 - len(sheet))          # oudere bestanden hebben minder velden
+        sheet += [None] * (6 - len(sheet))          # older files have fewer fields
         dr = Drawing(layers=layers, sheet_w=sheet[0], sheet_h=sheet[1],
                      thickness=sheet[2], margin=sheet[3], gap=sheet[4], sheet_count=sheet[5],
                      warnings=list(d.get("warnings") or []))
@@ -442,12 +482,12 @@ class Drawing:
 
     @staticmethod
     def new_sheet() -> "Drawing":
-        """Een leeg 2D-werkblad: laag "0" plus de standaardlagen met hun kleuren."""
+        """An empty 2D worksheet: layer "0" plus the default layers with their colours."""
         return Drawing(layers=default_layers())
 
 
 def _norm_color(c) -> str:
-    """Kleur als kleine letters "#rrggbb"; andere teksten blijven zoals ze zijn."""
+    """Colour as lower-case "#rrggbb"; other texts stay as they are."""
     s = str(c or "#000000").strip().lower()
     if len(s) == 4 and s.startswith("#"):
         s = "#" + "".join(ch * 2 for ch in s[1:])
@@ -455,11 +495,11 @@ def _norm_color(c) -> str:
 
 
 # --------------------------------------------------------------------------
-#  krommen afvlakken
+#  flattening curves
 # --------------------------------------------------------------------------
 
 def _subdivide(fn, a, b, tol, out, depth):
-    """Verfijn tot de middenspunt-afwijking van de koorde onder `tol` is."""
+    """Refine until the midpoint deviation from the chord is below `tol`."""
     pa, pb = fn(a), fn(b)
     if depth <= 0:
         out.append(pb)
@@ -477,10 +517,10 @@ def _subdivide(fn, a, b, tol, out, depth):
 
 
 def flatten_quad(p0, p1, p2, tol=TOL) -> np.ndarray:
-    """De kwadratische Bezier: punten na `p0` tot en met `p2`.
+    """The quadratic Bezier: points after `p0` up to and including `p2`.
 
-    De afwijking van de koorden tot de echte kromme blijft onder `tol`:
-    |B(t) - lijn(t)| <= halve afwijking van het tussenliggende controlepunt.
+    The deviation of the chords from the true curve stays below `tol`:
+    |B(t) - line(t)| <= half the deviation of the middle control point.
     """
     p0, p1, p2 = (np.asarray(p0, float), np.asarray(p1, float), np.asarray(p2, float))
     out: list[np.ndarray] = []
@@ -504,10 +544,10 @@ def flatten_quad(p0, p1, p2, tol=TOL) -> np.ndarray:
 
 
 def flatten_cubic(p0, p1, p2, p3, tol=TOL) -> np.ndarray:
-    """De kubieke Bezier: punten na `p0` tot en met `p3`, afwijking <= `tol`.
+    """The cubic Bezier: points after `p0` up to and including `p3`, deviation <= `tol`.
 
-    |B(t) - lijn(t)| <= 3t(1-t)((1-t)|d1| + t|d2|) <= 0.75 max(|d1|, |d2|),
-    met d1 en d2 de controlepunten ten opzichte van de koorde.
+    |B(t) - line(t)| <= 3t(1-t)((1-t)|d1| + t|d2|) <= 0.75 max(|d1|, |d2|),
+    with d1 and d2 the control points relative to the chord.
     """
     p0, p1, p2, p3 = (np.asarray(p, float) for p in (p0, p1, p2, p3))
     out: list[np.ndarray] = []
@@ -538,9 +578,9 @@ def flatten_cubic(p0, p1, p2, p3, tol=TOL) -> np.ndarray:
 
 
 def arc_points(center, r, a0, a1, tol=TOL) -> np.ndarray:
-    """Cirkelboog van `a0` naar `a1` radialen, beide einden inbegrepen.
+    """Circular arc from `a0` to `a1` radians, both ends included.
 
-    De koordehoogte r(1-cos(theta/2)) blijft onder `tol`.
+    The chord height r(1-cos(theta/2)) stays below `tol`.
     """
     c = np.asarray(center, float)
     r = abs(float(r))
@@ -555,10 +595,10 @@ def arc_points(center, r, a0, a1, tol=TOL) -> np.ndarray:
 
 
 def ellipse_arc_points(center, rx, ry, a0, a1, tol=TOL, rot=0.0) -> np.ndarray:
-    """Boog van een ellips, van `a0` naar `a1` radialen, beide einden inbegrepen.
+    """Arc of an ellipse, from `a0` to `a1` radians, both ends included.
 
-    `rot` is de hoek van de ellips in radialen. Voor een gesloten ellips lopen
-    eerste en laatste punt op elkaar; wie dat niet wil neemt `pts[:-1]`.
+    `rot` is the angle of the ellipse in radians. For a closed ellipse the first
+    and last point coincide; whoever does not want that takes `pts[:-1]`.
     """
     c = np.asarray(center, dtype=float)
     rx, ry = abs(float(rx)), abs(float(ry))
@@ -577,11 +617,11 @@ def ellipse_arc_points(center, rx, ry, a0, a1, tol=TOL, rot=0.0) -> np.ndarray:
 
 
 def svg_arc(p0, rx, ry, phi, large, sweep, p1, tol=TOL) -> np.ndarray:
-    """Ellipsboog uit de SVG-eindpuntnotatie (SVG 1.1, bijlage F.6.5).
+    """Elliptical arc from the SVG endpoint notation (SVG 1.1, appendix F.6.5).
 
-    Te kleine stralen worden opgeschaald, zoals de specificatie voorschrijft.
-    Geeft de punten na `p0` tot en met `p1` terug, in het coördinatenstelsel van de
-    bron (dus met Y omlaag voor SVG).
+    Radii that are too small are scaled up, as the specification prescribes.
+    Returns the points after `p0` up to and including `p1`, in the coordinate
+    system of the source (so with Y down for SVG).
     """
     p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
     rx, ry = abs(float(rx)), abs(float(ry))
@@ -590,15 +630,15 @@ def svg_arc(p0, rx, ry, phi, large, sweep, p1, tol=TOL) -> np.ndarray:
     hoek = math.radians(float(phi))
     co, si = math.cos(hoek), math.sin(hoek)
     dx, dy = 0.5 * (p0[0] - p1[0]), 0.5 * (p0[1] - p1[1])
-    # stap 2: coördinaten in het stelsel van de ellips (F.6.5.2)
+    # step 2: coordinates in the system of the ellipse (F.6.5.2)
     x1 = co * dx + si * dy
     y1 = -si * dx + co * dy
-    # stap 3: stralen die te klein zijn voor dit eindpuntenpaar opschalen
+    # step 3: scale up radii that are too small for this pair of endpoints
     lam = (x1 / rx) ** 2 + (y1 / ry) ** 2
     if lam > 1.0:
         k = math.sqrt(lam)
         rx, ry = rx * k, ry * k
-    # stap 4: het midden van de ellips
+    # step 4: the centre of the ellipse
     rx2, ry2 = rx * rx, ry * ry
     noemer = rx2 * y1 * y1 + ry2 * x1 * x1
     if noemer <= 0.0:
@@ -641,11 +681,11 @@ def svg_arc(p0, rx, ry, phi, large, sweep, p1, tol=TOL) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------
-#  vlakken
+#  faces
 # --------------------------------------------------------------------------
 
 def polygon_area(pts) -> float:
-    """Getekende oppervlakte van een gesloten polylijn (positief met de klok tegenin)."""
+    """Signed area of a closed polyline (positive counter-clockwise)."""
     p = _arr(pts)
     if len(p) < 3:
         return 0.0
@@ -667,13 +707,13 @@ def _point_in_poly(poly, q) -> bool:
 
 
 def regions(paths):
-    """Gesloten paden als vlakken: per vorm een lijst lussen [buitenrand, gaten].
+    """Closed paths as faces: per shape a list of loops [outer boundary, holes].
 
-    Paden met hetzelfde `src`-nummer horen bij één bronelement en worden samen
-    geïnterpreteerd met de vulregel van dat element (nonzero of evenodd); de
-    groepen worden verenigd. De buitenrand is tegen de klok in, gaten met de
-    klok mee, zodat `sum(polygon_area(l) for l in vorm)` de oppervlakte is.
-    Dit is precies wat `Entities.add_shape(plane, lussen)` verwacht.
+    Paths with the same `src` number belong to one source element and are
+    interpreted together with the fill rule of that element (nonzero or evenodd);
+    the groups are united. The outer boundary is counter-clockwise, holes
+    clockwise, so `sum(polygon_area(l) for l in shape)` is the area.
+    This is exactly what `Entities.add_shape(plane, loops)` expects.
     """
     groups: dict[int, list[VPath]] = {}
     for p in paths:
@@ -716,16 +756,16 @@ def regions(paths):
 
 
 # --------------------------------------------------------------------------
-#  open lijnen aaneenrijgen
+#  joining open lines
 # --------------------------------------------------------------------------
 
 def next_src(paths) -> int:
-    """Het eerst vrije bronnummer: paden die bij elkaar horen krijgen er één."""
+    """The first free source number: paths that belong together get one."""
     return int(max([int(p.src) for p in paths] + [0])) + 1
 
 
 def path_segments(pts, closed=False):
-    """De lijnstukken van een polylijn als (a, b)-paren."""
+    """The segments of a polyline as (a, b) pairs."""
     p = _arr(pts)
     if len(p) < 2:
         return []
@@ -736,11 +776,11 @@ def path_segments(pts, closed=False):
 
 
 def join_open_paths(paths, tol=0.01):
-    """Open polylijnen met gelijke eindpunten aaneenrijgen (eventueel omgekeerd).
+    """Join open polylines with matching endpoints (reversed where needed).
 
-    Bestanden bevatten vaak losse lijnstukken die samen een vorm geven; hier
-    worden ze één pad, en als het eindpunt op het startpunt uitkomt een gesloten
-    vorm. Paden worden alleen binnen dezelfde laag verbonden.
+    Files often contain loose segments that together make a shape; here they
+    become one path, and a closed shape when the end point lands on the start
+    point. Paths are only joined within the same layer.
     """
     paths = list(paths)
     used = [False] * len(paths)

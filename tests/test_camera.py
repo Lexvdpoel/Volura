@@ -1,4 +1,4 @@
-"""Camera > Vorige/Volgende, Gezichtsveld en Zoomvenster.
+"""Camera > Previous/Next, Field of View and Zoom Window.
 
 Runs without a display (Qt offscreen platform), like tests/test_ui_spec.py.
 """
@@ -110,7 +110,7 @@ def drag(win, p0, p1):
 
 # ------------------------------------------------------------------ history
 
-def test_starts_without_vorige_of_volgende(win):
+def test_starts_without_previous_or_next(win):
     assert len(win.view.cam_hist) == 1
     assert not win.a_prev_view.isEnabled()
     assert not win.a_next_view.isEnabled()
@@ -135,7 +135,7 @@ def test_the_same_camera_is_not_recorded_twice(win):
     assert len(win.view.cam_hist) == 2
 
 
-def test_vorige_terug_volgende_vooruit(win):
+def test_previous_goes_back_next_goes_forward(win):
     s1 = change(win, distance=300.0)
     s2 = change(win, yaw=15.0)
     s3 = change(win, target=(0.0, 0.0, 5.0))
@@ -153,14 +153,14 @@ def test_vorige_terug_volgende_vooruit(win):
     assert win.view.cam.state() == s3
 
 
-def test_vorige_zet_ook_gezichtsveld_en_projectie_terug(win):
+def test_previous_also_restores_field_of_view_and_projection(win):
     change(win, fov=60.0, ortho=True)
     assert win.view.cam.ortho and win.view.cam.fov == 60.0
     win.a_prev_view.trigger()
     assert not win.view.cam.ortho and win.view.cam.fov == 35.0
 
 
-def test_nieuwe_beweging_na_vorige_wist_volgende(win):
+def test_new_movement_after_previous_clears_next(win):
     change(win, distance=300.0)
     change(win, distance=200.0)
     win.a_prev_view.trigger()
@@ -170,7 +170,7 @@ def test_nieuwe_beweging_na_vorige_wist_volgende(win):
     assert len(win.view.cam_hist) == 3
 
 
-def test_maximaal_50_standen(win):
+def test_at_most_50_states(win):
     for i in range(60):
         change(win, distance=100.0 + i)
     assert len(win.view.cam_hist) == win.view.CAM_HISTORY_MAX == 50
@@ -181,7 +181,7 @@ def test_maximaal_50_standen(win):
     assert win.view.cam.state() == win.view.cam_hist[0]
 
 
-def test_standaardweergave_zoomen_en_projectie_bewaren_een_stand(win):
+def test_standard_view_zoom_and_projection_store_a_state(win):
     n = len(win.view.cam_hist)
     win.views["top"].trigger()
     assert len(win.view.cam_hist) == n + 1
@@ -192,7 +192,7 @@ def test_standaardweergave_zoomen_en_projectie_bewaren_een_stand(win):
     assert win.view.cam_hist[-1][5] is True
 
 
-def test_scrollen_bundelt_tot_een_stand(win):
+def test_scrolling_bundles_into_one_state(win):
     n = len(win.view.cam_hist)
     for _ in range(4):
         wheel(win, 400, 300, 120)
@@ -204,12 +204,12 @@ def test_scrollen_bundelt_tot_een_stand(win):
     assert win.view.cam.distance < BASE[1]
 
 
-# ------------------------------------------------------------------ gezichtsveld
+# ------------------------------------------------------------------ field of view
 
-def test_gezichtsveld_zet_zoomengereedschap_en_de_maatinvoer(win):
+def test_field_of_view_sets_zoom_tool_and_measurements(win):
     win.a_fov.trigger()
     assert win.view.tool.name == "zoom"
-    assert win.vcb_label.text() == "Gezichtsveld"
+    assert win.vcb_label.text() == "Field of View"
     assert win.vcb.text() == "35.0 deg"
     win.vcb.setText("60")
     win.on_vcb_return()
@@ -218,7 +218,7 @@ def test_gezichtsveld_zet_zoomengereedschap_en_de_maatinvoer(win):
     assert win.view.cam_hist[-1][4] == pytest.approx(60.0)
 
 
-def test_gezichtsveld_blijft_binnen_5_tot_120_graden(win):
+def test_field_of_view_stays_within_5_to_120_degrees(win):
     win.a_fov.trigger()
     win.view.submit_vcb("500")
     assert win.view.cam.fov == 120.0
@@ -226,9 +226,9 @@ def test_gezichtsveld_blijft_binnen_5_tot_120_graden(win):
     assert win.view.cam.fov == 5.0
 
 
-# ------------------------------------------------------------------ zoomvenster
+# ------------------------------------------------------------------ zoom window
 
-def test_zoomvenster_gaat_terug_na_het_vorige_gereedschap(win):
+def test_zoom_window_returns_to_the_previous_tool(win):
     win.set_tool("select")
     win.a_zoom_window.trigger()
     assert win.view.tool.name == "zoomwindow"
@@ -237,7 +237,7 @@ def test_zoomvenster_gaat_terug_na_het_vorige_gereedschap(win):
     assert win.view.tool.name == "select"
 
 
-def test_zoomvenster_zoomt_het_kader_op(win):
+def test_zoom_window_zooms_to_the_frame(win):
     win.set_tool("select")
     win.a_zoom_window.trigger()
     d0, t0 = win.view.cam.distance, win.view.cam.target.copy()
@@ -250,14 +250,14 @@ def test_zoomvenster_zoomt_het_kader_op(win):
     assert win.view.cam.state() == win.view.cam_hist[-1]
 
 
-def test_zoomvenster_kleiner_dan_twee_pixel_doet_niets(win):
+def test_zoom_window_smaller_than_two_pixels_does_nothing(win):
     win.set_tool("zoomwindow")
     drag(win, (300, 300), (301, 301))
     assert win.view.cam.state() == BASE
     assert win.view.tool.name == "select"
 
 
-def test_zoomvenster_ontsnapt_met_esc(win):
+def test_zoom_window_escapes_with_esc(win):
     win.set_tool("select")
     win.a_zoom_window.trigger()
     tool = win.view.tool

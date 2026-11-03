@@ -1,7 +1,7 @@
-"""Duwen/trekken: omhoog is positief, ook bij een los vlak op de grond (zoals SketchUp).
+"""Push/Pull: up is positive, also for a loose face on the ground (like SketchUp).
 
-Een vlak dat op de grond getekend wordt wijst naar beneden; de getoonde en getypte
-afstand moet toch positief zijn als het vlak omhoog getrokken wordt.
+A face drawn on the ground points down; the shown and typed distance must still
+be positive when the face is pulled up.
 """
 import os
 import sys
@@ -37,7 +37,7 @@ def face_at_z(ents, z, nz):
     for fid, f in ents.F.items():
         if abs(f.normal[2] - nz) < 1e-6 and all(abs(ents.V[v][2] - z) < 1e-6 for v in f.loops[0]):
             return fid
-    raise AssertionError("geen vlak")
+    raise AssertionError("no face")
 
 
 def zmax(ents):
@@ -49,7 +49,7 @@ def pick(t, ents, fid):
     t._set_target(t.doc.active, fid, ents.V[ents.F[fid].loops[0][0]].copy())
 
 
-def test_getypte_afstand_op_grondvlak_gaat_omhoog(win):
+def test_typed_distance_on_ground_face_goes_up(win):
     ents = win.doc.root
     ground_rect(ents)
     fid = face_at_z(ents, 0, -1)
@@ -61,21 +61,21 @@ def test_getypte_afstand_op_grondvlak_gaat_omhoog(win):
     assert win.vcb.text() == "10.00"
 
 
-def test_omhoog_slepen_toont_positieve_afstand(win):
+def test_dragging_up_shows_positive_distance(win):
     ents = win.doc.root
     ground_rect(ents)
     fid = face_at_z(ents, 0, -1)
     win.set_tool("pushpull")
     t = win.view.tools["pushpull"]
     pick(t, ents, fid)
-    t.dist = -7.0                       # langs de normaal (omlaag gericht) = 7 mm omhoog
+    t.dist = -7.0                       # along the normal (pointing down) = 7 mm up
     assert t.sign * t.dist == pytest.approx(7.0)
     t.apply(t.dist)
     assert zmax(ents) == pytest.approx(7.0)
     assert win.vcb.text() == "7.00"
 
 
-def test_bovenvlak_van_blok_omhoog_positief(win):
+def test_top_face_of_block_up_is_positive(win):
     ents = win.doc.root
     ground_rect(ents)
     win.set_tool("pushpull")
@@ -86,7 +86,7 @@ def test_bovenvlak_van_blok_omhoog_positief(win):
     assert t.sign == 1.0
     t.vcb_enter("5")
     assert zmax(ents) == pytest.approx(15.0)
-    # een negatieve getypte waarde duwt het bovenvlak omlaag
+    # a negative typed value pushes the top face down
     pick(t, ents, face_at_z(ents, 15, 1))
     t.vcb_enter("-3")
     assert zmax(ents) == pytest.approx(12.0)
@@ -98,7 +98,7 @@ class _Ev:
         return Qt.KeyboardModifier.NoModifier
 
 
-def test_klikken_kiest_vlak(win, monkeypatch):
+def test_clicking_picks_face(win, monkeypatch):
     ents = win.doc.root
     ground_rect(ents)
     fid = face_at_z(ents, 0, -1)

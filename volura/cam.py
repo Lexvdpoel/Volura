@@ -1,18 +1,19 @@
-"""De rekenkern voor laser en frees: nestingdiepte, kerf-/freescorrectie en dogbones.
+"""The computational core for laser and mill: nesting depth, kerf/cutter compensation
+and dogbones.
 
-Geen Qt in dit bestand. `nesting_depth`, `compensate` en `dogbones` werken op het
-gedeelde 2D-model uit `volura/vector2d.py` en zijn daarom los te testen en elders
-weer te gebruiken (het lagenpaneel, "Exporteren voor laser/frees" en het nesten).
+No Qt in this file. `nesting_depth`, `compensate` and `dogbones` work on the shared 2D
+model from `volura/vector2d.py` and can therefore be tested on their own and reused
+elsewhere (the layers panel, "Export for laser/mill" and nesting).
 
-Een laser snijdt in het midden van de getekende lijn en haalt aan beide kanten de
-halve kerf weg; een frees heeft een eigen straal. De contour moet dus opzij geschoven
-worden om na het snijden de getekende maat te geven. Welke kant op zegt de
-nestingdiepte: de buitenrand van een onderdeel (diepte 0) naar buiten, een gat
-(diepte 1) de andere kant op, een eiland in dat gat (diepte 2) weer naar buiten.
+A laser cuts in the middle of the drawn line and removes half the kerf on both sides;
+a mill has its own radius. The contour must therefore be moved sideways to give the
+drawn size after cutting. Which way is told by the nesting depth: the outer boundary of
+a part (depth 0) outwards, a hole (depth 1) the other way, an island in that hole
+(depth 2) outwards again.
 
-Een ronde frees kan niet in een scherpe binnenhoek komen. Daar hoort een uitsparing
-bij: een cirkel met de freesdiameter door het hoekpunt, langs de bissectrice
-("dogbone") of langs de langste van de twee randen ("T-bone").
+A round cutter cannot reach into a sharp inside corner. That needs a relief: a circle
+with the cutter diameter through the corner point, along the bisector ("dogbone") or
+along the longer of the two edges ("T-bone").
 """
 from __future__ import annotations
 
@@ -22,12 +23,13 @@ from dataclasses import replace
 import numpy as np
 import manifold3d as mf
 
+from .i18n import tr
 from .vector2d import (Drawing, VPath, _point_in_poly, arc_points, layer_param,
                        polygon_area, regions)
 
-MAX_ANGLE = 179.0        # hoeken die scherper zijn dan dit laat de frees staan
-CURVE_TOL = 0.002        # afwijking van de cirkel van een dogbone, in mm
-MAX_RINGS = 4000         # een uitkameringsgebied loopt nooit oneindig door
+MAX_ANGLE = 179.0        # the mill leaves corners sharper than this standing
+CURVE_TOL = 0.002        # deviation of the circle of a dogbone, in mm
+MAX_RINGS = 4000         # a pocket area never goes on forever
 
 
 # --------------------------------------------------------------------------
@@ -35,12 +37,12 @@ MAX_RINGS = 4000         # een uitkameringsgebied loopt nooit oneindig door
 # --------------------------------------------------------------------------
 
 def _is_shape(path) -> bool:
-    """Alleen een gesloten pad met minstens drie punten is een vorm."""
+    """Only a closed path with at least three points is a shape."""
     return bool(getattr(path, "closed", False)) and len(getattr(path, "pts", ())) >= 3
 
 
 def _polygons(cs: mf.CrossSection) -> list[np.ndarray]:
-    """De lussen van een doorsnede, gaten en al, als arrays."""
+    """The loops of a cross-section, holes and all, as arrays."""
     return [np.asarray(q, dtype=float) for q in cs.to_polygons() if len(q) >= 3]
 
 
@@ -55,7 +57,7 @@ def _copy(path: VPath) -> VPath:
 
 
 def _new(path: VPath, pts) -> VPath:
-    """Een nieuw gesloten pad op de laag van `path`; de meta van een cirkel klopt niet meer."""
+    """A new closed path on the layer of `path`; the meta of a circle is no longer right."""
     return VPath(np.asarray(pts, dtype=float), True, path.layer, path.filled,
                  path.rule, path.src, {})
 
@@ -67,7 +69,7 @@ def _unit(v) -> np.ndarray:
 
 
 def _edge_distance(poly, q) -> float:
-    """Kleinste afstand van punt `q` tot de rand van de gesloten polylijn `poly`."""
+    """Smallest distance from point `q` to the edge of the closed polyline `poly`."""
     p = np.asarray(poly, dtype=float)
     a, b = p, np.roll(p, -1, axis=0)
     d = b - a
@@ -77,22 +79,22 @@ def _edge_distance(poly, q) -> float:
 
 
 def _circle(center, r, tol=CURVE_TOL) -> np.ndarray:
-    """Een cirkel als gesloten polylijn (laatste punt valt weg)."""
+    """A circle as a closed polyline (the last point is dropped)."""
     pts = arc_points(np.asarray(center, dtype=float), abs(float(r)),
                      0.0, 2.0 * math.pi, tol)
     return np.ascontiguousarray(np.asarray(pts, dtype=float)[:-1])
 
 
 # --------------------------------------------------------------------------
-#  nestingdiepte
+#  nesting depth
 # --------------------------------------------------------------------------
 
 def _interior_point(poly) -> np.ndarray:
-    """Een punt net binnen de lus: bij een bolle hoek, dicht bij de rand.
+    """A point just inside the loop: at a convex corner, close to the edge.
 
-    Het midden van de punten is geen goed vertegenwoordigend punt: bij een plaat met
-    een gat ligt het midden van de buitenrand just in het gat. Het oortje van een hoek
-    ligt tegen de rand aan en dus buiten de contouren die erin liggen.
+    The mean of the points is not a good representative point: for a plate with a
+    hole the middle of the outer boundary lies right in the hole. The ear of a corner
+    lies against the edge and so outside the contours that lie inside it.
     """
     p = np.asarray(poly, dtype=float)
     n = len(p)
@@ -104,7 +106,7 @@ def _interior_point(poly) -> np.ndarray:
         if L1 <= 1e-12 or L2 <= 1e-12:
             continue
         if sgn * (d1[0] * d2[1] - d1[1] * d2[0]) >= 0.0:
-            continue                        # holle hoek: de bissectrice wijst naar buiten
+            continue                        # concave corner: the bisector points outwards
         bis = _unit(d1) + _unit(d2)
         u = _unit(bis)
         if float(np.hypot(*u)) < 1e-9:
@@ -118,12 +120,12 @@ def _interior_point(poly) -> np.ndarray:
 
 
 def nesting_depth(paths) -> list[int]:
-    """Hoe diep elk gesloten pad in de andere ligt: 0 buitenrand, 1 gat, 2 eiland in een gat.
+    """How deep each closed path lies within the others: 0 outer boundary, 1 hole,
+    2 island in a hole.
 
-    De lijst hoort bij de gegeven paden; een open pad of een pad dat geen vorm is
-    krijgt 0. Paden van verschillende lagen tellen niet voor elkaar, dus wie dit voor
-    een hele tekening gebruikt krijgt de diepte binnen de eigen laag terug door de
-    paden per laag aan te bieden.
+    The list matches the given paths; an open path or a path that is not a shape gets
+    0. Paths of different layers do not count for each other, so whoever uses this for
+    a whole drawing gets the depth within each layer by passing the paths per layer.
     """
     paths = list(paths.paths if isinstance(paths, Drawing) else paths)
     loops = [np.asarray(p.pts, dtype=float) for p in paths if _is_shape(p)]
@@ -147,14 +149,14 @@ def nesting_depth(paths) -> list[int]:
 
 
 # --------------------------------------------------------------------------
-#  verschuiven
+#  offsetting
 # --------------------------------------------------------------------------
 
 def offset_loop(pts, delta, join=None) -> list[np.ndarray]:
-    """Een gesloten pad `delta` millimeter opzij zetten (positief naar buiten).
+    """Move a closed path `delta` millimetres sideways (positive outwards).
 
-    Afgeronde hoeken (`mf.JoinType.Round`), want een laser en een frees draaien.
-    Een gat dat dichtloopt of een contour die te klein is voor de frees geeft niets.
+    Rounded corners (`mf.JoinType.Round`), because a laser and a mill turn.
+    A hole that closes up or a contour that is too small for the cutter gives nothing.
     """
     delta = float(delta)
     if abs(delta) < 1e-12:
@@ -162,20 +164,20 @@ def offset_loop(pts, delta, join=None) -> list[np.ndarray]:
     try:
         cs = _section([np.asarray(pts, dtype=float)]).offset(
             delta, join or mf.JoinType.Round, 2.0)
-    except Exception:                       # manifold3d wijst soms een sprong af
+    except Exception:                       # manifold3d sometimes rejects a jump
         return []
     return [] if cs.is_empty() else _polygons(cs)
 
 
 def region_of(paths) -> mf.CrossSection:
-    """Het gebied dat de gesloten paden van een laag omsluiten (gaten eruit)."""
+    """The area enclosed by the closed paths of a layer (holes removed)."""
     loops = [loop for shape in regions(paths) for loop in shape]
     return _section(loops) if loops else mf.CrossSection()
 
 
 def pocket_paths(paths, tool_d, stepover=50.0) -> list[np.ndarray]:
-    """De paden van een uitkamering: eerst de rand met de freesradius naar binnen,
-    daarna concentrisch smaller met de stapover totdat het gebied op is."""
+    """The paths of a pocket: first the edge moved inwards by the cutter radius,
+    then concentrically smaller by the stepover until the area is used up."""
     tool_d = abs(float(tool_d))
     if tool_d <= 0.0:
         return []
@@ -201,7 +203,7 @@ def pocket_paths(paths, tool_d, stepover=50.0) -> list[np.ndarray]:
 
 
 def _reach(cs: mf.CrossSection) -> float:
-    """Hoe ver een pad hooguit naar binnen kan: de halve diagonal van de omvang."""
+    """How far a path can go inwards at most: half the diagonal of the extent."""
     loops = _polygons(cs)
     if not loops:
         return 0.0
@@ -215,23 +217,23 @@ def _reach(cs: mf.CrossSection) -> float:
 # --------------------------------------------------------------------------
 
 def corner_spots(pts, tool_d, style="dogbone", max_angle=MAX_ANGLE) -> list[np.ndarray]:
-    """De middelpunten van de uitsparingscirkels bij de binnenhoeken van een gesloten pad.
+    """The centres of the relief circles at the inside corners of a closed path.
 
-    Een hoek is een binnenhoek als het gebied binnen het pad (het uit te freesde
-    gebied) daar scherper is dan `max_angle` graden: de frees komt er niet. De cirkel
-    heeft de freesdiameter en gaat door het hoekpunt, dus zijn middelpunt staat op
-    afstand van de freesradius: langs de bissectrice ("dogbone") of langs de langste
-    van de twee randen ("T-bone").
+    A corner is an inside corner when the area inside the path (the area to be milled)
+    is sharper than `max_angle` degrees there: the cutter cannot reach it. The circle
+    has the cutter diameter and passes through the corner point, so its centre is at a
+    distance of the cutter radius: along the bisector ("dogbone") or along the longer
+    of the two edges ("T-bone").
 
-    De veelhoekjes waarmee een cirkel of boog is afgevlakt zijn geen hoeken: daar rolt
-    de frees langs. Een hoek telt daarom pas als de uitsparing grof is vergeleken met
-    de ribben en de freesradius zelf.
+    The small polygons with which a circle or arc was flattened are not corners: the
+    cutter rolls along there. A corner therefore only counts when the relief is coarse
+    compared with the edges and the cutter radius itself.
     """
     r = abs(float(tool_d)) / 2.0
     p = np.asarray(pts, dtype=float)
     if r <= 0.0 or len(p) < 3:
         return []
-    if polygon_area(p) < 0.0:               # tegen de klok in: binnen ligt links van de rand
+    if polygon_area(p) < 0.0:               # counter-clockwise: inside is left of the edge
         p = p[::-1].copy()
     n = len(p)
     out: list[np.ndarray] = []
@@ -242,12 +244,12 @@ def corner_spots(pts, tool_d, style="dogbone", max_angle=MAX_ANGLE) -> list[np.n
         if L1 <= 1e-9 or L2 <= 1e-9:
             continue
         if d1[0] * d2[1] - d1[1] * d2[0] >= 0.0:
-            continue                        # bolle hoek voor het gereedschap: die haalt het
+            continue                        # convex corner for the tool: it reaches that
         hoek = math.degrees(math.acos(max(-1.0, min(1.0, float(d1 @ d2) / (L1 * L2)))))
         if hoek >= float(max_angle):
             continue
         if 0.5 * float(np.hypot(*(d1 + d2))) < max(0.05 * min(L1, L2), 0.02 * r):
-            continue                        # afgevlakte kromme, geen echte hoek
+            continue                        # flattened curve, not a real corner
         if str(style).lower() == "tbone":
             weg = _unit(d1) if L1 >= L2 else _unit(d2)
         else:
@@ -259,7 +261,7 @@ def corner_spots(pts, tool_d, style="dogbone", max_angle=MAX_ANGLE) -> list[np.n
 
 
 def dogbone_loops(pts, tool_d, style="dogbone") -> list[np.ndarray]:
-    """Een gesloten pad met de uitsparingscirkels verenigen; weer één gesloten pad."""
+    """Unite a closed path with the relief circles; one closed path again."""
     spots = corner_spots(pts, tool_d, style)
     p = np.asarray(pts, dtype=float)
     if not spots:
@@ -275,10 +277,10 @@ def dogbone_loops(pts, tool_d, style="dogbone") -> list[np.ndarray]:
 
 
 def dogbones(paths, tool_d, style="dogbone") -> list[VPath]:
-    """Voeg bij elke binnenhoek van de gesloten paden een uitsparing toe.
+    """Add a relief at every inside corner of the closed paths.
 
-    Het resultaat is weer een lijst gesloten paden op dezelfde laag, klaar om te
-    frezen; open paden blijven zoals ze zijn.
+    The result is again a list of closed paths on the same layer, ready to mill;
+    open paths stay as they are.
     """
     paths = list(paths.paths if isinstance(paths, Drawing) else paths)
     out: list[VPath] = []
@@ -292,11 +294,11 @@ def dogbones(paths, tool_d, style="dogbone") -> list[VPath]:
 
 
 # --------------------------------------------------------------------------
-#  de correctie van een hele tekening
+#  the compensation of a whole drawing
 # --------------------------------------------------------------------------
 
 def compensate_path(layer, path, depth=0) -> list[VPath]:
-    """Eén pad, verschoven zoals de bewerking van zijn laag dat vraagt."""
+    """One path, offset as the operation of its layer requires."""
     op = getattr(layer, "op", "cut")
     if not _is_shape(path) or op in ("engrave", "raster", "drill", "none"):
         return [_copy(path)]
@@ -318,7 +320,7 @@ def compensate_path(layer, path, depth=0) -> list[VPath]:
 
 
 def compensate_pocket(layer, paths) -> list[tuple[VPath, list[VPath]]]:
-    """De concentrische paden van een uitkamering, aan de eerste contour van de laag."""
+    """The concentric paths of a pocket, attached to the first contour of the layer."""
     shapes = [p for p in paths if _is_shape(p)]
     if not shapes:
         return [(p, [_copy(p)]) for p in paths]
@@ -336,7 +338,7 @@ def compensate_pocket(layer, paths) -> list[tuple[VPath, list[VPath]]]:
 
 
 def _corners_of(loops, tool_d, style) -> list[np.ndarray]:
-    """Dogbones op de binnenhoeken van de lussen, als de laag die vraagt."""
+    """Dogbones on the inside corners of the loops, when the layer asks for them."""
     if not style or str(style) == "none":
         return list(loops)
     out: list[np.ndarray] = []
@@ -346,14 +348,14 @@ def _corners_of(loops, tool_d, style) -> list[np.ndarray]:
 
 
 def compensate(drawing) -> Drawing:
-    """Een nieuwe tekening met de contouren zoals de machine ze moet volgen.
+    """A new drawing with the contours as the machine must follow them.
 
-    Per laag, met de instellingen van die laag: "cut" met de halve kerf naar buiten
-    voor de buitenranden en naar binnen voor de gaten (het gat wordt kleiner, zodat
-    het na het snijden de getekende maat heeft); "mill_outside" en "mill_inside" met
-    de freesradius naar buiten of naar binnen; "pocket" met de rand met de
-    freesradius naar binnen en daarna concentrische paden met de stapover tot het
-    gebied leeg is. "engrave", "raster", "drill" en open lijnen blijven zoals ze zijn.
+    Per layer, with the settings of that layer: "cut" with half the kerf outwards for
+    the outer boundaries and inwards for the holes (the hole gets smaller, so it has the
+    drawn size after cutting); "mill_outside" and "mill_inside" with the cutter radius
+    outwards or inwards; "pocket" with the edge moved inwards by the cutter radius and
+    then concentric paths with the stepover until the area is empty. "engrave",
+    "raster", "drill" and open lines stay as they are.
     """
     drawing = drawing if isinstance(drawing, Drawing) else Drawing(paths=list(drawing))
     repl: dict[int, list[VPath]] = {}
@@ -383,6 +385,6 @@ def compensate(drawing) -> Drawing:
             skipped += 1
         out.paths.extend(made)
     if skipped:
-        out.warn(f"{skipped} contouren zijn te klein voor de gekozen frees of kerf en "
-                 "zijn overgeslagen.")
+        out.warn(tr("{n} contours are too small for the chosen cutter or kerf and "
+                    "were skipped.").format(n=skipped))
     return out

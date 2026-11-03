@@ -1,9 +1,9 @@
-"""Willekeurige stresstest van de B-rep-kern.
+"""Random stress test of the B-rep core.
 
-Per seed (0..39) worden 6..12 willekeurige bewerkingen op een leeg model
-gedaan (rechthoeken, cirkels, lijnen, push/pull, een rand wissen). Na elke
-bewerking moeten de invarianten van de B-rep nog gelden, en is het model op
-dat moment gesloten, dan moet het een geldig volume zijn.
+Per seed (0..39), 6..12 random operations are done on an empty model
+(rectangles, circles, lines, push/pull, erasing an edge). After every
+operation the B-rep invariants must still hold, and if the model is closed
+at that moment, it must be a valid solid.
 """
 import os
 import random
@@ -18,12 +18,12 @@ from volura.brep import Entities  # noqa: E402
 from volura.geom import Plane, circle_points, point_in_polys  # noqa: E402
 
 GROUND = Plane((0, 0, 0), (0, 0, 1))
-MIN_VERTEX_DIST = 1e-4   # mm: dichter bij elkaar zijn hetzelfde hoekpunt
+MIN_VERTEX_DIST = 1e-4   # mm: closer together is the same vertex
 MAX_LOOP_OFF_PLANE = 1e-6
 CIRCLE_SEGMENTS = 16
 
 
-# ----------------------------------------------------------------- invarianten
+# ----------------------------------------------------------------- invariants
 def check_invariants(e, ctx):
     V, E, F = e.V, e.E, e.F
 
@@ -140,7 +140,7 @@ def free_loop(rng, kind):
     return np.array([[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]], dtype=float)
 
 
-# ----------------------------------------------------------------- bewerkingen
+# ----------------------------------------------------------------- operations
 def op_shape_ground(e, rng, kind):
     e.add_shape(ground_plane(e), [free_loop(rng, kind)])
     return f"add_shape({kind}) on ground"
@@ -228,9 +228,9 @@ def test_fuzz_brep(seed):
     run_seed(seed)
 
 
-# Seeds that only appear with more than 12 bewerkingen; de fouten zijn hersteld
-# in volura/brep.py en blijven hier geregistreerd.
-#   10146: een zijvlak van een push/pull was 3,3e-4 mm niet vlak
+# Seeds that only show up with more than 12 operations; the bugs are fixed
+# in volura/brep.py and stay recorded here.
+#   10146: a side face of a push/pull was 3.3e-4 mm out of plane
 REGRESSION = [(10146, 15)]
 
 

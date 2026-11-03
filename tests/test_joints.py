@@ -1,8 +1,8 @@
-"""De rekenkern van "Snijden en verbinden" (volura/joints.py).
+"""The computing core of "Cut and Join" (volura/joints.py).
 
-Een balk van 40 x 20 x 20 mm wordt in het midden (x = 20, normaal +X) doorgesneden;
-vervolgens worden de verbindingen gecontroleerd. Verwachte volumes: de helft is
-8000 mm³, het hele blok 16000 mm³.
+A 40 x 20 x 20 mm bar is cut in the middle (x = 20, normal +X); then the joints
+are checked. Expected volumes: one half is 8000 mm³, the whole block 16000 mm³.
+The joint kinds ("geen", "pennen", ...) are internal keys of joints.KINDS.
 """
 import os
 import sys
@@ -28,7 +28,7 @@ def volume(m):
     return m.volume()
 
 
-# ------------------------------------------------------------------ snijden
+# ------------------------------------------------------------------ cutting
 
 def test_cut_without_joint_keeps_the_total_volume():
     a, b, extra = joints.split_with_joint(block(), ORIGIN, NORMAL, "geen")
@@ -38,45 +38,45 @@ def test_cut_without_joint_keeps_the_total_volume():
     assert abs(volume(a) + volume(b) - 16000) < 1e-6
 
 
-def test_cut_puts_deel_a_at_the_normal_side():
+def test_cut_puts_part_a_at_the_normal_side():
     a, b = joints.cut(block(), ORIGIN, NORMAL)
-    assert a.bounding_box()[0] >= 20.0 - 1e-6      # deel_a ligt aan de kant van +X
+    assert a.bounding_box()[0] >= 20.0 - 1e-6      # part_a lies at the +X side
     assert b.bounding_box()[3] <= 20.0 + 1e-6
 
 
-# ------------------------------------------------------------------ pennen
+# ------------------------------------------------------------------ pins
 
-def test_pennen_adds_a_pin_to_a_and_a_hole_to_b():
+def test_pins_adds_a_pin_to_a_and_a_hole_to_b():
     params = {"pin_diameter": 5.0, "pin_length": 10.0, "count": "auto", "wall": 2.0}
     a, b, extra = joints.split_with_joint(block(), ORIGIN, NORMAL, "pennen", params)
     assert extra == []
-    assert volume(a) > 8000                        # pen erbij
-    assert volume(b) < 8000                        # gat eraf
-    assert (a ^ b).volume() < 1e-6                 # de pen past in het gat
+    assert volume(a) > 8000                        # pin added
+    assert volume(b) < 8000                        # hole removed
+    assert (a ^ b).volume() < 1e-6                 # the pin fits the hole
 
 
-# ------------------------------------------------------------------ losse pennen
+# ------------------------------------------------------------------ loose pins
 
 def test_loose_pins_make_extra_parts_and_holes_in_both():
     params = {"pin_diameter": 5.0, "pin_length": 10.0, "count": "auto", "wall": 2.0}
     a, b, extra = joints.split_with_joint(block(), ORIGIN, NORMAL, "losse pennen", params)
-    assert len(extra) >= 1                         # er komen losse pennen bij
-    assert volume(a) < 8000 and volume(b) < 8000   # beide delen krijgen een gat
+    assert len(extra) >= 1                         # loose pins are added
+    assert volume(a) < 8000 and volume(b) < 8000   # both parts get a hole
     for pin in extra:
         assert pin.status() == mf.Error.NoError
-        assert pin.bounding_box()[2] >= -1e-6      # de pen ligt op het bed
+        assert pin.bounding_box()[2] >= -1e-6      # the pin lies on the bed
 
 
-# ------------------------------------------------------------------ zwaluwstaart
+# ------------------------------------------------------------------ dovetail
 
 def test_dovetail_parts_are_valid_and_do_not_overlap():
     params = {"dovetail_width": 8.0, "dovetail_depth": 5.0, "clearance": 0.2}
     a, b, extra = joints.split_with_joint(block(), ORIGIN, NORMAL, "zwaluwstaart", params)
     assert extra == []
     assert a.status() == mf.Error.NoError and b.status() == mf.Error.NoError
-    assert (a ^ b).volume() < 1e-6                 # de delen schuiven in elkaar
+    assert (a ^ b).volume() < 1e-6                 # the parts slide into each other
     gap = (block() - joints.union_all([a, b])).volume()
-    assert gap > 0                                  # er is speling
+    assert gap > 0                                  # there is clearance
     assert abs(volume(a) + volume(b) + gap - 16000) < 1.0
 
 

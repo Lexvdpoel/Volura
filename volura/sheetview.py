@@ -1,13 +1,13 @@
-"""Het 2D-werkblad: een vlakke tekening naast het 3D-model.
+"""The 2D worksheet: a flat drawing next to the 3D model.
 
-`SheetView` is een gewoon QWidget met QPainter (geen OpenGL): de wereld is in
-millimeters met Y omhoog, het raster past zich aan het zoomniveau aan, en de paden
-van `doc.sheet` worden in hun laagkleur getekend. Het venster is de spelgeleider van
-de gereedschappen uit `volura.sheettools`: het geeft muis, toetsen en meetvak door,
-houdt de selectie bij en doet elke bewerking als één undo-stap op het document.
+`SheetView` is a plain QWidget with QPainter (no OpenGL): the world is in
+millimetres with Y up, the grid adapts to the zoom level, and the paths of
+`doc.sheet` are drawn in their layer colour. The widget is the game master of the
+tools from `volura.sheettools`: it passes on mouse, keys and the Measurements box,
+keeps track of the selection and does every operation as one undo step on the document.
 
-De 3D-weergave (`volura.viewport.Viewport`) en dit werkblad staan samen in het
-centrale widget van het venster; schakelen doet `MainWindow.set_mode`.
+The 3D view (`volura.viewport.Viewport`) and this worksheet sit together in the
+central widget of the window; `MainWindow.set_mode` switches between them.
 """
 from __future__ import annotations
 
@@ -19,34 +19,33 @@ from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
                                QMenu, QSpinBox, QWidget)
 
-from . import errors, nesting
+from . import errors, nesting, theme
 from .sheettools import (ALIGN_LABELS, MEASURE_LABEL, PICK_PX, SHEET_TOOLS, align_deltas,
                          boolean_loops, copy_of, distribute_deltas, grid_offsets,
                          joined_paths, mirror_matrix, next_src, path_distance, path_in_rect,
                          path_touches_rect, paths_bbox, split_into_segments, translation,
                          transformed_points)
+from .i18n import tr
 from .sheetsnap import SnapEngine, grid_step
-from .vector2d import (SHEET_SPACING, OP_LABELS, Layer, VPath, _transform_meta)
+from .vector2d import (DEFAULT_LAYERS, SHEET_SPACING, OP_LABELS, Layer, VPath, _transform_meta,
+                       default_layer_names)
 
-_NO_LAYER = Layer("0", "#000000")   # voor een pad waarvan de laag weg is
+_NO_LAYER = Layer("0", "#000000")   # for a path whose layer is gone
 
-GRID_MIN_PX = 8.0            # een rasterlijn moet minstens zo ver uit elkaar liggen
-SELECT_COLOR = "#2f6fd6"     # geselecteerde paden: blauw en dikker
-HOVER_COLOR = "#f08a24"      # het pad onder de cursor
-GRID_COLOR = "#dfe3e8"
-GRID_MAJOR = "#b9c0c9"
+GRID_MIN_PX = 8.0            # grid lines must be at least this far apart
+SELECT_COLOR = "#2f6fd6"     # selected paths: blue and thicker
+HOVER_COLOR = "#f08a24"      # the path under the cursor
 AXIS_X = "#d23b3b"
 AXIS_Y = "#3fa34d"
-SHEET_COLOR = "#4b5563"         # rand van de plaat: doorgetrokken en donker
-SHEET_FILL = "#ffffff"          # de plaat zelf licht, met het raster erop
-SHEET_SHADOW = "#c4cad3"
-OUTSIDE_SHEET = "#e8ebef"       # naast de plaat iets donkerder, zodat de plaat opvalt
-MARGIN_COLOR = "#8fa3bf"
-OUTSIDE_COLOR = "#e02020"     # paden buiten de plaat of in de marge: rode rand
-SHEET_LABEL_COLOR = "#6b7280"
+OUTSIDE_COLOR = "#e02020"     # paths outside the sheet or in the margin: red outline
+# The sheet and the grid: colours per theme in theme.py. The sheet stays light in the
+# dark theme too, so black and blue layer colours remain readable on it.
 VCB_CHARS = set("0123456789.,;-+=\"' ")
 
-#: sneltoetsen op het werkblad, dezelfde letters als in 3D (L, R, C, A, F, ...)
+#: the default Cut layer of a new sheet (in the current language)
+CUT_LAYER = next(name for name, _color, op in DEFAULT_LAYERS if op == "cut")
+
+#: shortcuts on the worksheet, the same letters as in 3D (L, R, C, A, F, ...)
 SHEET_KEYS = {
     Qt.Key_L: "line", Qt.Key_R: "rectangle", Qt.Key_N: "roundrect", Qt.Key_C: "circle",
     Qt.Key_E: "ellipse", Qt.Key_A: "arc", Qt.Key_B: "centerarc", Qt.Key_P: "polygon",
@@ -55,16 +54,16 @@ SHEET_KEYS = {
 
 
 class SheetView(QWidget):
-    """De 2D-omgeving: raster, plaat, paden, selectie en de gereedschappen erbij."""
+    """The 2D environment: grid, sheet, paths, selection and the tools that go with it."""
 
     status_changed = Signal(str)
-    vcb_changed = Signal(str, str)        # label, waarde
+    vcb_changed = Signal(str, str)        # label, value
     tool_changed = Signal(str)
-    coords_changed = Signal(str)          # de cursorplaats in de statusbalk
+    coords_changed = Signal(str)          # the cursor position in the status bar
     selection_changed = Signal()
-    sheet_settings_requested = Signal()   # "Plaat…" vraagt de plaatinstellingen
-    auto_arrange_requested = Signal()     # "Automatisch schikken" vraagt de opties
-    to_model_requested = Signal()         # "Onderdelen naar 3D-model": platen in het model
+    sheet_settings_requested = Signal()   # "Sheet…" asks for the sheet settings
+    auto_arrange_requested = Signal()     # "Auto Arrange" asks for the options
+    to_model_requested = Signal()         # "Parts to 3D Model": plates in the model
 
     MIN_SCALE = 0.005                      # pixels per mm
     MAX_SCALE = 500.0
@@ -76,14 +75,14 @@ class SheetView(QWidget):
         self.tools = {cls.name: cls(self) for cls in SHEET_TOOLS}
         self.tool = None
         self.scale = 4.0                   # pixels per mm
-        self.origin = QPointF(0.0, 0.0)    # de schermplek van wereld (0, 0)
-        self.selected: list = []           # de geselecteerde VPath-objecten
+        self.origin = QPointF(0.0, 0.0)    # the screen position of world (0, 0)
+        self.selected: list = []           # the selected VPath objects
         self.hover = None
-        self.preview_transform = None      # voor errors.recover
+        self.preview_transform = None      # for errors.recover
         self.vcb_text = ""
-        self.snap_to_grid = True           # raster vastzetten, aan of uit op de werkbalk
-        self.offset_round = True           # afgeronde of scherpe hoeken bij Verschuiving
-        self.current_layer = "Snijden"     # de laag van nieuw getekende paden
+        self.snap_to_grid = True           # snap to grid, on or off on the toolbar
+        self.offset_round = True           # rounded or sharp corners for Offset
+        self.current_layer = CUT_LAYER     # the layer of newly drawn paths
         self.snap_engine = SnapEngine(self)
         self._status_note = None
         self._status_shown = ""
@@ -91,35 +90,44 @@ class SheetView(QWidget):
         self._pan_from = None
         self._space = False
         self._placed_origin = False
-        self._outside_ids: set = set()     # id van paden buiten de plaat of in de marge
+        self._outside_ids: set = set()     # ids of paths outside the sheet or in the margin
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumSize(320, 240)
         doc.changed.connect(self._on_doc_changed)
         self.set_tool("select")
 
-    # ------------------------------------------------------------ instellingen van het werkblad
+    # ------------------------------------------------------------ worksheet settings
     def join_type_name(self) -> str:
-        return "Afgerond" if self.offset_round else "Scherp"
+        return tr("Rounded") if self.offset_round else tr("Sharp")
 
     def set_offset_round(self, round_corners: bool):
         self.offset_round = bool(round_corners)
         self.update()
 
     def set_grid_snap(self, on: bool):
-        """Raster vastzetten: de cursor naar rasterkruisingen trekken of niet."""
+        """Snap to grid: pull the cursor to grid crossings or not."""
         self.snap_to_grid = bool(on)
         self.update()
 
+    def _follow_cut_layer(self):
+        """The active layer is the default Cut layer under another name in this sheet
+        (a file from Volura 0.1.0 has Dutch layer names): use the name of this sheet."""
+        names = default_layer_names("cut")
+        layers = self.doc.sheet.layers
+        if self.current_layer not in layers and self.current_layer in names:
+            self.current_layer = next((n for n in names if n in layers), self.current_layer)
+
     def draw_layer(self) -> str:
-        """De laag van nieuw getekende paden; een vergrendelde laag is dat niet."""
+        """The layer of newly drawn paths; a locked layer is not one."""
+        self._follow_cut_layer()
         lay = self.doc.sheet.layers.get(self.current_layer)
         if lay is None or lay.locked:
             return "0"
         return self.current_layer
 
     def set_current_layer(self, name) -> bool:
-        """De actieve laag: nieuwe paden komen hier terecht (paneel "Lagen")."""
+        """The active layer: new paths end up here (the "Layers" panel)."""
         name = str(name)
         if name not in self.doc.sheet.layers:
             return False
@@ -128,39 +136,39 @@ class SheetView(QWidget):
         return True
 
     def move_to_layer(self, name) -> bool:
-        """De selectie naar een andere laag zetten, als één undo-stap."""
+        """Move the selection to another layer, as one undo step."""
         sel = self.selected_paths()
         if not sel:
-            self.set_status("Selecteer eerst de contouren die naar een laag moeten.")
+            self.set_status(tr("First select the contours that should go to a layer."))
             return False
         name = str(name)
         lay = self.doc.sheet.layers.get(name)
         if lay is None:
-            self.set_status(f"Laag {name} bestaat niet.")
+            self.set_status(tr("Layer {name} does not exist.").format(name=name))
             return False
         if lay.locked:
-            self.set_status(f"Laag {name} staat op slot; maak hem eerst open.")
+            self.set_status(tr("Layer {name} is locked; unlock it first.").format(name=name))
             return False
         moved = [p for p in sel if p.layer != name]
         if not moved:
-            self.set_status(f"Die contouren staan al op laag {name}.")
+            self.set_status(tr("Those contours are already on layer {name}.").format(name=name))
             return False
 
         def change():
             for p in moved:
                 p.layer = name
         self.edit(change)
-        self.set_status(f"{len(moved)} contouren naar laag {name}")
+        self.set_status(tr("{n} contours to layer {name}").format(n=len(moved), name=name))
         return True
 
-    # ------------------------------------------------------------ wereld en scherm
+    # ------------------------------------------------------------ world and screen
     def to_screen(self, pt) -> QPointF:
-        """Wereldpunt (mm) naar schermkoordinaten (pixels, Y omlaag)."""
+        """World point (mm) to screen coordinates (pixels, Y down)."""
         return QPointF(self.origin.x() + float(pt[0]) * self.scale,
                        self.origin.y() - float(pt[1]) * self.scale)
 
     def to_world(self, pos) -> np.ndarray:
-        """Schermpunt (QPoint of QPointF) naar wereldkoordinaten (mm, Y omhoog)."""
+        """Screen point (QPoint or QPointF) to world coordinates (mm, Y up)."""
         x = float(pos.x()) if hasattr(pos, "x") else float(pos[0])
         y = float(pos.y()) if hasattr(pos, "y") else float(pos[1])
         return self.to_world_xy(x, y)
@@ -171,7 +179,7 @@ class SheetView(QWidget):
                          (self.origin.y() - y) / self.scale])
 
     def world_rect(self):
-        """(xmin, ymin, xmax, ymax) van wat er nu te zien is."""
+        """(xmin, ymin, xmax, ymax) of what is visible now."""
         a = self.to_world_xy(0.0, float(self.height()))
         b = self.to_world_xy(float(self.width()), 0.0)
         return float(a[0]), float(a[1]), float(b[0]), float(b[1])
@@ -180,10 +188,10 @@ class SheetView(QWidget):
         return max(self.MIN_SCALE, min(self.MAX_SCALE, float(value)))
 
     def zoom_extents(self):
-        """Alles op het werkblad (of de plaat) zo groot mogelijk in beeld."""
+        """Everything on the worksheet (or the sheet) as large as possible in view."""
         s = self.doc.sheet
         box = s.bounds()
-        if s.sheet_w and s.sheet_h:          # de platen horen er altijd helemaal bij
+        if s.sheet_w and s.sheet_h:          # the sheets always belong in it entirely
             for ox, oy in nesting.sheet_origins(s) or [(0.0, 0.0)]:
                 r = (ox, oy, ox + float(s.sheet_w), oy + float(s.sheet_h))
                 box = r if box is None else (min(box[0], r[0]), min(box[1], r[1]),
@@ -193,7 +201,7 @@ class SheetView(QWidget):
             self.scale = self._clamp_scale(min(w, h) / 200.0)
             self.origin = QPointF(0.35 * w, 0.65 * h)
         else:
-            pad, label = 24.0, 20.0          # ruimte rondom, en boven voor "Plaat · maat"
+            pad, label = 24.0, 20.0          # room around it, and on top for "Sheet · size"
             dw = max(box[2] - box[0], 1e-6)
             dh = max(box[3] - box[1], 1e-6)
             self.scale = self._clamp_scale(min((w - 2 * pad) / dw, (h - 2 * pad - label) / dh))
@@ -204,7 +212,7 @@ class SheetView(QWidget):
         self.update()
 
     def zoom_by(self, factor, about: QPointF | None = None):
-        """Zoomen rond een schermpunt: dat punt blijft op zijn plek staan."""
+        """Zoom around a screen point: that point stays in its place."""
         about = QPointF(self.width() / 2.0, self.height() / 2.0) if about is None else about
         before = self.to_world(about)
         self.scale = self._clamp_scale(self.scale * float(factor))
@@ -213,7 +221,16 @@ class SheetView(QWidget):
                               self.origin.y() - (after[1] - before[1]) * self.scale)
         self.update()
 
-    # ------------------------------------------------------------ gereedschap en status
+    def spacemouse_move(self, m, speed=1.0):
+        """The 3D mouse on the worksheet: slide the cap to pan, pull it towards you to zoom in."""
+        k = float(speed) * m.dt
+        step = 1.2 * self.height() * k
+        self.origin = QPointF(self.origin.x() + m.tx * step, self.origin.y() - m.ty * step)
+        if m.tz:
+            self.zoom_by(float(math.exp(m.tz * 1.6 * k)))
+        self.update()
+
+    # ------------------------------------------------------------ tool and status
     def set_tool(self, name):
         if name not in self.tools:
             return
@@ -247,7 +264,7 @@ class SheetView(QWidget):
         self.update_vcb()
 
     def announce(self):
-        """Zorg dat de statusbalk opnieuw zegt wat het gereedschap nu wil (na moduswissel)."""
+        """Make the status bar say again what the tool wants now (after a mode switch)."""
         self._status_shown = ""
         self._vcb_shown = None
         self.refresh_status()
@@ -268,10 +285,10 @@ class SheetView(QWidget):
             try:
                 self.tool.vcb_enter(text.strip())
             except ValueError as e:
-                self.set_status(f"Ongeldige invoer: {e}")
-            except Exception as e:                       # een gereedschap mag nooit crashen
-                errors.log_exception(note=f"2D-gereedschap: {e}")
-                self.set_status(f"Invoer mislukt: {e}")
+                self.set_status(tr("Invalid input: {error}").format(error=e))
+            except Exception as e:                       # a tool must never crash
+                errors.log_exception(note=f"2D tool: {e}")
+                self.set_status(tr("Input failed: {error}").format(error=e))
         self._vcb_shown = None
         self.refresh_status()
         self.update()
@@ -280,23 +297,24 @@ class SheetView(QWidget):
         self.tool.vcb_value = value
         self.update_vcb()
 
-    # ------------------------------------------------------------ selectie
+    # ------------------------------------------------------------ selection
     def _on_doc_changed(self):
+        self._follow_cut_layer()
         self._prune_selection()
         self._refresh_outside()
         self.update()
 
     def _refresh_outside(self, announce=True) -> int:
-        """Paden buiten de plaat of in de marge markeren en het aantal melden."""
+        """Mark paths outside the sheet or in the margin and report how many."""
         try:
             outside = nesting.outside_paths(self.doc.sheet)
-        except Exception as e:                       # een waarschuwing mag nooit crashen
-            errors.log_exception(note=f"plaatcontrole: {e}")
+        except Exception as e:                       # a warning must never crash
+            errors.log_exception(note=f"sheet check: {e}")
             outside = []
         self._outside_ids = {id(p) for p in outside}
         n = len(outside)
         if n and announce:
-            self.show_status(f"{n} paden liggen buiten de plaat of in de marge")
+            self.show_status(tr("{n} paths lie outside the sheet or in the margin").format(n=n))
         return n
 
     def _prune_selection(self):
@@ -340,7 +358,7 @@ class SheetView(QWidget):
         self.set_selection(self._selectable_paths())
 
     def _layer(self, path) -> Layer:
-        """De laag van een pad; een pad zonder laag gedraagt zich als laag "0"."""
+        """The layer of a path; a path without a layer behaves like layer "0"."""
         return self.doc.sheet.layers.get(path.layer) or _NO_LAYER
 
     def _visible(self, path) -> bool:
@@ -359,7 +377,7 @@ class SheetView(QWidget):
         return np.array([0.5 * (box[0] + box[2]), 0.5 * (box[1] + box[3])])
 
     def path_at(self, x, y):
-        """Het pad dat het dichtst bij de cursor ligt, binnen een paar pixels."""
+        """The path closest to the cursor, within a few pixels."""
         tol = PICK_PX / self.scale
         p = self.to_world_xy(x, y)
         best, dist = None, tol
@@ -370,7 +388,7 @@ class SheetView(QWidget):
         return best
 
     def paths_in_band(self, a, b):
-        """Kaderselectie: links naar rechts alleen wat erin ligt, rechts naar links ook wat het raakt."""
+        """Window selection: left to right only what lies inside, right to left also what it touches."""
         w0 = self.to_world_xy(min(a[0], b[0]), max(a[1], b[1]))
         w1 = self.to_world_xy(max(a[0], b[0]), min(a[1], b[1]))
         rect = (float(w0[0]), float(w0[1]), float(w1[0]), float(w1[1]))
@@ -381,16 +399,16 @@ class SheetView(QWidget):
                 out.append(path)
         return out
 
-    # ------------------------------------------------------------ bewerken
+    # ------------------------------------------------------------ editing
     def edit(self, change):
-        """Eén undo-stap: checkpoint, de paden aanpassen, het document melden."""
+        """One undo step: checkpoint, change the paths, notify the document."""
         self.doc.checkpoint()
         change()
         self.doc.notify()
         self.update()
 
     def transform_paths(self, paths, M, copy=False):
-        """Matrix `M` op de paden; met `copy` blijven de originele paden liggen."""
+        """Apply matrix `M` to the paths; with `copy` the original paths stay."""
         M = np.asarray(M, dtype=float)
         lin, off = M[:2, :2], M[:2, 2]
         if copy:
@@ -411,7 +429,7 @@ class SheetView(QWidget):
     def delete_selected(self):
         sel = self.selected_paths()
         if not sel:
-            self.set_status("Er is niets geselecteerd om te wissen.")
+            self.set_status(tr("Nothing is selected to delete."))
             return 0
         live = {id(p) for p in sel}
         sheet = self.doc.sheet
@@ -421,32 +439,32 @@ class SheetView(QWidget):
 
         self.edit(drop)
         self.clear_selection()
-        self.set_status(f"{len(sel)} contouren gewist")
+        self.set_status(tr("{n} contours deleted").format(n=len(sel)))
         return len(sel)
 
     def mirror(self, horizontal=True):
-        """Spiegelen rond het midden van de selectie: horizontaal = links en rechts om."""
+        """Mirror around the centre of the selection: horizontal = swap left and right."""
         sel = self.selected_paths()
         if not sel:
-            self.set_status("Selecteer eerst wat u wilt spiegelen.")
+            self.set_status(tr("First select what you want to mirror."))
             return False
         center = self.selection_center()
         if center is None:
             return False
         self.edit(lambda: self.transform_paths(sel, mirror_matrix(bool(horizontal), center)))
-        self.set_status("Contouren gespiegeld")
+        self.set_status(tr("Contours mirrored"))
         return True
 
-    # ------------------------------------------------------------ bewerkingen op de selectie
+    # ------------------------------------------------------------ operations on the selection
     def _replace_selected(self, shapes, message):
-        """De selectie vervangen door nieuwe paden, als één undo-stap.
+        """Replace the selection with new paths, as one undo step.
 
-        `shapes` is een lijst `(punten, gesloten, meta, gevuld)`; alle paden die erbij
-        horen krijgen één bronnummer, zodat gaten als één vorm gelezen worden.
+        `shapes` is a list `(points, closed, meta, filled)`; all paths that belong to it
+        get one source number, so holes are read as one shape.
         """
         sel = self.selected_paths()
         if not sel:
-            self.set_status("Selecteer eerst de contouren voor deze bewerking.")
+            self.set_status(tr("First select the contours for this operation."))
             return []
         sheet = self.doc.sheet
         src = next_src(sheet.paths)
@@ -467,34 +485,34 @@ class SheetView(QWidget):
         return fresh
 
     def sheet_boolean(self, op) -> bool:
-        """Samenvoegen, aftrekken of snijden van de geselecteerde gesloten paden."""
-        labels = {"union": "samengevoegd", "subtract": "afgetrokken",
-                  "intersect": "in snijpunt gezet"}
+        """Union, subtract or intersect the selected closed paths."""
+        done = {"union": tr("{n} contours united"), "subtract": tr("{n} contours subtracted"),
+                "intersect": tr("{n} contours intersected")}
         sel = self.selected_paths()
         if len([p for p in sel if p.closed and len(p.pts) >= 3]) < (1 if op == "union" else 2):
-            self.set_status("Selecteer eerst twee gesloten contouren voor deze bewerking.")
+            self.set_status(tr("First select two closed contours for this operation."))
             return False
         try:
             loops = boolean_loops(sel, op)
         except ValueError as e:
-            self.set_status(f"Bewerking lukt niet: {e}")
+            self.set_status(tr("The operation failed: {error}").format(error=e))
             return False
-        except Exception as e:                       # manifold3d mag hier niets laten crashen
-            errors.log_exception(note=f"2D-booleaanse bewerking: {e}")
-            self.set_status(f"Bewerking lukt niet: {e}")
+        except Exception as e:                       # manifold3d must not crash anything here
+            errors.log_exception(note=f"2D boolean operation: {e}")
+            self.set_status(tr("The operation failed: {error}").format(error=e))
             return False
         if not loops:
-            self.set_status("Er blijft niets over van deze contouren.")
+            self.set_status(tr("Nothing is left of these contours."))
             return False
         shapes = [(loop, True, {}, True) for loop in loops]
-        self._replace_selected(shapes, f"{len(sel)} contouren {labels[op]}")
+        self._replace_selected(shapes, done[op].format(n=len(sel)))
         return True
 
     def join_selected(self) -> int:
-        """Open lijnstukken aaneenrijgen tot polylijnen en gesloten vormen."""
+        """Join open segments into polylines and closed shapes."""
         sel = self.selected_paths()
         if not sel:
-            self.set_status("Selecteer eerst de lijnen die u wilt aaneenrijgen.")
+            self.set_status(tr("First select the lines you want to join."))
             return 0
         joined = joined_paths(sel)
         src = next_src(self.doc.sheet.paths)
@@ -514,14 +532,14 @@ class SheetView(QWidget):
         self.edit(change)
         self.set_selection([p for p in sheet.paths if int(p.src) == src])
         made = len(out)
-        self.set_status(f"{made} paden uit {len(sel)} lijnen")
+        self.set_status(tr("{made} paths from {n} lines").format(made=made, n=len(sel)))
         return made
 
     def split_selected(self) -> int:
-        """Elk geselecteerd pad in losse lijnstukken opsplitsen."""
+        """Split every selected path into loose segments."""
         sel = self.selected_paths()
         if not sel:
-            self.set_status("Selecteer eerst de contouren die u wilt opsplitsen.")
+            self.set_status(tr("First select the contours you want to split."))
             return 0
         segs = split_into_segments(sel)
         src = next_src(self.doc.sheet.paths)
@@ -536,44 +554,44 @@ class SheetView(QWidget):
             sheet.paths = keep
         self.edit(change)
         self.set_selection([p for p in sheet.paths if int(p.src) == src])
-        self.set_status(f"{len(segs)} lijnstukken")
+        self.set_status(tr("{n} segments").format(n=len(segs)))
         return len(segs)
 
     def align_selected(self, mode) -> bool:
-        """Uitlijnen: links, midden, rechts, boven of onder, over de hele selectie."""
+        """Align: left, middle, right, top or bottom, across the whole selection."""
         sel = self.selected_paths()
         if len(sel) < 2:
-            self.set_status("Selecteer minstens twee contouren om uit te lijnen.")
+            self.set_status(tr("Select at least two contours to align."))
             return False
         if mode not in ALIGN_LABELS:
             return False
         deltas = align_deltas(sel, mode)
         self.edit(lambda: [self.transform_paths([p], translation(d))
                            for p, d in zip(sel, deltas)])
-        self.set_status(f"contouren uitgelijnd ({ALIGN_LABELS[mode]})")
+        self.set_status(tr("contours aligned ({side})").format(side=ALIGN_LABELS[mode]))
         return True
 
     def distribute_selected(self, axis="x") -> bool:
-        """Gelijk verdelen: overal dezelfde afstand tussen de middenpunten."""
+        """Distribute: the same distance between the centres everywhere."""
         sel = self.selected_paths()
         if len(sel) < 3:
-            self.set_status("Selecteer minstens drie contouren om gelijk te verdelen.")
+            self.set_status(tr("Select at least three contours to distribute."))
             return False
         deltas = distribute_deltas(sel, axis)
         self.edit(lambda: [self.transform_paths([p], translation(d))
                            for p, d in zip(sel, deltas)])
-        self.set_status("contouren gelijk verdeeld")
+        self.set_status(tr("contours distributed"))
         return True
 
     def duplicate_grid(self, cols=2, rows=1, dx=10.0, dy=10.0) -> list:
-        """Dupliceren in een rij of raster: kopieën naast en boven het origineel."""
+        """Duplicate in a row or grid: copies next to and above the original."""
         sel = self.selected_paths()
         if not sel:
-            self.set_status("Selecteer eerst wat u wilt dupliceren.")
+            self.set_status(tr("First select what you want to duplicate."))
             return []
         offsets = grid_offsets(cols, rows, dx, dy)
         if not offsets:
-            self.set_status("Een rij van één kolom en één rij is geen duplicatie.")
+            self.set_status(tr("A row of one column and one row is not a duplication."))
             return []
         fresh: list = []
 
@@ -589,12 +607,12 @@ class SheetView(QWidget):
                     fresh.append(q)
         self.edit(change)
         self.set_selection(fresh)
-        self.set_status(f"{len(fresh)} kopieën geplaatst")
+        self.set_status(tr("{n} copies placed").format(n=len(fresh)))
         return fresh
 
-    # ------------------------------------------------------------ automatisch schikken
+    # ------------------------------------------------------------ auto arrange
     def arrange_source(self) -> list:
-        """De paden die meedoen: de selectie, of alles zichtbare als niets gekozen is."""
+        """The paths that take part: the selection, or everything visible when nothing is chosen."""
         sel = self.selected_paths()
         if sel:
             return sel
@@ -602,15 +620,15 @@ class SheetView(QWidget):
                 if self._visible(p) and not self._layer(p).locked and len(p.pts)]
 
     def auto_arrange(self, options=None) -> bool:
-        """Schik de onderdelen zo zuinig mogelijk over de platen, als één undo-stap."""
+        """Arrange the parts as economically as possible over the sheets, as one undo step."""
         options = dict(options or {})
         sheet = self.doc.sheet
         if not sheet.sheet_w or not sheet.sheet_h:
-            self.set_status("Kies eerst een plaatformaat (Plaat…) voor je schikt.")
+            self.set_status(tr("First choose a sheet size (Sheet…) before you arrange."))
             return False
         source = self.arrange_source()
         if not source:
-            self.set_status("Er is niets om te schikken.")
+            self.set_status(tr("There is nothing to arrange."))
             return False
         gap = float(options.get("gap", sheet.sheet_gap))
         margin = float(options.get("margin", sheet.sheet_margin))
@@ -624,9 +642,9 @@ class SheetView(QWidget):
         except ValueError as e:
             self.set_status(str(e))
             return False
-        except Exception as e:                       # nesten mag nooit crashen
-            errors.log_exception(note=f"automatisch schikken: {e}")
-            self.set_status(f"Schikken lukt niet: {e}")
+        except Exception as e:                       # nesting must never crash
+            errors.log_exception(note=f"auto arrange: {e}")
+            self.set_status(tr("Arranging failed: {error}").format(error=e))
             return False
         spacing = float(sheet.sheet_w) + SHEET_SPACING
         used = max((si for (_p, si, *_r) in placements), default=0) + 1
@@ -643,11 +661,11 @@ class SheetView(QWidget):
         self.edit(change)
         util = nesting.utilization(placements, sheet.sheet_w, sheet.sheet_h)
         self._refresh_outside(announce=False)
-        self.set_status(f"{len(parts)} onderdelen op {used} platen, "
-                        f"benutting {round(util * 100)}%")
+        self.set_status(tr("{n} parts on {sheets} sheets, utilization {pct}%").format(
+            n=len(parts), sheets=used, pct=round(util * 100)))
         return True
 
-    # ------------------------------------------------------------ rechtsklikmenu
+    # ------------------------------------------------------------ context menu
     @errors.safe_handler
     def contextMenuEvent(self, event):
         pos = event.pos()
@@ -658,43 +676,43 @@ class SheetView(QWidget):
         menu.exec(event.globalPos())
 
     def build_context_menu(self) -> QMenu:
-        """Het rechtsklikmenu van het werkblad: gereedschap en de bewerkingen."""
+        """The context menu of the worksheet: tools and the operations."""
         menu = QMenu(self)
-        for name, label in (("select", "Selecteren"), ("line", "Lijn"),
-                            ("rectangle", "Rechthoek"), ("circle", "Cirkel"),
-                            ("text", "Tekst…"), ("offset", "Verschuiving")):
+        for name, label in (("select", tr("Select")), ("line", tr("Line")),
+                            ("rectangle", tr("Rectangle")), ("circle", tr("Circle")),
+                            ("text", tr("Text…")), ("offset", tr("Offset"))):
             act = menu.addAction(label)
             act.triggered.connect(
                 lambda checked=False, n=name: self._menu_tool(n))
         menu.addSeparator()
-        for label, slot in (("Samenvoegen", lambda: self.sheet_boolean("union")),
-                            ("Aftrekken", lambda: self.sheet_boolean("subtract")),
-                            ("Snijpunt", lambda: self.sheet_boolean("intersect")),
-                            ("Aaneenrijgen", self.join_selected),
-                            ("Opsplitsen in lijnstukken", self.split_selected)):
+        for label, slot in ((tr("Union"), lambda: self.sheet_boolean("union")),
+                            (tr("Subtract"), lambda: self.sheet_boolean("subtract")),
+                            (tr("Intersect"), lambda: self.sheet_boolean("intersect")),
+                            (tr("Join"), self.join_selected),
+                            (tr("Split into Segments"), self.split_selected)):
             menu.addAction(label, slot)
-        align = menu.addMenu("Uitlijnen")
+        align = menu.addMenu(tr("Align"))
         for mode in ALIGN_LABELS:
             align.addAction(ALIGN_LABELS[mode].capitalize(),
                             lambda checked=False, m=mode: self.align_selected(m))
-        dist = menu.addMenu("Gelijk verdelen")
-        dist.addAction("Horizontaal", lambda checked=False: self.distribute_selected("x"))
-        dist.addAction("Verticaal", lambda checked=False: self.distribute_selected("y"))
-        layers = menu.addMenu("Naar laag")
+        dist = menu.addMenu(tr("Distribute"))
+        dist.addAction(tr("Horizontally"), lambda checked=False: self.distribute_selected("x"))
+        dist.addAction(tr("Vertically"), lambda checked=False: self.distribute_selected("y"))
+        layers = menu.addMenu(tr("Move to Layer"))
         for name, lay in self.doc.sheet.layers.items():
             act = layers.addAction(f"{name}   —   {OP_LABELS.get(lay.op, lay.op)}")
             act.setEnabled(not lay.locked)
             if lay.locked:
-                act.setToolTip("Deze laag staat op slot")
+                act.setToolTip(tr("This layer is locked"))
             act.triggered.connect(lambda checked=False, n=name: self.move_to_layer(n))
         menu.addSeparator()
-        menu.addAction("Dupliceren in rij of raster…", self.duplicate_dialog)
-        menu.addAction("Wissen", self.delete_selected)
-        menu.addAction("Alles selecteren", self.select_all)
+        menu.addAction(tr("Duplicate in Row or Grid…"), self.duplicate_dialog)
+        menu.addAction(tr("Delete"), self.delete_selected)
+        menu.addAction(tr("Select All"), self.select_all)
         menu.addSeparator()
-        menu.addAction("Automatisch schikken…", lambda: self.auto_arrange_requested.emit())
-        menu.addAction("Plaat…", lambda: self.sheet_settings_requested.emit())
-        menu.addAction("Onderdelen naar 3D-model", lambda: self.to_model_requested.emit())
+        menu.addAction(tr("Auto Arrange…"), lambda: self.auto_arrange_requested.emit())
+        menu.addAction(tr("Sheet…"), lambda: self.sheet_settings_requested.emit())
+        menu.addAction(tr("Parts to 3D Model"), lambda: self.to_model_requested.emit())
         return menu
 
     def _menu_tool(self, name):
@@ -706,14 +724,14 @@ class SheetView(QWidget):
         self.set_tool(name)
 
     def duplicate_dialog(self):
-        """Dialoog 'Dupliceren in een rij of raster' (aantal en afstand)."""
+        """Dialog 'Duplicate in a row or grid' (count and distance)."""
         dlg = DuplicateSheetDialog(self)
         if dlg.exec() == QDialog.Accepted:
             c, r, dx, dy = dlg.values()
             self.duplicate_grid(c, r, dx, dy)
         self.setFocus()
 
-    # ------------------------------------------------------------ tekenen
+    # ------------------------------------------------------------ painting
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
@@ -726,8 +744,8 @@ class SheetView(QWidget):
         if self.tool is not None:
             try:
                 self.tool.paint(p)
-            except Exception as e:                       # een voorbeeld mag nooit crashen
-                errors.log_exception(note=f"2D-voorbeeld: {e}")
+            except Exception as e:                       # a preview must never crash
+                errors.log_exception(note=f"2D preview: {e}")
         p.end()
 
     def _draw_grid(self, p):
@@ -735,9 +753,28 @@ class SheetView(QWidget):
         xmin, ymin, xmax, ymax = self.world_rect()
         if (xmax - xmin) / step > 4000 or (ymax - ymin) / step > 4000:
             return
-        minor = QPen(QColor(GRID_COLOR))
+        rects = self._sheet_screen_rects()
+        if not rects or not theme.is_dark():
+            self._grid_lines(p, step, "grid", "grid_major")
+            return
+        # dark: a light grid on the light sheet, a dark grid next to it
+        plates = QPainterPath()
+        for r in rects:
+            plates.addRect(r)
+        desk = QPainterPath()
+        desk.addRect(QRectF(self.rect()))
+        p.save()
+        p.setClipPath(desk.subtracted(plates))
+        self._grid_lines(p, step, "desk_grid", "desk_grid_major")
+        p.setClipPath(plates)
+        self._grid_lines(p, step, "grid", "grid_major")
+        p.restore()
+
+    def _grid_lines(self, p, step, minor_color, major_color):
+        xmin, ymin, xmax, ymax = self.world_rect()
+        minor = QPen(theme.qcolor(minor_color))
         minor.setWidthF(1.0)
-        major = QPen(QColor(GRID_MAJOR))
+        major = QPen(theme.qcolor(major_color))
         major.setWidthF(1.0)
         start = math.floor(xmin / step) * step
         x = start
@@ -759,7 +796,7 @@ class SheetView(QWidget):
             y += step
 
     def _sheet_screen_rects(self):
-        """De platen als schermrechthoeken; leeg zonder plaatformaat."""
+        """The sheets as screen rectangles; empty without a sheet size."""
         s = self.doc.sheet
         if not s.sheet_w or not s.sheet_h:
             return []
@@ -771,46 +808,48 @@ class SheetView(QWidget):
         return out
 
     def _draw_background(self, p):
-        """Wit zonder plaat; met een plaat is alles ernaast grijs en de plaat licht met
-        een schaduw, zodat duidelijk is waar het materiaal ligt."""
+        """White without a sheet; with a sheet everything around it is grey and the sheet
+        light with a shadow, so it is clear where the material is."""
         rects = self._sheet_screen_rects()
         if not rects:
-            p.fillRect(self.rect(), QColor("#ffffff"))
+            p.fillRect(self.rect(), theme.qcolor("sheet_empty"))
             return
-        p.fillRect(self.rect(), QColor(OUTSIDE_SHEET))
+        p.fillRect(self.rect(), theme.qcolor("sheet_desk"))
         for r in rects:
-            p.fillRect(r.translated(3.0, 3.0), QColor(SHEET_SHADOW))
+            p.fillRect(r.translated(3.0, 3.0), theme.qcolor("sheet_shadow"))
         for r in rects:
-            p.fillRect(r, QColor(SHEET_FILL))
+            p.fillRect(r, theme.qcolor("sheet_plate"))
 
     def _draw_sheet_rect(self, p):
         s = self.doc.sheet
         rects = self._sheet_screen_rects()
         if not rects:
             return
-        pen = QPen(QColor(SHEET_COLOR))
+        pen = QPen(theme.qcolor("sheet_border"))
         pen.setWidthF(1.6)
         pen.setJoinStyle(Qt.MiterJoin)
         p.setBrush(Qt.NoBrush)
         font = p.font()
         font.setPointSizeF(10.0)
         font.setBold(True)
-        size = f"{float(s.sheet_w):g} × {float(s.sheet_h):g}" +             (f" × {float(s.sheet_thickness):g}" if s.sheet_thickness else "") + " mm"
+        size = (f"{float(s.sheet_w):g} × {float(s.sheet_h):g}"
+                + (f" × {float(s.sheet_thickness):g}" if s.sheet_thickness else "") + " mm")
         for i, r in enumerate(rects):
             p.setPen(pen)
             p.drawRect(r)
-            p.setPen(QPen(QColor(SHEET_LABEL_COLOR)))
+            p.setPen(QPen(theme.qcolor("sheet_label")))
             p.setFont(font)
-            label = (f"Plaat {i + 1}" if len(rects) > 1 else "Plaat") + f"  ·  {size}"
+            label = (tr("Sheet {n}  ·  {size}").format(n=i + 1, size=size) if len(rects) > 1
+                     else tr("Sheet  ·  {size}").format(size=size))
             p.drawText(QPointF(r.left() + 2.0, r.top() - 6.0), label)
 
     def _draw_margin(self, p):
-        """De marge langs de rand stippellijn, zodat zichtbaar is wat erop mag."""
+        """The margin along the edge as a dashed line, so it is visible what may go on it."""
         s = self.doc.sheet
         m = float(s.sheet_margin or 0.0)
         if not s.sheet_w or not s.sheet_h or m <= 0:
             return
-        pen = QPen(QColor(MARGIN_COLOR))
+        pen = QPen(theme.qcolor("sheet_margin"))
         pen.setStyle(Qt.DashLine)
         pen.setWidthF(1.0)
         p.setPen(pen)
@@ -831,7 +870,7 @@ class SheetView(QWidget):
         pen.setWidthF(1.2)
         p.setPen(pen)
         p.drawLine(self.to_screen((0.0, ymin)), self.to_screen((0.0, ymax)))
-        p.setPen(QPen(QColor("#2b2b2b")))
+        p.setPen(QPen(theme.qcolor("origin")))
         p.drawLine(QPointF(o.x() - 6, o.y()), QPointF(o.x() + 6, o.y()))
         p.drawLine(QPointF(o.x(), o.y() - 6), QPointF(o.x(), o.y() + 6))
 
@@ -842,7 +881,7 @@ class SheetView(QWidget):
             if not self._visible(path) or len(path.pts) < 1:
                 continue
             color = self._layer(path).color or "#000000"
-            if id(path) in self._outside_ids:      # buiten de plaat of in de marge
+            if id(path) in self._outside_ids:      # outside the sheet or in the margin
                 warn = QPen(QColor(OUTSIDE_COLOR))
                 warn.setWidthF(4.2)
                 p.setPen(warn)
@@ -869,9 +908,9 @@ class SheetView(QWidget):
             out.closeSubpath()
         return out
 
-    # ------------------------------------------------------------ invoer
+    # ------------------------------------------------------------ input
     def event(self, e):
-        """Cijfers in het meetvak mogen nooit een sneltoets worden, zoals in de 3D-weergave."""
+        """Digits for the Measurements box must never become a shortcut, as in the 3D view."""
         from PySide6.QtCore import QEvent
         if e.type() == QEvent.ShortcutOverride:
             t = e.text()
@@ -895,7 +934,7 @@ class SheetView(QWidget):
             if self.vcb_text:
                 self.submit_vcb(self.vcb_text)
             elif self.tool is not None:
-                self.tool.finish_input()          # Enter zonder tekst: klaar met tekenen
+                self.tool.finish_input()          # Enter without text: done drawing
                 self.refresh_status()
                 self.update()
             return
@@ -929,7 +968,7 @@ class SheetView(QWidget):
             self.set_tool({Qt.Key_M: "move", Qt.Key_Q: "rotate", Qt.Key_S: "scale"}[k])
             return
         if not mods and k in SHEET_KEYS:
-            self.set_tool(SHEET_KEYS[k])          # L, R, C, A, F … zoals in 3D
+            self.set_tool(SHEET_KEYS[k])          # L, R, C, A, F … as in 3D
             return
         if t and (t in "0123456789.-,;="
                   or (self.vcb_text and (t in VCB_CHARS or t.isalnum() or t == "<"))):
@@ -971,7 +1010,7 @@ class SheetView(QWidget):
 
     @errors.safe_handler
     def mouseDoubleClickEvent(self, e):
-        """Dubbelklik beëindigt een open pad, zoals in 3D."""
+        """A double click ends an open path, as in 3D."""
         self.setFocus()
         if e.button() != Qt.LeftButton or self.tool is None:
             return
@@ -1026,28 +1065,28 @@ class SheetView(QWidget):
         super().resizeEvent(event)
 
     def showEvent(self, event):
-        """De eerste keer dat het werkblad in beeld komt: meteen alles zichtbaar."""
+        """The first time the worksheet comes into view: show everything right away."""
         super().showEvent(event)
         if not self._placed_origin:
             self.zoom_extents()
 
 
 class DuplicateSheetDialog(QDialog):
-    """Dupliceren in een rij of raster: aantal kolommen en rijen, en de afstand ertussen."""
+    """Duplicate in a row or grid: number of columns and rows, and the distance between them."""
 
     def __init__(self, view: SheetView, parent=None):
         super().__init__(parent or view)
-        self.setWindowTitle("Dupliceren in een rij of raster")
+        self.setWindowTitle(tr("Duplicate in a Row or Grid"))
         box = self.selected_box(view)
         lay = QFormLayout(self)
         self.cols = QSpinBox()
         self.cols.setRange(1, 100)
         self.cols.setValue(3)
-        self.cols.setToolTip("Aantal exemplaren naast elkaar")
+        self.cols.setToolTip(tr("Number of copies side by side"))
         self.rows = QSpinBox()
         self.rows.setRange(1, 100)
         self.rows.setValue(1)
-        self.rows.setToolTip("Aantal exemplaren boven elkaar")
+        self.rows.setToolTip(tr("Number of copies above each other"))
         self.dx = QDoubleSpinBox()
         self.dy = QDoubleSpinBox()
         for spin in (self.dx, self.dy):
@@ -1056,10 +1095,10 @@ class DuplicateSheetDialog(QDialog):
             spin.setSuffix(" mm")
         self.dx.setValue(max(10.0, box[2] - box[0]) if box else 10.0)
         self.dy.setValue(max(10.0, box[3] - box[1]) if box else 10.0)
-        lay.addRow("Kolommen", self.cols)
-        lay.addRow("Rijen", self.rows)
-        lay.addRow("Afstand horizontaal", self.dx)
-        lay.addRow("Afstand verticaal", self.dy)
+        lay.addRow(tr("Columns"), self.cols)
+        lay.addRow(tr("Rows"), self.rows)
+        lay.addRow(tr("Horizontal distance"), self.dx)
+        lay.addRow(tr("Vertical distance"), self.dy)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)

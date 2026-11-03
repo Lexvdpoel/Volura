@@ -122,8 +122,8 @@ class Entities:
         self.E = {}          # eid -> (a, b)
         self.F = {}          # fid -> Face
         self.soft = set()    # smoothed edges (not drawn as a crease)
-        self.hidden_f = set()  # faces hidden by Bewerken > Verbergen
-        self.hidden_e = set()  # edges hidden by Bewerken > Verbergen
+        self.hidden_f = set()  # faces hidden by Edit > Hide
+        self.hidden_e = set()  # edges hidden by Edit > Hide
         self.next_id = 1
         self._index()
 
@@ -453,19 +453,19 @@ class Entities:
 
     # ------------------------------------------------------------ visibility
     def hide(self, fids=(), eids=()):
-        """Bewerken > Verbergen: hide faces and edges (they stay part of the model)."""
+        """Edit > Hide: hide faces and edges (they stay part of the model)."""
         self.hidden_f |= {f for f in fids if f in self.F}
         self.hidden_e |= {e for e in eids if e in self.E}
         self.touch()
 
     def unhide(self, fids=(), eids=()):
-        """Bewerken > Zichtbaar maken: show the given faces and edges again."""
+        """Edit > Unhide: show the given faces and edges again."""
         self.hidden_f -= set(fids)
         self.hidden_e -= set(eids)
         self.touch()
 
     def unhide_all(self):
-        """Bewerken > Zichtbaar maken > Alles: show every hidden face and edge."""
+        """Edit > Unhide > All: show every hidden face and edge."""
         had = bool(self.hidden_f or self.hidden_e)
         self.hidden_f.clear()
         self.hidden_e.clear()

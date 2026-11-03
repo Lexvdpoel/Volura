@@ -253,7 +253,7 @@ def arc_from_bulge(p0, p1, bulge_point, plane, segments=12):
 
 
 # --------------------------------------------------------------------------
-# Freehand strokes (the "Uit de vrije hand" tool)
+# Freehand strokes (the Freehand tool)
 # --------------------------------------------------------------------------
 
 def simplify_polyline(points, tol, min_len=None):
@@ -305,7 +305,7 @@ def simplify_polyline(points, tol, min_len=None):
 
 
 # --------------------------------------------------------------------------
-# Rotated rectangle (the "Gedraaide rechthoek" tool)
+# Rotated rectangle (the Rotated Rectangle tool)
 # --------------------------------------------------------------------------
 
 def rotated_rect(p0, p1, width, plane):

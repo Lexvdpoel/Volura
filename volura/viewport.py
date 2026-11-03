@@ -8,8 +8,9 @@ from PySide6.QtCore import QEvent, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QSurfaceFormat
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
-from . import errors, icons
+from . import errors, icons, theme
 from .camera import Camera, horizon_line
+from .i18n import tr
 from .inference import InferenceEngine
 from .tools import MEASURE_LABEL
 
@@ -17,17 +18,14 @@ VCB_CHARS = set("0123456789.,;-+/*xXsS\"'mcin<>[]=")
 SELECT_COLOR = (0.13, 0.35, 1.0)
 LOCK_COLOR = (0.80, 0.13, 0.10)        # a selected locked group gets a red frame, not a blue one
 HIDDEN_EDGE_COLOR = (0.45, 0.45, 0.55, 0.85)
-PROBLEM_COLOR = (0.86, 0.06, 0.06, 1.0)   # de problemen van Printcontrole
+PROBLEM_COLOR = (0.86, 0.06, 0.06, 1.0)   # the problems of Print Check
 FRONT = (1.0, 1.0, 1.0)                # the front of a face is white, like SketchUp
 BACK = (0.64, 0.70, 0.78)              # the back of a face is blue grey
 
 # The SketchUp background: a light blue grey sky that fades to almost white at the
-# horizon, and a grey ground below it.
-SKY_TOP = (0.62, 0.72, 0.82)
-SKY_HORIZON = (0.97, 0.97, 0.96)
-GROUND_COLOR = (204 / 255, 203 / 255, 198 / 255)
+# horizon, and a grey ground below it. In the dark theme a muted grey (theme.py).
 
-# The inference markers of SketchUp: per soort een vorm, getekend in 2D op de cursor.
+# The inference markers of SketchUp: one shape per kind, drawn in 2D at the cursor.
 INFERENCE_COLORS = {
     "endpoint": (0.10, 0.72, 0.10, 1), "midpoint": (0.10, 0.72, 0.85, 1),
     "origin": (0.98, 0.80, 0.10, 1),
@@ -44,7 +42,7 @@ INFERENCE_SHAPES = {
 TOOLTIP_FILL = (255, 255, 153)         # the yellow SketchUp tooltip
 TOOLTIP_BORDER = (140, 130, 40)
 
-# Beeld > Vlakstijl (SketchUp's face styles); SHADED is the default.
+# View > Face Style (SketchUp's face styles); SHADED is the default.
 WIREFRAME = "wireframe"
 HIDDENLINE = "hiddenline"
 SHADED = "shaded"
@@ -53,7 +51,10 @@ FACE_STYLES = (WIREFRAME, HIDDENLINE, SHADED, MONOCHROME)
 HIDDEN_FACE = (1.0, 1.0, 1.0)          # hidden line: faces in the white background colour
 BACK_EDGE_COLOR = (0.60, 0.60, 0.60, 0.85)
 SOFT_EDGE_COLOR = (0.35, 0.50, 0.85, 0.9)
-GUIDE_COLOR = (0.52, 0.52, 0.58, 1)    # hulplijnen: dashed light grey, like SketchUp
+GUIDE_COLOR = (0.52, 0.52, 0.58, 1)
+# the print bed: fill, fine and coarse grid lines; light lines on the dark background
+BED_LIGHT = ((0.55, 0.60, 0.55, 0.13), (0.45, 0.48, 0.45, 0.25), (0.35, 0.38, 0.35, 0.40))
+BED_DARK = ((0.85, 0.88, 0.85, 0.08), (0.86, 0.89, 0.86, 0.16), (0.90, 0.92, 0.90, 0.32))    # guides: dashed light grey, like SketchUp
 
 
 def hex_rgb(h):
@@ -156,7 +157,7 @@ class Viewport(QOpenGLWidget):
         self._vcb_shown = None            # last (label, value) sent to the Measurements box
         self.hover = None               # ("face", obj, rid) | ("object", obj) | ("region", r) | ...
         self.preview_transform = None   # (ids, 4x4, keep_original)
-        self.problem_items = []         # items the Printcontrole panel marks in red
+        self.problem_items = []         # items the Print Check panel marks in red
         self.labels = []                # (screen QPointF, text)
         self.markers = []               # (screen QPointF, inference kind)
         self._rcache = {}
@@ -203,7 +204,7 @@ class Viewport(QOpenGLWidget):
             try:
                 self.tool.vcb_enter(text.strip())
             except ValueError as e:
-                self.set_status(f"Ongeldige invoer: {e}")
+                self.set_status(tr("Invalid input: {error}").format(error=e))
         self._vcb_shown = None            # whatever was typed always leaves the Measurements box
         self.refresh_status()
         self.update()
@@ -236,9 +237,9 @@ class Viewport(QOpenGLWidget):
 
     # ------------------------------------------------------------- GL
     def initializeGL(self):
-        # openstaande fouten weg: anders geeft PyOpenGL GLError 1282 terug bij glClearColor
+        # clear pending errors: otherwise PyOpenGL returns GLError 1282 on glClearColor
         errors.clear_gl_errors()
-        gl.glClearColor(0.95, 0.95, 0.95, 1)
+        gl.glClearColor(*theme.rgb("sky_horizon"), 1)
 
     def resizeGL(self, w, h):
         self.cam.width, self.cam.height = max(1, w), max(1, h)
@@ -323,11 +324,12 @@ class Viewport(QOpenGLWidget):
         gl.glLoadIdentity()
         h = float(max(1, self.height()))
         y0, y1 = horizon_line(self.cam)
+        sky_top, sky_horizon = theme.rgb("sky_top"), theme.rgb("sky_horizon")
 
         def sky(y):
             """Sky colour at widget y: almost white at the horizon, blue grey one screen up."""
             t = min(1.0, max(0.0, (0.5 * (y0 + y1) - y) / h))
-            return tuple(a * t + b * (1 - t) for a, b in zip(SKY_TOP, SKY_HORIZON))
+            return tuple(a * t + b * (1 - t) for a, b in zip(sky_top, sky_horizon))
 
         gl.glBegin(gl.GL_QUADS)
         gl.glColor3f(*sky(0.0))
@@ -346,7 +348,7 @@ class Viewport(QOpenGLWidget):
         ground = _clip_below([(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)],
                              (-1.0, ndc_y(y0)), (1.0, ndc_y(y1)))
         if len(ground) > 2:
-            gl.glColor3f(*GROUND_COLOR)
+            gl.glColor3f(*theme.rgb("ground"))
             gl.glBegin(gl.GL_POLYGON)
             for x, y in ground:
                 gl.glVertex2f(x, y)
@@ -355,8 +357,9 @@ class Viewport(QOpenGLWidget):
 
     def _draw_bed(self):
         bx, by, _ = self.settings.bed_size
+        fill, minor_col, major_col = BED_DARK if theme.is_dark() else BED_LIGHT
         gl.glDepthMask(gl.GL_FALSE)
-        gl.glColor4f(0.55, 0.60, 0.55, 0.13)
+        gl.glColor4f(*fill)
         gl.glBegin(gl.GL_QUADS)
         for x, y in ((0, 0), (bx, 0), (bx, by), (0, by)):
             gl.glVertex3f(x, y, 0)
@@ -367,13 +370,13 @@ class Viewport(QOpenGLWidget):
             lines += [(x, 0, 0), (x, by, 0)]
         for y in np.arange(0, by + 1e-6, step):
             lines += [(0, y, 0), (bx, y, 0)]
-        self.draw_lines(lines, (0.45, 0.48, 0.45, 0.25), 1.0)
+        self.draw_lines(lines, minor_col, 1.0)
         major = []
         for x in np.arange(0, bx + 1e-6, 50.0):
             major += [(x, 0, 0), (x, by, 0)]
         for y in np.arange(0, by + 1e-6, 50.0):
             major += [(0, y, 0), (bx, y, 0)]
-        self.draw_lines(major, (0.35, 0.38, 0.35, 0.40), 1.0)
+        self.draw_lines(major, major_col, 1.0)
         self.draw_loop([(0, 0, 0), (bx, 0, 0), (bx, by, 0), (0, by, 0)], (0.2, 0.25, 0.2, 0.8), 1.6)
         gl.glDepthMask(gl.GL_TRUE)
 
@@ -468,7 +471,7 @@ class Viewport(QOpenGLWidget):
             for M in mats:
                 self._push(M)
                 if show_hidden:
-                    # Bewerken > Verbergen geometry: translucent faces and dashed edges
+                    # Edit > Hide geometry: translucent faces and dashed edges
                     self._draw_faces(rc["hidden"], alpha=0.35, tint=selected, style=style)
                     if len(rc["hedges"]):
                         self.draw_lines(rc["hedges"], HIDDEN_EDGE_COLOR, 1.2, stipple=True)
@@ -502,7 +505,7 @@ class Viewport(QOpenGLWidget):
         self._draw_selection()
 
     def _draw_guides(self):
-        """Beeld > Hulplijnen: oneindige gestippelde lijnen en hulppunten als kruisjes."""
+        """View > Guides: infinite dashed lines, and guide points as small crosses."""
         doc = self.doc
         if not doc.guides:
             return
@@ -628,7 +631,7 @@ class Viewport(QOpenGLWidget):
         gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
 
     def _draw_stippled(self, tris, color):
-        """Geselecteerde vlakken: het blauwe stippelpatroon van SketchUp, geen dekkende laag."""
+        """Selected faces: the blue dot pattern of SketchUp, not an opaque layer."""
         tris = np.asarray(tris, dtype=np.float32).reshape(-1, 3)
         if not len(tris):
             return
@@ -666,7 +669,7 @@ class Viewport(QOpenGLWidget):
         gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
 
     def _draw_problems(self):
-        """Printcontrole: de randen en vlakken van het gekozen probleem, dik in het rood."""
+        """Print Check: the edges and faces of the chosen problem, thick and red."""
         if not self.problem_items:
             return
         gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
@@ -764,7 +767,7 @@ class Viewport(QOpenGLWidget):
             self.add_label(inf.point, inf.label, offset=(14, -26), tooltip=True)
 
     def _paint_marker(self, p, pos, kind):
-        """The inference point of SketchUp: per soort een andere vorm in zijn eigen kleur."""
+        """The inference point of SketchUp: a different shape per kind, in its own colour."""
         col = QColor(*[int(round(c * 255)) for c in INFERENCE_COLORS[kind][:3]])
         x, y = float(pos.x()), float(pos.y())
         p.setPen(QPen(QColor(35, 35, 35), 1.2))
@@ -817,9 +820,9 @@ class Viewport(QOpenGLWidget):
         if self.tool is not None:
             self.tool.paint_overlay(p)
         # view name corner
-        p.setPen(QColor(90, 90, 90))
+        p.setPen(theme.qcolor("view_text"))
         p.drawText(10, self.height() - 10,
-                   "Parallel" if self.cam.ortho else "Perspectief")
+                   tr("Parallel") if self.cam.ortho else tr("Perspective"))
         p.end()
 
     # ------------------------------------------------------------- events
@@ -968,12 +971,34 @@ class Viewport(QOpenGLWidget):
                 about = p
         factor = 0.85 ** steps
         self.cam.zoom(factor, about)
-        self._cam_settle.start()       # bundle scrolling: store one state after 0,5 s of quiet
+        self._cam_settle.start()       # bundle scrolling: store one state after 0.5 s of quiet
+        self.update()
+
+    # A 3D mouse at full deflection: degrees per second, screen heights per second, zoom factor.
+    SPACEMOUSE_ROTATE = 120.0
+    SPACEMOUSE_PAN = 1.2
+    SPACEMOUSE_ZOOM = 1.6
+
+    def spacemouse_move(self, m, speed=1.0):
+        """A motion of the 3D mouse: the model moves along with the cap.
+
+        Pushing the cap right or up moves the model along, pulling it towards you zooms in,
+        twisting the cap turns the model about the vertical axis and tilting tilts it.
+        """
+        k = float(speed) * m.dt
+        cam = self.cam
+        cam.yaw -= m.ry * self.SPACEMOUSE_ROTATE * k
+        cam.pitch = max(-89.99, min(89.99, cam.pitch + m.rx * self.SPACEMOUSE_ROTATE * k))
+        _, r, u = cam.basis()
+        step = 2 * cam.half_height() * self.SPACEMOUSE_PAN * k
+        cam.target = cam.target - r * (m.tx * step) - u * (m.ty * step)
+        cam.distance = max(0.5, cam.distance * float(np.exp(-m.tz * self.SPACEMOUSE_ZOOM * k)))
+        self._cam_settle.start()       # after the motion, one step in Camera > Previous
         self.update()
 
     # ------------------------------------------------------------- camera
     def commit_camera(self):
-        """Remember the current camera as the newest step of the view history (Camera > Vorige)."""
+        """Remember the current camera as the newest step of the view history (Camera > Previous)."""
         self._cam_settle.stop()
         s = self.cam.state()
         if self.cam_hist and states_equal(s, self.cam_hist[self.cam_idx]):
@@ -1002,12 +1027,12 @@ class Viewport(QOpenGLWidget):
         self.update()
 
     def prev_camera(self):
-        """Camera > Vorige: back to the previous camera position."""
+        """Camera > Previous: back to the previous camera position."""
         if self.can_prev_camera():
             self._goto_camera(self.cam_idx - 1)
 
     def next_camera(self):
-        """Camera > Volgende: forward again after Vorige."""
+        """Camera > Next: forward again after Previous."""
         if self.can_next_camera():
             self._goto_camera(self.cam_idx + 1)
 
@@ -1020,7 +1045,7 @@ class Viewport(QOpenGLWidget):
         return self.cam.target + r * (nx * hh * w / h) + u * (ny * hh)
 
     def zoom_window(self, rect):
-        """Camera > Zoomvenster: make the screen rectangle fill the view."""
+        """Camera > Zoom Window: make the screen rectangle fill the view."""
         (x0, y0), (x1, y1) = rect
         w, h = abs(x1 - x0), abs(y1 - y0)
         if w < 2 or h < 2:
@@ -1053,7 +1078,7 @@ class Viewport(QOpenGLWidget):
         self.update()
 
     def zoom_items(self, items):
-        """Zoom in on the given items (the Printcontrole panel uses this on double click)."""
+        """Zoom in on the given items (the Print Check panel uses this on double click)."""
         pts = [p for p in (self.item_points(it) for it in items) if p is not None and len(p)]
         if not pts:
             return

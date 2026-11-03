@@ -1,7 +1,9 @@
 """Built-in toolbar icons as small SVG drawings (no external image files)."""
-from PySide6.QtCore import QByteArray, QRectF, Qt
-from PySide6.QtGui import QCursor, QGuiApplication, QIcon, QImage, QPainter, QPixmap
+from PySide6.QtCore import QByteArray, QRectF, QSize, Qt
+from PySide6.QtGui import QCursor, QGuiApplication, QIcon, QIconEngine, QImage, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
+
+from . import theme
 
 def S(color="#2b2b2b", w=1.6):
     return f'stroke="{color}" stroke-width="{w}" stroke-linejoin="round" stroke-linecap="round"'
@@ -12,13 +14,13 @@ N = 'fill="none"'
 
 SVG = {
     "select": f'<path d="M5 3 L5 19 L9 15 L12 21 L14.5 20 L11.5 14 L17 14 Z" fill="#fff" {S()}/>',
-    # gum: roze punt met blauwe huls, schuin neergelegd, met een veeg eronder
+    # eraser: pink tip with a blue sleeve, lying at an angle, with a smudge below it
     "eraser": f'<path d="M11.5 22.6 L18 22.6" {N} stroke="#9a9a9a" stroke-width="1.4" stroke-linecap="round"/>'
               f'<g transform="rotate(45 12 11.5)">'
               f'<rect x="6.5" y="1.5" width="11" height="20" rx="2.2" fill="#2f6fd6" {S()}/>'
               f'<path d="M6.5 13.5 L17.5 13.5 L17.5 19.3 A2.2 2.2 0 0 1 15.3 21.5 L8.7 21.5 A2.2 2.2 0 0 1 6.5 19.3 Z" fill="#f5a3b8" {S()}/>'
               f'<path d="M9 5 L15 5 M9 8.5 L15 8.5" {N} stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></g>',
-    # verfemmer die naar links uitgiet, met een druppel (hotspot) linksonder
+    # paint bucket pouring to the left, with a drop (hotspot) at the bottom left
     "paint": f'<g transform="matrix(-1 0 0 1 24 0)"><g transform="rotate(55 10 12)">'
              f'<path d="M3.5 8 L5 18.5 Q10 21 15 18.5 L16.5 8 Z" fill="#b8c9de" {S()}/>'
              f'<ellipse cx="10" cy="8" rx="6.5" ry="2.2" fill="#fff" {S()}/>'
@@ -26,7 +28,7 @@ SVG = {
              f'<path d="M5 18.5 C6 21.5 9 22.5 10 20.2" {N} {S(w=1.3)}/></g>'
              f'<path d="M16.8 14.8 C18.6 15.3 19.6 16.2 19.8 17.4" {N} stroke="#2f6fd6" stroke-width="2" stroke-linecap="round"/>'
              f'<path d="M19.8 16.6 C21.3 18.6 21.8 19.6 21.8 20.5 A2 2 0 0 1 17.8 20.5 C17.8 19.6 18.3 18.6 19.8 16.6 Z" fill="#2f6fd6" {S(w=1.1)}/></g>',
-    # potlood: grafietpunt linksonder (hotspot), houten punt, gele schacht, huls en gum
+    # pencil: graphite tip at the bottom left (hotspot), wooden point, yellow shaft, ferrule and eraser
     "line": f'<path d="M3 21 L5.4 14.9 L9.1 18.6 Z" fill="#f3d9b1" {S(w=1.2)}/>'
             f'<path d="M3 21 L3.9 18.8 L5.2 20.1 Z" fill="#2b2b2b" stroke="#2b2b2b" stroke-width="0.8" stroke-linejoin="round"/>'
             f'<path d="M5.4 14.9 L14.6 5.7 L18.3 9.4 L9.1 18.6 Z" fill="#f2c230" {S(w=1.2)}/>'
@@ -52,14 +54,14 @@ SVG = {
                f'<path d="M4 14 L15 6" {N} stroke="#d23b3b" stroke-width="2.2" stroke-linecap="round"/>'
                f'<circle cx="4" cy="14" r="1.7" fill="#2b2b2b"/>',
     "circle": f'<circle cx="12" cy="12" r="8.5" {F} {S()}/><circle cx="12" cy="12" r="1" fill="#2b2b2b"/>',
-    # afgeronde rechthoek: dezelfde hoeken als Rechthoek, maar met een straal erin
+    # rounded rectangle: the same corners as Rectangle, but with a radius in them
     "roundrect": f'<path d="M7 6 L17 6 A2 2 0 0 1 19 8 L19 16 A2 2 0 0 1 17 18 L7 18 A2 2 0 0 1 5 16 '
                  f'L5 8 A2 2 0 0 1 7 6 Z" {F} {S()}/>'
                  f'<path d="M5 12 L7.6 12 A1.4 1.4 0 0 0 9 10.6 L9 8" {N} stroke="#d23b3b" stroke-width="1.2" stroke-dasharray="2 1.5"/>',
     "ellipse": f'<ellipse cx="12" cy="12" rx="9" ry="5.5" {F} {S()}/>'
                f'<path d="M3 12 L21 12 M12 6.5 L12 17.5" {N} stroke="#d23b3b" stroke-width="1.1" stroke-dasharray="2 1.6"/>'
                f'<circle cx="12" cy="12" r="1" fill="#2b2b2b"/>',
-    # boog om een middelpunt: straal en hoek zijn zichtbaar
+    # arc around a center: radius and angle are visible
     "centerarc": f'<path d="M12 12 L19 12" {N} stroke="#d23b3b" stroke-width="1.2" stroke-dasharray="2 1.6"/>'
                  f'<path d="M12 12 L6.5 5.5" {N} stroke="#d23b3b" stroke-width="1.2" stroke-dasharray="2 1.6"/>'
                  f'<path d="M19 12 A7 7 0 0 1 6.5 5.5" {N} {S()}/>'
@@ -76,7 +78,7 @@ SVG = {
     "offset": f'<rect x="3" y="4" width="18" height="16" {N} {S()}/><rect x="7" y="8" width="10" height="8" {F} {S()}/>'
               f'<path d="M3 4 L7 8 M21 20 L17 16" stroke="#d23b3b" stroke-width="1.4"/>',
     "move": f'<path d="M12 2 L12 22 M2 12 L22 12 M9 5 L12 2 L15 5 M9 19 L12 22 L15 19 M5 9 L2 12 L5 15 M19 9 L22 12 L19 15" {N} {S("#d23b3b", 1.8)}/>',
-    # draaien: blok in de oude stand (gestippeld), gedraaid blok en een boogpijl om het draaipunt
+    # rotate: block in the old position (dotted), rotated block and a curved arrow around the pivot
     "rotate": f'<rect x="6" y="9" width="10" height="10" {N} {S("#8a8a8a", 1.1)} stroke-dasharray="2 1.6"/>'
               f'<rect x="6" y="9" width="10" height="10" transform="rotate(-28 11 14)" {F} {S()}/>'
               f'<path d="M1.8 11.5 A9.5 9.5 0 0 1 18.5 8.3" {N} stroke="#d23b3b" stroke-width="2" stroke-linecap="round"/>'
@@ -86,7 +88,7 @@ SVG = {
              f'<path d="M12 12 L20 4 M15 4 L20 4 L20 9" {N} stroke="#d23b3b" stroke-width="1.8" stroke-linecap="round"/>',
     "tape": f'<circle cx="10" cy="12" r="7" fill="#f2c230" {S()}/><circle cx="10" cy="12" r="2.2" fill="#fff" {S()}/>'
             f'<path d="M10 19 L22 19 L22 16 L17 16" fill="#f2e5a0" {S()}/>',
-    # draaien (camera): wereldbol met een rode omloopbaan eromheen
+    # orbit (camera): globe with a red orbit around it
     "orbit": f'<g transform="rotate(-18 12 12)">'
              f'<path d="M22.5 12 A10.5 4.2 0 0 0 1.5 12" {N} stroke="#d23b3b" stroke-width="1.2" stroke-dasharray="1.8 1.6"/></g>'
              f'<circle cx="12" cy="12" r="7.2" fill="#cfe0f5" {S()}/>'
@@ -144,7 +146,7 @@ SVG = {
             f'<path d="M9 10.5 L15 12.5 M9 13.5 L15 15.5 M9 16.5 L15 18.5" {N} stroke="#d23b3b" stroke-width="1.3"/>',
     "nut": f'<path d="M12 3 L20 7.5 L20 16.5 L12 21 L4 16.5 L4 7.5 Z" {F} {S()}/>'
            f'<circle cx="12" cy="12" r="4.5" fill="#fff" {S()}/>',
-    # snijden: blok in twee helften, het snijvlak (rood gestippeld) en het rode snijoppervlak
+    # cut: block in two halves, the cutting plane (red dotted) and the red cut surface
     "cutplane": f'<path d="M4 13 L12 17 L12 22 L4 18 Z" fill="#b8c9de" {S()}/>'
                 f'<path d="M12 17 L20 13 L20 18 L12 22 Z" fill="#8fa6c3" {S()}/>'
                 f'<path d="M0.8 13 L12 18.6 L23.2 13 L12 7.4 Z" fill="#d23b3b" fill-opacity="0.12" stroke="#d23b3b" stroke-width="1" stroke-dasharray="2 1.4"/>'
@@ -152,7 +154,7 @@ SVG = {
                 f'<path d="M4 5.5 L12 9.5 L12 12.5 L4 8.5 Z" fill="#b8c9de" {S()}/>'
                 f'<path d="M12 9.5 L20 5.5 L20 8.5 L12 12.5 Z" fill="#8fa6c3" {S()}/>'
                 f'<path d="M4 5.5 L12 9.5 L20 5.5 L12 1.5 Z" fill="#e8eef7" {S()}/>',
-    # snijden en verbinden: twee helften met zwaluwstaart en bijpassende uitsparing, rood de snede
+    # cut and join: two halves with a dovetail and matching recess, the cut in red
     "cut_join": f'<path d="M2 4 L10 4 L10 10 L14.5 8 L14.5 16 L10 14 L10 20 L2 20 Z" {F} {S()}/>'
                 f'<path d="M15.5 4 L22 4 L22 20 L15.5 20 L15.5 14 L20 16 L20 8 L15.5 10 Z" fill="#9fd29b" {S()}/>'
                 f'<path d="M15 1.5 L15 22.5" {N} stroke="#d23b3b" stroke-width="1.2" stroke-dasharray="2 1.6"/>',
@@ -168,7 +170,7 @@ SVG = {
     "mirror_v": f'<path d="M2 12 L22 12" {N} stroke="#d23b3b" stroke-width="1.2" stroke-dasharray="2 1.6"/>'
                 f'<path d="M7 3 L12 9.5 L17 3 Z" {F} {S()}/>'
                 f'<path d="M7 21 L12 14.5 L17 21 Z" fill="#e8eef7" stroke="#8a8a8a" stroke-width="1.2"/>',
-    # 2D-werkblad: lijnen aaneenrijgen, opsplitsen, uitlijnen, verdelen, dupliceren, raster
+    # 2D worksheet: join lines, split, align, distribute, duplicate, grid
     "join": f'<path d="M3 18 L9 18 L9 6" {N} {S(w=2.2)}/>'
             f'<path d="M13 6 L21 6" {N} {S(w=2.2)} stroke-dasharray="3 2"/>'
             f'<circle cx="9" cy="6" r="1.8" fill="#d23b3b"/><circle cx="13" cy="6" r="1.8" fill="#fff" {S()}/>',
@@ -193,7 +195,7 @@ SVG = {
     "sharp_join": f'<path d="M3 21 L3 3 L21 3" {N} stroke="#d23b3b" stroke-width="2.2" stroke-linejoin="miter"/>'
                   f'<path d="M7 17 L7 7 L17 7" {N} {S()} stroke-dasharray="3 2"/>',
     "ortho": f'<path d="M4 8 L14 8 L14 20 L4 20 Z M4 8 L10 4 L20 4 L14 8 M14 20 L20 16 L20 4" {N} {S()}/>',
-    # oogje en slotje van het lagenpaneel
+    # eye and lock of the layers panel
     "eye": f'<path d="M2 12 C6 5.5 18 5.5 22 12 C18 18.5 6 18.5 2 12 Z" fill="#e8eef7" {S()}/>'
            '<circle cx="12" cy="12" r="3.4" fill="#2f6fd6" stroke="#2b2b2b" stroke-width="1.2"/>',
     "eye_off": f'<path d="M2 12 C6 5.5 18 5.5 22 12 C18 18.5 6 18.5 2 12 Z" fill="#f0f0f0" '
@@ -214,7 +216,7 @@ SVG = {
             f'<rect x="4.5" y="6" width="8" height="6" fill="#9fd29b" {S(w=1.2)}/>'
             f'<rect x="13.5" y="6" width="6" height="12" fill="#cfe0f5" {S(w=1.2)}/>'
             f'<rect x="4.5" y="13" width="8" height="5" fill="#f2c230" {S(w=1.2)}/>',
-    # doos met vingerlassen: een open doos met tanden boven de rand
+    # finger-joint box: an open box with teeth above the rim
     "boxjoint": f'<path d="M4 9 L12 4.5 L20 9 L12 13.5 Z" fill="#cfe0f5" {S()}/>'
                 f'<path d="M4 9 L4 18 L12 22.5 L12 13.5 Z" fill="#9fd29b" {S()}/>'
                 f'<path d="M20 9 L20 18 L12 22.5 L12 13.5 Z" fill="#e6ecf3" {S()}/>'
@@ -222,13 +224,13 @@ SVG = {
                 f'stroke-linecap="round"/>'
                 f'<path d="M20 9 L20 6 M17 6 L17 9 M14 6 L14 9" {N} stroke="#d23b3b" '
                 f'stroke-width="1.5" stroke-linecap="round"/>',
-    # werkblad naar model: een rode snijcontour die als dikke plaat omhoog komt
+    # worksheet to model: a red cut contour rising up as a thick plate
     "to_model": f'<path d="M3 20 L11 16 L21 19 L13 23 Z" {N} stroke="#d23b3b" stroke-width="1.4" '
                 f'stroke-dasharray="2 1.4" stroke-linejoin="round"/>'
                 f'<path d="M3 9 L11 5 L21 8 L13 12 Z" fill="#e8c897" {S()}/>'
                 f'<path d="M3 9 L3 12 L13 15 L13 12 Z" fill="#c9a26a" {S()}/>'
                 f'<path d="M13 12 L13 15 L21 11 L21 8 Z" fill="#b08850" {S()}/>',
-    # model naar werkblad: een vlak met een rode laserstraal erop
+    # model to worksheet: a face with a red laser beam on it
     "to_laser": f'<path d="M2 17 L10 13 L22 16 L14 20.5 Z" fill="#cfe0f5" {S()}/>'
                 f'<path d="M7 16 L11 14.2 L17 15.8 L13 17.8 Z" {N} stroke="#d23b3b" '
                 f'stroke-width="1.5" stroke-linejoin="round"/>'
@@ -241,11 +243,21 @@ SVG = {
 }
 
 _cache = {}
+_pixmaps = {}
 
 
-def pixmap(name, size=24):
+def _dark_body(body):
+    """Make the dark lines of an icon light, for the dark theme."""
+    for dark, light in theme.ICON_INK.items():
+        body = body.replace(f'"{dark}"', f'"{light}"')
+    return body
+
+
+def pixmap(name, size=24, dark=False):
     """The SVG drawing of `name` as a pixmap of `size` x `size` pixels."""
     body = SVG.get(name, SVG["select"])
+    if dark:
+        body = _dark_body(body)
     svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">{body}</svg>'
     renderer = QSvgRenderer(QByteArray(svg.encode()))
     img = QImage(size, size, QImage.Format_ARGB32_Premultiplied)
@@ -257,24 +269,70 @@ def pixmap(name, size=24):
     return QPixmap.fromImage(img)
 
 
+class _ThemedIcon(QIconEngine):
+    """Draws the icon in the current theme on every request: a theme switch then
+    needs no new icons on all the buttons."""
+
+    def __init__(self, name):
+        super().__init__()
+        self.name = name
+
+    def pixmap(self, size, mode, state):
+        side = max(1, min(size.width(), size.height()))
+        dark = theme.is_dark()
+        key = (self.name, side, dark, int(mode.value) if hasattr(mode, "value") else int(mode))
+        pm = _pixmaps.get(key)
+        if pm is None:
+            pm = pixmap(self.name, side, dark)
+            if mode == QIcon.Disabled:
+                app = QGuiApplication.instance()
+                style = app.style() if app is not None and hasattr(app, "style") else None
+                if style is not None:
+                    from PySide6.QtWidgets import QStyleOption
+                    pm = style.generatedIconPixmap(QIcon.Disabled, pm, QStyleOption())
+            _pixmaps[key] = pm
+        return pm
+
+    def scaledPixmap(self, size, mode, state, scale):
+        """Sharp on a scaled screen: draw in real pixels."""
+        scale = max(1.0, float(scale))
+        pm = QPixmap(self.pixmap(QSize(round(size.width() * scale), round(size.height() * scale)),
+                                 mode, state))
+        pm.setDevicePixelRatio(scale)
+        return pm
+
+    def paint(self, painter, rect, mode, state):
+        scale = painter.device().devicePixelRatioF() if painter.device() is not None else 1.0
+        painter.drawPixmap(rect, self.scaledPixmap(rect.size(), mode, state, scale))
+
+    def actualSize(self, size, mode, state):
+        side = min(size.width(), size.height())
+        return size.scaled(side, side, Qt.KeepAspectRatio)
+
+    def availableSizes(self, mode=QIcon.Normal, state=QIcon.Off):
+        return [QSize(s, s) for s in (16, 24, 32, 48, 64)]
+
+    def clone(self):
+        return _ThemedIcon(self.name)
+
+
 def icon(name, size=32):
     key = (name, size)
     if key in _cache:
-        return _cache[key]
-    ic = QIcon()
-    for s in (16, 24, 32, 48, 64):
-        ic.addPixmap(pixmap(name, s))
-    _cache[key] = ic
+        return _cache[key][0]
+    engine = _ThemedIcon(name)
+    ic = QIcon(engine)
+    _cache[key] = (ic, engine)          # the engine must stay alive as long as the icon exists
     return ic
 
 
-# Where the tool "touches" the point under the cursor: potloodpunt, hoek van de gum, verfdruppel.
+# Where the tool "touches" the point under the cursor: pencil tip, eraser corner, paint drop.
 CURSOR_HOTSPOTS = {"line": (3, 21), "freehand": (3, 18), "eraser": (5, 19), "paint": (4, 22)}
 _cursors = {}
 
 
 def cursor(name, size=24):
-    """The tool icon as mouse pointer, like SketchUp shows it (Selecteren keeps the arrow).
+    """The tool icon as mouse pointer, like SketchUp shows it (Select keeps the arrow).
 
     Made on demand and cached: a QCursor needs a QApplication that already exists.
     """

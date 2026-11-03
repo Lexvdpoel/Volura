@@ -10,6 +10,7 @@ import manifold3d as mf
 from .brep import TOL, Entities
 from .geom import (Plane, default_u, extrude_cs, manifold_from_mesh, mesh_arrays, normalize,
                    rotation_matrix)
+from .i18n import tr
 from .model import ROOT, Document, Group
 
 DEFAULT_COLOR = "#f2f2f2"
@@ -73,7 +74,7 @@ def boolean(doc: Document, groups, op):
     for g in groups:
         m = g.ents.to_manifold()
         if m.status() != mf.Error.NoError or m.is_empty():
-            raise ValueError(f"{g.name} is geen gesloten volume.")
+            raise ValueError(tr("{name} is not a closed volume.").format(name=g.name))
         ms.append(m)
     if op == "union":
         res = union_all(ms)
@@ -118,7 +119,7 @@ def outside(m):
 
 
 def outer_shell(doc: Document, groups):
-    """Gereedschap > Buitenschil: one group of the outside of the selected groups.
+    """Tools > Outer Shell: one group of the outside of the selected groups.
 
     The groups are united and everything that is not on the outside is dropped:
     hollow cavities (decompose() returns those with a negative volume) and parts
@@ -129,7 +130,7 @@ def outer_shell(doc: Document, groups):
     for g in groups:
         m = g.ents.to_manifold()
         if m.status() != mf.Error.NoError or m.is_empty():
-            raise ValueError(f"{g.name} is geen gesloten volume.")
+            raise ValueError(tr("{name} is not a closed volume.").format(name=g.name))
         ms.append(m)
     res = outside(union_all(ms))
     first = groups[0]
@@ -143,12 +144,12 @@ def outer_shell(doc: Document, groups):
 
 
 def trim(doc: Document, a: Group, b: Group):
-    """Gereedschap > Bijsnijden: b is trimmed with a (b becomes b - a), a stays as it is."""
+    """Tools > Trim: b is trimmed with a (b becomes b - a), a stays as it is."""
     ms = []
     for g in (a, b):
         m = g.ents.to_manifold()
         if m.status() != mf.Error.NoError or m.is_empty():
-            raise ValueError(f"{g.name} is geen gesloten volume.")
+            raise ValueError(tr("{name} is not a closed volume.").format(name=g.name))
         ms.append(m)
     res = ms[1] - ms[0]
     if res.is_empty():
@@ -237,7 +238,7 @@ def face_intersection_segments(ents_a, fid_a, ents_b, fid_b):
 
 
 def intersect_faces(doc: Document, items_a, items_b):
-    """Bewerken > Vlakken snijden: add the cut lines between two sets of faces.
+    """Edit > Intersect Faces: add the cut lines between two sets of faces.
 
     Every face of `items_a` is cut with every face of `items_b` (groups contribute
     all their faces); the segments go into the active context, where they split the
@@ -327,7 +328,7 @@ def selection_bbox(doc: Document, items=None):
                 pts.extend(g.bbox())
             continue
         if k != "e" and k != "f":
-            continue                      # hulplijnen horen niet bij het volume
+            continue                      # guides are not part of the volume
         ents = doc.ents(ctx)
         if ents is None:
             continue
@@ -565,19 +566,19 @@ def parts(doc: Document, only_selected=False):
         for k, shell in enumerate(doc.root.shells(), 1):
             colors = Counter(doc.root.F[f].color for f in shell if doc.root.F[f].color)
             color = colors.most_common(1)[0][0] if colors else DEFAULT_COLOR
-            out.append(_part(f"Losse geometrie {k}", color, doc.root, shell))
+            out.append(_part(tr("Loose geometry {k}").format(k=k), color, doc.root, shell))
     return out
 
 
 def _part(name, color, ents, fids):
     open_e = ents.open_edges(fids)
     if open_e:
-        return Part(name, color, problem=f"niet gesloten: {len(open_e)} open of dubbele rand(en)")
+        return Part(name, color, problem=tr("not closed: {n} open or doubled edge(s)").format(n=len(open_e)))
     m = ents.to_manifold(fids)
     if m.status() != mf.Error.NoError or m.is_empty():
-        return Part(name, color, problem=f"geen geldig volume ({m.status().name})")
+        return Part(name, color, problem=tr("not a valid volume ({status})").format(status=m.status().name))
     if m.volume() < 0:
-        return Part(name, color, problem="vlakken staan binnenstebuiten")
+        return Part(name, color, problem=tr("faces are inside out"))
     return Part(name, color, m)
 
 
@@ -606,30 +607,33 @@ def check_parts(part_list, bed=None):
     msgs = []
     for p in part_list:
         if p.problem:
-            msgs.append(("fout", f"{p.name}: {p.problem}."))
+            msgs.append(("fout", tr("{name}: {problem}.").format(name=p.name, problem=p.problem)))
             continue
         m = p.manifold
         bb = m.bounding_box()
         lo, hi = np.array(bb[:3]), np.array(bb[3:])
-        msgs.append(("ok", f"{p.name}: gesloten volume, {m.num_tri()} driehoeken, "
-                           f"volume {m.volume() / 1000:.2f} cm³."))
+        msgs.append(("ok", tr("{name}: closed volume, {tris} triangles, volume {vol:.2f} cm³.")
+                     .format(name=p.name, tris=m.num_tri(), vol=m.volume() / 1000)))
         if lo[2] < -1e-4:
-            msgs.append(("waarschuwing", f"{p.name}: steekt {-lo[2]:.2f} mm onder het printbed."))
+            msgs.append(("waarschuwing", tr("{name}: sticks out {d:.2f} mm below the print bed.")
+                         .format(name=p.name, d=-lo[2])))
         if bed and (lo[0] < -1e-4 or lo[1] < -1e-4 or hi[0] > bed[0] + 1e-4 or hi[1] > bed[1] + 1e-4
                     or hi[2] > bed[2] + 1e-4):
-            msgs.append(("waarschuwing", f"{p.name}: ligt (deels) buiten het printvolume."))
+            msgs.append(("waarschuwing",
+                         tr("{name}: lies (partly) outside the print volume.").format(name=p.name)))
     valid = [p for p in part_list if p.manifold is not None]
     if valid:
         zmin = min(p.manifold.bounding_box()[2] for p in valid)
         if zmin > 1e-4:
-            msgs.append(("waarschuwing", f"Het model zweeft {zmin:.2f} mm boven het bed."))
+            msgs.append(("waarschuwing", tr("The model floats {z:.2f} mm above the bed.").format(z=zmin)))
     for i, a in enumerate(valid):
         for b in valid[i + 1:]:
             if a.color == b.color:
                 continue
             ov = (a.manifold ^ b.manifold).volume()
             if ov > 1e-6:
-                msgs.append(("info", f"{a.name} en {b.name} overlappen ({ov:.2f} mm³); bij export wint {b.name}."))
+                msgs.append(("info", tr("{a} and {b} overlap ({ov:.2f} mm³); on export {b} wins.")
+                             .format(a=a.name, b=b.name, ov=ov)))
     return msgs
 
 
@@ -639,12 +643,12 @@ def check_parts(part_list, bed=None):
 # Every part is a group or one closed shell of loose geometry; every problem
 # carries the geometry it is about, so the panel can select and mark it.
 
-OPEN_EDGE = "open rand"
-MANY_FACES = "dubbele rand"
-LOOSE_EDGE = "losse rand"
-INTERIOR_FACE = "binnenvlak"
-REVERSED_FACE = "omgekeerd vlak"
-NO_VOLUME = "geen volume"
+OPEN_EDGE = tr("open edge")
+MANY_FACES = tr("doubled edge")
+LOOSE_EDGE = tr("loose edge")
+INTERIOR_FACE = tr("interior face")
+REVERSED_FACE = tr("reversed face")
+NO_VOLUME = tr("no volume")
 
 # a direction that never runs along an axis or a face diagonal of a box
 INSIDE_DIR = normalize(np.array([0.313, 0.571, 0.759]))
@@ -848,31 +852,32 @@ def _inspect_part(ents, ctx, name, fids, loose=(), tri=None):
     probs = []
     if loose:
         probs.append(Problem(LOOSE_EDGE, ctx, name, edges=loose, point=_edge_mid(ents, loose[0]),
-                             detail=f"{len(loose)} rand(en) zonder vlak"))
+                             detail=tr("{n} edge(s) without a face").format(n=len(loose))))
     one, many = _part_edges(ents, fids)
     if one:
         probs.append(Problem(OPEN_EDGE, ctx, name, edges=one, point=_edge_mid(ents, one[0]),
-                             detail=f"{len(one)} rand(en) met 1 vlak: gat"))
+                             detail=tr("{n} edge(s) with 1 face: hole").format(n=len(one))))
     if many:
         probs.append(Problem(MANY_FACES, ctx, name, edges=many, point=_edge_mid(ents, many[0]),
-                             detail=f"{len(many)} rand(en) met meer dan 2 vlakken"))
+                             detail=tr("{n} edge(s) with more than 2 faces").format(n=len(many))))
     inner = _interior_faces(ents, fids, tri)
     if inner:
         probs.append(Problem(INTERIOR_FACE, ctx, name, faces=inner,
                              point=_face_center(ents, inner[0]),
-                             detail=f"{len(inner)} vlak(ken) binnen in een volume"))
+                             detail=tr("{n} face(s) inside a volume").format(n=len(inner))))
     flipped = _faces_to_reverse(ents, fids) if not one and not many else set()
     if flipped:
         probs.append(Problem(REVERSED_FACE, ctx, name, faces=sorted(flipped),
                              point=_face_center(ents, sorted(flipped)[0]),
-                             detail=f"{len(flipped)} vlak(ken) met de normaal naar binnen"))
+                             detail=tr("{n} face(s) with the normal pointing inwards")
+                             .format(n=len(flipped))))
     if fids and not probs:
         m = ents.to_manifold(fids)
         if m.status() != mf.Error.NoError or m.is_empty() or abs(m.volume()) < 1e-9:
-            oorzaak = m.status().name if m.status() != mf.Error.NoError else "ledig"
+            oorzaak = m.status().name if m.status() != mf.Error.NoError else tr("empty")
             probs.append(Problem(NO_VOLUME, ctx, name, faces=sorted(fids),
                                  point=_face_center(ents, sorted(fids)[0]),
-                                 detail=f"manifold: {oorzaak}"))
+                                 detail=tr("manifold: {cause}").format(cause=oorzaak)))
     return probs
 
 
@@ -890,17 +895,18 @@ def _inspect_context(ents, ctx, name):
         label = name if len(shells) == 1 else f"{name} {k}"
         out += _inspect_part(ents, ctx, label, shell, mine, tri)
     if left:
-        out += _inspect_part(ents, ctx, f"{name} (losse randen)", set(), sorted(left), tri)
+        out += _inspect_part(ents, ctx, tr("{name} (loose edges)").format(name=name), set(),
+                             sorted(left), tri)
     return out
 
 
 def inspect(doc: Document):
-    """Printability problems per onderdeel, like Solid Inspector: a list of Problem."""
+    """Printability problems per part, like Solid Inspector: a list of Problem."""
     out = []
     for g in doc.groups:
         if g.visible:
             out += _inspect_context(g.ents, g.id, g.name)
-    out += _inspect_context(doc.root, ROOT, "Losse geometrie")
+    out += _inspect_context(doc.root, ROOT, tr("Loose geometry"))
     return out
 
 
@@ -933,7 +939,7 @@ def _repair_ents(ents):
 
 
 def repair_all(doc: Document):
-    """Printcontrole > Alles repareren: one undo step that closes and orients every part.
+    """Print Check > Repair All: one undo step that closes and orients every part.
 
     Loose edges go, collinear edges are joined, faces are oriented outwards, faces
     inside a volume are removed and flat open loops get a face."""

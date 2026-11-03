@@ -1,7 +1,7 @@
-"""Schroefdraad op een cilinder en in een gat/bus die op elkaar passen.
+"""Screw thread on a cylinder and in a hole/sleeve that fit each other.
 
-Test de rekern uit volura/threads.py (thread_solid, external_on, internal_in,
-nut) en de plaatsing in de interface (submenu + werkbalk Printhulpmiddelen).
+Tests the computing core of volura/threads.py (thread_solid, external_on, internal_in,
+nut) and its place in the interface (submenu + Print Tools toolbar).
 """
 import math
 import os
@@ -47,7 +47,7 @@ def test_thread_solid_runs_along_z_from_zero_to_length():
     assert abs(lo[0] + 5) < 1e-6 and abs(hi[0] - 5) < 1e-6
 
 
-# ------------------------------------------------------------- bout en moer
+# ------------------------------------------------------------ bolt and nut
 
 def test_bolt_and_nut_fit_with_clearance_and_phase():
     bolt = threads.thread_solid(8, 1.25, 12)
@@ -83,7 +83,7 @@ def test_internal_in_block_with_hole_gives_a_valid_solid():
     assert 0 < res.volume() < block.volume()
 
 
-# ------------------------------------------------------------------ linksdraad
+# ------------------------------------------------------------ left-hand thread
 
 def test_left_hand_thread_is_the_mirror_image():
     right = threads.thread_solid(10, 1.5, 20)
@@ -109,28 +109,28 @@ def win():
 
 def test_print_tools_toolbar_is_visible_on_the_right(win):
     bar = win.findChild(QToolBar, "PrintToolsToolbar")
-    assert bar is not None, "werkbalk PrintToolsToolbar ontbreekt"
-    assert not bar.isHidden(), "Printhulpmiddelen moet standaard zichtbaar zijn"
+    assert bar is not None, "toolbar PrintToolsToolbar is missing"
+    assert not bar.isHidden(), "Print Tools must be visible by default"
     assert win.toolBarArea(bar).name == "RightToolBarArea"
     labels = [clean(a.text()) for a in bar.actions() if not a.isSeparator()]
-    assert "Schroefdraad" in labels
+    assert "Thread" in labels
 
 
-def test_printhulpmiddelen_is_the_last_submenu_of_gereedschap(win):
+def test_print_tools_is_the_last_submenu_of_tools(win):
     tools = next(a.menu() for a in win.menuBar().actions()
-                 if a.menu() is not None and clean(a.text()) == "Gereedschap")
+                 if a.menu() is not None and clean(a.text()) == "Tools")
     acts = [a for a in tools.actions() if not a.isSeparator()]
     assert acts[-1].menu() is not None
-    assert clean(acts[-1].text()) == "Printhulpmiddelen"
+    assert clean(acts[-1].text()) == "Print Tools"
     assert tools.actions()[-2].isSeparator()
     labels = [clean(a.text()) for a in acts[-1].menu().actions() if not a.isSeparator()]
-    thread_labels = ["Schroefdraad", "Buitendraad op cilinder", "Binnendraad in gat",
-                     "Nieuwe bout", "Nieuwe moer of bus"]
+    thread_labels = ["Thread", "External Thread on Cylinder", "Internal Thread in Hole",
+                     "New Bolt", "New Nut or Sleeve"]
     assert labels[:len(thread_labels)] == thread_labels
 
 
 def test_external_thread_on_a_selected_cylinder_group_is_one_undo_step(win):
-    g = ops.group_from_manifold(win.doc, mf.Manifold.cylinder(20, 5, 5, 64), "#f2f2f2", "cilinder")
+    g = ops.group_from_manifold(win.doc, mf.Manifold.cylinder(20, 5, 5, 64), "#f2f2f2", "cylinder")
     cyl_vol = g.ents.to_manifold().volume()
     win.doc.set_selection([("g", g.id, g.id)])
     win._apply_thread("external", 10, 1.5, 20, 0.15, 1, False, 17.0, True, False)
@@ -146,7 +146,7 @@ def test_thread_without_selection_reports_in_the_status_bar(win):
     win.view.status_changed.connect(msgs.append)
     win.doc.set_selection([])
     win._apply_thread("external", 10, 1.5, 20, 0.15, 1, False, 17.0, True, False)
-    assert any("Selecteer" in m for m in msgs), msgs
+    assert any("select" in m for m in msgs), msgs
 
 
 def test_new_bolt_with_matching_nut_makes_two_groups(win):
@@ -155,7 +155,7 @@ def test_new_bolt_with_matching_nut_makes_two_groups(win):
     vols = sorted(g.ents.to_manifold().volume() for g in win.doc.groups)
     assert all(v > 0 for v in vols)
     names = sorted(g.name for g in win.doc.groups)
-    assert names == ["Bout M8x1.25", "Moer M8x1.25"]
+    assert names == ["Bolt M8x1.25", "Nut M8x1.25"]
 
 
 if __name__ == "__main__":

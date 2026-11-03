@@ -15,6 +15,7 @@ import manifold3d as mf
 from . import __version__
 from .brep import Entities, Face
 from .geom import Plane, manifold_from_mesh, mesh_arrays
+from .i18n import tr
 from .model import ROOT, Document, Group, Guide
 from .ops import print_parts, union_all
 from .vector2d import Drawing
@@ -25,10 +26,10 @@ FORMAT_VERSION = 2
 # ------------------------------------------------------------------ writing safely
 
 def atomic_write(path, write):
-    """Schrijf naar een tijdelijk bestand op dezelfde plek en vervang `path` pas daarna.
+    """Write to a temporary file in the same folder and only then replace `path`.
 
-    `write` krijgt de naam van het tijdelijke bestand; lukt dat niet, dan blijft het
-    bestaande bestand heel en wordt het tijdelijke bestand verwijderd.
+    `write` gets the name of the temporary file; if it fails, the existing file stays
+    intact and the temporary file is removed.
     """
     path = os.fspath(path)
     folder = os.path.dirname(os.path.abspath(path)) or "."
@@ -47,7 +48,7 @@ def atomic_write(path, write):
 
 
 def write_zip(path, files):
-    """Schrijf de gegeven namen en inhoud als zip-bestand (een .volura of .3mf)."""
+    """Write the given names and contents as a zip file (a .volura or .3mf)."""
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         for name, data in files.items():
             z.writestr(name, data)
@@ -97,7 +98,7 @@ def load_document(doc: Document, path):
     with zipfile.ZipFile(path) as z:
         data = json.loads(z.read("document.json"))
         if data.get("format") != "volura":
-            raise ValueError("Geen Volura-bestand.")
+            raise ValueError(tr("Not a Volura file."))
         doc.reset()
         doc.materials = [list(m) for m in data.get("materials", doc.materials)]
         if data.get("version", 1) < 2:
@@ -178,23 +179,23 @@ def import_stl(path):
     """Return a Manifold, raising ValueError when the mesh is not watertight."""
     v, t = read_stl(path)
     if not len(t):
-        raise ValueError("Het STL-bestand bevat geen driehoeken.")
+        raise ValueError(tr("The STL file contains no triangles."))
     m = manifold_from_mesh(v, t)
     if m.status() != mf.Error.NoError or m.is_empty():
-        raise ValueError(f"Het STL-bestand is niet waterdicht ({m.status()}). "
-                         "Alleen gesloten volumes kunnen worden geïmporteerd.")
+        raise ValueError(tr("The STL file is not watertight ({status}). "
+                            "Only closed volumes can be imported.").format(status=m.status()))
     return m
 
 
 def export_stl(path, part_list):
     m = union_all([p.manifold for p in part_list if p.manifold is not None])
     if m.is_empty():
-        raise ValueError("Er is niets om te exporteren.")
+        raise ValueError(tr("There is nothing to export."))
     return write_stl(path, m, os.path.splitext(os.path.basename(path))[0])
 
 
 def export_stl_per_color(path, part_list, materials):
-    """Write one STL per color: <name>_<kleur>.stl. Returns the written files."""
+    """Write one STL per color: <name>_<color>.stl. Returns the written files."""
     base, _ = os.path.splitext(path)
     names = {c.lower(): n for n, c in materials}
     files = []
@@ -218,7 +219,7 @@ def export_3mf(path, part_list, materials, name="Volura"):
     """
     parts = print_parts(part_list)
     if not parts:
-        raise ValueError("Er is niets om te exporteren.")
+        raise ValueError(tr("There is nothing to export."))
     color_order = [c.lower() for _, c in materials]
     names = {c.lower(): n for n, c in materials}
 

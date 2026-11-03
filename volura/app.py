@@ -21,14 +21,15 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
                                QInputDialog,
                                QLabel, QLineEdit, QKeySequenceEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QMenu, QMessageBox, QProgressDialog, QPushButton, QRadioButton,
-                               QSizePolicy, QSpinBox, QStackedWidget, QTableWidget,
+                               QSizePolicy, QSlider, QSpinBox, QStackedWidget, QTableWidget,
                                QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
-from . import (__version__, boxgen, cam, dxf, errors, fileio, joints, nesting, ops, sheet3d, svg,
-               threads, updater, vector_export, vector_import)
+from . import (__version__, boxgen, cam, dxf, errors, fileio, i18n, joints, nesting, ops, sheet3d,
+               svg, spacemouse, theme, threads, updater, vector_export, vector_import)
 from .brep import Entities
 from .geom import Plane
+from .i18n import tr, tr_noop
 from .icons import icon
 from .model import ROOT, LOCKED_MSG, Document
 from .sheetview import SheetView
@@ -51,48 +52,43 @@ PRINTERS = [
 ]
 
 TOOL_INFO = [
-    # name, label, icon, shortcut
-    ("select", "Selecteren", "select", "Space"),
-    ("eraser", "Gum", "eraser", "E"),
-    ("paint", "Verfemmer", "paint", "B"),
-    ("line", "Lijn", "line", "L"),
-    ("rectangle", "Rechthoek", "rectangle", "R"),
-    ("circle", "Cirkel", "circle", "C"),
-    ("polygon", "Veelhoek", "polygon", None),
-    ("text", "3D-tekst", "text", "Shift+T"),
-    ("pushpull", "Duwen/trekken", "pushpull", "P"),
-    ("offset", "Verschuiving", "offset", "F"),
-    ("move", "Verplaatsen", "move", "M"),
-    ("rotate", "Roteren", "rotate", "Q"),
-    ("scale", "Schalen", "scale", "S"),
-    ("tape", "Meetlint", "tape", "T"),
-    ("orbit", "Draaien", "orbit", "O"),
-    ("pan", "Pannen", "pan", "H"),
-    ("zoom", "Zoomen", "zoom", "Z"),
+    # name, label (English, translated at use), icon, shortcut
+    ("select", tr_noop("Select"), "select", "Space"),
+    ("eraser", tr_noop("Eraser"), "eraser", "E"),
+    ("paint", tr_noop("Paint Bucket"), "paint", "B"),
+    ("line", tr_noop("Line"), "line", "L"),
+    ("rectangle", tr_noop("Rectangle"), "rectangle", "R"),
+    ("circle", tr_noop("Circle"), "circle", "C"),
+    ("polygon", tr_noop("Polygon"), "polygon", None),
+    ("text", tr_noop("3D Text"), "text", "Shift+T"),
+    ("pushpull", tr_noop("Push/Pull"), "pushpull", "P"),
+    ("offset", tr_noop("Offset"), "offset", "F"),
+    ("move", tr_noop("Move"), "move", "M"),
+    ("rotate", tr_noop("Rotate"), "rotate", "Q"),
+    ("scale", tr_noop("Scale"), "scale", "S"),
+    ("tape", tr_noop("Tape Measure"), "tape", "T"),
+    ("orbit", tr_noop("Orbit"), "orbit", "O"),
+    ("pan", tr_noop("Pan"), "pan", "H"),
+    ("zoom", tr_noop("Zoom"), "zoom", "Z"),
 ]
 
-# De gereedschappen van het 2D-werkblad; de toetsen doen het alleen in
-# 2D, want in 3D horen M, Q, S en spatie toe aan de 3D-gereedschappen. De letters van de
-# tekengereedschappen zijn dezelfde als in 3D (L, R, C, A, F), maar zitten op het werkblad
-# zelf, zodat er geen dubbele sneltoetsen in het venster ontstaan.
+# The tools of the 2D worksheet; their keys only work in 2D, because in 3D M, Q, S and
+# Space belong to the 3D tools. The letters of the drawing tools are the same as in 3D
+# (L, R, C, A, F), but they live on the worksheet itself, so the window gets no duplicate
+# shortcuts.
 class ModeSwitch(QToolButton):
-    """De schuifknop 3D | 2D rechtsonder: de helft van de huidige modus is blauw.
+    """The 3D | 2D slide switch at the bottom right: the half of the current mode is blue.
 
-    Niet ingedrukt is 3D, ingedrukt is 2D; bij het wisselen schuift het blauwe blokje
-    naar de andere kant. De tekst blijft "3D | 2D" voor schermlezers en sneltoetsen.
+    Unchecked is 3D, checked is 2D; when switching, the blue block slides to the other
+    side. The text stays "3D | 2D" for screen readers and shortcuts.
     """
-    ON = QColor("#2f6fd6")
-    TRACK = QColor("#e6eaf0")
-    BORDER = QColor("#b9c3d0")
-    TEXT = QColor("#4b5563")
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("modeSwitch")
         self.setCheckable(True)
         self.setText("3D | 2D")
         self.setCursor(Qt.PointingHandCursor)
-        self._pos = 0.0                     # 0 = blokje op 3D, 1 = op 2D
+        self._pos = 0.0                     # 0 = block on 3D, 1 = on 2D
         self._anim = QVariantAnimation(self)
         self._anim.setDuration(140)
         self._anim.valueChanged.connect(self._moved)
@@ -124,14 +120,14 @@ class ModeSwitch(QToolButton):
         p.setRenderHint(QPainter.Antialiasing)
         r = QRectF(self.rect()).adjusted(1.0, 2.0, -1.0, -2.0)
         radius = r.height() / 2.0
-        p.setPen(QPen(self.BORDER, 1.0))
-        p.setBrush(self.TRACK.darker(104) if self.underMouse() else self.TRACK)
+        p.setPen(QPen(theme.qcolor("switch_border"), 1.0))
+        p.setBrush(theme.qcolor("switch_hover" if self.underMouse() else "switch_track"))
         p.drawRoundedRect(r, radius, radius)
         half = r.width() / 2.0
         knob = QRectF(r.left() + 1.5 + self._pos * (half - 1.5), r.top() + 1.5,
                       half - 1.5, r.height() - 3.0)
         p.setPen(Qt.NoPen)
-        p.setBrush(self.ON)
+        p.setBrush(theme.qcolor("switch_on"))
         p.drawRoundedRect(knob, knob.height() / 2.0, knob.height() / 2.0)
         font = self.font()
         font.setBold(True)
@@ -139,28 +135,38 @@ class ModeSwitch(QToolButton):
         for i, label in enumerate(("3D", "2D")):
             part = QRectF(r.left() + i * half, r.top(), half, r.height())
             active = abs(self._pos - i) < 0.5
-            p.setPen(QColor("#ffffff") if active else self.TEXT)
+            p.setPen(theme.qcolor("switch_on_text" if active else "switch_text"))
             p.drawText(part, Qt.AlignCenter, label)
         p.end()
 
 
 SHEET_TOOL_INFO = [
-    # naam in volura.sheettools, label, hulptekst
-    ("select", "Selecteren", "Klik een lijn of sleep een kader (spatie)"),
-    ("move", "Verplaatsen", "Basispunt en doel klikken, of een afstand typen (M)"),
-    ("rotate", "Draaien", "Middelpunt klikken en een hoek in graden typen (Q)"),
-    ("scale", "Schalen", "Sleep vanaf het middelpunt of typ een factor (S)"),
-    ("line", "Lijn", "Punten klikken; klik op het startpunt om te sluiten (L)"),
-    ("rectangle", "Rechthoek", "Twee hoeken klikken of 30;20 typen (R)"),
-    ("roundrect", "Afgeronde rechthoek", "Rechthoek met afgeronde hoeken, straal typen met r (N)"),
-    ("circle", "Cirkel", "Middelpunt en straal klikken of typen (C)"),
-    ("ellipse", "Ellips", "Middelpunt klikken en de twee halvematen slepen (E)"),
-    ("arc", "Boog", "Boog door drie punten (A)"),
-    ("centerarc", "Boog om middelpunt", "Middelpunt, straal en hoek van de boog (B)"),
-    ("polygon", "Veelhoek", "Middelpunt en straal; aantal zijden typen zoals 6s (P)"),
-    ("text", "Tekst", "De contouren van tekst op het werkblad plaatsen (T)"),
-    ("offset", "Verschuiving", "Een gesloten contour naar binnen of buiten schuiven (F)"),
+    # name in volura.sheettools, label (English, translated at use), help text
+    ("select", tr_noop("Select"), tr("Click a line or drag a box (Space)")),
+    ("move", tr_noop("Move"), tr("Click a base point and a target, or type a distance (M)")),
+    ("rotate", tr_noop("Turn"), tr("Click a center and type an angle in degrees (Q)")),
+    ("scale", tr_noop("Scale"), tr("Drag from the center or type a factor (S)")),
+    ("line", tr_noop("Line"), tr("Click points; click the start point to close (L)")),
+    ("rectangle", tr_noop("Rectangle"), tr("Click two corners or type 30;20 (R)")),
+    ("roundrect", tr_noop("Rounded Rectangle"),
+     tr("Rectangle with rounded corners, type the radius with r (N)")),
+    ("circle", tr_noop("Circle"), tr("Click or type the center and radius (C)")),
+    ("ellipse", tr_noop("Ellipse"), tr("Click the center and drag the two semi-axes (E)")),
+    ("arc", tr_noop("Arc"), tr("Arc through three points (A)")),
+    ("centerarc", tr_noop("Arc Around Center"), tr("Center, radius and angle of the arc (B)")),
+    ("polygon", tr_noop("Polygon"), tr("Center and radius; type the number of sides like 6s (P)")),
+    ("text", tr_noop("Text"), tr("Place the outlines of text on the worksheet (T)")),
+    ("offset", tr_noop("Offset"), tr("Move a closed outline inward or outward (F)")),
 ]
+
+# The panels of the Default Tray. The Tray knows a panel by its translated title (that is
+# what it shows); these English names are the stable keys in the code, used through tr().
+PANEL_INFO = tr_noop("Entity Info")
+PANEL_MATERIALS = tr_noop("Materials")
+PANEL_OUTLINER = tr_noop("Outliner")
+PANEL_PRINT_CHECK = tr_noop("Print Check")
+PANEL_LAYERS = tr_noop("Layers")
+PANELS = (PANEL_INFO, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT_CHECK, PANEL_LAYERS)
 
 
 class Settings:
@@ -188,6 +194,15 @@ class Settings:
             self.length_precision = 2
         self.current_color = str(self.q.value("current_color", "#d23b3b"))
         self.check_updates = self._bool("check_updates", True)
+        self.theme = str(self.q.value("theme", theme.SYSTEM))
+        if self.theme not in dict(theme.CHOICES):
+            self.theme = theme.SYSTEM
+        self.spacemouse = self._bool("spacemouse", True)
+        try:
+            self.spacemouse_speed = float(self.q.value("spacemouse_speed", 1.0))
+        except (TypeError, ValueError):
+            self.spacemouse_speed = 1.0
+        self.spacemouse_speed = max(0.05, min(2.0, self.spacemouse_speed))
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
@@ -203,6 +218,9 @@ class Settings:
         self.q.setValue("show_edges", self.show_edges)
         self.q.setValue("xray", self.xray)
         self.q.setValue("check_updates", self.check_updates)
+        self.q.setValue("theme", self.theme)
+        self.q.setValue("spacemouse", self.spacemouse)
+        self.q.setValue("spacemouse_speed", self.spacemouse_speed)
         self.q.setValue("face_style", self.face_style)
         self.q.setValue("back_edges", self.back_edges)
         self.q.setValue("show_hidden", self.show_hidden)
@@ -216,8 +234,13 @@ class Settings:
 
 
 def swatch(color, size=16):
+    """A color square with a gray border: black and white stay visible in both themes."""
     pm = QPixmap(size, size)
     pm.fill(QColor(color))
+    p = QPainter(pm)
+    p.setPen(QPen(QColor("#808080"), 1.0))
+    p.drawRect(0, 0, size - 1, size - 1)
+    p.end()
     return QIcon(pm)
 
 
@@ -229,14 +252,14 @@ class MaterialsPanel(QWidget):
         self.win = win
         lay = QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
-        lay.addWidget(QLabel("Filamenten (volgorde = extrudernummer):"))
+        lay.addWidget(QLabel(tr("Filaments (order = extruder number):")))
         self.list = QListWidget()
         self.list.setIconSize(QSize(22, 22))
         self.list.itemClicked.connect(self.pick)
         self.list.itemDoubleClicked.connect(lambda it: self.edit())
         lay.addWidget(self.list)
         row = QHBoxLayout()
-        for text, fn in (("Nieuw", self.add), ("Wijzig", self.edit), ("Verwijder", self.remove)):
+        for text, fn in ((tr("New"), self.add), (tr("Edit"), self.edit), (tr("Remove"), self.remove)):
             b = QPushButton(text)
             b.clicked.connect(fn)
             row.addWidget(b)
@@ -259,12 +282,12 @@ class MaterialsPanel(QWidget):
         self.win.set_tool("paint")
 
     def add(self):
-        c = QColorDialog.getColor(QColor("#888888"), self, "Nieuwe filamentkleur")
+        c = QColorDialog.getColor(QColor("#888888"), self, tr("New filament color"))
         if not c.isValid():
             return
         doc = self.win.doc
         doc.checkpoint()
-        doc.materials.append([f"Kleur {len(doc.materials) + 1}", c.name()])
+        doc.materials.append([tr("Color {n}").format(n=len(doc.materials) + 1), c.name()])
         self.win.settings.current_color = c.name()
         doc.notify()
 
@@ -275,7 +298,7 @@ class MaterialsPanel(QWidget):
             return
         name, color = doc.materials[row]
         dlg = QDialog(self)
-        dlg.setWindowTitle("Filament wijzigen")
+        dlg.setWindowTitle(tr("Edit Filament"))
         form = QFormLayout(dlg)
         ed = QLineEdit(name)
         btn = QPushButton()
@@ -290,8 +313,8 @@ class MaterialsPanel(QWidget):
                 btn.setIcon(swatch(c.name(), 20))
                 btn.setText(c.name())
         btn.clicked.connect(choose)
-        form.addRow("Naam", ed)
-        form.addRow("Kleur", btn)
+        form.addRow(tr("Name"), ed)
+        form.addRow(tr("Color"), btn)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(dlg.accept)
         bb.rejected.connect(dlg.reject)
@@ -351,98 +374,99 @@ class EntityInfoPanel(QWidget):
         edges = [(c, i) for k, c, i in sel if k == "e"]
         guides = [(c, i) for k, c, i in sel if k == "guide"]
         if doc.active != ROOT and doc.group(doc.active):
-            form.addRow(QLabel(f"<i>Bewerken: {doc.group(doc.active).name}</i>"))
+            form.addRow(QLabel(tr("<i>Editing: {name}</i>").format(name=doc.group(doc.active).name)))
         if not sel:
-            form.addRow(QLabel("<b>Geen selectie</b>"))
-            form.addRow("Groepen", QLabel(str(len(doc.groups))))
-            form.addRow("Losse vlakken", QLabel(str(len(doc.root.F))))
-            form.addRow("Losse randen", QLabel(str(len(doc.root.E))))
-            form.addRow("Hulplijnen", QLabel(str(len(doc.guides))))
+            form.addRow(QLabel(tr("<b>No selection</b>")))
+            form.addRow(tr("Groups"), QLabel(str(len(doc.groups))))
+            form.addRow(tr("Loose faces"), QLabel(str(len(doc.root.F))))
+            form.addRow(tr("Loose edges"), QLabel(str(len(doc.root.E))))
+            form.addRow(tr("Guides"), QLabel(str(len(doc.guides))))
         elif len(sel) == 1 and groups:
             self._group_form(form, groups[0])
         elif len(sel) == 1 and guides:
             g = doc.guide(guides[0][1])
             if g is not None:
-                form.addRow(QLabel("<b>Hulplijn</b>" if g.is_line else "<b>Hulppunt</b>"))
-                form.addRow("Punt", QLabel(f"{g.point[0]:.2f}, {g.point[1]:.2f}, {g.point[2]:.2f} mm"))
+                form.addRow(QLabel(tr("<b>Guide</b>") if g.is_line else tr("<b>Guide Point</b>")))
+                form.addRow(tr("Point"), QLabel(f"{g.point[0]:.2f}, {g.point[1]:.2f}, {g.point[2]:.2f} mm"))
                 if g.is_line:
                     d = g.direction
-                    form.addRow("Richting", QLabel(f"{d[0]:.3f}, {d[1]:.3f}, {d[2]:.3f}"))
+                    form.addRow(tr("Direction"), QLabel(f"{d[0]:.3f}, {d[1]:.3f}, {d[2]:.3f}"))
         elif len(sel) == 1 and faces:
             c, f = faces[0]
             ents = doc.ents(c)
             tri, _ = ents.face_triangles(f)
             area = float(np.linalg.norm(np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]), axis=1).sum() / 2)
-            form.addRow(QLabel("<b>Vlak</b>"))
-            form.addRow("Oppervlakte", QLabel(f"{area:.2f} mm²"))
-            form.addRow("Kleur", QLabel(ents.F[f].color or "standaard"))
+            form.addRow(QLabel(tr("<b>Face</b>")))
+            form.addRow(tr("Area"), QLabel(f"{area:.2f} mm²"))
+            form.addRow(tr("Color"), QLabel(ents.F[f].color or tr("default")))
         elif len(sel) == 1 and edges:
             c, e = edges[0]
             ents = doc.ents(c)
             A, B = ents.edge_points(e)
-            form.addRow(QLabel("<b>Rand</b>"))
-            form.addRow("Lengte", QLabel(f"{np.linalg.norm(B - A):.3f} mm"))
-            form.addRow("Vlakken", QLabel(str(len(ents.e2f.get(e, ())))))
-            form.addRow("Verzacht", QLabel("ja" if e in ents.soft else "nee"))
+            form.addRow(QLabel(tr("<b>Edge</b>")))
+            form.addRow(tr("Length"), QLabel(f"{np.linalg.norm(B - A):.3f} mm"))
+            form.addRow(tr("Faces"), QLabel(str(len(ents.e2f.get(e, ())))))
+            form.addRow(tr("Softened"), QLabel(tr("yes") if e in ents.soft else tr("no")))
         else:
-            form.addRow(QLabel(f"<b>{len(sel)} items geselecteerd</b>"))
-            form.addRow("Groepen", QLabel(str(len(groups))))
-            form.addRow("Vlakken", QLabel(str(len(faces))))
-            form.addRow("Randen", QLabel(str(len(edges))))
+            form.addRow(QLabel(tr("<b>{count} items selected</b>").format(count=len(sel))))
+            form.addRow(tr("Groups"), QLabel(str(len(groups))))
+            form.addRow(tr("Faces"), QLabel(str(len(faces))))
+            form.addRow(tr("Edges"), QLabel(str(len(edges))))
             if guides:
-                form.addRow("Hulplijnen", QLabel(str(len(guides))))
+                form.addRow(tr("Guides"), QLabel(str(len(guides))))
             bb = ops.selection_bbox(doc)
             if bb is not None:
                 d = bb[1] - bb[0]
-                form.addRow("Afmetingen", QLabel(f"{d[0]:.2f} × {d[1]:.2f} × {d[2]:.2f} mm"))
+                form.addRow(tr("Dimensions"), QLabel(f"{d[0]:.2f} × {d[1]:.2f} × {d[2]:.2f} mm"))
         self.lay.insertWidget(0, self.body)
 
     def _sheet_form(self, form):
-        """Entiteitsinfo op het werkblad: de geselecteerde contouren en de plaat."""
+        """Entity Info on the worksheet: the selected outlines and the sheet."""
         sheet = self.win.doc.sheet
         sel = self.win.sheet_view.selected_paths()
         paths = sel or sheet.paths
         if sel:
-            form.addRow(QLabel(f"<b>{len(sel)} contour{'en' if len(sel) != 1 else ''} "
-                               "geselecteerd</b>"))
+            form.addRow(QLabel(tr("<b>1 outline selected</b>") if len(sel) == 1
+                               else tr("<b>{count} outlines selected</b>").format(count=len(sel))))
         else:
-            form.addRow(QLabel("<b>Geen selectie</b>"))
-            form.addRow("Contouren", QLabel(str(len(sheet.paths))))
+            form.addRow(QLabel(tr("<b>No selection</b>")))
+            form.addRow(tr("Outlines"), QLabel(str(len(sheet.paths))))
         layers = sorted({p.layer for p in paths})
         if sel and len(layers) == 1:
             lay = sheet.layers.get(layers[0])
             op = OP_LABELS.get(lay.op, lay.op) if lay else ""
-            form.addRow("Laag", QLabel(f"{layers[0]} ({op})" if op else layers[0]))
+            form.addRow(tr("Layer"), QLabel(f"{layers[0]} ({op})" if op else layers[0]))
         elif layers:
-            form.addRow("Lagen", QLabel(str(len(layers))))
+            form.addRow(tr("Layers"), QLabel(str(len(layers))))
         if sel:
             closed = sum(1 for p in sel if p.closed)
-            form.addRow("Gesloten", QLabel(f"{closed} van {len(sel)}"))
+            form.addRow(tr("Closed"), QLabel(tr("{closed} of {total}").format(closed=closed,
+                                                                            total=len(sel))))
             pts = [p.pts for p in sel if len(p.pts)]
             if pts:
                 P = np.vstack(pts)
                 lo, hi = P.min(axis=0), P.max(axis=0)
-                form.addRow("Afmetingen", QLabel(f"{hi[0] - lo[0]:.2f} × {hi[1] - lo[1]:.2f} mm"))
-                form.addRow("Positie", QLabel(f"{lo[0]:.2f}, {lo[1]:.2f} mm"))
-        form.addRow(QLabel("<b>Plaat</b>"))
+                form.addRow(tr("Dimensions"), QLabel(f"{hi[0] - lo[0]:.2f} × {hi[1] - lo[1]:.2f} mm"))
+                form.addRow(tr("Position"), QLabel(f"{lo[0]:.2f}, {lo[1]:.2f} mm"))
+        form.addRow(QLabel(tr("<b>Sheet</b>")))
         if sheet.sheet_w and sheet.sheet_h:
-            form.addRow("Formaat", QLabel(f"{sheet.sheet_w:g} × {sheet.sheet_h:g} mm"))
-            form.addRow("Aantal", QLabel(str(int(sheet.sheet_count or 1))))
+            form.addRow(tr("Size"), QLabel(f"{sheet.sheet_w:g} × {sheet.sheet_h:g} mm"))
+            form.addRow(tr("Count"), QLabel(str(int(sheet.sheet_count or 1))))
         else:
-            form.addRow("Formaat", QLabel("niet ingesteld"))
-        form.addRow("Dikte", QLabel(f"{sheet.sheet_thickness:g} mm" if sheet.sheet_thickness
-                                    else "niet ingesteld"))
+            form.addRow(tr("Size"), QLabel(tr("not set")))
+        form.addRow(tr("Thickness"), QLabel(f"{sheet.sheet_thickness:g} mm" if sheet.sheet_thickness
+                                            else tr("not set")))
 
     def _group_form(self, form, g):
         doc = self.win.doc
-        form.addRow(QLabel("<b>Groep (printbaar onderdeel)</b>"))
+        form.addRow(QLabel(tr("<b>Group (printable part)</b>")))
         name = QLineEdit(g.name)
 
         def rename():
             if name.text() and name.text() != g.name:
                 self._apply(lambda: setattr(doc.group(g.id), "name", name.text()))
         name.editingFinished.connect(rename)
-        form.addRow("Naam", name)
+        form.addRow(tr("Name"), name)
         combo = QComboBox()
         idx = -1
         for i, (mname, color) in enumerate(doc.materials):
@@ -459,14 +483,14 @@ class EntityInfoPanel(QWidget):
             if c and c.lower() != g.color.lower():
                 self._apply(lambda: setattr(doc.group(g.id), "color", c))
         combo.currentIndexChanged.connect(recolor)
-        form.addRow("Filament", combo)
+        form.addRow(tr("Filament"), combo)
         bb = g.bbox()
         if bb is None:
             return
         lo, hi = bb
         size = hi - lo
         spins = []
-        for label, v in zip(("Breedte (X)", "Diepte (Y)", "Hoogte (Z)"), size):
+        for label, v in zip((tr("Width (X)"), tr("Depth (Y)"), tr("Height (Z)")), size):
             sp = QDoubleSpinBox()
             sp.setRange(0.01, 100000)
             sp.setDecimals(2)
@@ -474,7 +498,7 @@ class EntityInfoPanel(QWidget):
             sp.setValue(v)
             spins.append(sp)
             form.addRow(label, sp)
-        lock = QCheckBox("Verhoudingen behouden")
+        lock = QCheckBox(tr("Keep proportions"))
         lock.setChecked(True)
         form.addRow(lock)
 
@@ -487,19 +511,19 @@ class EntityInfoPanel(QWidget):
             self._apply(lambda: ops.resize_group(doc, doc.group(g.id), new))
         for i, sp in enumerate(spins):
             sp.editingFinished.connect(lambda i=i: resize(i))
-        form.addRow("Positie", QLabel(", ".join(f"{round(v, 2) + 0.0:.2f}" for v in lo) + " mm"))
+        form.addRow(tr("Position"), QLabel(", ".join(f"{round(v, 2) + 0.0:.2f}" for v in lo) + " mm"))
         part = ops._part(g.name, g.color, g.ents, list(g.ents.F))
         if part.manifold is not None:
             m = part.manifold
-            form.addRow("Volume", QLabel(f"{m.volume() / 1000:.3f} cm³"))
-            form.addRow("Oppervlak", QLabel(f"{m.surface_area() / 100:.2f} cm²"))
-            ok = QLabel("✔ gesloten volume (solid)")
-            ok.setStyleSheet("color: #2e7d32; font-weight: bold;")
+            form.addRow(tr("Volume"), QLabel(f"{m.volume() / 1000:.3f} cm³"))
+            form.addRow(tr("Surface"), QLabel(f"{m.surface_area() / 100:.2f} cm²"))
+            ok = QLabel(tr("✔ closed volume (solid)"))
+            ok.setStyleSheet(f"color: {theme.color('ok')}; font-weight: bold;")
         else:
             ok = QLabel(f"✖ {part.problem}")
-            ok.setStyleSheet("color: #c62828; font-weight: bold;")
+            ok.setStyleSheet(f"color: {theme.color('error')}; font-weight: bold;")
             ok.setWordWrap(True)
-        form.addRow("Printbaar", ok)
+        form.addRow(tr("Printable"), ok)
 
     def _apply(self, fn):
         doc = self.win.doc
@@ -535,7 +559,7 @@ class OutlinerPanel(QWidget):
             self.list.addItem(it)
             it.setSelected(g.id in sel)
         if doc.root.F or doc.root.E:
-            it = QListWidgetItem(f"Losse geometrie ({len(doc.root.F)} vlakken)")
+            it = QListWidgetItem(tr("Loose geometry ({n} faces)").format(n=len(doc.root.F)))
             it.setData(Qt.UserRole, None)
             it.setFlags(it.flags() & ~Qt.ItemIsSelectable)
             self.list.addItem(it)
@@ -572,7 +596,7 @@ class OutlinerPanel(QWidget):
 
 
 class PrintCheckPanel(QWidget):
-    """Tray paneel "Printcontrole": waarom iets geen geldig volume is (Solid Inspector).
+    """Tray panel "Print Check": why something is not a valid volume (Solid Inspector).
 
     One row per part with its problems underneath. Clicking a problem selects the
     geometry involved and marks it red in the viewport; double clicking zooms on it."""
@@ -591,15 +615,14 @@ class PrintCheckPanel(QWidget):
         self.tree.itemDoubleClicked.connect(self.on_double)
         lay.addWidget(self.tree, 1)
         row = QHBoxLayout()
-        self.b_check = QPushButton("Controleren")
+        self.b_check = QPushButton(tr("Check"))
         self.b_check.clicked.connect(self.refresh)
-        self.b_fix = QPushButton("Alles repareren")
+        self.b_fix = QPushButton(tr("Repair All"))
         self.b_fix.clicked.connect(self.repair)
         row.addWidget(self.b_check)
         row.addWidget(self.b_fix)
         lay.addLayout(row)
-        self.summary = QLabel("Klik op Controleren om elk onderdeel op een gesloten "
-                              "volume te testen.")
+        self.summary = QLabel(tr("Click Check to test every part for a closed volume."))
         self.summary.setWordWrap(True)
         lay.addWidget(self.summary)
 
@@ -617,35 +640,36 @@ class PrintCheckPanel(QWidget):
         self.tree.clear()
         for key in order:
             head = QTreeWidgetItem([f"{key[1]}  ({len(by_part[key])})"])
-            head.setForeground(0, QColor("#c62828"))
+            head.setForeground(0, theme.qcolor("error"))
             self.tree.addTopLevelItem(head)
             for n in by_part[key]:
                 p = self.problems[n]
                 it = QTreeWidgetItem([p.text()])
                 it.setData(0, Qt.UserRole, n)
-                it.setToolTip(0, f"{p.kind}: {p.detail}\n{len(p.faces)} vlakken, {len(p.edges)} randen")
+                it.setToolTip(0, tr("{kind}: {detail}\n{faces} faces, {edges} edges").format(
+                    kind=p.kind, detail=p.detail, faces=len(p.faces), edges=len(p.edges)))
                 head.addChild(it)
             head.setExpanded(True)
         if not order:
-            ok = QTreeWidgetItem(["✔ elk onderdeel is een gesloten volume"])
-            ok.setForeground(0, QColor("#2e7d32"))
+            ok = QTreeWidgetItem([tr("✔ every part is a closed volume")])
+            ok.setForeground(0, theme.qcolor("ok"))
             self.tree.addTopLevelItem(ok)
         self.tree.blockSignals(False)
         if order:
             bad = len({p.part for p in self.problems})
-            self.summary.setText(f"{bad} onderdeel(en) met problemen. Klik op een probleem om het "
-                                 "te zien; dubbelklik zoomt erop.")
+            self.summary.setText(tr("{count} part(s) with problems. Click a problem to see it; "
+                                    "double-click zooms to it.").format(count=bad))
         else:
-            self.summary.setText("Alle onderdelen zijn gesloten volumes en kunnen geprint worden.")
+            self.summary.setText(tr("All parts are closed volumes and can be printed."))
         self.win.view.problem_items = []
         self.win.view.update()
 
     def repair(self, checked=False):
-        """Alles repareren: één undo-stap die de onderdelen sluit en oriënteert."""
+        """Repair All: one undo step that closes and orients the parts."""
         fixed = ops.repair_all(self.win.doc)
         self.refresh()
-        self.win.hint.setText("Printcontrole: onderdelen gerepareerd (Ongedaan maken maakt het terug)."
-                              if fixed else "Printcontrole: er was niets te repareren.")
+        self.win.hint.setText(tr("Print Check: parts repaired (Undo reverts it).")
+                              if fixed else tr("Print Check: there was nothing to repair."))
 
     # ------------------------------------------------------------ picking
     def _problem(self, it):
@@ -678,15 +702,15 @@ class PrintCheckPanel(QWidget):
         self.win.view.problem_items = []
 
 
-# ---------------------------------------------------------------- lagen van het 2D-werkblad
+# ---------------------------------------------------------------- layers of the 2D worksheet
 
 class LayerParamsDialog(QDialog):
-    """Dialoog "Instellingen van een laag": wat de machine met die laag moet doen.
+    """The "Layer settings" dialog: what the machine should do with that layer.
 
-    Een laserlaag krijgt vermogen, snelheid, aantal doorgangen en de kerf; een
-    freeslaag de freesdiameter, de diepte, de stapdiepte, de stapover en de
-    hoekuitsparing voor de binnenhoeken. De waarden komen in `Layer.params` te staan
-    en gaan zo mee in het bestand en in de SVG-export.
+    A laser layer gets power, speed, number of passes and the kerf; a mill layer the
+    tool diameter, the depth, the step depth, the stepover and the corner relief for
+    the inside corners. The values are stored in `Layer.params` and so travel along in
+    the file and in the SVG export.
     """
 
     SUFFIX = {"power": " %", "stepover": " %", "speed": " mm/s"}
@@ -696,9 +720,9 @@ class LayerParamsDialog(QDialog):
         self.layer = layer
         self.op = getattr(layer, "op", "cut")
         self.fields = {}
-        self.setWindowTitle(f"Instellingen van laag {layer.name}")
+        self.setWindowTitle(tr("Settings of Layer {name}").format(name=layer.name))
         form = QFormLayout(self)
-        form.addRow(QLabel(f"Bewerking: {OP_LABELS.get(self.op, self.op)}"))
+        form.addRow(QLabel(tr("Operation: {op}").format(op=OP_LABELS.get(self.op, self.op))))
         keys = (LASER_PARAMS if self.op in LASER_OPS
                 else MILL_PARAMS if self.op in MILL_OPS else ())
         for key, default in keys:
@@ -725,15 +749,16 @@ class LayerParamsDialog(QDialog):
             form.addRow(PARAM_LABELS.get(key, key), w)
             self.fields[key] = w
         if not keys:
-            form.addRow(note("Deze laag is alleen ter informatie en wordt niet geëxporteerd."))
+            form.addRow(note(tr("This layer is for information only and is not exported.")))
         elif self.op in MILL_OPS:
-            form.addRow(note("Bij de correctie schuift de contour met de halve freesdiameter opzij. "
-                             "Uitkameren rijdt concentrische paden met de stapover, tot het gebied "
-                             "op is. Een hoekuitsparing geeft de frees ruimte in de binnenhoeken."))
+            form.addRow(note(tr("The compensation shifts the outline sideways by half the tool "
+                                "diameter. A pocket runs concentric paths with the stepover until "
+                                "the area is cleared. A corner relief gives the cutter room in the "
+                                "inside corners.")))
         else:
-            form.addRow(note("De kerfcorrectie schuift buitenranden de halve kerf naar buiten en "
-                             "maakt gaten evenveel kleiner, zodat het onderdeel na het snijden de "
-                             "getekende maat heeft."))
+            form.addRow(note(tr("The kerf compensation moves outer edges out by half the kerf and "
+                                "makes holes smaller by the same amount, so the part has the drawn "
+                                "size after cutting.")))
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -752,13 +777,12 @@ class LayerParamsDialog(QDialog):
 
 
 class LayersPanel(QWidget):
-    """Tray paneel "Lagen": kleur, naam, bewerking, zichtbaarheid en instellingen per laag.
+    """Tray panel "Layers": color, name, operation, visibility and settings per layer.
 
-    Eén rij per laag van het 2D-werkblad. Klik het kleurvak om een kleur te kiezen
-    (rood snijdt, blauw graveert, zoals lasersoftware het verwacht), dubbelklik de naam
-    om te hernoemen, kies de bewerking in de keuzelijst, en zet een laag met het oogje
-    uit of met het slotje op slot. Nieuwe paden komen op de actieve laag; die kies je
-    door op een rij te klikken.
+    One row per layer of the 2D worksheet. Click the color box to choose a color (red
+    cuts, blue engraves, as laser software expects), double-click the name to rename,
+    choose the operation in the combo box, and turn a layer off with the eye or lock it
+    with the padlock. New paths go on the active layer; you choose it by clicking a row.
     """
 
     COLS = 6
@@ -772,9 +796,9 @@ class LayersPanel(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
         lay.setSpacing(4)
-        lay.addWidget(QLabel("Lagen van het 2D-werkblad (klik een rij voor de actieve laag):"))
+        lay.addWidget(QLabel(tr("Layers of the 2D worksheet (click a row for the active layer):")))
         self.table = QTableWidget(0, self.COLS)
-        self.table.setHorizontalHeaderLabels(["", "", "", "Laag", "Bewerking", ""])
+        self.table.setHorizontalHeaderLabels(["", "", "", tr("Layer"), tr("Operation"), ""])
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -787,17 +811,17 @@ class LayersPanel(QWidget):
         self.table.itemChanged.connect(self.on_rename)
         lay.addWidget(self.table, 1)
         row = QHBoxLayout()
-        self.b_add = QPushButton("Toevoegen")
+        self.b_add = QPushButton(tr("Add"))
         self.b_add.clicked.connect(self.add_layer)
-        self.b_remove = QPushButton("Verwijderen")
+        self.b_remove = QPushButton(tr("Delete Layer"))
         self.b_remove.clicked.connect(self.remove_layer)
         row.addWidget(self.b_add)
         row.addWidget(self.b_remove)
         lay.addLayout(row)
         row = QHBoxLayout()
-        self.b_active = QPushButton("Actieve laag")
+        self.b_active = QPushButton(tr("Active Layer"))
         self.b_active.clicked.connect(self.pick_active)
-        self.b_params = QPushButton("Instellingen…")
+        self.b_params = QPushButton(tr("Settings…"))
         self.b_params.clicked.connect(self.edit_params)
         row.addWidget(self.b_active)
         row.addWidget(self.b_params)
@@ -807,11 +831,11 @@ class LayersPanel(QWidget):
         lay.addWidget(self.info)
         self.refresh()
 
-    # ------------------------------------------------------------ opbouw
+    # ------------------------------------------------------------ building
 
     @contextmanager
     def _quiet(self):
-        """Geen reactie op de eigen wijzigingen in de tabel (ze komen van het model)."""
+        """No reaction to our own changes in the table (they come from the model)."""
         saved, self._busy = self._busy, True
         try:
             yield
@@ -832,21 +856,21 @@ class LayersPanel(QWidget):
                     font = QFont()
                     font.setBold(True)
                     it.setFont(font)
-                it.setToolTip("Dubbelklik om te hernoemen")
+                it.setToolTip(tr("Double-click to rename"))
                 self.table.setItem(row, 3, it)
                 self.table.setCellWidget(row, 0, self._button(
                     row, "eye" if lay.visible else "eye_off",
-                    "Laag verbergen (wordt niet geëxporteerd)" if lay.visible
-                    else "Laag tonen", self.toggle_visible))
+                    tr("Hide layer (is not exported)") if lay.visible
+                    else tr("Show layer"), self.toggle_visible))
                 self.table.setCellWidget(row, 1, self._button(
                     row, "lock" if lay.locked else "unlock",
-                    "Laag vergrendelen (kun je niet meer selecteren)" if not lay.locked
-                    else "Laag ontgrendelen", self.toggle_locked))
+                    tr("Lock layer (can no longer be selected)") if not lay.locked
+                    else tr("Unlock layer"), self.toggle_locked))
                 self.table.setCellWidget(row, 2, self._button(
-                    row, "paint", f"Kleur van de laag ({lay.color})", self.pick_color))
+                    row, "paint", tr("Layer color ({color})").format(color=lay.color), self.pick_color))
                 self.table.setCellWidget(row, 4, self._op_box(row, lay))
                 self.table.setCellWidget(row, 5, self._button(
-                    row, "check", "Instellingen van deze laag", self.edit_params))
+                    row, "check", tr("Settings of this layer"), self.edit_params))
             self.table.selectRow(max(0, self.names.index(active)) if active in self.names else 0)
         self.info.setText(self._summary(sheet, active))
 
@@ -856,15 +880,16 @@ class LayersPanel(QWidget):
             return ""
         n = sum(1 for p in sheet.paths if p.layer == active)
         if lay.op in MILL_OPS:
-            details = (f"frees Ø{layer_param(lay, 'tool_d'):g} mm, "
-                       f"diepte {layer_param(lay, 'depth'):g} mm")
+            details = tr("cutter Ø{tool:g} mm, depth {depth:g} mm").format(
+                tool=layer_param(lay, 'tool_d'), depth=layer_param(lay, 'depth'))
         elif lay.op in LASER_OPS:
-            details = (f"{layer_param(lay, 'power'):g} %, {layer_param(lay, 'speed'):g} mm/s, "
-                       f"{layer_param(lay, 'passes')}×, kerf {layer_param(lay, 'kerf'):g} mm")
+            details = tr("{power:g} %, {speed:g} mm/s, {passes}×, kerf {kerf:g} mm").format(
+                power=layer_param(lay, 'power'), speed=layer_param(lay, 'speed'),
+                passes=layer_param(lay, 'passes'), kerf=layer_param(lay, 'kerf'))
         else:
-            details = "wordt niet geëxporteerd"
-        return (f"Actieve laag: {active} — {OP_LABELS.get(lay.op, lay.op)}; {n} contouren; "
-                f"{details}.")
+            details = tr("not exported")
+        return tr("Active layer: {name} — {op}; {n} outlines; {details}.").format(
+            name=active, op=OP_LABELS.get(lay.op, lay.op), n=n, details=details)
 
     def _button(self, row, name, tip, slot):
         b = QToolButton()
@@ -880,7 +905,7 @@ class LayersPanel(QWidget):
         for op in OPS:
             box.addItem(OP_LABELS[op], op)
         box.setCurrentIndex(max(0, OPS.index(lay.op) if lay.op in OPS else 0))
-        box.setToolTip("Wat de machine met deze laag doet")
+        box.setToolTip(tr("What the machine does with this layer"))
         box.currentIndexChanged.connect(lambda _=0, r=row, b=box: self.set_op(r, b))
         return box
 
@@ -891,14 +916,14 @@ class LayersPanel(QWidget):
             return None
 
     def _edit(self, change, message):
-        """Eén undo-stap op het werkblad, daarna alles bijwerken."""
+        """One undo step on the worksheet, then update everything."""
         self.win.doc.checkpoint()
         change()
         self.win.doc.notify()
         self.refresh()
         self.win.hint.setText(message)
 
-    # ------------------------------------------------------------ knoppen
+    # ------------------------------------------------------------ buttons
 
     def on_row(self):
         if self._busy:
@@ -914,11 +939,12 @@ class LayersPanel(QWidget):
         if lay is None:
             return
         if lay.locked:
-            self.win.hint.setText(f"Laag {lay.name} staat op slot; dat kan nu niet als actieve laag.")
+            self.win.hint.setText(tr("Layer {name} is locked; it cannot be the active layer now.")
+                                  .format(name=lay.name))
             return
         self.win.sheet_view.set_current_layer(lay.name)
         self.refresh()
-        self.win.hint.setText(f"Nieuwe contouren gaan naar laag {lay.name}.")
+        self.win.hint.setText(tr("New outlines go to layer {name}.").format(name=lay.name))
 
     def on_rename(self, item):
         if self._busy or item is None or item.column() != 3:
@@ -930,7 +956,7 @@ class LayersPanel(QWidget):
             self.refresh()
             return
         if new in sheet.layers:
-            self.win.hint.setText(f"Er is al een laag met de naam {new}.")
+            self.win.hint.setText(tr("There is already a layer named {name}.").format(name=new))
             self.refresh()
             return
         with self._quiet():
@@ -940,7 +966,7 @@ class LayersPanel(QWidget):
                 self.win.sheet_view.current_layer = new
             self.win.doc.notify()
         self.refresh()
-        self.win.hint.setText(f"Laag {old} heet nu {new}.")
+        self.win.hint.setText(tr("Layer {old} is now called {new}.").format(old=old, new=new))
 
     def add_layer(self):
         sheet = self.win.doc.sheet
@@ -949,7 +975,7 @@ class LayersPanel(QWidget):
 
         def change():
             sheet.ensure_layer(name, color, "cut")
-        self._edit(change, f"Laag {name} toegevoegd; teken of verplaats er contouren naartoe.")
+        self._edit(change, tr("Layer {name} added; draw or move outlines onto it.").format(name=name))
         if name in self.names:
             self.table.selectRow(self.names.index(name))
             self.win.sheet_view.set_current_layer(name)
@@ -961,17 +987,17 @@ class LayersPanel(QWidget):
         if lay is None:
             return
         if lay.name == "0":
-            self.win.hint.setText("Laag 0 is de basislaag en kan er niet uit.")
+            self.win.hint.setText(tr("Layer 0 is the base layer and cannot be removed."))
             return
         sheet = self.win.doc.sheet
         n = sum(1 for p in sheet.paths if p.layer == lay.name)
         if n:
             box = QMessageBox(self)
             box.setIcon(QMessageBox.Question)
-            box.setWindowTitle(f"Laag {lay.name} verwijderen")
-            box.setText(f"Er staan {n} contouren op laag {lay.name}.")
-            b_move = box.addButton("Paden naar laag 0", QMessageBox.AcceptRole)
-            b_del = box.addButton("Paden ook verwijderen", QMessageBox.DestructiveRole)
+            box.setWindowTitle(tr("Delete Layer {name}").format(name=lay.name))
+            box.setText(tr("Layer {name} has {n} outlines.").format(name=lay.name, n=n))
+            b_move = box.addButton(tr("Paths to layer 0"), QMessageBox.AcceptRole)
+            b_del = box.addButton(tr("Delete paths too"), QMessageBox.DestructiveRole)
             box.addButton(QMessageBox.Cancel)
             box.exec()
             clicked = box.clickedButton()
@@ -986,9 +1012,13 @@ class LayersPanel(QWidget):
             sheet.remove_layer(lay.name, move_paths=move)
             if active == lay.name:
                 self.win.sheet_view.current_layer = "0"
-        self._edit(change, f"Laag {lay.name} verwijderd"
-                   + (f" ({n} contouren naar laag 0)" if move and n else
-                      f" met {n} contouren" if n else "") + ".")
+        if move and n:
+            message = tr("Layer {name} deleted ({n} outlines to layer 0).")
+        elif n:
+            message = tr("Layer {name} deleted with {n} outlines.")
+        else:
+            message = tr("Layer {name} deleted.")
+        self._edit(change, message.format(name=lay.name, n=n))
 
     def toggle_visible(self, row):
         lay = self._layer(row)
@@ -998,9 +1028,9 @@ class LayersPanel(QWidget):
 
         def change():
             lay.visible = new
-        self._edit(change, f"Laag {lay.name} "
-                   + ("weer zichtbaar." if new
-                      else "verborgen; die gaat niet mee naar de machine."))
+        self._edit(change, (tr("Layer {name} visible again.") if new
+                            else tr("Layer {name} hidden; it does not go to the machine."))
+                   .format(name=lay.name))
 
     def toggle_locked(self, row):
         lay = self._layer(row)
@@ -1010,16 +1040,15 @@ class LayersPanel(QWidget):
 
         def change():
             lay.locked = new
-        self._edit(change, f"Laag {lay.name} "
-                   + ("op slot: je kunt de contouren nu niet meer aanklikken." if new
-                      else "ontgrendeld."))
+        self._edit(change, (tr("Layer {name} locked: you can no longer click its outlines.") if new
+                            else tr("Layer {name} unlocked.")).format(name=lay.name))
 
     def pick_color(self, row):
         lay = self._layer(row)
         if lay is None:
             return
         color = QColorDialog.getColor(QColor(lay.color or "#000000"), self,
-                                      f"Kleur van laag {lay.name}")
+                                      tr("Color of Layer {name}").format(name=lay.name))
         if not color.isValid():
             return
 
@@ -1027,7 +1056,7 @@ class LayersPanel(QWidget):
 
         def change():
             lay.color = new
-        self._edit(change, f"Laag {lay.name} is nu {new}.")
+        self._edit(change, tr("Layer {name} is now {color}.").format(name=lay.name, color=new))
 
     def set_op(self, row, box):
         lay = self._layer(row)
@@ -1039,7 +1068,7 @@ class LayersPanel(QWidget):
 
         def change():
             lay.op = op
-        self._edit(change, f"Laag {lay.name}: {OP_LABELS.get(op, op)}.")
+        self._edit(change, tr("Layer {name}: {op}.").format(name=lay.name, op=OP_LABELS.get(op, op)))
 
     def edit_params(self, row=None):
         if row is None:
@@ -1055,14 +1084,17 @@ class LayersPanel(QWidget):
 
         def change():
             lay.params = {**dict(lay.params or {}), **values}
-        self._edit(change, f"Instellingen van laag {lay.name} aangepast.")
+        self._edit(change, tr("Settings of layer {name} changed.").format(name=lay.name))
 
 
 # ---------------------------------------------------------------- dialogs
 
 SHORTCUTS_KEY = "shortcuts/"
 SHOW_WELCOME_KEY = "show_welcome"
-OTHER_COMMANDS = "Overig"     # the group of the commands that are only in the right-click menu
+# the group of the commands that are only in the right-click menu; English, as it is part
+# of the settings keys (shown translated)
+OTHER_COMMANDS = tr_noop("Other")
+SOURCE_TEXT = "source_text"   # QAction property: the English text, when tr() can't tell
 
 
 def qsettings():
@@ -1075,26 +1107,47 @@ def clean_text(text):
     return text.replace("&", "").replace("…", "").replace("...", "").strip()
 
 
+def source_text_of(action):
+    """The English text of an action or menu (with & and …), for language-independent keys."""
+    text = action.property(SOURCE_TEXT)
+    if text:
+        return str(text)
+    text = action.text()
+    return text if i18n.language() == "en" else i18n.source_text(text)
+
+
+_TABLES = None
+
+
+def translation_tables():
+    """The translation tables of the other languages, to recognise their old settings keys."""
+    global _TABLES
+    if _TABLES is None:
+        _TABLES = [t for t in (i18n.table(code) for code, _name in i18n.LANGUAGES if code != "en")
+                   if t]
+    return _TABLES
+
+
 def welcome_enabled():
-    """Help > Welkom bij Volura at startup, unless the user unchecked the box."""
+    """Help > Welcome to Volura at startup, unless the user unchecked the box."""
     return qsettings().value(SHOW_WELCOME_KEY, True) in (True, "true", "1", 1)
 
 
-UPDATE_DELAY_MS = 4000             # niet meteen bij het opstarten: eerst het venster
-UPDATE_INTERVAL = 24 * 3600        # automatisch hooguit één keer per dag
+UPDATE_DELAY_MS = 4000             # not right at startup: the window comes first
+UPDATE_INTERVAL = 24 * 3600        # automatically at most once a day
 UPDATE_LAST_KEY = "update/last_check"
 UPDATE_SKIP_KEY = "update/skip"
 
 
 class _Bridge(QObject):
-    """Brengt de uitkomst van een achtergronddraad terug naar de hoofddraad."""
+    """Brings the outcome of a background thread back to the main thread."""
 
-    done = Signal(object, object)          # resultaat, fout
+    done = Signal(object, object)          # result, error
     progress = Signal(int, int)
 
 
 def run_in_background(work, on_done, on_progress=None):
-    """`work(progress)` in een draad; `on_done(resultaat, fout)` in de hoofddraad."""
+    """`work(progress)` in a thread; `on_done(result, error)` in the main thread."""
     bridge = _Bridge()
     bridge.done.connect(on_done)
     if on_progress is not None:
@@ -1103,7 +1156,7 @@ def run_in_background(work, on_done, on_progress=None):
     def run():
         try:
             result = work(bridge.progress.emit)
-        except Exception as e:               # netwerkfouten horen in de melding, niet in een crash
+        except Exception as e:               # network errors belong in the message, not in a crash
             bridge.done.emit(None, e)
         else:
             bridge.done.emit(result, None)
@@ -1120,11 +1173,11 @@ def is_offscreen():
 
 
 AUTOSAVE_NAME = "autosave.volura"
-AUTOSAVE_INTERVAL_MS = 5 * 60 * 1000      # automatisch opslaan, zoals SketchUp
+AUTOSAVE_INTERVAL_MS = 5 * 60 * 1000      # autosave, like SketchUp
 
 
 def autosave_path():
-    """<AppDataLocation>/autosave.volura: het model van de laatste sessie."""
+    """<AppDataLocation>/autosave.volura: the model of the last session."""
     return os.path.join(errors.log_dir(), AUTOSAVE_NAME)
 
 
@@ -1167,7 +1220,7 @@ class VectorPreview(QWidget):
         bounds = self.drawing.bounds() if self.drawing is not None else None
         if bounds is None or box.width() <= 0 or box.height() <= 0:
             p.setPen(QColor("#808080"))
-            p.drawText(box, Qt.AlignCenter, "geen contouren")
+            p.drawText(box, Qt.AlignCenter, tr("no outlines"))
             return
         w = max(bounds[2] - bounds[0], 1e-6)
         h = max(bounds[3] - bounds[1], 1e-6)
@@ -1198,45 +1251,45 @@ class VectorPreview(QWidget):
 
 
 class VectorExportDialog(QDialog):
-    """Dialoog '2D-vector exporteren': wat er weg moet en een klein voorbeeld.
+    """The 'Export 2D Vector' dialog: what to export and a small preview.
 
-    Te kiezen: de geselecteerde vlakken (alleen als er vlakken zijn), het
-    bovenaanzicht of een doorsnede op hoogte Z -- van de selectie of van alles.
-    De hoogte is een getal met eenheid zoals in het meetvak (12 of 0,5 in) en staat
-    halverwege het model. Het voorbeeld tekent mee wat er weggeschreven wordt.
+    The choices: the selected faces (only when there are faces), the top view or a
+    section at height Z -- of the selection or of everything. The height is a number
+    with a unit as in the Measurements box (12 or 0.5 in) and starts halfway up the
+    model. The preview shows what will be written.
     """
 
     def __init__(self, win):
         super().__init__(win)
         self.win = win
-        self.setWindowTitle("2D-vector exporteren")
+        self.setWindowTitle(tr("Export 2D Vector"))
         form = QFormLayout(self)
         faces = [i for i in win.doc.selection if i[0] == "f"]
 
-        self.b_faces = QRadioButton(f"Geselecteerde vlakken ({len(faces)})")
+        self.b_faces = QRadioButton(tr("Selected faces ({n})").format(n=len(faces)))
         self.b_faces.setEnabled(bool(faces))
-        self.b_faces.setToolTip("Elk vlak op ware grootte, in zijn eigen vlak")
-        self.b_top = QRadioButton("Bovenaanzicht (de omtrek van bovenaf)")
-        self.b_section = QRadioButton("Doorsnede op hoogte Z")
+        self.b_faces.setToolTip(tr("Every face at true size, in its own plane"))
+        self.b_top = QRadioButton(tr("Top view (the outline from above)"))
+        self.b_section = QRadioButton(tr("Section at height Z"))
         (self.b_faces if faces else self.b_top).setChecked(True)
-        box = QGroupBox("Wat te exporteren")
+        box = QGroupBox(tr("What to export"))
         col = QVBoxLayout(box)
         for b in (self.b_faces, self.b_top, self.b_section):
             col.addWidget(b)
 
         self.z_edit = QLineEdit(format_length(vector_export.section_z_default(win.doc)))
-        self.z_edit.setToolTip("Hoogte van de doorsnede, bijvoorbeeld 12 of 0,5 in")
+        self.z_edit.setToolTip(tr("Height of the section, for example 12 or 0.5 in"))
         self.z_edit.setFixedWidth(90)
 
-        self.only = QCheckBox("Alleen de selectie")
-        self.only.setToolTip("Alleen de geselecteerde groepen; anders het hele model")
+        self.only = QCheckBox(tr("Selection only"))
+        self.only.setToolTip(tr("Only the selected groups; otherwise the whole model"))
 
         self.preview = VectorPreview()
 
         form.addRow(box)
-        form.addRow("Hoogte Z", self.z_edit)
+        form.addRow(tr("Height Z"), self.z_edit)
         form.addRow("", self.only)
-        form.addRow("Voorbeeld", self.preview)
+        form.addRow(tr("Preview"), self.preview)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -1249,7 +1302,7 @@ class VectorExportDialog(QDialog):
         self.refresh()
 
     def options(self):
-        """De keuzes als dict: bron, alleen de selectie en de hoogte van de doorsnede."""
+        """The choices as a dict: source, selection only and the height of the section."""
         source = ("faces" if self.b_faces.isChecked()
                   else "section" if self.b_section.isChecked() else "top")
         try:
@@ -1266,19 +1319,19 @@ class VectorExportDialog(QDialog):
             parse_length(self.z_edit.text())
             self.z_edit.setStyleSheet("")
         except ValueError:
-            self.z_edit.setStyleSheet("border: 1px solid #c0392b;")
+            self.z_edit.setStyleSheet(f"border: 1px solid {theme.color('invalid')};")
         self.preview.set_drawing(self.win.vector_export_drawing(self.options()))
 
 
 class SheetExportDialog(QDialog):
-    """Dialoog "Exporteren voor laser/frees": welke lagen er weg mogen en welke correctie.
+    """The "Export for Laser/Mill" dialog: which layers may go and which compensation.
 
-    Standaard gaan de zichtbare lagen mee die iets voor de machine betekenen (behalve
-    "Geen", die is alleen ter informatie). De kerf-/freescorrectie staat aan zodra er
-    een freeslaag meegaat — een frees heeft een eigen diameter — en uit bij laser, want
-    lasersoftware doet die correctie vaak zelf. Met "per laag een apart bestand" krijgt
-    elke laag zijn eigen bestand, zoals sommige snijsoftware graag ziet. Het voorbeeld
-    tekent mee wat er weggeschreven wordt.
+    By default the visible layers that mean something to the machine go along (except
+    "None", which is for information only). The kerf/cutter compensation is on as soon
+    as a mill layer goes along — a cutter has its own diameter — and off for laser,
+    because laser software often does that compensation itself. With "a separate file
+    per layer" every layer gets its own file, as some cutting software likes. The
+    preview shows what will be written.
     """
 
     def __init__(self, win, kind="svg"):
@@ -1286,30 +1339,31 @@ class SheetExportDialog(QDialog):
         self.win = win
         self.kind = "dxf" if str(kind).lower() == "dxf" else "svg"
         self._busy = False
-        self.setWindowTitle("Exporteren voor laser/frees")
+        self.setWindowTitle(tr("Export for Laser/Mill"))
         self.resize(430, 520)
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel("Lagen die naar de machine gaan:"))
+        lay.addWidget(QLabel(tr("Layers that go to the machine:")))
         self.list = QListWidget()
         self.list.setIconSize(QSize(16, 16))
         lay.addWidget(self.list, 1)
-        self.compensate = QCheckBox("Kerf-/freescorrectie toepassen")
-        self.compensate.setToolTip("Contouren opzij zetten met de halve kerf of de freesradius, "
-                                   "zodat het werkstuk de getekende maat wordt")
-        self.per_layer = QCheckBox("Per laag een apart bestand")
-        self.per_layer.setToolTip(f"Elke laag krijgt zijn eigen bestand: naam_laagnaam.{self.kind}")
-        self.per_sheet = QCheckBox("Per plaat een apart bestand")
-        self.per_sheet.setToolTip("Elke plaat wordt een eigen bestand met die plaat als pagina "
-                                  "en zijn oorsprong als nulpunt: naam_plaat1.svg ...")
+        self.compensate = QCheckBox(tr("Apply kerf/cutter compensation"))
+        self.compensate.setToolTip(tr("Move outlines sideways by half the kerf or the cutter "
+                                      "radius, so the workpiece gets the drawn size"))
+        self.per_layer = QCheckBox(tr("A separate file per layer"))
+        self.per_layer.setToolTip(tr("Every layer gets its own file: name_layername.{ext}")
+                                  .format(ext=self.kind))
+        self.per_sheet = QCheckBox(tr("A separate file per sheet"))
+        self.per_sheet.setToolTip(tr("Every sheet becomes its own file with that sheet as the page "
+                                     "and its origin as the zero point: name_sheet1.svg ..."))
         lay.addWidget(self.compensate)
         lay.addWidget(self.per_layer)
         lay.addWidget(self.per_sheet)
         self.warning = QLabel("")
         self.warning.setWordWrap(True)
-        self.warning.setStyleSheet("color: #c0392b;")
+        self.warning.setStyleSheet(f"color: {theme.color('invalid')};")
         lay.addWidget(self.warning)
         self.preview = VectorPreview()
-        lay.addWidget(QLabel("Voorbeeld van wat er weggaat:"))
+        lay.addWidget(QLabel(tr("Preview of what is exported:")))
         lay.addWidget(self.preview, 1)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
@@ -1326,7 +1380,7 @@ class SheetExportDialog(QDialog):
             it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
             it.setCheckState(Qt.Checked if name in default["layers"] else Qt.Unchecked)
             if layer.op == "none":
-                it.setToolTip("Deze laag is alleen ter informatie en gaat normaal niet mee")
+                it.setToolTip(tr("This layer is for information only and normally does not go along"))
             self.list.addItem(it)
         self._busy = False
         self.compensate.setChecked(bool(default["compensate"]))
@@ -1350,33 +1404,33 @@ class SheetExportDialog(QDialog):
             return
         try:
             self.preview.set_drawing(self.win.sheet_export_drawing(self.options()))
-        except Exception:                       # het voorbeeld mag nooit een dialoog breken
+        except Exception:                       # the preview must never break a dialog
             self.preview.set_drawing(None)
         try:
             n = len(nesting.outside_paths(self.win.doc.sheet))
         except Exception:
             n = 0
         self.warning.setText("" if not n else
-                             f"Let op: {n} paden liggen buiten de plaat of in de marge en gaan "
-                             "zo mee naar de machine.")
+                             tr("Note: {n} paths lie outside the sheet or in the margin and go "
+                                "to the machine like that.").format(n=n))
 
 
 class SheetSettingsDialog(QDialog):
-    """Dialoog "Plaat…": voorgegeven maten of vrij, plus dikte, marge, ruimte en aantal."""
+    """The "Sheet…" dialog: preset sizes or custom, plus thickness, margin, gap and count."""
 
     PRESETS = [("A4 — 297 × 210", 297.0, 210.0),
                ("A3 — 420 × 297", 420.0, 297.0),
                ("300 × 200", 300.0, 200.0),
                ("400 × 300", 400.0, 300.0),
                ("600 × 400", 600.0, 400.0),
-               ("1220 × 610 (halve plaat)", 1220.0, 610.0),
-               ("2440 × 1220 (plaat)", 2440.0, 1220.0),
-               ("Vrij formaat", None, None)]
+               (tr("1220 × 610 (half sheet)"), 1220.0, 610.0),
+               (tr("2440 × 1220 (full sheet)"), 2440.0, 1220.0),
+               (tr("Custom size"), None, None)]
 
     def __init__(self, win):
         super().__init__(win)
         self.win = win
-        self.setWindowTitle("Plaat")
+        self.setWindowTitle(tr("Sheet"))
         sheet = win.doc.sheet
         lay = QFormLayout(self)
         self.preset = QComboBox()
@@ -1392,32 +1446,32 @@ class SheetSettingsDialog(QDialog):
         self.thickness.setRange(0.0, 500.0)
         self.thickness.setDecimals(2)
         self.thickness.setSuffix(" mm")
-        self.thickness.setToolTip("Dikte van het materiaal (gebruikt door de freespaden)")
+        self.thickness.setToolTip(tr("Thickness of the material (used by the milling paths)"))
         self.margin = QDoubleSpinBox()
         self.margin.setRange(0.0, 1000.0)
         self.margin.setDecimals(2)
         self.margin.setSuffix(" mm")
-        self.margin.setToolTip("Afstand die langs de rand van de plaat vrij blijft")
+        self.margin.setToolTip(tr("Distance that stays free along the edge of the sheet"))
         self.gap = QDoubleSpinBox()
         self.gap.setRange(0.0, 1000.0)
         self.gap.setDecimals(2)
         self.gap.setSuffix(" mm")
-        self.gap.setToolTip("Minimale afstand tussen twee onderdelen")
+        self.gap.setToolTip(tr("Minimum distance between two parts"))
         self.count = QSpinBox()
         self.count.setRange(1, 99)
-        self.count.setToolTip("Aantal platen naast elkaar op het werkblad")
+        self.count.setToolTip(tr("Number of sheets side by side on the worksheet"))
         thick_row = QHBoxLayout()
-        self.thick_off = QCheckBox("geen dikte")
+        self.thick_off = QCheckBox(tr("no thickness"))
         self.thick_off.toggled.connect(self.thickness.setDisabled)
         thick_row.addWidget(self.thickness)
         thick_row.addWidget(self.thick_off)
-        lay.addRow("Voorinstelling", self.preset)
-        lay.addRow("Breedte", self.w)
-        lay.addRow("Hoogte", self.h)
-        lay.addRow("Materiaaldikte", thick_row)
-        lay.addRow("Marge langs de rand", self.margin)
-        lay.addRow("Tussenruimte", self.gap)
-        lay.addRow("Aantal platen", self.count)
+        lay.addRow(tr("Preset"), self.preset)
+        lay.addRow(tr("Width"), self.w)
+        lay.addRow(tr("Height"), self.h)
+        lay.addRow(tr("Material thickness"), thick_row)
+        lay.addRow(tr("Margin along the edge"), self.margin)
+        lay.addRow(tr("Gap"), self.gap)
+        lay.addRow(tr("Number of sheets"), self.count)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -1457,21 +1511,21 @@ class SheetSettingsDialog(QDialog):
 
 
 class AutoArrangeDialog(QDialog):
-    """Dialoog "Automatisch schikken": draaien, tussenruimte, marge en nieuwe platen."""
+    """The "Auto Arrange" dialog: rotation, gap, margin and new sheets."""
 
     def __init__(self, win):
         super().__init__(win)
         self.win = win
         sheet = win.doc.sheet
-        self.setWindowTitle("Automatisch schikken")
+        self.setWindowTitle(tr("Auto Arrange"))
         lay = QFormLayout(self)
-        self.rot_all = QRadioButton("0°, 90°, 180° en 270°")
-        self.rot_none = QRadioButton("alleen 0° (niet draaien)")
+        self.rot_all = QRadioButton(tr("0°, 90°, 180° and 270°"))
+        self.rot_none = QRadioButton(tr("0° only (do not rotate)"))
         self.rot_all.setChecked(True)
         rot_row = QHBoxLayout()
         rot_row.addWidget(self.rot_all)
         rot_row.addWidget(self.rot_none)
-        lay.addRow("Draaien toestaan", rot_row)
+        lay.addRow(tr("Allow rotation"), rot_row)
         self.gap = QDoubleSpinBox()
         self.gap.setRange(0.0, 1000.0)
         self.gap.setDecimals(2)
@@ -1482,11 +1536,11 @@ class AutoArrangeDialog(QDialog):
         self.margin.setDecimals(2)
         self.margin.setSuffix(" mm")
         self.margin.setValue(float(sheet.sheet_margin))
-        self.add_sheets = QCheckBox("nieuwe platen toevoegen als het niet past")
+        self.add_sheets = QCheckBox(tr("add new sheets if it does not fit"))
         self.add_sheets.setChecked(True)
-        lay.addRow("Tussenruimte", self.gap)
-        lay.addRow("Marge", self.margin)
-        lay.addRow("Platen", self.add_sheets)
+        lay.addRow(tr("Gap"), self.gap)
+        lay.addRow(tr("Margin"), self.margin)
+        lay.addRow(tr("Sheets"), self.add_sheets)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -1499,13 +1553,13 @@ class AutoArrangeDialog(QDialog):
 
 
 class BoxJointDialog(QDialog):
-    """Dialoog "Doos met vingerlassen…": maten, materiaal, vingers, kerf en deksel.
+    """The "Box with Finger Joints…" dialog: sizes, material, fingers, kerf and lid.
 
-    De twee knoppen onderaan doen allebei iets met de maten: "Op werkblad" zet de
-    snijcontouren op het 2D-werkblad en schikt ze op de plaat, "Voorbeeld in 3D" zet de
-    panelen geëxtrudeerd in het model. De dikte komt uit de plaatinstellingen en de kerf
-    uit de laag "Snijden"; de vingerbreedte volgt de dikte (2,5 ×) zolang die niet zelf
-    gekozen is.
+    The two buttons at the bottom both do something with the sizes: "On Worksheet" puts
+    the cutting outlines on the 2D worksheet and arranges them on the sheet, "Preview in
+    3D" puts the panels extruded into the model. The thickness comes from the sheet
+    settings and the kerf from the "Cut" layer; the finger width follows the thickness
+    (2.5 ×) as long as it was not chosen by the user.
     """
 
     SHEET = "sheet"
@@ -1517,10 +1571,10 @@ class BoxJointDialog(QDialog):
         self.mode = self.SHEET
         self._sync = False
         self._finger_fixed = False
-        self.setWindowTitle("Doos met vingerlassen")
+        self.setWindowTitle(tr("Box with Finger Joints"))
         sheet = win.doc.sheet
         t = float(sheet.sheet_thickness or 0.0) or boxgen.DEFAULT_THICKNESS
-        kerf = float(layer_param(sheet.layers.get("Snijden"), "kerf") or 0.0)
+        kerf = float(layer_param(sheet.layers.get(sheet.default_layer("cut")), "kerf") or 0.0)
         lay = QFormLayout(self)
 
         def spin(lo, hi, value, step=0.5):
@@ -1536,38 +1590,40 @@ class BoxJointDialog(QDialog):
         self.d = spin(1.0, 5000.0, 60.0)
         self.h = spin(1.0, 5000.0, 40.0)
         self.kind = QComboBox()
-        self.kind.addItem("binnenmaten (de ruimte binnen de doos)", True)
-        self.kind.addItem("buitenmaten (de afmetingen van de doos)", False)
+        self.kind.addItem(tr("inside dimensions (the space inside the box)"), True)
+        self.kind.addItem(tr("outside dimensions (the size of the box)"), False)
         self.t = spin(0.1, 100.0, t, 0.1)
-        self.t.setToolTip("Dikte van het paneel; de vingers zijn even diep als de dikte")
+        self.t.setToolTip(tr("Thickness of the panel; the fingers are as deep as the thickness"))
         self.finger = spin(0.5, 200.0, boxgen.FINGER_FACTOR * t, 0.1)
-        self.finger.setToolTip("Gewenste vingerbreedte; het aantal vingers wordt er het "
-                               "grootste oneven getal van dat past")
+        self.finger.setToolTip(tr("Desired finger width; the number of fingers becomes the "
+                                  "largest odd number that fits"))
         self.kerf = spin(0.0, 5.0, kerf, 0.05)
-        self.kerf.setToolTip("Breedte van de snedespleet: de vingers worden er breder en "
-                             "de uitsparingen smaller door, zodat de las strak past")
+        self.kerf.setToolTip(tr("Width of the cut gap: it makes the fingers wider and the "
+                                "slots narrower, so the joint fits tightly"))
         self.lid = QComboBox()
-        for label, key in (("geen deksel (open doos)", "none"), ("vast deksel", "closed")):
+        for label, key in ((tr("no lid (open box)"), "none"), (tr("fixed lid"), "closed")):
             self.lid.addItem(label, key)
-        self.labels = QCheckBox("paneelnaam klein graveren in het midden")
+        self.labels = QCheckBox(tr("engrave the panel name small in the middle"))
         self.labels.setChecked(True)
         self.info = QLabel()
         self.info.setWordWrap(True)
-        lay.addRow("Breedte", self.w)
-        lay.addRow("Diepte", self.d)
-        lay.addRow("Hoogte", self.h)
-        lay.addRow("Maten", self.kind)
-        lay.addRow("Materiaaldikte", self.t)
-        lay.addRow("Vingerbreedte", self.finger)
-        lay.addRow("Kerf", self.kerf)
-        lay.addRow("Deksel", self.lid)
+        lay.addRow(tr("Width"), self.w)
+        lay.addRow(tr("Depth"), self.d)
+        lay.addRow(tr("Height"), self.h)
+        lay.addRow(tr("Sizes"), self.kind)
+        lay.addRow(tr("Material thickness"), self.t)
+        lay.addRow(tr("Finger width"), self.finger)
+        lay.addRow(tr("Kerf"), self.kerf)
+        lay.addRow(tr("Lid"), self.lid)
         lay.addRow("", self.labels)
         lay.addRow(self.info)
         bb = QDialogButtonBox(QDialogButtonBox.Cancel)
-        to_sheet = QPushButton("Op werkblad")
-        to_sheet.setToolTip("De panelen snijden op het werkblad en automatisch schikken op de plaat")
-        to_model = QPushButton("Voorbeeld in 3D")
-        to_model.setToolTip("De panelen geëxtrudeerd in het model zetten, zoals de gelijmde doos eruitziet")
+        to_sheet = QPushButton(tr("On Worksheet"))
+        to_sheet.setToolTip(tr("Cut the panels on the worksheet and arrange them on the sheet "
+                               "automatically"))
+        to_model = QPushButton(tr("Preview in 3D"))
+        to_model.setToolTip(tr("Put the panels extruded into the model, the way the glued box "
+                               "looks"))
         bb.addButton(to_sheet, QDialogButtonBox.AcceptRole)
         bb.addButton(to_model, QDialogButtonBox.AcceptRole)
         bb.rejected.connect(self.reject)
@@ -1591,7 +1647,7 @@ class BoxJointDialog(QDialog):
             self._finger_fixed = True
 
     def _follow_thickness(self, value):
-        """De vingerbreedte volgt 2,5 × de dikte, tenzij de gebruiker die zelf koos."""
+        """The finger width follows 2.5 × the thickness, unless the user chose it."""
         if self._sync or self._finger_fixed:
             return
         self._sync = True
@@ -1604,8 +1660,9 @@ class BoxJointDialog(QDialog):
             W, D, H = boxgen.box_size(o["w"], o["d"], o["h"], o["t"], o["inner"], o["lid"])
             n = boxgen.finger_count(max(o["w"], o["d"], o["h"]), o["finger_w"])
             step = max(o["w"], o["d"], o["h"]) / n
-            self.info.setText(f"Doos van {W:g} × {D:g} × {H:g} mm, vingers van "
-                              f"{step:.2f} mm ({n} over de langste rand).")
+            self.info.setText(tr("Box of {w:g} × {d:g} × {h:g} mm, fingers of {step:.2f} mm "
+                                 "({n} along the longest edge).").format(w=W, d=D, h=H, step=step,
+                                                                          n=n))
         except (ValueError, ZeroDivisionError) as e:
             self.info.setText(str(e))
 
@@ -1650,6 +1707,10 @@ class PageDialog(QDialog):
 
     def select_page(self, page):
         if isinstance(page, str):
+            if page not in self.page_titles:     # the English title, or one in another language
+                english = [i18n.source_text(t) for t in self.page_titles]
+                page = (tr(page) if tr(page) in self.page_titles
+                        else self.page_titles[english.index(i18n.source_text(page))])
             page = self.page_titles.index(page)
         page = max(0, min(len(self.page_titles) - 1, int(page)))
         self.pages_list.setCurrentRow(page)
@@ -1664,13 +1725,13 @@ class PageDialog(QDialog):
 
 
 class ModelInfoDialog(PageDialog):
-    """Venster > Modelinfo: Eenheden, Statistieken en Printbed (SketchUp 2017)."""
+    """Window > Model Info: Units, Statistics and Print Bed (SketchUp 2017)."""
 
-    PAGES = ("Eenheden", "Statistieken", "Printbed")
+    PAGES = (tr("Units"), tr("Statistics"), tr("Print Bed"))
     SIZE = (660, 430)
 
     def __init__(self, win, page=0):
-        super().__init__(win, "Modelinfo", self.PAGES, page)
+        super().__init__(win, tr("Model Info"), self.PAGES, page)
         self._build_units()
         self._build_statistics()
         self._build_bed()
@@ -1686,9 +1747,9 @@ class ModelInfoDialog(PageDialog):
         page = QWidget()
         form = QFormLayout(page)
         snap = self.win.settings.length_snap
-        box = QGroupBox("Lengte")
+        box = QGroupBox(tr("Length"))
         inner = QFormLayout(box)
-        self.snap_on = QCheckBox("Lengte-afronding inschakelen")
+        self.snap_on = QCheckBox(tr("Enable length snapping"))
         self.snap_on.setChecked(snap > 0)
         self.snap = QDoubleSpinBox()
         self.snap.setRange(0.01, 100)
@@ -1698,22 +1759,23 @@ class ModelInfoDialog(PageDialog):
         self.snap.setValue(snap or 1.0)
         self.snap.setEnabled(snap > 0)
         self.snap_on.toggled.connect(self.snap.setEnabled)
-        self.snap.setToolTip("Lengtes die niet op een punt of rand snappen worden hierop afgerond, "
-                             "zoals 'Lengte-uitlijning' in SketchUp.")
+        self.snap.setToolTip(tr("Lengths that do not snap to a point or edge are rounded to this, "
+                                "like 'Length Snapping' in SketchUp."))
         inner.addRow(self.snap_on)
-        inner.addRow("Afronden op", self.snap)
+        inner.addRow(tr("Round to"), self.snap)
         self.precision = QComboBox()
         self.precision.addItems(["0", "0.0", "0.00"])
         self.precision.setCurrentIndex(min(self.win.settings.length_precision, 2))
         self.sample = QLabel()
         self.precision.currentIndexChanged.connect(self._show_sample)
         self._show_sample()
-        inner.addRow("Weergaveprecisie", self.precision)
-        inner.addRow("Voorbeeld", self.sample)
+        inner.addRow(tr("Display precision"), self.precision)
+        inner.addRow(tr("Sample"), self.sample)
         form.addRow(box)
-        form.addRow(note("De weergaveprecisie is het aantal decimalen van de maatinvoer en van de "
-                         "afmetingen in het tekenvenster, zoals 'Lengteprecisie' in SketchUp."))
-        form.addRow(note("Het printbed en de printer staan op de pagina Printbed."))
+        form.addRow(note(tr("The display precision is the number of decimals of the Measurements "
+                            "input and of the dimensions in the drawing window, like 'Precision' "
+                            "in SketchUp.")))
+        form.addRow(note(tr("The print bed and the printer are on the Print Bed page.")))
         self.add_page(page)
 
     def _show_sample(self):
@@ -1723,32 +1785,34 @@ class ModelInfoDialog(PageDialog):
         page = QWidget()
         form = QFormLayout(page)
         self.stats = {}
-        for label in ("Groepen", "Losse vlakken", "Losse randen", "Volume in totaal"):
+        # keyed by the English label, shown translated
+        for label in (tr_noop("Groups"), tr_noop("Loose faces"), tr_noop("Loose edges"),
+                      tr_noop("Total volume")):
             value = QLabel()
-            form.addRow(label, value)
+            form.addRow(tr(label), value)
             self.stats[label] = value
-        form.addRow(note("Het volume is de som van alle gesloten onderdelen: elke groep en elke "
-                         "losse vorm die een gesloten volume vormt."))
+        form.addRow(note(tr("The volume is the sum of all closed parts: every group and every "
+                            "loose shape that forms a closed volume.")))
         self.add_page(page)
 
     def refresh_statistics(self):
         doc = self.win.doc
-        self.stats["Groepen"].setText(str(len(doc.groups)))
-        self.stats["Losse vlakken"].setText(str(len(doc.root.F)))
-        self.stats["Losse randen"].setText(str(len(doc.root.E)))
+        self.stats["Groups"].setText(str(len(doc.groups)))
+        self.stats["Loose faces"].setText(str(len(doc.root.F)))
+        self.stats["Loose edges"].setText(str(len(doc.root.E)))
         volume = sum(p.manifold.volume() for p in ops.parts(doc) if p.manifold is not None)
-        self.stats["Volume in totaal"].setText(f"{volume / 1000:.3f} cm³")
+        self.stats["Total volume"].setText(f"{volume / 1000:.3f} cm³")
 
     def _build_bed(self):
         page = QWidget()
         form = QFormLayout(page)
         self.printer = QComboBox()
         self.printer.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.printer.addItem("Aangepast", None)
+        self.printer.addItem(tr("Custom"), None)
         for name, size in PRINTERS:
             self.printer.addItem(f"{name}  ({size[0]}×{size[1]}×{size[2]})", size)
         self.bed_spins = []
-        for label, v in zip(("Bed X", "Bed Y", "Hoogte Z"), self.win.settings.bed_size):
+        for label, v in zip((tr("Bed X"), tr("Bed Y"), tr("Height Z")), self.win.settings.bed_size):
             sp = QDoubleSpinBox()
             sp.setRange(10, 2000)
             sp.setSuffix(" mm")
@@ -1762,9 +1826,9 @@ class ModelInfoDialog(PageDialog):
                 for sp, v in zip(self.bed_spins, size):
                     sp.setValue(v)
         self.printer.currentIndexChanged.connect(preset)
-        form.insertRow(0, "Printer", self.printer)
-        form.addRow(note("Het bed bepaalt het raster van het tekenvlak en de grenzen van de "
-                         "printcontrole."))
+        form.insertRow(0, tr("Printer"), self.printer)
+        form.addRow(note(tr("The bed sets the grid of the drawing area and the limits of the "
+                            "print check.")))
         self.add_page(page)
 
     def apply(self):
@@ -1778,15 +1842,18 @@ class ModelInfoDialog(PageDialog):
 
 
 class PreferencesDialog(PageDialog):
-    """Venster > Voorkeuren: Algemeen, Tekenen en Sneltoetsen (SketchUp 2017)."""
+    """Window > Preferences: General, Display, Drawing, 3D Mouse and Shortcuts (SketchUp 2017)."""
 
-    PAGES = ("Algemeen", "Tekenen", "Sneltoetsen")
+    PAGES = (tr("General"), tr("Display"), tr("Drawing"), tr("3D Mouse"), tr("Shortcuts"))
     SIZE = (680, 470)
+    SPEED_STEPS = 20                       # slider 1..40 = speed 0.05..2 times
 
     def __init__(self, win, page=0):
-        super().__init__(win, "Voorkeuren", self.PAGES, page)
+        super().__init__(win, tr("Preferences"), self.PAGES, page)
         self._build_general()
+        self._build_looks()
         self._build_drawing()
+        self._build_spacemouse()
         self.shortcuts = ShortcutsPanel(win)
         self.add_page(self.shortcuts)
 
@@ -1796,39 +1863,117 @@ class PreferencesDialog(PageDialog):
         self.segments = QSpinBox()
         self.segments.setRange(8, 512)
         self.segments.setValue(self.win.settings.circle_segments)
-        self.segments.setToolTip("Aantal lijnstukken van een cirkel, boog of veelhoek. Typ tijdens het "
-                                 "tekenen bijvoorbeeld 32s om het voor die vorm te veranderen.")
-        form.addRow("Cirkelsegmenten", self.segments)
-        form.addRow(note("Hoe meer segmenten, hoe ronder een cirkel eruitziet en hoe langer "
-                         "tekenen en exporteren duurt."))
-        self.updates = QCheckBox("Bij het opstarten op updates controleren")
+        self.segments.setToolTip(tr("Number of segments of a circle, arc or polygon. While "
+                                    "drawing, type for example 32s to change it for that shape."))
+        form.addRow(tr("Circle segments"), self.segments)
+        form.addRow(note(tr("The more segments, the rounder a circle looks and the longer "
+                            "drawing and exporting take.")))
+        self.updates = QCheckBox(tr("Check for updates at startup"))
         self.updates.setChecked(self.win.settings.check_updates)
-        self.updates.setToolTip("Eén keer per dag kijkt Volura op GitHub of er een nieuwere versie is.")
+        self.updates.setToolTip(tr("Once a day Volura checks on GitHub whether there is a newer "
+                                   "version."))
         form.addRow(self.updates)
+        self.language = QComboBox()
+        self.language.addItem(tr("System"), i18n.SYSTEM)
+        for code, name in i18n.LANGUAGES:       # language names stay in their own language
+            self.language.addItem(name, code)
+        self.language.setCurrentIndex(max(0, self.language.findData(i18n.saved_choice())))
+        self.language.setToolTip(tr("System uses the language of Windows (English if Volura "
+                                    "does not have it)."))
+        form.addRow(tr("Language"), self.language)
+        form.addRow(note(tr("Takes effect after restarting Volura.")))
         self.add_page(page)
+
+    def _build_looks(self):
+        page = QWidget()
+        form = QFormLayout(page)
+        self.theme = QComboBox()
+        for key, label in theme.CHOICES:
+            self.theme.addItem(label, key)
+        self.theme.setCurrentIndex(max(0, self.theme.findData(self.win.settings.theme)))
+        self.theme.setToolTip(tr("System follows the Windows setting (light or dark)."))
+        form.addRow(tr("Theme"), self.theme)
+        form.addRow(note(tr("In the dark theme the sheet on the 2D worksheet stays light, so the "
+                            "layer colors stay readable, and the 3D window gets a muted gray "
+                            "background.")))
+        self.add_page(page)
+
+    def _build_spacemouse(self):
+        page = QWidget()
+        form = QFormLayout(page)
+        s = self.win.settings
+        self.sm_on = QCheckBox(tr("Use a 3Dconnexion 3D mouse"))
+        self.sm_on.setChecked(s.spacemouse)
+        form.addRow(self.sm_on)
+        self.sm_speed = QSlider(Qt.Horizontal)
+        self.sm_speed.setRange(1, 2 * self.SPEED_STEPS)
+        self.sm_speed.setValue(round(s.spacemouse_speed * self.SPEED_STEPS))
+        self.sm_speed.setToolTip(tr("How fast the model moves with the cap."))
+        form.addRow(tr("Speed"), self.sm_speed)
+        form.addRow(tr("Connection"), QLabel(self.win.spacemouse_status()))
+        self.sm_live = QLabel(tr("move the cap to test"))
+        form.addRow(tr("Motion"), self.sm_live)
+        self.win.spacemouse.motion.connect(self._show_motion)
+        self.win.spacemouse.command.connect(self._show_command)
+        self.finished.connect(self._stop_live)
+        form.addRow(note(tr("Works with the SpaceMouse (Wireless, Pro, Compact, Enterprise) and "
+                            "older devices such as SpaceNavigator, SpaceExplorer and SpacePilot. "
+                            "With 3DxWare installed you set up buttons and axes in the Volura "
+                            "profile in 3DxWare; without a driver Volura reads the device itself.\n"
+                            "Sliding the cap pans the model, pulling or pushing zooms, twisting and "
+                            "tilting rotates the model. In 2D the cap pans and zooms the "
+                            "worksheet.")))
+        self.add_page(page)
+
+    def _show_motion(self, m):
+        self.sm_live.setText(tr("pan {tx:+.2f} {ty:+.2f} {tz:+.2f}   rotate {rx:+.2f} {ry:+.2f} "
+                                "{rz:+.2f}").format(tx=m.tx, ty=m.ty, tz=m.tz,
+                                                    rx=m.rx, ry=m.ry, rz=m.rz))
+
+    def _show_command(self, name):
+        self.sm_live.setText(tr("button: {name}").format(name=name))
+
+    def _stop_live(self, *args):
+        for signal, slot in ((self.win.spacemouse.motion, self._show_motion),
+                             (self.win.spacemouse.command, self._show_command)):
+            try:
+                signal.disconnect(slot)
+            except (RuntimeError, TypeError):
+                pass
 
     def _build_drawing(self):
         page = QWidget()
         form = QFormLayout(page)
-        self.split_lines = QCheckBox("Lijnen automatisch splitsen")
+        self.split_lines = QCheckBox(tr("Split lines automatically"))
         self.split_lines.setChecked(True)
         self.split_lines.setEnabled(False)
-        self.split_lines.setToolTip("Zoals in SketchUp: randen die elkaar kruisen splitsen elkaar altijd, "
-                                    "en een lijn over een vlak splitst dat vlak.")
+        self.split_lines.setToolTip(tr("As in SketchUp: edges that cross always split each other, "
+                                       "and a line across a face splits that face."))
         form.addRow(self.split_lines)
-        form.addRow(note("Dit doet Volura altijd, net als SketchUp; het is hier alleen te zien."))
+        form.addRow(note(tr("Volura always does this, like SketchUp; it is only shown here.")))
         self.add_page(page)
 
     def apply(self):
         s = self.win.settings
         s.circle_segments = self.segments.value()
         s.check_updates = self.updates.isChecked()
+        s.spacemouse_speed = self.sm_speed.value() / self.SPEED_STEPS
+        sm_changed = s.spacemouse != self.sm_on.isChecked()
+        s.spacemouse = self.sm_on.isChecked()
+        theme_changed = s.theme != self.theme.currentData()
+        s.theme = self.theme.currentData()
         s.save()
+        # the language is read once at startup (i18n.saved_choice), so it applies after a restart
+        s.q.setValue(i18n.SETTINGS_KEY, str(self.language.currentData() or i18n.SYSTEM))
+        if theme_changed:
+            self.win.apply_theme()
+        if sm_changed:
+            self.win.start_spacemouse()
         self.win.view.tools["circle"].segments = s.circle_segments
 
 
 class ShortcutsPanel(QWidget):
-    """Voorkeuren > Sneltoetsen: filter, de opdrachten per menu, en sneltoets toevoegen/afhalen."""
+    """Preferences > Shortcuts: filter, the commands per menu, and add/remove a shortcut."""
 
     def __init__(self, win):
         super().__init__()
@@ -1836,30 +1981,30 @@ class ShortcutsPanel(QWidget):
         self.items = {}
         lay = QVBoxLayout(self)
         top = QHBoxLayout()
-        top.addWidget(QLabel("Filter"))
+        top.addWidget(QLabel(tr("Filter")))
         self.filter = QLineEdit()
-        self.filter.setPlaceholderText("Typ om te zoeken")
+        self.filter.setPlaceholderText(tr("Type to search"))
         self.filter.textChanged.connect(self._filter)
         top.addWidget(self.filter, 1)
         lay.addLayout(top)
         self.tree = QTreeWidget()
         self.tree.setColumnCount(2)
-        self.tree.setHeaderLabels(["Opdracht", "Sneltoets"])
+        self.tree.setHeaderLabels([tr("Command"), tr("Shortcut")])
         self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tree.setColumnWidth(1, 150)
         lay.addWidget(self.tree, 1)
         row = QHBoxLayout()
-        row.addWidget(QLabel("Sneltoets toevoegen"))
+        row.addWidget(QLabel(tr("Add shortcut")))
         self.key_edit = QKeySequenceEdit()
         row.addWidget(self.key_edit, 1)
         self.add_button = QPushButton("+")
-        self.add_button.setToolTip("Zet de ingetypte sneltoets op de gekozen opdracht")
+        self.add_button.setToolTip(tr("Puts the typed shortcut on the chosen command"))
         self.add_button.clicked.connect(self.add_shortcut)
         self.remove_button = QPushButton("−")
-        self.remove_button.setToolTip("Haalt de sneltoets van de gekozen opdracht af")
+        self.remove_button.setToolTip(tr("Removes the shortcut from the chosen command"))
         self.remove_button.clicked.connect(self.remove_shortcut)
-        self.restore_button = QPushButton("Alles herstellen")
-        self.restore_button.setToolTip("Zet alle sneltoetsen terug op de standaardwaarden")
+        self.restore_button = QPushButton(tr("Reset All"))
+        self.restore_button.setToolTip(tr("Puts all shortcuts back to their defaults"))
         self.restore_button.clicked.connect(self.restore_all)
         for b in (self.add_button, self.remove_button, self.restore_button):
             b.setMinimumWidth(40)
@@ -1868,14 +2013,19 @@ class ShortcutsPanel(QWidget):
         self.reload()
 
     def reload(self, keep=None):
-        """Every command of the menus, grouped per menu, with the shortcut it has now."""
+        """Every command of the menus, grouped per menu, with the shortcut it has now.
+
+        The paths are the English ones (the settings keys); the tree shows the menu texts."""
         keep = keep or self.selected_path()
         self.tree.blockSignals(True)
         self.tree.clear()
         self.items = {}
+        self.labels = {}
         groups = {}
         for path, action in self.win.command_paths().items():
-            menu, _, name = path.partition("/")
+            label = self.win.command_label(path)
+            self.labels[path] = label
+            menu, _, name = label.partition("/")
             groups.setdefault(menu, []).append((name, path, action))
         for menu, rows in groups.items():
             head = QTreeWidgetItem([menu, ""])
@@ -1926,7 +2076,7 @@ class ShortcutsPanel(QWidget):
         return True
 
     def restore_all(self, checked=False):
-        """Alles herstellen: back to the shortcuts Volura ships with."""
+        """Reset All: back to the shortcuts Volura ships with."""
         self.win.restore_shortcuts()
         self.reload()
 
@@ -1939,7 +2089,8 @@ class ShortcutsPanel(QWidget):
     def _filter(self, text):
         text = text.strip().lower()
         for path, it in self.items.items():
-            it.setHidden(bool(text) and text not in path.lower())
+            label = self.labels.get(path, path)
+            it.setHidden(bool(text) and text not in label.lower() and text not in path.lower())
         for i in range(self.tree.topLevelItemCount()):
             head = self.tree.topLevelItem(i)
             found = any(not head.child(j).isHidden() for j in range(head.childCount()))
@@ -1947,38 +2098,40 @@ class ShortcutsPanel(QWidget):
 
 
 class WelcomeDialog(QDialog):
-    """Help > Welkom bij Volura, the welcome screen of SketchUp 2017."""
+    """Help > Welcome to Volura, the welcome screen of SketchUp 2017."""
 
-    STEPS = (("Teken een vorm", "Lijn (L), Rechthoek (R), Cirkel (C) of Veelhoek: van elke gesloten "
-                                "vorm maakt Volura een vlak."),
-             ("Duwen/trekken", "Kies Duwen/trekken (P), klik het vlak en typ een maat: er ontstaat een "
-                               "volume. Omlaag maakt een uitsparing of gat."),
-             ("Exporteer naar je slicer", "Bestand > Exporteren als 3MF (meerkleuren) of STL, en open "
-                                          "het bestand in PrusaSlicer, OrcaSlicer of Bambu Studio."))
+    STEPS = ((tr("Draw a shape"), tr("Line (L), Rectangle (R), Circle (C) or Polygon: Volura makes "
+                                     "a face of every closed shape.")),
+             (tr("Push/Pull"), tr("Choose Push/Pull (P), click the face and type a distance: a "
+                                  "volume appears. Going down makes a recess or hole.")),
+             (tr("Export to your slicer"), tr("File > Export as 3MF (multicolor) or STL, and open "
+                                              "the file in PrusaSlicer, OrcaSlicer or Bambu "
+                                              "Studio.")))
 
     def __init__(self, win):
         super().__init__(win)
-        self.setWindowTitle("Welkom bij Volura")
+        self.setWindowTitle(tr("Welcome to Volura"))
         self.resize(700, 430)
         lay = QVBoxLayout(self)
         title = QLabel("Volura")
-        title.setStyleSheet("font-size: 34px; font-weight: bold; color: #d23b3b;")
+        title.setStyleSheet(f"font-size: 34px; font-weight: bold; color: {theme.color('title')};")
         lay.addWidget(title)
-        lay.addWidget(QLabel("<b>3D-modelleren voor 3D-printen, zoals in SketchUp 2017.</b>"))
+        lay.addWidget(QLabel(tr("<b>3D modeling for 3D printing, like in SketchUp 2017.</b>")))
         lay.addSpacing(10)
+        muted = theme.color("muted")
         for i, (head, text) in enumerate(self.STEPS, 1):
-            step = QLabel(f"<b>{i}. {head}</b><br><span style='color:#555'>{text}</span>")
+            step = QLabel(f"<b>{i}. {head}</b><br><span style='color:{muted}'>{text}</span>")
             step.setWordWrap(True)
             step.setTextFormat(Qt.RichText)
             lay.addWidget(step)
         lay.addStretch(1)
-        self.show_at_start = QCheckBox("Altijd tonen bij opstarten")
+        self.show_at_start = QCheckBox(tr("Always show at startup"))
         self.show_at_start.setChecked(welcome_enabled())
         self.show_at_start.toggled.connect(self.save)
         lay.addWidget(self.show_at_start)
         row = QHBoxLayout()
         row.addStretch(1)
-        start = QPushButton("Begin met Volura")
+        start = QPushButton(tr("Start Using Volura"))
         start.setDefault(True)
         start.clicked.connect(self.accept)
         row.addWidget(start)
@@ -1996,8 +2149,44 @@ class WelcomeDialog(QDialog):
 
 # ---------------------------------------------------------------- window
 
+#: Help > Keyboard Shortcuts; {rows} are the rows of the tools with a shortcut
+HELP_HTML = tr_noop("""
+<h2>Volura - how it works</h2>
+<p>Volura works like SketchUp: draw a flat face and make a volume of it with <b>Push/Pull</b>.</p>
+<ol>
+<li>Draw edges with Line (L), Rectangle (R), Circle (C) or Polygon. A closed shape becomes a face.</li>
+<li>Edges split each other, a line across a face splits the face; with the Eraser (E) you erase edges
+(or parts of them) and faces are merged again.</li>
+<li>Push/Pull (P) works on every face or part of a face: up = add, down = recess or hole.
+Type a distance and Enter; the direction follows your mouse.</li>
+<li>Select a shape (triple-click) and make a <b>group</b> of it (G): every group is a separate
+printable part with its own color. Double-click a group to edit it.</li>
+<li><b>Multicolor</b>: hold <b>Alt</b> while pushing/pulling: inward makes an inlay (recess +
+filling as a separate group), outward a separate part. Give it a color with the Paint Bucket (B) and
+export as 3MF.</li>
+</ol>
+<h3>Keyboard shortcuts</h3>
+<table cellpadding="3">{rows}
+<tr><td><b>A</b></td><td>2 Point Arc (in Draw &gt; Arcs also Arc, 3 Point Arc and Pie)</td></tr>
+<tr><td><b>Shift+Z</b></td><td>Zoom Extents</td></tr>
+<tr><td><b>Middle mouse button</b></td><td>Orbit, with Shift: pan. Scroll wheel: zoom</td></tr>
+<tr><td><b>Arrow keys</b></td><td>Lock an axis (right = red/X, left = green/Y, up = blue/Z)</td></tr>
+<tr><td><b>Shift</b> (hold)</td><td>Lock the current direction</td></tr>
+<tr><td><b>Ctrl</b></td><td>Move/rotate: copy. Push/Pull: new start face</td></tr>
+<tr><td><b>Alt</b></td><td>Push/Pull: separate part / inlay</td></tr>
+<tr><td><b>G</b></td><td>Make a component or group of the selection</td></tr>
+<tr><td><b>Esc</b></td><td>Cancel the current operation</td></tr>
+<tr><td><b>Ctrl+Z / Ctrl+Y</b></td><td>Undo / redo</td></tr>
+</table>
+<h3>Measurements (bottom right)</h3>
+<p>Just start typing during an operation. Examples: <code>25</code>, <code>2.5cm</code>,
+<code>40;20</code> (rectangle), <code>64s</code> (segments), <code>10;0;5</code> (move),
+<code>5x</code> or <code>/5</code> after a copy (array), <code>45</code> (degrees when rotating).</p>
+""")
+
+
 class MainWindow(QMainWindow):
-    #: de actieve omgeving: "3d" of "2d" (het 2D-werkblad); hoort niet bij het bestand
+    #: the active environment: "3d" or "2d" (the 2D worksheet); not part of the file
     mode = "3d"
 
     def __init__(self):
@@ -2047,6 +2236,11 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self.show_welcome_on_startup)
         QTimer.singleShot(0, self.offer_autosave_restore)
         QTimer.singleShot(UPDATE_DELAY_MS, self.check_for_updates_on_startup)
+        self.spacemouse = spacemouse.SpaceMouse(self)
+        self.spacemouse.motion.connect(self.on_spacemouse_motion)
+        self.spacemouse.command.connect(self.on_spacemouse_command)
+        QTimer.singleShot(0, self.start_spacemouse)
+        QApplication.instance().styleHints().colorSchemeChanged.connect(self._system_scheme_changed)
         self.autosave_timer = QTimer(self)
         self.autosave_timer.setInterval(AUTOSAVE_INTERVAL_MS)
         self.autosave_timer.timeout.connect(self.autosave)
@@ -2054,23 +2248,23 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ autosave
     def autosave(self):
-        """Automatisch opslaan: elke 5 minuten, alleen als er iets is gewijzigd."""
+        """Autosave: every 5 minutes, only when something has changed."""
         if not self.doc.dirty:
             return False
         try:
             fileio.save_document(self.doc, autosave_path())
         except Exception as e:
-            errors.log_exception(note=f"automatisch opslaan mislukt: {e}")
+            errors.log_exception(note=f"autosave failed: {e}")
             return False
         return True
 
     def offer_autosave_restore(self):
-        """Bij opstarten vragen of het automatisch opgeslagen model hersteld moet worden."""
+        """At startup, ask whether the autosaved model should be restored."""
         if is_offscreen() or not os.path.exists(autosave_path()):
             return False
-        r = QMessageBox.question(self, "Automatisch opgeslagen model",
-                                 "Er is een automatisch opgeslagen model van een vorige sessie.\n\n"
-                                 "Wilt u dat model herstellen?",
+        r = QMessageBox.question(self, tr("Autosaved Model"),
+                                 tr("There is an autosaved model from a previous session.\n\n"
+                                    "Do you want to restore that model?"),
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if r != QMessageBox.Yes:
             remove_autosave()
@@ -2078,20 +2272,20 @@ class MainWindow(QMainWindow):
         return self.restore_autosave()
 
     def restore_autosave(self):
-        """Het automatisch opgeslagen model in laden; het document blijft zijn eigen naam houden."""
+        """Load the autosaved model; the document keeps its own name."""
         path = self.doc.path
         try:
             self.view.tool.reset()
             fileio.load_document(self.doc, autosave_path())
         except Exception as e:
-            QMessageBox.critical(self, "Herstellen mislukt", str(e))
+            QMessageBox.critical(self, tr("Restore Failed"), str(e))
             return False
         self.doc.path = path
         self.doc.dirty = True
         self.doc.notify()
         self.update_title()
         self.view.zoom_extents()
-        self.hint.setText("Automatisch opgeslagen model hersteld.")
+        self.hint.setText(tr("Autosaved model restored."))
         return True
 
     def initial_view(self):
@@ -2105,8 +2299,8 @@ class MainWindow(QMainWindow):
         sb.addWidget(self.hint, 1)
         self.coords = QLabel()
         self.coords.setObjectName("sheetCoords")
-        self.coords.setToolTip("Plaats van de cursor op het 2D-werkblad")
-        self.vcb_label = QLabel("Afmetingen")
+        self.coords.setToolTip(tr("Position of the cursor on the 2D worksheet"))
+        self.vcb_label = QLabel(tr("Measurements"))
         self.vcb = QLineEdit()
         self.vcb.setFixedWidth(180)
         self.vcb.returnPressed.connect(self.on_vcb_return)
@@ -2120,17 +2314,17 @@ class MainWindow(QMainWindow):
         self.coords.hide()
 
     def _update_mode_button(self):
-        """De schuifknop '3D | 2D' rechtsonder: de helft van de modus van nu is blauw."""
+        """The '3D | 2D' slide switch at the bottom right: the half of the current mode is blue."""
         two = self.mode == "2d"
         self.mode_button.setText("3D | 2D")
         self.mode_button.setChecked(two)
         self.mode_button.setToolTip(
-            f"Nu: {'2D-werkblad' if two else '3D-model'} — klik voor het "
-            f"{'3D-model' if two else '2D-werkblad'} (Ctrl+Shift+2)")
+            tr("Now: 2D worksheet — click for the 3D model (Ctrl+Shift+2)") if two
+            else tr("Now: 3D model — click for the 2D worksheet (Ctrl+Shift+2)"))
 
-    # ------------------------------------------------------------ 3D of 2D
+    # ------------------------------------------------------------ 3D or 2D
     def set_mode(self, mode) -> bool:
-        """Naar het 3D-model of het 2D-werkblad; de modus hoort niet bij het bestand."""
+        """To the 3D model or the 2D worksheet; the mode is not part of the file."""
         want = "2d" if str(mode).lower().startswith("2") else "3d"
         changed = want != self.mode
         self.mode = want
@@ -2151,47 +2345,48 @@ class MainWindow(QMainWindow):
         self._show_layers_panel(want == "2d")
         return changed
 
-    #: De panelen van het standaardvenster die bij elke modus horen.
-    MODE_PANELS = {"3d": ("Entiteitsinfo", "Materialen", "Overzicht", "Printcontrole"),
-                   "2d": ("Entiteitsinfo", "Lagen")}
+    #: The panels of the Default Tray that belong to each mode (English keys, see PANELS).
+    MODE_PANELS = {"3d": (PANEL_INFO, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT_CHECK),
+                   "2d": (PANEL_INFO, PANEL_LAYERS)}
 
     def _show_layers_panel(self, two_d: bool):
-        """Alleen de panelen die bij de modus horen: filamenten, overzicht en printcontrole
-        bij het model, de lagen bij het werkblad. Entiteitsinfo toont wat bij de modus hoort."""
+        """Only the panels that belong to the mode: filaments, outliner and print check with
+        the model, the layers with the worksheet. Entity Info shows what belongs to the mode."""
         if not hasattr(self, "layers_panel"):
             return
         mode = "2d" if two_d else "3d"
+        mode_titles = {tr(p) for p in self.MODE_PANELS[mode]}
         for title in list(self.tray.panel_titles) + list(self.tray.extra_titles):
-            shown = title in self.MODE_PANELS[mode]
+            shown = title in mode_titles
             self.tray.set_panel_shown(title, shown)
             a = self.tray_actions.get(title)
             if a is not None:
                 a.setVisible(shown)
-        if two_d and self.tray.is_open("Printcontrole"):
+        if two_d and self.tray.is_open(tr(PANEL_PRINT_CHECK)):
             self.print_panel.clear_marks()
         self.layers_panel.refresh()
-        self.tray.set_panel_open("Lagen", bool(two_d))
+        self.tray.set_panel_open(tr(PANEL_LAYERS), bool(two_d))
         self.info.refresh()
 
     def toggle_sheet_mode(self, checked=None):
-        """Beeld > 2D-werkblad en de knop rechtsonder in de statusbalk."""
+        """View > 2D Worksheet and the button at the bottom right of the status bar."""
         want = "2d" if (self.mode == "3d" if checked is None else bool(checked)) else "3d"
         return self.set_mode(want)
 
     def zoom_extents(self):
-        """Zoomen tot alles: in de 3D-weergave het model, op het werkblad de tekening."""
+        """Zoom Extents: the model in the 3D view, the drawing on the worksheet."""
         (self.sheet_view if self.mode == "2d" else self.view).zoom_extents()
 
     def active_view(self):
-        """Het venster dat nu bij de modus hoort: de 3D-weergave of het werkblad."""
+        """The view that belongs to the current mode: the 3D view or the worksheet."""
         return self.sheet_view if self.mode == "2d" else self.view
 
     def _show_mode_toolbars(self, changed=True):
-        """In 2D wijken de 3D-werkbalken voor die van het werkblad; terug herstelt alles.
+        """In 2D the 3D toolbars make way for those of the worksheet; going back restores all.
 
-        Wat zichtbaar was wordt alleen bij het binnengaan van 2D onthouden: een tweede
-        set_mode("2d") (bijvoorbeeld door Plaat… of de doosgenerator) zou anders de
-        verborgen stand onthouden en de werkbalken bij terugkeer weg laten.
+        What was visible is only remembered when entering 2D: a second set_mode("2d") (for
+        example from Sheet… or the box generator) would otherwise remember the hidden state
+        and leave the toolbars away on return.
         """
         if not hasattr(self, "tb_sheet"):
             return
@@ -2215,7 +2410,7 @@ class MainWindow(QMainWindow):
                                 getattr(self, "tb_print", None)) if bar is not None]
 
     def _enable_3d_tools(self, enabled: bool):
-        """De 3D-gereedschappen en wat erbij hoort zijn in 2D buiten bereik gezet."""
+        """The 3D tools and what goes with them are out of reach in 2D."""
         for a in list(self.tool_actions.values()) + [self.a_delete, self.a_sel_all,
                                                      self.a_sel_none, self.a_hide, self.a_lock]:
             a.setEnabled(enabled)
@@ -2242,8 +2437,8 @@ class MainWindow(QMainWindow):
     def stub(self, text, shortcut=None, icon_name=None):
         """Disabled placeholder action for a SketchUp feature Volura does not have yet."""
         a = self.act(text, lambda checked=False: None, shortcut, icon_name)
-        a.setToolTip("Nog niet beschikbaar")
-        a.setStatusTip("Nog niet beschikbaar")
+        a.setToolTip(tr("Not available yet"))
+        a.setStatusTip(tr("Not available yet"))
         a.setEnabled(False)
         return a
 
@@ -2255,7 +2450,7 @@ class MainWindow(QMainWindow):
         return a
 
     def face_style_act(self, text, value):
-        """One choice of the exclusive Beeld > Vlakstijl group."""
+        """One choice of the exclusive View > Face Style group."""
         a = self.act(text, lambda checked=False, v=value: self.set_face_style(v), None, None,
                      checkable=True)
         a.setChecked(self.settings.face_style == value)
@@ -2275,251 +2470,257 @@ class MainWindow(QMainWindow):
 
     def _build_actions(self):
         A = self.act
-        self.a_new = A("&Nieuw", self.file_new, "Ctrl+N", "new")
-        self.a_open = A("&Openen", self.file_open, "Ctrl+O", "open")
-        self.a_save = A("Op&slaan", self.file_save, "Ctrl+S", "save")
-        self.a_save_as = A("Opslaan &als", self.file_save_as)
-        self.a_save_copy = A("Kopie opslaan al&s", self.file_save_copy_as)
-        self.a_import = A("&Importeren…", self.file_import)
-        self.a_exp_stl = A("&3D-model (STL)…", self.export_stl, None, "stl")
-        self.a_exp_3mf = A("&Meerkleuren 3MF…", self.export_3mf, None, "3mf")
-        self.a_exp_colors = A("STL per &kleur…", self.export_stl_colors)
-        self.a_exp_svg2d = A("2D-vector (&SVG)…", lambda checked=False: self.export_vector("svg"))
-        self.a_exp_dxf2d = A("2D-vector (&DXF)…", lambda checked=False: self.export_vector("dxf"))
-        self.a_print_setup = A("&Printer instellen…", lambda checked=False: self.print_setup())
-        self.a_check = A("Print&controle", self.print_check, "F5", "check")
-        self.a_print = A("&Afdrukken", self.export_3mf, "Ctrl+P", "3mf")
-        self.a_quit = A("&Afsluiten", self.close, "Ctrl+Q")
+        self.a_new = A(tr("&New"), self.file_new, "Ctrl+N", "new")
+        self.a_open = A(tr("&Open"), self.file_open, "Ctrl+O", "open")
+        self.a_save = A(tr("&Save"), self.file_save, "Ctrl+S", "save")
+        self.a_save_as = A(tr("Save &As"), self.file_save_as)
+        self.a_save_copy = A(tr("Save a Cop&y As"), self.file_save_copy_as)
+        self.a_import = A(tr("&Import…"), self.file_import)
+        self.a_exp_stl = A(tr("&3D Model (STL)…"), self.export_stl, None, "stl")
+        self.a_exp_3mf = A(tr("&Multicolor 3MF…"), self.export_3mf, None, "3mf")
+        self.a_exp_colors = A(tr("STL per &Color…"), self.export_stl_colors)
+        self.a_exp_svg2d = A(tr("2D Vector (&SVG)…"), lambda checked=False: self.export_vector("svg"))
+        self.a_exp_dxf2d = A(tr("2D Vector (&DXF)…"), lambda checked=False: self.export_vector("dxf"))
+        self.a_print_setup = A(tr("Printer Set&up…"), lambda checked=False: self.print_setup())
+        self.a_check = A(tr("Print &Check"), self.print_check, "F5", "check")
+        self.a_print = A(tr("&Print"), self.export_3mf, "Ctrl+P", "3mf")
+        self.a_quit = A(tr("E&xit"), self.close, "Ctrl+Q")
 
-        self.a_undo = A("&Ongedaan maken", self.undo, ["Alt+Backspace", "Ctrl+Z"], "undo")
-        self.a_redo = A("Opnie&uw", self.redo, "Ctrl+Y", "redo")
-        self.a_cut = A("&Knippen", self.cut, ["Shift+Del", "Ctrl+X"])
-        self.a_copy = A("&Kopiëren", self.copy, "Ctrl+C")
-        self.a_paste = A("&Plakken", self.paste, "Ctrl+V")
-        self.a_paste_loc = A("Plakken op l&ocatie", self.paste_at_location)
-        self.a_delete = A("&Wissen", self.delete, "Del")
-        self.a_erase_guides = A("Hulplijnen &wissen", self.erase_guides)
-        self.a_sel_all = A("&Alles selecteren", self.select_all, "Ctrl+A")
-        self.a_sel_none = A("Niets selecteren", self.select_none, "Ctrl+T")
-        self.a_hide = A("&Verbergen", self.hide_selected)
-        self.a_unhide_sel = A("&Geselecteerd", self.unhide_selected)
-        self.a_unhide_last = A("&Laatste", self.unhide_last)
-        self.a_unhide = A("&Alles", self.unhide_all)
-        self.a_lock = A("&Vergrendelen", self.lock_selected)
-        self.a_unlock = A("&Ontgrendelen", self.unlock_selected)
-        self.a_unlock_sel = A("&Geselecteerd", self.unlock_selected)
-        self.a_unlock_all = A("&Alles", self.unlock_all)
-        self.a_cut_face_model = A("&Met model", lambda checked=False: self.intersect_faces(True),
+        self.a_undo = A(tr("&Undo"), self.undo, ["Alt+Backspace", "Ctrl+Z"], "undo")
+        self.a_redo = A(tr("&Redo"), self.redo, "Ctrl+Y", "redo")
+        self.a_cut = A(tr("Cu&t"), self.cut, ["Shift+Del", "Ctrl+X"])
+        self.a_copy = A(tr("&Copy"), self.copy, "Ctrl+C")
+        self.a_paste = A(tr("&Paste"), self.paste, "Ctrl+V")
+        self.a_paste_loc = A(tr("Paste &In Place"), self.paste_at_location)
+        self.a_delete = A(tr("&Delete"), self.delete, "Del")
+        self.a_erase_guides = A(tr("Delete Guid&es"), self.erase_guides)
+        self.a_sel_all = A(tr("Select &All"), self.select_all, "Ctrl+A")
+        self.a_sel_none = A(tr("Select None"), self.select_none, "Ctrl+T")
+        self.a_hide = A(tr("&Hide"), self.hide_selected)
+        self.a_unhide_sel = A(tr("&Selected"), self.unhide_selected)
+        self.a_unhide_last = A(tr("&Last"), self.unhide_last)
+        self.a_unhide = A(tr("&All"), self.unhide_all)
+        self.a_lock = A(tr("Loc&k"), self.lock_selected)
+        self.a_unlock = A(tr("Unl&ock"), self.unlock_selected)
+        self.a_unlock_sel = A(tr("&Selected"), self.unlock_selected)
+        self.a_unlock_all = A(tr("&All"), self.unlock_all)
+        self.a_cut_face_model = A(tr("With &Model"), lambda checked=False: self.intersect_faces(True),
                                   None, "cut_faces", False,
-                                  "Snijlijnen van de selectie met de rest van het model")
-        self.a_cut_face_sel = A("&Met selectie", lambda checked=False: self.intersect_faces(False),
+                                  tr("Intersection lines of the selection with the rest of the model"))
+        self.a_cut_face_sel = A(tr("With &Selection"), lambda checked=False: self.intersect_faces(False),
                                 None, "cut_faces", False,
-                                "Snijlijnen tussen de geselecteerde items")
-        self.a_component = A("&Component maken", self.make_group, "G")
-        self.a_group = A("&Groep maken", self.make_group)
-        self.a_close_group = A("Groep/component &sluiten", self.close_group)
-        self.a_explode = A("Groep e&xploderen", self.explode_group)
-        self.a_edit_group = A("Groep &bewerken", self.edit_group)
+                                tr("Intersection lines between the selected items"))
+        self.a_component = A(tr("Make Co&mponent"), self.make_group, "G")
+        self.a_group = A(tr("Make &Group"), self.make_group)
+        self.a_close_group = A(tr("Clo&se Group/Component"), self.close_group)
+        self.a_explode = A(tr("E&xplode Group"), self.explode_group)
+        self.a_edit_group = A(tr("&Edit Group"), self.edit_group)
 
         for name, label, ic, sc in TOOL_INFO:
-            a = A(label, lambda checked=False, n=name: self.set_tool(n), sc, ic, checkable=True)
+            a = A(tr(label), lambda checked=False, n=name: self.set_tool(n), sc, ic, checkable=True)
+            a.setProperty(SOURCE_TEXT, label)     # "Orbit" and "Turn" are both "Draaien" in Dutch
             self.tool_actions[name] = a
 
-        self.a_freehand = self.tool_act("&Uit de vrije hand", "freehand", None, "freehand")
-        self.a_arc = self.tool_act("&Boog", "arc", None, "arc")
-        self.a_arc2 = self.tool_act("Boog door &2 punten", "arc2", "A", "arc2")
-        self.a_arc3 = self.tool_act("Boog door &3 punten", "arc3", None, "arc3")
-        self.a_pie = self.tool_act("&Taartpunt", "pie", None, "pie")
-        self.a_rotrect = self.tool_act("&Gedraaide rechthoek", "rotrect", None, "rotrect")
-        self.a_box = A("&Kubus / balk…", lambda checked=False: self.insert_primitive("box"))
-        self.a_cylinder = A("&Cilinder…", lambda checked=False: self.insert_primitive("cylinder"))
-        self.a_cone = A("&Kegel…", lambda checked=False: self.insert_primitive("cone"))
-        self.a_sphere = A("&Bol…", lambda checked=False: self.insert_primitive("sphere"))
-        self.a_torus = A("&Torus…", lambda checked=False: self.insert_primitive("torus"))
+        self.a_freehand = self.tool_act(tr("&Freehand"), "freehand", None, "freehand")
+        self.a_arc = self.tool_act(tr("&Arc"), "arc", None, "arc")
+        self.a_arc2 = self.tool_act(tr("&2 Point Arc"), "arc2", "A", "arc2")
+        self.a_arc3 = self.tool_act(tr("&3 Point Arc"), "arc3", None, "arc3")
+        self.a_pie = self.tool_act(tr("&Pie"), "pie", None, "pie")
+        self.a_rotrect = self.tool_act(tr("R&otated Rectangle"), "rotrect", None, "rotrect")
+        self.a_box = A(tr("&Box…"), lambda checked=False: self.insert_primitive("box"))
+        self.a_cylinder = A(tr("&Cylinder…"), lambda checked=False: self.insert_primitive("cylinder"))
+        self.a_cone = A(tr("C&one…"), lambda checked=False: self.insert_primitive("cone"))
+        self.a_sphere = A(tr("&Sphere…"), lambda checked=False: self.insert_primitive("sphere"))
+        self.a_torus = A(tr("&Torus…"), lambda checked=False: self.insert_primitive("torus"))
 
-        self.a_extents = A("Zoomen tot alles", self.zoom_extents, ["Ctrl+Shift+E", "Shift+Z"],
+        self.a_extents = A(tr("Zoom Extents"), self.zoom_extents, ["Ctrl+Shift+E", "Shift+Z"],
                            "zoom_extents")
         self.views = {}
-        for key, label, ic in (("top", "Boven", "view_top"), ("bottom", "Onder", "view_top"),
-                               ("front", "Voor", "view_front"), ("back", "Achter", "view_back"),
-                               ("left", "Links", "view_left"), ("right", "Rechts", "view_right"),
-                               ("iso", "Iso", "view_iso")):
+        for key, label, ic in (("top", tr("Top"), "view_top"), ("bottom", tr("Bottom"), "view_top"),
+                               ("front", tr("Front"), "view_front"), ("back", tr("Back"), "view_back"),
+                               ("left", tr("Left"), "view_left"), ("right", tr("Right"), "view_right"),
+                               ("iso", tr("Iso"), "view_iso")):
             self.views[key] = A(label, lambda checked=False, k=key: self.view.set_view(k), None, ic)
-        self.a_prev_view = A("&Vorige", self.camera_prev)
-        self.a_next_view = A("&Volgende", self.camera_next)
+        self.a_prev_view = A(tr("&Previous"), self.camera_prev)
+        self.a_next_view = A(tr("&Next"), self.camera_next)
         self.a_prev_view.setEnabled(self.view.can_prev_camera())
         self.a_next_view.setEnabled(self.view.can_next_camera())
-        self.a_ortho = A("Parallelle projectie", lambda checked=False: self.apply_projection(),
+        self.a_ortho = A(tr("Parallel Projection"), lambda checked=False: self.apply_projection(),
                          None, "ortho", checkable=True)
-        self.a_persp = A("&Perspectief", lambda checked=False: self.apply_projection(), None, None,
+        self.a_persp = A(tr("P&erspective"), lambda checked=False: self.apply_projection(), None, None,
                          checkable=True)
         proj = QActionGroup(self)
         proj.setExclusive(True)
         proj.addAction(self.a_ortho)
         proj.addAction(self.a_persp)
         self.a_persp.setChecked(True)
-        self.a_fov = A("&Gezichtsveld", self.camera_fov)
-        self.a_zoom_window = A("&Zoomvenster", self.camera_zoom_window, "Ctrl+Shift+W")
+        self.a_fov = A(tr("&Field of View"), self.camera_fov)
+        self.a_zoom_window = A(tr("Zoom &Window"), self.camera_zoom_window, "Ctrl+Shift+W")
 
-        self.a_toolbars = A("&Werkbalken", self.show_toolbar_dialog)
-        self.a_hidden_geometry = A("Verborgen &geometrie", self.toggle_show_hidden, None, None,
+        self.a_toolbars = A(tr("&Toolbars"), self.show_toolbar_dialog)
+        self.a_hidden_geometry = A(tr("Hidden &Geometry"), self.toggle_show_hidden, None, None,
                                    checkable=True)
         self.a_hidden_geometry.setChecked(self.settings.show_hidden)
-        self.a_guides = A("Hulpl&ijnen", self.toggle_guides, None, None, checkable=True)
+        self.a_guides = A(tr("G&uides"), self.toggle_guides, None, None, checkable=True)
         self.a_guides.setChecked(self.settings.show_guides)
-        self.a_grid = A("Printbed", self.toggle_grid, None, None, checkable=True)
+        self.a_grid = A(tr("Print Bed"), self.toggle_grid, None, None, checkable=True)
         self.a_grid.setChecked(self.settings.show_grid)
-        self.a_axes = A("&Assen", self.toggle_axes, None, None, checkable=True)
+        self.a_axes = A(tr("&Axes"), self.toggle_axes, None, None, checkable=True)
         self.a_axes.setChecked(self.settings.show_axes)
-        self.a_edges = A("&Randen", self.toggle_edges, None, None, checkable=True)
+        self.a_edges = A(tr("&Edges"), self.toggle_edges, None, None, checkable=True)
         self.a_edges.setChecked(self.settings.show_edges)
-        self.a_back_edges = A("&Achterliggende randen", self.toggle_back_edges, "K", None,
+        self.a_back_edges = A(tr("&Back Edges"), self.toggle_back_edges, "K", None,
                               checkable=True)
         self.a_back_edges.setChecked(self.settings.back_edges)
-        self.a_xray = A("&Röntgen", self.toggle_xray, "Alt+X", "xray", checkable=True)
+        self.a_xray = A(tr("&X-ray"), self.toggle_xray, "Alt+X", "xray", checkable=True)
         self.a_xray.setChecked(self.settings.xray)
         self.face_style_group = QActionGroup(self)
         self.face_style_group.setExclusive(True)
         self.face_style_actions = {}
-        self.a_wireframe = self.face_style_act("&Draadmodel", WIREFRAME)
-        self.a_hidden_lines = self.face_style_act("Verborgen &lijnen", HIDDENLINE)
-        self.a_shaded = self.face_style_act("&Gearceerd", SHADED)
-        self.a_monochrome = self.face_style_act("&Monochroom", MONOCHROME)
-        self.a_hide_rest = A("&Rest van model verbergen", self.toggle_hide_rest, None, None,
+        self.a_wireframe = self.face_style_act(tr("&Wireframe"), WIREFRAME)
+        self.a_hidden_lines = self.face_style_act(tr("&Hidden Line"), HIDDENLINE)
+        self.a_shaded = self.face_style_act(tr("&Shaded"), SHADED)
+        self.a_monochrome = self.face_style_act(tr("&Monochrome"), MONOCHROME)
+        self.a_hide_rest = A(tr("Hide &Rest of Model"), self.toggle_hide_rest, None, None,
                              checkable=True)
         self.a_hide_rest.setChecked(self.settings.hide_rest)
 
-        self.a_union = A("Samenvoegen", lambda checked=False: self.solid_op("union"), None, "union")
-        self.a_subtract = A("Aftrekken", lambda checked=False: self.solid_op("subtract"), None, "subtract")
-        self.a_intersect = A("Snijpunt", lambda checked=False: self.solid_op("intersect"), None, "intersect")
-        self.a_trim = A("&Bijsnijden", lambda checked=False: self.trim_solids(), None, "trim",
-                        False, "De tweede groep met de eerste bijsnijden (B = B - A)")
-        self.a_split = A("Splitsen", self.split_parts)
-        self.a_follow_me = self.tool_act("&Volg mij", "followme", None, "followme")
-        self.a_shell = A("&Buitenschil", self.outer_shell, None, "shell",
-                         False, "Alleen de buitenkant van de geselecteerde groepen overhouden")
-        self.a_protractor = self.tool_act("&Gradenboog", "protractor")
-        self.a_drop = A("Op bed plaatsen", self.drop_to_bed, "Ctrl+B", "bed")
-        self.a_center = A("Centreren op bed", self.center_on_bed)
+        self.a_union = A(tr("Union"), lambda checked=False: self.solid_op("union"), None, "union")
+        self.a_subtract = A(tr("Subtract"), lambda checked=False: self.solid_op("subtract"), None,
+                            "subtract")
+        self.a_intersect = A(tr("Intersect"), lambda checked=False: self.solid_op("intersect"), None,
+                             "intersect")
+        self.a_trim = A(tr("&Trim"), lambda checked=False: self.trim_solids(), None, "trim",
+                        False, tr("Trim the second group with the first (B = B - A)"))
+        self.a_split = A(tr("Split"), self.split_parts)
+        self.a_follow_me = self.tool_act(tr("&Follow Me"), "followme", None, "followme")
+        self.a_shell = A(tr("&Outer Shell"), self.outer_shell, None, "shell",
+                         False, tr("Keep only the outside of the selected groups"))
+        self.a_protractor = self.tool_act(tr("&Protractor"), "protractor")
+        self.a_drop = A(tr("Drop to Bed"), self.drop_to_bed, "Ctrl+B", "bed")
+        self.a_center = A(tr("Center on Bed"), self.center_on_bed)
 
-        self.a_thread = A("Schroefdraad...", lambda checked=False: self.thread_dialog(), None, "thread",
-                          False, "Schroefdraad zetten of een bout of moer maken (ISO metrisch)")
-        self.a_thread_ext = A("Buitendraad op cilinder...",
+        self.a_thread = A(tr("Thread..."), lambda checked=False: self.thread_dialog(), None, "thread",
+                          False, tr("Add a screw thread or make a bolt or nut (ISO metric)"))
+        self.a_thread_ext = A(tr("External Thread on Cylinder..."),
                               lambda checked=False: self.thread_dialog("external"), None, "thread_ext")
-        self.a_thread_int = A("Binnendraad in gat...",
+        self.a_thread_int = A(tr("Internal Thread in Hole..."),
                               lambda checked=False: self.thread_dialog("internal"), None, "thread_int")
-        self.a_thread_bolt = A("Nieuwe bout...",
+        self.a_thread_bolt = A(tr("New Bolt..."),
                                lambda checked=False: self.thread_dialog("bolt"), None, "bolt")
-        self.a_thread_nut = A("Nieuwe moer of bus...",
+        self.a_thread_nut = A(tr("New Nut or Sleeve..."),
                               lambda checked=False: self.thread_dialog("nut"), None, "nut")
 
-        self.a_cutplane = self.tool_act("Snijden", "cutplane", None, "cutplane")
-        self.a_cut_join = A("Snijden en verbinden...", lambda checked=False: self.cut_join_dialog(),
+        self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
+        self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
                             None, "cut_join", False,
-                            "Knip het model op een vlak en maak pennen, gaten of een zwaluwstaart")
-        self.a_fillet = self.tool_act("Afronden", "fillet", None, "fillet")
-        self.a_fillet.setToolTip("Klik randen aan en typ een straal: een bolle of holle afronding")
-        self.a_chamfer = self.tool_act("Afschuinen", "chamfer", None, "chamfer")
-        self.a_chamfer.setToolTip("Klik randen aan en typ een afstand: een schuine kant langs de rand")
+                            tr("Cut the model at a plane and make pins, holes or a dovetail"))
+        self.a_fillet = self.tool_act(tr("Fillet"), "fillet", None, "fillet")
+        self.a_fillet.setToolTip(tr("Click edges and type a radius: a convex or concave rounding"))
+        self.a_chamfer = self.tool_act(tr("Chamfer"), "chamfer", None, "chamfer")
+        self.a_chamfer.setToolTip(tr("Click edges and type a distance: a bevel along the edge"))
 
-        self.a_prefs = A("&Voorkeuren", self.preferences)
-        self.a_model_info = A("&Modelinfo", lambda checked=False: self.model_info())
-        self.a_welcome = A("&Welkom bij Volura", self.show_welcome)
-        self.a_updates = A("Controleren op &updates…", lambda checked=False: self.check_for_updates())
-        self.a_help = A("&Sneltoetsen", self.show_help, "F1")
-        self.a_about = A("Over &Volura", self.about)
+        self.a_prefs = A(tr("&Preferences"), self.preferences)
+        self.a_model_info = A(tr("&Model Info"), lambda checked=False: self.model_info())
+        self.a_welcome = A(tr("&Welcome to Volura"), self.show_welcome)
+        self.a_updates = A(tr("Check for &Updates…"), lambda checked=False: self.check_for_updates())
+        self.a_help = A(tr("&Keyboard Shortcuts"), self.show_help, "F1")
+        self.a_about = A(tr("&About Volura"), self.about)
 
-        # ---- het 2D-werkblad
-        self.a_sheet = A("2D-werk&blad", self.toggle_sheet_mode, "Ctrl+Shift+2", None,
-                         checkable=True, tip="Tekenen in 2D voor lasersnijder en frees")
-        self.a_to_sheet = A("Naar 2D-werkblad &kopiëren…", self.copy_to_sheet, None, None, False,
-                            "Geselecteerde vlakken, bovenaanzicht of doorsnede naar het werkblad")
-        self.a_to_laser = A("Naar &laser of frees…", self.send_selection_to_sheet, None, "to_laser",
-                            False, "De geselecteerde vlakken of platen op een laag van het werkblad "
-                                   "zetten om te snijden, graveren of frezen")
-        self.a_sheet_to_model = A("Onderdelen naar &3D-model", self.sheet_to_model, None, "to_model",
-                                  False, "Wat gesneden wordt als plaat met de plaatdikte in het "
-                                         "3D-model zetten")
+        # ---- the 2D worksheet
+        self.a_sheet = A(tr("2D &Worksheet"), self.toggle_sheet_mode, "Ctrl+Shift+2", None,
+                         checkable=True, tip=tr("Drawing in 2D for laser cutter and mill"))
+        self.a_to_sheet = A(tr("Copy to 2D &Worksheet…"), self.copy_to_sheet, None, None, False,
+                            tr("Selected faces, top view or section to the worksheet"))
+        self.a_to_laser = A(tr("To &Laser or Mill…"), self.send_selection_to_sheet, None, "to_laser",
+                            False, tr("Put the selected faces or plates on a layer of the worksheet "
+                                      "to cut, engrave or mill them"))
+        self.a_sheet_to_model = A(tr("Parts to &3D Model"), self.sheet_to_model, None, "to_model",
+                                  False, tr("Put what is cut into the 3D model as plates with the "
+                                            "sheet thickness"))
         for name, label, tip in SHEET_TOOL_INFO:
-            self.sheet_tool_act(label, name, tip)
-        self.a_mirror_h = A("Spiegelen &horizontaal",
+            self.sheet_tool_act(tr(label), name, tip).setProperty(SOURCE_TEXT, label)
+        self.a_mirror_h = A(tr("Flip &Horizontally"),
                             lambda checked=False: self.sheet_view.mirror(True), None, "mirror_h",
-                            False, "Links en rechts omwisselen rond het midden van de selectie")
-        self.a_mirror_v = A("Spiegelen &verticaal",
+                            False, tr("Swap left and right around the center of the selection"))
+        self.a_mirror_v = A(tr("Flip &Vertically"),
                             lambda checked=False: self.sheet_view.mirror(False), None, "mirror_v",
-                            False, "Boven en onder omwisselen rond het midden van de selectie")
-        # ---- bewerkingen op de selectie van het 2D-werkblad
-        self.a_sheet_union = A("Contouren samenvoegen",
+                            False, tr("Swap top and bottom around the center of the selection"))
+        # ---- operations on the selection of the 2D worksheet
+        self.a_sheet_union = A(tr("Union Outlines"),
                                lambda checked=False: self.sheet_op("union"), None, "union", False,
-                               "De geselecteerde gesloten contouren als één vorm")
-        self.a_sheet_subtract = A("Contouren aftrekken",
+                               tr("The selected closed outlines as one shape"))
+        self.a_sheet_subtract = A(tr("Subtract Outlines"),
                                   lambda checked=False: self.sheet_op("subtract"), None, "subtract",
-                                  False, "Het eerste geselecteerde pad minus de rest")
-        self.a_sheet_intersect = A("Snijpunt van contouren",
+                                  False, tr("The first selected path minus the rest"))
+        self.a_sheet_intersect = A(tr("Intersect Outlines"),
                                    lambda checked=False: self.sheet_op("intersect"), None,
-                                   "intersect", False, "Alleen wat alle contouren gemeen hebben")
-        self.a_sheet_join = A("Lijnen aaneenrijgen",
+                                   "intersect", False, tr("Only what all outlines have in common"))
+        self.a_sheet_join = A(tr("Join Lines"),
                               lambda checked=False: self.sheet_view.join_selected(), None, "join",
-                              False, "Losse lijnstukken tot polylijnen en vormen maken")
-        self.a_sheet_split = A("Opsplitsen in lijnstukken",
+                              False, tr("Make loose segments into polylines and shapes"))
+        self.a_sheet_split = A(tr("Split into Segments"),
                                lambda checked=False: self.sheet_view.split_selected(), None, "split",
-                               False, "Elk lijnstuk van de selectie apart zetten")
-        self.a_sheet_align = A("Uitlijnen…", lambda checked=False: self.sheet_view.align_selected("left"),
+                               False, tr("Make every segment of the selection separate"))
+        self.a_sheet_align = A(tr("Align…"), lambda checked=False: self.sheet_view.align_selected("left"),
                                None, "align", False,
-                               "De selectie links, midden, rechts, boven of onder op één lijn")
+                               tr("Line up the selection left, center, right, top or bottom"))
         self.sheet_align_actions = {}
-        for mode, label in (("left", "Links uitlijnen"), ("center", "Midden uitlijnen"),
-                            ("right", "Rechts uitlijnen"), ("top", "Boven uitlijnen"),
-                            ("bottom", "Onder uitlijnen")):
+        for mode, label, tip in (
+                ("left", tr("Align Left"), tr("Align the selection to the left")),
+                ("center", tr("Align Center"), tr("Center the selection")),
+                ("right", tr("Align Right"), tr("Align the selection to the right")),
+                ("top", tr("Align Top"), tr("Align the selection to the top")),
+                ("bottom", tr("Align Bottom"), tr("Align the selection to the bottom"))):
             self.sheet_align_actions[mode] = A(
                 label, lambda checked=False, m=mode: self.sheet_view.align_selected(m), None,
-                None, False, "De selectie " + label.lower().replace(" uitlijnen", "")
-                                    .replace("midden", "in het midden") + " zetten")
-        self.a_sheet_distribute = A("Gelijk verdelen…",
+                None, False, tip)
+        self.a_sheet_distribute = A(tr("Distribute…"),
                                     lambda checked=False: self.sheet_view.distribute_selected("x"),
                                     None, "distribute", False,
-                                    "Over de selectie steeds dezelfde afstand zetten")
+                                    tr("Put the same spacing throughout the selection"))
         self.sheet_distribute_actions = {
-            "x": A("Horizontaal verdelen",
+            "x": A(tr("Distribute Horizontally"),
                    lambda checked=False: self.sheet_view.distribute_selected("x"), None, None,
-                   False, "De middenpunten horizontaal op gelijke afstand zetten"),
-            "y": A("Verticaal verdelen",
+                   False, tr("Space the centers evenly horizontally")),
+            "y": A(tr("Distribute Vertically"),
                    lambda checked=False: self.sheet_view.distribute_selected("y"), None, None,
-                   False, "De middenpunten verticaal op gelijke afstand zetten"),
+                   False, tr("Space the centers evenly vertically")),
         }
-        self.a_sheet_duplicate = A("Dupliceren in rij of raster…",
+        self.a_sheet_duplicate = A(tr("Duplicate in Row or Grid…"),
                                    lambda checked=False: self.sheet_view.duplicate_dialog(), None,
                                    "duplicate", False,
-                                   "Kopieën van de selectie zetten met een vaste afstand")
-        self.a_sheet_grid = A("Raster vastzetten", self.set_sheet_grid_snap, None, "grid",
-                              checkable=True, tip="De cursor naar rasterkruisingen trekken")
+                                   tr("Place copies of the selection at a fixed spacing"))
+        self.a_sheet_grid = A(tr("Snap to Grid"), self.set_sheet_grid_snap, None, "grid",
+                              checkable=True, tip=tr("Pull the cursor to grid intersections"))
         self.a_sheet_grid.setChecked(True)
-        self.a_sheet_round = A("Afgeronde hoeken bij verschuiving", self.set_sheet_round_join, None,
+        self.a_sheet_round = A(tr("Rounded Corners on Offset"), self.set_sheet_round_join, None,
                                "round_join", checkable=True,
-                               tip="Verschuivingen met ronde hoeken (uit) of scherpe hoeken (aan)")
+                               tip=tr("Offsets with round corners (off) or sharp corners (on)"))
         self.a_sheet_round.setChecked(True)
-        # ---- lagen van het werkblad
-        self.a_sheet_to_layer = A("Naar &laag", lambda checked=False: self.move_selection_to_layer(),
+        # ---- layers of the worksheet
+        self.a_sheet_to_layer = A(tr("To &Layer"), lambda checked=False: self.move_selection_to_layer(),
                                   None, "layers", False,
-                                  "De selectie naar de actieve laag zetten; het pijltje kiest een andere")
-        self.a_sheet_layers = A("Lagen van het &werkblad", self.open_layers_panel, None, None, False,
-                                "Het lagenpaneel openen: kleur, bewerking en instellingen per laag")
-        # ---- plaatformaat en automatisch nesten
-        self.a_sheet_plaat = A("&Plaat…", lambda checked=False: self.open_sheet_settings(), None,
+                                  tr("Move the selection to the active layer; the arrow picks "
+                                     "another one"))
+        self.a_sheet_layers = A(tr("&Worksheet Layers"), self.open_layers_panel, None, None, False,
+                                tr("Open the Layers panel: color, operation and settings per layer"))
+        # ---- sheet size and automatic nesting
+        self.a_sheet_plaat = A(tr("&Sheet…"), lambda checked=False: self.open_sheet_settings(), None,
                                "sheet", False,
-                               "Plaatformaat, materiaaldikte, marge, tussenruimte en aantal platen")
-        self.a_sheet_nest = A("&Automatisch schikken…", lambda checked=False: self.auto_arrange(),
+                               tr("Sheet size, material thickness, margin, gap and number of sheets"))
+        self.a_sheet_nest = A(tr("Auto Arra&nge…"), lambda checked=False: self.auto_arrange(),
                               None, "nest", False,
-                              "Onderdelen zo zuinig mogelijk over de platen schikken")
-        # ---- doos met vingerlassen
-        self.a_box_joint = A("Doos met &vingerlassen…",
+                              tr("Arrange the parts over the sheets as economically as possible"))
+        # ---- box with finger joints
+        self.a_box_joint = A(tr("Box with &Finger Joints…"),
                              lambda checked=False: self.box_joint_dialog(), None, "boxjoint",
                              False,
-                             "Doos met vingerlassen voor de lasersnijder, op het werkblad "
-                             "of als voorbeeld in 3D")
+                             tr("Box with finger joints for the laser cutter, on the worksheet "
+                                "or as a preview in 3D"))
 
     def sheet_tool_act(self, label, name, tip=None):
-        """Knop voor een 2D-gereedschap; de toets werkt op het werkblad (M, Q, S, spatie)."""
+        """Button for a 2D tool; the key works on the worksheet (M, Q, S, Space)."""
         a = self.act(label, lambda checked=False, n=name: self.sheet_view.set_tool(n), None,
                      name, checkable=True, tip=tip)
         self.sheet_tool_actions[name] = a
@@ -2528,15 +2729,15 @@ class MainWindow(QMainWindow):
     def _build_menus(self):
         mb = self.menuBar()
 
-        m = mb.addMenu("&Bestand")
-        export = QMenu("&Exporteren", m)
+        m = mb.addMenu(tr("&File"))
+        export = QMenu(tr("&Export"), m)
         for a in (self.a_exp_stl, self.a_exp_3mf, self.a_exp_colors, None,
                   self.a_exp_svg2d, self.a_exp_dxf2d):
             if a is None:
                 export.addSeparator()
             else:
                 export.addAction(a)
-        self.recent_menu = QMenu("&Recente bestanden", m)
+        self.recent_menu = QMenu(tr("&Recent Files"), m)
         self.update_recent_menu()
         self.fill(m, (self.a_new, self.a_open, self.recent_menu, None,
                       self.a_save, self.a_save_as, self.a_save_copy, None,
@@ -2544,12 +2745,12 @@ class MainWindow(QMainWindow):
                       self.a_print_setup, self.a_check, self.a_print, None,
                       self.a_quit))
 
-        m = mb.addMenu("Be&werken")
-        unhide = QMenu("Zichtbaar &maken", m)
+        m = mb.addMenu(tr("&Edit"))
+        unhide = QMenu(tr("U&nhide"), m)
         self.fill(unhide, (self.a_unhide_sel, self.a_unhide_last, self.a_unhide))
-        unlock = QMenu("&Ontgrendelen", m)
+        unlock = QMenu(tr("Unl&ock"), m)
         self.fill(unlock, (self.a_unlock_sel, self.a_unlock_all))
-        cut_faces = QMenu("&Vlakken snijden", m)
+        cut_faces = QMenu(tr("Intersect &Faces"), m)
         self.fill(cut_faces, (self.a_cut_face_model, self.a_cut_face_sel))
         self.fill(m, (self.a_undo, self.a_redo, None,
                       self.a_cut, self.a_copy, self.a_paste, self.a_paste_loc, self.a_to_sheet,
@@ -2561,13 +2762,13 @@ class MainWindow(QMainWindow):
                       self.a_component, self.a_group, self.a_close_group, None,
                       cut_faces))
 
-        m = mb.addMenu("Beel&d")
-        edge_style = QMenu("&Randstijl", m)
+        m = mb.addMenu(tr("&View"))
+        edge_style = QMenu(tr("&Edge Style"), m)
         self.fill(edge_style, (self.a_edges, self.a_back_edges))
-        face_style = QMenu("&Vlakstijl", m)
+        face_style = QMenu(tr("Face St&yle"), m)
         self.fill(face_style, (self.a_xray, None, self.a_wireframe, self.a_hidden_lines,
                                self.a_shaded, self.a_monochrome))
-        comp_edit = QMenu("Component&bewerking", m)
+        comp_edit = QMenu(tr("Co&mponent Edit"), m)
         self.fill(comp_edit, (self.a_hide_rest,))
         self.fill(m, (self.a_toolbars, self.a_sheet, None,
                       self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint,
@@ -2575,8 +2776,8 @@ class MainWindow(QMainWindow):
                       self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid, None,
                       edge_style, face_style, comp_edit))
 
-        m = mb.addMenu("&Camera")
-        std_views = QMenu("Standaard&weergaven", m)
+        m = mb.addMenu(tr("&Camera"))
+        std_views = QMenu(tr("&Standard Views"), m)
         self.fill(std_views, tuple(self.views[k] for k in
                                    ("top", "bottom", "front", "back", "left", "right", "iso")))
         self.fill(m, (self.a_prev_view, self.a_next_view, std_views, None,
@@ -2584,22 +2785,22 @@ class MainWindow(QMainWindow):
                       self.tool_actions["orbit"], self.tool_actions["pan"], self.tool_actions["zoom"],
                       self.a_fov, self.a_zoom_window, self.a_extents))
 
-        m = mb.addMenu("&Tekenen")
-        lines = QMenu("&Lijnen", m)
+        m = mb.addMenu(tr("&Draw"))
+        lines = QMenu(tr("&Lines"), m)
         self.fill(lines, (self.tool_actions["line"], self.a_freehand))
-        arcs = QMenu("&Bogen", m)
+        arcs = QMenu(tr("&Arcs"), m)
         self.fill(arcs, (self.a_arc, self.a_arc2, self.a_arc3, self.a_pie))
-        shapes = QMenu("&Vormen", m)
+        shapes = QMenu(tr("&Shapes"), m)
         self.fill(shapes, (self.tool_actions["rectangle"], self.a_rotrect, self.tool_actions["circle"],
                            self.tool_actions["polygon"]))
-        primitives = QMenu("&Basisvormen", m)
+        primitives = QMenu(tr("&Basic Shapes"), m)
         self.fill(primitives, (self.a_box, self.a_cylinder, self.a_cone, self.a_sphere, self.a_torus))
         self.fill(m, (lines, arcs, shapes, None, primitives))
 
-        m = mb.addMenu("&Gereedschap")
-        solids = QMenu("&Volumegereedschap", m)
+        m = mb.addMenu(tr("&Tools"))
+        solids = QMenu(tr("&Solid Tools"), m)
         self.fill(solids, (self.a_intersect, self.a_union, self.a_subtract, self.a_trim, self.a_split))
-        self.print_tools_menu = QMenu("&Printhulpmiddelen", m)
+        self.print_tools_menu = QMenu(tr("P&rint Tools"), m)
         self.fill(self.print_tools_menu, (self.a_thread, self.a_thread_ext, self.a_thread_int,
                                           self.a_thread_bolt, self.a_thread_nut, None,
                                           self.a_cutplane, self.a_cut_join, None,
@@ -2614,11 +2815,11 @@ class MainWindow(QMainWindow):
                       self.tool_actions["text"], None,
                       self.print_tools_menu))
 
-        m = mb.addMenu("&Venster")
-        self.standard_menu = QMenu("Standaard&venster", m)
+        m = mb.addMenu(tr("&Window"))
+        self.standard_menu = QMenu(tr("Default &Tray"), m)
         self.fill(m, (self.standard_menu, None, self.a_model_info, self.a_prefs))
 
-        m = mb.addMenu("&Help")
+        m = mb.addMenu(tr("&Help"))
         self.fill(m, (self.a_welcome, self.a_help, None, self.a_updates, self.a_about))
 
     def _build_toolbars(self):
@@ -2626,7 +2827,7 @@ class MainWindow(QMainWindow):
         self._toolbar_tool_icons = {}
         T = self.tool_actions
 
-        tb = QToolBar("Aan de slag")
+        tb = QToolBar(tr("Getting Started"))
         tb.setObjectName("gettingstarted")
         tb.setIconSize(QSize(24, 24))
         self.tb_main = tb
@@ -2641,7 +2842,7 @@ class MainWindow(QMainWindow):
         self._add_dropdown(tb, self.a_arc2, (self.a_arc, self.a_arc2, self.a_arc3, self.a_pie))
         self._add_dropdown(tb, T["rectangle"], (T["rectangle"], self.a_rotrect, T["circle"], T["polygon"]))
 
-        tools = QToolBar("Grote gereedschapsset")
+        tools = QToolBar(tr("Large Tool Set"))
         tools.setObjectName("tools")
         tools.setIconSize(QSize(28, 28))
         self.tb_tools = tools
@@ -2657,10 +2858,10 @@ class MainWindow(QMainWindow):
         self._build_sheet_toolbar()
 
     def _build_sheet_toolbar(self):
-        """Werkbalk '2D-werkblad' links; alleen zichtbaar in de 2D-modus."""
+        """The '2D Worksheet' toolbar on the left; only visible in 2D mode."""
         bar = self.findChild(QToolBar, "SheetToolbar")
         if bar is None:
-            bar = QToolBar("2D-werkblad")
+            bar = QToolBar(tr("2D Worksheet"))
             bar.setObjectName("SheetToolbar")
             bar.setIconSize(QSize(24, 24))
             self.addToolBar(Qt.LeftToolBarArea, bar)
@@ -2683,10 +2884,10 @@ class MainWindow(QMainWindow):
             self._add_dropdown(bar, self.a_sheet_distribute,
                                tuple(self.sheet_distribute_actions.values()))
             self._add_layer_dropdown(bar, self.a_sheet_to_layer)
-        bar.hide()          # SketchUp toont standaard geen gereedschapsbalk links
+        bar.hide()          # SketchUp shows no toolbar on the left by default
 
     def _add_layer_dropdown(self, tb, action):
-        """Knop met een uitklapmenu van de lagen; het menu wordt bij elk openen gevuld."""
+        """Button with a drop-down menu of the layers; the menu is filled each time it opens."""
         btn = tb.widgetForAction(action)
         if not isinstance(btn, QToolButton):
             return
@@ -2697,20 +2898,20 @@ class MainWindow(QMainWindow):
         self._dropdown_buttons[action] = btn
 
     def _fill_layer_menu(self, menu):
-        """Het menu "Naar laag": één regel per laag van het werkblad."""
+        """The "To Layer" menu: one line per layer of the worksheet."""
         menu.clear()
         for name, lay in self.doc.sheet.layers.items():
             a = menu.addAction(f"{name}   —   {OP_LABELS.get(lay.op, lay.op)}")
             a.setIcon(swatch(lay.color or "#000000", 14))
             if lay.locked:
                 a.setEnabled(False)
-                a.setToolTip("Deze laag staat op slot")
+                a.setToolTip(tr("This layer is locked"))
             a.triggered.connect(lambda checked=False, n=name: self.move_selection_to_layer(n))
         if not self.doc.sheet.layers:
-            menu.addAction("(geen lagen)").setEnabled(False)
+            menu.addAction(tr("(no layers)")).setEnabled(False)
 
     def sheet_op(self, op):
-        """Bewerken op de selectie: Samenvoegen, Aftrekken of Snijpunt."""
+        """An operation on the selection: Union, Subtract or Intersect."""
         self.set_mode("2d")
         return self.sheet_view.sheet_boolean(op)
 
@@ -2721,30 +2922,30 @@ class MainWindow(QMainWindow):
         self.sheet_view.set_offset_round(checked)
 
     def move_selection_to_layer(self, name=None) -> bool:
-        """"Naar laag": de selectie naar de actieve laag, of naar de gekozen laag."""
+        """"To Layer": the selection to the active layer, or to the chosen layer."""
         self.set_mode("2d")
         sel = self.sheet_view.selected_paths()
         if not sel:
-            self.hint.setText("Selecteer eerst de contouren die naar een laag moeten.")
+            self.hint.setText(tr("First select the outlines that should go to a layer."))
             return False
         if name is None:
             name = self.sheet_view.draw_layer()
             if all(p.layer == name for p in sel):
-                self.hint.setText(f"Die contouren staan al op laag {name}; kies met het pijltje "
-                                  "een andere laag.")
+                self.hint.setText(tr("Those outlines are already on layer {name}; choose another "
+                                     "layer with the arrow.").format(name=name))
                 return False
         return self.sheet_view.move_to_layer(name)
 
     def open_layers_panel(self):
-        """Venster > Standaardvenster > Lagen: kleur, bewerking en instellingen per laag."""
+        """Window > Default Tray > Layers: color, operation and settings per layer."""
         self.tray.show()
         self.tray.raise_()
-        self.tray.open_panel("Lagen")
+        self.tray.open_panel(tr(PANEL_LAYERS))
         self.layers_panel.refresh()
 
-    # ------------------------------------------------------------ plaat en nesten
+    # ------------------------------------------------------------ sheet and nesting
     def open_sheet_settings(self):
-        """Beeld > Plaat…: formaat, dikte, marge, tussenruimte en aantal platen."""
+        """View > Sheet…: size, thickness, margin, gap and number of sheets."""
         self.set_mode("2d")
         dlg = SheetSettingsDialog(self)
         if dlg.exec() != QDialog.Accepted:
@@ -2765,16 +2966,18 @@ class MainWindow(QMainWindow):
         self.doc.notify()
         self.sheet_view.zoom_extents()
         self.sheet_view._refresh_outside(announce=False)
-        self.hint.setText(f"Plaat {values['w']:g} × {values['h']:g} mm, {values['count']} "
-                          f"plaat{'s' if values['count'] != 1 else ''}, marge "
-                          f"{values['margin']:g} mm, tussenruimte {values['gap']:g} mm")
+        message = (tr("Sheet {w:g} × {h:g} mm, {count} sheet, margin {margin:g} mm, gap {gap:g} mm")
+                   if values["count"] == 1 else
+                   tr("Sheet {w:g} × {h:g} mm, {count} sheets, margin {margin:g} mm, gap {gap:g} mm"))
+        self.hint.setText(message.format(w=values["w"], h=values["h"], count=values["count"],
+                                         margin=values["margin"], gap=values["gap"]))
         self.setFocus()
 
     def auto_arrange(self, options=None):
-        """Beeld > Automatisch schikken…: onderdelen zuinig over de platen schikken."""
+        """View > Auto Arrange…: arrange parts economically over the sheets."""
         self.set_mode("2d")
         if not self.doc.sheet.paths:
-            self.hint.setText("Er staat niets op het werkblad om te schikken.")
+            self.hint.setText(tr("There is nothing on the worksheet to arrange."))
             return
         if options is None:
             dlg = AutoArrangeDialog(self)
@@ -2785,9 +2988,9 @@ class MainWindow(QMainWindow):
         self.sheet_view.auto_arrange(options)
         self.setFocus()
 
-    # ------------------------------------------------------------ doos met vingerlassen
+    # ------------------------------------------------------------ box with finger joints
     def box_joint_dialog(self):
-        """Beeld > Doos met vingerlassen…: de panelen op het werkblad of als 3D-voorbeeld."""
+        """View > Box with Finger Joints…: the panels on the worksheet or as a 3D preview."""
         dlg = BoxJointDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -2801,7 +3004,7 @@ class MainWindow(QMainWindow):
         return made
 
     def box_panels_from(self, options):
-        """De panelen van de doos uit een opties-dict; `ValueError` bij onmogelijke maten."""
+        """The panels of the box from an options dict; `ValueError` for impossible sizes."""
         o = dict(options or {})
         sheet = self.doc.sheet
         t = float(o.get("t") or sheet.sheet_thickness or boxgen.DEFAULT_THICKNESS)
@@ -2810,28 +3013,33 @@ class MainWindow(QMainWindow):
                                  bool(o.get("inner", True)), str(o.get("lid", "none")),
                                  float(o.get("kerf", 0.0) or 0.0))
 
-    def _box_failure(self, error, note):
-        """Een mislukte doos: een duidelijke tekst in de statusbalk, nooit een crash."""
+    def _box_failure(self, error, note, message):
+        """A failed box: a clear text in the status bar, never a crash.
+
+        `note` is the English text for the log, `message` the translated template with
+        {error} for the status bar."""
         if isinstance(error, ValueError):
             self.hint.setText(str(error))
         else:
             errors.log_exception(note=f"{note}: {error}")
-            self.hint.setText(f"{note.capitalize()} lukt niet: {error}")
+            self.hint.setText(message.format(error=error))
         return None
 
     def make_box_sheet(self, options):
-        """"Op werkblad": de snijcontouren op het werkblad, automatisch op de plaat geschikt.
+        """"On Worksheet": the cutting outlines on the worksheet, auto arranged on the sheet.
 
-        Eén undo-stap: de panelen gaan er in dezelfde stap op en hun plek komt meteen uit
-        het automatisch schikken. Zonder plaatformaat blijven ze naast elkaar liggen.
+        One undo step: the panels go on in the same step and their place comes straight
+        from the auto arrange. Without a sheet size they stay side by side.
         """
         self.set_mode("2d")
         sheet = self.doc.sheet
         try:
             panels = self.box_panels_from(options)
-            drawing = boxgen.panels_to_drawing(panels, labels=bool(options.get("labels", True)))
-        except Exception as e:                      # de generator mag nooit crashen
-            return self._box_failure(e, "de doos")
+            drawing = boxgen.panels_to_drawing(panels, layer=sheet.default_layer("cut") or None,
+                                               label_layer=sheet.default_layer("engrave") or None,
+                                               labels=bool(options.get("labels", True)))
+        except Exception as e:                      # the generator must never crash
+            return self._box_failure(e, "the box", tr("The box failed: {error}"))
         note = ""
         used = 0
         if sheet.sheet_w and sheet.sheet_h:
@@ -2842,12 +3050,12 @@ class MainWindow(QMainWindow):
             except ValueError as e:
                 note = f" ({e})"
             except Exception as e:
-                return self._box_failure(e, "het schikken")
+                return self._box_failure(e, "arranging", tr("The arranging failed: {error}"))
             else:
                 drawing = self._nest_box_drawing(drawing, placements, sheet)
                 used = max((si for (_p, si, *_r) in placements), default=0) + 1
         else:
-            note = " (geen plaatformaat: kies Beeld > Plaat… om te schikken)"
+            note = tr(" (no sheet size: choose View > Sheet… to arrange)")
         self.doc.checkpoint()
         added = sheet.merge(drawing)
         if used:
@@ -2862,14 +3070,19 @@ class MainWindow(QMainWindow):
                                           or boxgen.DEFAULT_THICKNESS),
                                   bool(options.get("inner", True)),
                                   str(options.get("lid", "none")))
-        self.hint.setText(f"{len(panels)} panelen van de doos op het werkblad "
-                          f"({W:g} × {D:g} × {H:g} mm)"
-                          + (f", geschikt op {used} plaat{'s' if used != 1 else ''}" if used else "")
-                          + note)
+        if not used:
+            message = tr("{n} panels of the box on the worksheet ({w:g} × {d:g} × {h:g} mm){note}")
+        elif used == 1:
+            message = tr("{n} panels of the box on the worksheet ({w:g} × {d:g} × {h:g} mm), "
+                         "arranged on {used} sheet{note}")
+        else:
+            message = tr("{n} panels of the box on the worksheet ({w:g} × {d:g} × {h:g} mm), "
+                         "arranged on {used} sheets{note}")
+        self.hint.setText(message.format(n=len(panels), w=W, d=D, h=H, used=used, note=note))
         return added
 
     def _nest_box_drawing(self, drawing, placements, sheet):
-        """De geschikte plekken op de tekening zetten: elk paneel met zijn gravure mee."""
+        """Put the arranged places on the drawing: every panel with its engraving."""
         spacing = float(sheet.sheet_w) + SHEET_SPACING
         out = Drawing(layers={n: replace(l, params=dict(l.params))
                               for n, l in drawing.layers.items()},
@@ -2885,13 +3098,13 @@ class MainWindow(QMainWindow):
         return out
 
     def make_box_model(self, options):
-        """"Voorbeeld in 3D": elk paneel als eigen groep, op zijn plek in de doos."""
+        """"Preview in 3D": every panel as its own group, in its place in the box."""
         self.set_mode("3d")
         try:
             panels = self.box_panels_from(options)
             solids = boxgen.panels_to_manifolds(panels)
-        except Exception as e:                      # de generator mag nooit crashen
-            return self._box_failure(e, "de doos")
+        except Exception as e:                      # the generator must never crash
+            return self._box_failure(e, "the box", tr("The box failed: {error}"))
         t = float(options.get("t") or self.doc.sheet.sheet_thickness
                   or boxgen.DEFAULT_THICKNESS)
         W, D, H = boxgen.box_size(float(options.get("w", 100.0)), float(options.get("d", 60.0)),
@@ -2904,21 +3117,22 @@ class MainWindow(QMainWindow):
         groups = []
         for p, man in zip(panels, solids):
             g = ops.group_from_manifold(self.doc, man.translate(shift),
-                                        self.settings.current_color, f"Doos - {p.name}")
+                                        self.settings.current_color,
+                                        tr("Box - {name}").format(name=p.name))
             groups.append(g)
         self.doc.set_selection([("g", g.id, g.id) for g in groups])
         self.doc.notify()
         self.view.zoom_extents()
-        self.hint.setText(f"{len(groups)} panelen van de doos in het model gezet "
-                          f"({W:g} × {D:g} × {H:g} mm)")
+        self.hint.setText(tr("{n} panels of the box placed in the model ({w:g} × {d:g} × {h:g} mm)")
+                          .format(n=len(groups), w=W, d=D, h=H))
         return groups
 
     def ask_sheet_text(self):
-        """Dialoog bij het 2D-tekengereedschap: tekst, lettertype, hoogte en vet."""
+        """Dialog of the 2D text tool: text, font, height and bold."""
         from .fonts import default_family, PREFERRED
         tool = self.sheet_view.tools["text"]
         dlg = QDialog(self)
-        dlg.setWindowTitle("Tekst op het werkblad")
+        dlg.setWindowTitle(tr("Text on the Worksheet"))
         form = QFormLayout(dlg)
         ed = QLineEdit(tool.text or getattr(self, "_last_sheet_text", "Volura"))
         family = QComboBox()
@@ -2927,19 +3141,20 @@ class MainWindow(QMainWindow):
             family.setCurrentText(tool.family)
         elif default_family() in PREFERRED:
             family.setCurrentText(default_family())
-        bold = QCheckBox("Vet")
+        bold = QCheckBox(tr("Bold"))
         bold.setChecked(bool(tool.bold))
         h = QDoubleSpinBox()
         h.setRange(0.5, 2000)
         h.setDecimals(2)
         h.setSuffix(" mm")
         h.setValue(float(tool.height) if tool.height else 10.0)
-        form.addRow("Tekst", ed)
-        form.addRow("Lettertype", family)
+        form.addRow(tr("Text"), ed)
+        form.addRow(tr("Font"), family)
         form.addRow("", bold)
-        form.addRow("Hoogte hoofdletter", h)
-        form.addRow(QLabel("De letters worden als gesloten contouren neergezet, met de gaten\n"
-                           "van o, a en e erin. Typ een hoogte in het meetvak om te wijzigen."))
+        form.addRow(tr("Cap height"), h)
+        form.addRow(QLabel(tr("The letters are placed as closed outlines, with the holes\n"
+                              "of o, a and e in them. Type a height in the Measurements box to "
+                              "change it.")))
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(dlg.accept)
         bb.rejected.connect(dlg.reject)
@@ -2948,17 +3163,17 @@ class MainWindow(QMainWindow):
             return False
         self._last_sheet_text = ed.text()
         if not tool.set_text(ed.text(), family.currentText(), h.value(), bold.isChecked()):
-            self.hint.setText("Van deze tekst zijn geen contouren gekomen; kies een ander lettertype.")
+            self.hint.setText(tr("This text gave no outlines; choose another font."))
             return False
         self.sheet_view.set_tool("text")
         self.sheet_view.setFocus()
         return True
 
     def _build_print_tools_toolbar(self):
-        """Werkbalk 'Printhulpmiddelen' rechts; ook andere functies kunnen er knoppen aan toevoegen."""
+        """The 'Print Tools' toolbar on the right; other features can add buttons to it too."""
         bar = self.findChild(QToolBar, "PrintToolsToolbar")
         if bar is None:
-            bar = QToolBar("Printhulpmiddelen")
+            bar = QToolBar(tr("Print Tools"))
             bar.setObjectName("PrintToolsToolbar")
             bar.setIconSize(QSize(24, 24))
             self.addToolBar(Qt.RightToolBarArea, bar)
@@ -2994,12 +3209,12 @@ class MainWindow(QMainWindow):
 
     def show_toolbar_dialog(self):
         dlg = QDialog(self)
-        dlg.setWindowTitle("Werkbalken")
+        dlg.setWindowTitle(tr("Toolbars"))
         lay = QVBoxLayout(dlg)
-        lay.addWidget(QLabel("Toon of verberg de werkbalken:"))
-        for bar, label in ((self.tb_main, "Aan de slag"), (self.tb_tools, "Grote gereedschapsset"),
-                           (getattr(self, "tb_print", None), "Printhulpmiddelen"),
-                           (getattr(self, "tb_sheet", None), "2D-werkblad")):
+        lay.addWidget(QLabel(tr("Show or hide the toolbars:")))
+        for bar, label in ((self.tb_main, tr("Getting Started")), (self.tb_tools, tr("Large Tool Set")),
+                           (getattr(self, "tb_print", None), tr("Print Tools")),
+                           (getattr(self, "tb_sheet", None), tr("2D Worksheet"))):
             if bar is None:
                 continue
             cb = QCheckBox(label)
@@ -3018,11 +3233,11 @@ class MainWindow(QMainWindow):
         self.outliner = OutlinerPanel(self)
         self.print_panel = PrintCheckPanel(self)
         self.layers_panel = LayersPanel(self)
-        self.tray = Tray((("Entiteitsinfo", self.info), ("Materialen", self.materials),
-                          ("Overzicht", self.outliner)),
-                         open_panels=("Entiteitsinfo", "Materialen"), parent=self,
-                         extra_panels=(("Printcontrole", self.print_panel),
-                                       ("Lagen", self.layers_panel)))
+        self.tray = Tray(((tr(PANEL_INFO), self.info), (tr(PANEL_MATERIALS), self.materials),
+                          (tr(PANEL_OUTLINER), self.outliner)),
+                         open_panels=(tr(PANEL_INFO), tr(PANEL_MATERIALS)), parent=self,
+                         extra_panels=((tr(PANEL_PRINT_CHECK), self.print_panel),
+                                       (tr(PANEL_LAYERS), self.layers_panel)))
         self.addDockWidget(Qt.RightDockWidgetArea, self.tray)
         self.resizeDocks([self.tray], [TRAY_WIDTH], Qt.Horizontal)
         self._build_tray_menu()
@@ -3031,69 +3246,100 @@ class MainWindow(QMainWindow):
         self.outliner.refresh()
 
     def _build_tray_menu(self):
-        """Venster > Standaardvenster: an item per panel that opens/closes that panel."""
+        """Window > Default Tray: an item per panel that opens/closes that panel."""
         self.tray_actions = {}
+        english = {tr(p): p for p in PANELS}
         for title in list(self.tray.panel_titles) + list(self.tray.extra_titles):
             a = self.act(f"&{title}", lambda checked=False, t=title: self.tray.toggle_panel(t),
                          checkable=True)
+            # the shortcut path uses the English title, whatever the language
+            a.setProperty(SOURCE_TEXT, f"&{english.get(title, title)}")
             a.setChecked(self.tray.is_open(title))
             self.tray_actions[title] = a
             self.standard_menu.addAction(a)
         self.tray.panel_toggled.connect(self.on_tray_panel_toggled)
         show = self.tray.toggleViewAction()
-        show.setText("&Standaardvenster tonen")
+        show.setText(tr("&Show Default Tray"))
         self.standard_menu.addAction(show)
 
     def on_tray_panel_toggled(self, title, is_open):
         a = self.tray_actions.get(title)
         if a is not None and a.isChecked() != is_open:
             a.setChecked(is_open)
-        if title == "Printcontrole":
+        if title == tr(PANEL_PRINT_CHECK):
             if is_open:
                 self.print_panel.refresh()
             else:
                 self.print_panel.clear_marks()
-        if title == "Lagen" and is_open:
+        if title == tr(PANEL_LAYERS) and is_open:
             self.layers_panel.refresh()
 
     def open_print_check(self):
-        """Venster > Standaardvenster > Printcontrole: open the panel and check the model."""
+        """Window > Default Tray > Print Check: open the panel and check the model."""
         self.tray.show()
         self.tray.raise_()
-        if self.tray.is_open("Printcontrole"):
+        if self.tray.is_open(tr(PANEL_PRINT_CHECK)):
             self.print_panel.refresh()
         else:
-            self.tray.open_panel("Printcontrole")   # opening runs the check through the toggle
+            self.tray.open_panel(tr(PANEL_PRINT_CHECK))   # opening runs the check through the toggle
         self.view.update()
 
     # ------------------------------------------------------------ shortcuts
     def command_paths(self):
-        """{'Bestand/Nieuw': QAction} for every command in the menus; the first menu wins."""
-        out = {}
+        """{'File/New': QAction} for every command in the menus; the first menu wins.
 
-        def walk(menu, prefix):
+        The paths are made of the English menu texts, so the shortcuts stored under them
+        (QSettings "shortcuts/<path>") work in every language. `command_label` gives the
+        path as the menus show it; `_legacy_paths` maps the path the same command had in
+        another language (the Dutch Volura 0.1.0 stored those) to the English one."""
+        out, labels, legacy = {}, {}, {}
+        tables = translation_tables()
+
+        def segments(a):
+            """The path segment of a menu or command: English, shown, per other language."""
+            src = source_text_of(a)
+            return (clean_text(src), clean_text(a.text()),
+                    *(clean_text(t.get(src) or t.get(clean_text(src)) or src) for t in tables))
+
+        def add(paths, a, overwrite=False):
+            if paths[0] in out and not overwrite:
+                return
+            out[paths[0]] = a
+            labels[paths[0]] = paths[1]
+            for old in paths[2:]:
+                legacy.setdefault(old, paths[0])
+
+        def walk(menu, prefixes):
             for a in menu.actions():
                 if a.isSeparator():
                     continue
                 sub = a.menu()
                 if sub is not None:
                     if sub is not getattr(self, "recent_menu", None):
-                        walk(sub, f"{prefix}/{clean_text(a.text())}")
+                        walk(sub, tuple(f"{p}/{s}" for p, s in zip(prefixes, segments(a))))
                     continue
-                name = clean_text(a.text())
-                if name:
-                    out.setdefault(f"{prefix}/{name}", a)
+                segs = segments(a)
+                if segs[0]:
+                    add(tuple(f"{p}/{s}" for p, s in zip(prefixes, segs)), a)
 
         for a in self.menuBar().actions():
             menu = a.menu()
             if menu is not None:
-                walk(menu, clean_text(a.text()))
+                walk(menu, segments(a))
         seen = {id(a) for a in out.values()}
+        other = (OTHER_COMMANDS, tr(OTHER_COMMANDS),
+                 *(t.get(OTHER_COMMANDS, OTHER_COMMANDS) for t in tables))
         for a in self.actions():          # the commands that only live in the right-click menu
-            name = clean_text(a.text())
-            if name and id(a) not in seen:
-                out[f"{OTHER_COMMANDS}/{name}"] = a
+            segs = segments(a)
+            if segs[0] and id(a) not in seen:
+                add(tuple(f"{p}/{s}" for p, s in zip(other, segs)), a, overwrite=True)
+        self._command_labels = labels
+        self._legacy_paths = legacy
         return out
+
+    def command_label(self, path):
+        """The path of a command as the menus show it (in the current language)."""
+        return getattr(self, "_command_labels", {}).get(path, path)
 
     def path_of(self, action):
         """The menu path of an action, the key its shortcuts are stored under."""
@@ -3136,11 +3382,22 @@ class MainWindow(QMainWindow):
                 taken.setdefault(text, a)
         stored = {}
         q = qsettings()
-        for key in q.allKeys():
-            if key.startswith(SHORTCUTS_KEY):
-                path = key[len(SHORTCUTS_KEY):]
-                if path in paths:
-                    stored[path] = self.read_shortcut_value(q.value(key))
+        keys = [k for k in q.allKeys() if k.startswith(SHORTCUTS_KEY)]
+        for key in keys:
+            path = key[len(SHORTCUTS_KEY):]
+            if path in paths:
+                stored[path] = self.read_shortcut_value(q.value(key))
+        legacy = getattr(self, "_legacy_paths", {})
+        for key in keys:                      # paths in another language, e.g. 'Bestand/Nieuw'
+            path = key[len(SHORTCUTS_KEY):]
+            new = legacy.get(path)
+            if path in paths or new is None:
+                continue
+            value = self.read_shortcut_value(q.value(key))
+            q.remove(key)                     # move it to the English path for good
+            if new not in stored:
+                stored[new] = value
+                q.setValue(SHORTCUTS_KEY + new, value)
         for path in stored:                   # first let go of what those commands use now
             a = paths[path]
             for text in self.sequence_texts(a):
@@ -3171,7 +3428,7 @@ class MainWindow(QMainWindow):
         self.store_shortcuts(action, texts)
 
     def assign_shortcut(self, path, sequence, ask=True):
-        """Voorkeuren > Sneltoetsen > '+': the shortcut goes to this command."""
+        """Preferences > Shortcuts > '+': the shortcut goes to this command."""
         action = self.command_paths().get(path)
         seq = QKeySequence(sequence)
         if action is None or seq.isEmpty():
@@ -3183,9 +3440,10 @@ class MainWindow(QMainWindow):
         other = self.action_using(text, skip=action)
         if other is not None:
             if ask and QMessageBox.question(
-                    self, "Sneltoets in gebruik",
-                    f"{seq.toString(QKeySequence.NativeText)} is nu de sneltoets van "
-                    f"'{clean_text(other.text())}'.\n\nWilt u die sneltoets hiernaartoe halen?"
+                    self, tr("Shortcut in Use"),
+                    tr("{key} is now the shortcut of '{command}'.\n\nDo you want to move that "
+                       "shortcut here?").format(key=seq.toString(QKeySequence.NativeText),
+                                                command=clean_text(other.text()))
             ) != QMessageBox.Yes:
                 return False
             self.change_shortcuts(other, [t for t in self.sequence_texts(other) if t != text])
@@ -3193,7 +3451,7 @@ class MainWindow(QMainWindow):
         return True
 
     def remove_shortcut(self, path, sequence=None):
-        """Voorkeuren > Sneltoetsen > '−': this shortcut, or all of them, off the command."""
+        """Preferences > Shortcuts > '−': this shortcut, or all of them, off the command."""
         action = self.command_paths().get(path)
         if action is None:
             return False
@@ -3211,7 +3469,7 @@ class MainWindow(QMainWindow):
         return True
 
     def restore_shortcuts(self):
-        """Voorkeuren > Sneltoetsen > Alles herstellen: back to the shortcuts Volura ships with."""
+        """Preferences > Shortcuts > Reset All: back to the shortcuts Volura ships with."""
         q = qsettings()
         for key in q.allKeys():
             if key.startswith(SHORTCUTS_KEY):
@@ -3223,23 +3481,65 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ dialogs
     def model_info(self, page=0):
-        """Venster > Modelinfo; Bestand > Printer instellen komt op de pagina Printbed uit."""
+        """Window > Model Info; File > Printer Setup lands on the Print Bed page."""
         dlg = ModelInfoDialog(self, page)
         dlg.exec()
         return dlg
 
     def print_setup(self):
-        """Bestand > Printer instellen: Modelinfo, pagina Printbed (SketchUp)."""
-        return self.model_info("Printbed")
+        """File > Printer Setup: Model Info, page Print Bed (SketchUp)."""
+        return self.model_info("Print Bed")
 
     def preferences(self, checked=False):
-        """Venster > Voorkeuren: Algemeen, Tekenen en Sneltoetsen."""
+        """Window > Preferences: General, Display, Drawing, 3D Mouse and Shortcuts."""
         dlg = PreferencesDialog(self)
         dlg.exec()
         return dlg
 
+    # ------------------------------------------------------------ theme
+    def apply_theme(self):
+        """Preferences > Display > Theme: the new theme everywhere at once."""
+        dark = theme.apply(self.settings.theme)
+        self.tray.apply_theme()
+        self.info.refresh()
+        for w in (self.view, self.sheet_view, self.mode_button):
+            w.update()
+        return dark
+
+    def _system_scheme_changed(self, scheme=None):
+        """Windows switches between light and dark: follow it when the theme is System."""
+        if self.settings.theme == theme.SYSTEM and theme.wants_dark(theme.SYSTEM) != theme.is_dark():
+            self.apply_theme()
+
+    # ------------------------------------------------------------ 3D mouse
+    def start_spacemouse(self):
+        """Connect the 3D mouse (3DxWare, Raw Input or spacenavd); never in a test."""
+        self.spacemouse.stop()
+        if is_offscreen() or not self.settings.spacemouse:
+            return None
+        return self.spacemouse.start(int(self.winId()))
+
+    def spacemouse_status(self):
+        if not self.settings.spacemouse:
+            return tr("off")
+        if self.spacemouse.name:
+            return tr("connected through {name}").format(name=self.spacemouse.name)
+        return tr("no 3D mouse found")
+
+    def on_spacemouse_motion(self, m):
+        if not self.isActiveWindow():
+            return
+        self.active_view().spacemouse_move(m, self.settings.spacemouse_speed)
+
+    def on_spacemouse_command(self, name):
+        """A button of the 3D mouse: fit to view, or a standard view in 3D."""
+        if name == "fit":
+            self.zoom_extents()
+        elif self.mode == "3d":
+            self.view.set_view(name)
+
     def show_welcome(self, checked=False):
-        """Help > Welkom bij Volura: the welcome screen."""
+        """Help > Welcome to Volura: the welcome screen."""
         dlg = WelcomeDialog(self)
         dlg.exec()
         return dlg
@@ -3295,30 +3595,30 @@ class MainWindow(QMainWindow):
         self.info.refresh()
 
     def update_title(self):
-        name = os.path.basename(self.doc.path) if self.doc.path else "Naamloos"
+        name = os.path.basename(self.doc.path) if self.doc.path else tr("Untitled")
         star = "*" if self.doc.dirty else ""
         self.setWindowTitle(f"{name}{star} - Volura")
 
     def show_entity_info(self):
         self.tray.show()
         self.tray.raise_()
-        self.tray.open_panel("Entiteitsinfo")
+        self.tray.open_panel(tr(PANEL_INFO))
 
     def select_color(self, color):
         self.settings.current_color = color
         if not any(c.lower() == color.lower() for _, c in self.doc.materials):
             self.doc.checkpoint()
-            self.doc.materials.append([f"Kleur {len(self.doc.materials) + 1}", color])
+            self.doc.materials.append([tr("Color {n}").format(n=len(self.doc.materials) + 1), color])
             self.doc.notify()
         self.materials.refresh()
-        self.view.set_status(f"Huidige kleur: {color}")
+        self.view.set_status(tr("Current color: {color}").format(color=color))
 
     # ------------------------------------------------------------ files
     def confirm_discard(self):
         if not self.doc.dirty or (not self.doc.groups and not self.doc.root.E
                                   and not self.doc.sheet.paths):
             return True
-        r = QMessageBox.question(self, "Volura", "Wijzigingen in het huidige model opslaan?",
+        r = QMessageBox.question(self, "Volura", tr("Save changes to the current model?"),
                                  QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
         if r == QMessageBox.Save:
             return self.file_save()
@@ -3337,8 +3637,8 @@ class MainWindow(QMainWindow):
         if not self.confirm_discard():
             return
         if not path:
-            path, _ = QFileDialog.getOpenFileName(self, "Model openen", self.last_dir(),
-                                                  "Volura-model (*.volura);;STL (*.stl)")
+            path, _ = QFileDialog.getOpenFileName(self, tr("Open Model"), self.last_dir(),
+                                                  tr("Volura model (*.volura);;STL (*.stl)"))
         if not path:
             return
         if path.lower().endswith(".stl"):
@@ -3349,7 +3649,7 @@ class MainWindow(QMainWindow):
             self.view.tool.reset()
             fileio.load_document(self.doc, path)
         except Exception as e:
-            QMessageBox.critical(self, "Openen mislukt", str(e))
+            QMessageBox.critical(self, tr("Open Failed"), str(e))
             return
         self.add_recent(path)
         self.doc.notify()
@@ -3362,16 +3662,16 @@ class MainWindow(QMainWindow):
         try:
             fileio.save_document(self.doc, self.doc.path)
         except Exception as e:
-            QMessageBox.critical(self, "Opslaan mislukt", str(e))
+            QMessageBox.critical(self, tr("Save Failed"), str(e))
             return False
         self.doc.dirty = False
         self.update_title()
-        self.hint.setText(f"Opgeslagen: {self.doc.path}")
+        self.hint.setText(tr("Saved: {path}").format(path=self.doc.path))
         return True
 
     def file_save_as(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Opslaan als", self.last_dir("model.volura"),
-                                              "Volura-model (*.volura)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("Save As"), self.last_dir("model.volura"),
+                                              tr("Volura model (*.volura)"))
         if not path:
             return False
         if not path.lower().endswith(".volura"):
@@ -3383,8 +3683,8 @@ class MainWindow(QMainWindow):
     def file_save_copy_as(self):
         """Save a copy under another name; the document keeps its own path."""
         name = os.path.basename(self.doc.path) if self.doc.path else "model.volura"
-        path, _ = QFileDialog.getSaveFileName(self, "Kopie opslaan als", self.last_dir(name),
-                                              "Volura-model (*.volura)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("Save a Copy As"), self.last_dir(name),
+                                              tr("Volura model (*.volura)"))
         if not path:
             return False
         if not path.lower().endswith(".volura"):
@@ -3392,22 +3692,21 @@ class MainWindow(QMainWindow):
         try:
             fileio.save_document(self.doc, path)
         except Exception as e:
-            QMessageBox.critical(self, "Kopie opslaan mislukt", str(e))
+            QMessageBox.critical(self, tr("Saving the Copy Failed"), str(e))
             return False
         self.add_recent(path)
-        self.hint.setText(f"Kopie opgeslagen: {path}")
+        self.hint.setText(tr("Copy saved: {path}").format(path=path))
         return True
 
     def file_import(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Importeren", self.last_dir(),
-            "Alle ondersteunde bestanden (*.stl *.svg *.dxf);;STL (*.stl);;"
-            "SVG (*.svg);;DXF (*.dxf)")
+            self, tr("Import"), self.last_dir(),
+            tr("All supported files (*.stl *.svg *.dxf);;STL (*.stl);;SVG (*.svg);;DXF (*.dxf)"))
         if not path:
             return
         if vector_import.is_vector(path):
             if self.mode == "2d":
-                self.import_vector_to_sheet(path)     # op het werkblad blijft het plat
+                self.import_vector_to_sheet(path)     # on the worksheet it stays flat
             else:
                 self.import_vector_interactive(path)
         else:
@@ -3417,7 +3716,7 @@ class MainWindow(QMainWindow):
         try:
             m = fileio.import_stl(path)
         except Exception as e:
-            QMessageBox.critical(self, "Importeren mislukt", str(e))
+            QMessageBox.critical(self, tr("Import Failed"), str(e))
             return
         self.doc.checkpoint()
         g = ops.group_from_manifold(self.doc, m, self.settings.current_color,
@@ -3429,14 +3728,14 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ vector import
     def ask_vector_options(self, drawing, name="Vector"):
-        """Dialoog 'Vectorbestand importeren'; None bij annuleren, anders een opties-dict."""
+        """The 'Import Vector File' dialog; None on cancel, else an options dict."""
         b = drawing.bounds()
         w = (b[2] - b[0]) if b else 0.0
         h = (b[3] - b[1]) if b else 0.0
         dlg = QDialog(self)
-        dlg.setWindowTitle("Vectorbestand importeren")
+        dlg.setWindowTitle(tr("Import Vector File"))
         form = QFormLayout(dlg)
-        form.addRow("Afmetingen", QLabel(f"{w:.1f} x {h:.1f} mm"))
+        form.addRow(tr("Dimensions"), QLabel(f"{w:.1f} x {h:.1f} mm"))
         scale = QDoubleSpinBox()
         scale.setRange(0.001, 10000.0)
         scale.setDecimals(4)
@@ -3449,11 +3748,11 @@ class MainWindow(QMainWindow):
         width.setValue(w if w > 0 else 1.0)
         width.setEnabled(w > 0)
         anchor = QComboBox()
-        anchor.addItem("Midden", "center")
-        anchor.addItem("Linksonder", "lower_left")
-        open_edges = QCheckBox("Open lijnen als randen importeren")
+        anchor.addItem(tr("Middle"), "center")
+        anchor.addItem(tr("Bottom left"), "lower_left")
+        open_edges = QCheckBox(tr("Import open lines as edges"))
         open_edges.setChecked(True)
-        extrude = QCheckBox("Extruderen tot volume")
+        extrude = QCheckBox(tr("Extrude to a volume"))
         height = QDoubleSpinBox()
         height.setRange(-1000.0, 1000.0)
         height.setDecimals(3)
@@ -3493,13 +3792,13 @@ class MainWindow(QMainWindow):
         width.valueChanged.connect(from_width)
         extrude.toggled.connect(height.setEnabled)
 
-        form.addRow("Schaal", scale)
-        form.addRow("Doelbreedte", width)
-        form.addRow("Ankerpunt", anchor)
+        form.addRow(tr("Scale factor"), scale)
+        form.addRow(tr("Target width"), width)
+        form.addRow(tr("Anchor point"), anchor)
         form.addRow("", open_edges)
         form.addRow("", extrude)
-        form.addRow("Hoogte", height)
-        form.addRow("Kleur", cbtn)
+        form.addRow(tr("Height"), height)
+        form.addRow(tr("Color"), cbtn)
         if drawing.warnings:
             form.addRow(QLabel("\n".join(drawing.warnings)))
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -3518,7 +3817,7 @@ class MainWindow(QMainWindow):
                 "name": name}
 
     def place_vector(self, drawing, options, plane=None, point=None):
-        """Plaats een tekening direct (zonder dialoog of gereedschap) als één undo-stap."""
+        """Place a drawing directly (without dialog or tool) as one undo step."""
         plane = plane or Plane((0, 0, 0), (0, 0, 1))
         point = np.zeros(3) if point is None else np.asarray(point, dtype=float)
         regios, open_paden = vector_import.prepare(
@@ -3526,7 +3825,7 @@ class MainWindow(QMainWindow):
             target_width=options.get("target_width"),
             anchor=options.get("anchor", "center"))
         if not regios and not open_paden:
-            self.view.set_status("Er viel niets te importeren uit het vectorbestand.")
+            self.view.set_status(tr("There was nothing to import from the vector file."))
             return None
         if not options.get("open_edges", True):
             open_paden = []
@@ -3550,11 +3849,11 @@ class MainWindow(QMainWindow):
         return group
 
     def import_vector(self, path, options=None):
-        """Importeer een SVG/DXF naar de grond; de dialoog is over te slaan met `options`."""
+        """Import an SVG/DXF onto the ground; `options` skips the dialog."""
         try:
             drawing = vector_import.load_vector(path)
         except Exception as e:
-            QMessageBox.critical(self, "Importeren mislukt", str(e))
+            QMessageBox.critical(self, tr("Import Failed"), str(e))
             return None
         if options is None:
             options = self.ask_vector_options(drawing,
@@ -3564,12 +3863,12 @@ class MainWindow(QMainWindow):
         return self.place_vector(drawing, options)
 
     def import_vector_interactive(self, path, drawing=None, name=None):
-        """Kies opties en plaats de tekening met het plaatsingsgereedschap achter de cursor."""
+        """Choose options and place the drawing with the placement tool behind the cursor."""
         if drawing is None:
             try:
                 drawing = vector_import.load_vector(path)
             except Exception as e:
-                QMessageBox.critical(self, "Importeren mislukt", str(e))
+                QMessageBox.critical(self, tr("Import Failed"), str(e))
                 return
         if name is None:
             name = os.path.splitext(os.path.basename(path))[0] if path else "Vector"
@@ -3580,17 +3879,19 @@ class MainWindow(QMainWindow):
             drawing, scale=options["scale"], target_width=options.get("target_width"),
             anchor=options.get("anchor", "center"))
         if not regios and not open_paden:
-            self.view.set_status("Er viel niets te importeren uit het vectorbestand.")
+            self.view.set_status(tr("There was nothing to import from the vector file."))
             return
         options["name"] = name
         self.view.tools["vectorplace"].set_drawing(regios, open_paden, options)
         self.set_tool("vectorplace")
 
-    def add_drawing_to_sheet(self, drawing, message="contouren aan het werkblad toegevoegd"):
-        """Een tekening als één undo-stap op het werkblad zetten en de nieuwe paden kiezen."""
+    def add_drawing_to_sheet(self, drawing, message=None, **fields):
+        """Put a drawing on the worksheet as one undo step and select the new paths.
+
+        `message` is a translated template with {n} (the number of paths) and `fields`."""
         if drawing is None or not drawing.paths:
-            self.active_view().set_status("Er viel niets naar het werkblad toe te voegen.")
-            self.hint.setText("Er is niets toegevoegd.")
+            self.active_view().set_status(tr("There was nothing to add to the worksheet."))
+            self.hint.setText(tr("Nothing was added."))
             return None
         self.doc.checkpoint()
         added = self.doc.sheet.merge(drawing)
@@ -3598,56 +3899,57 @@ class MainWindow(QMainWindow):
         self.set_mode("2d")
         self.sheet_view.set_selection(added)
         self.sheet_view.zoom_extents()
-        self.hint.setText(f"{len(added)} {message}")
+        message = message or tr("{n} outlines added to the worksheet")
+        self.hint.setText(message.format(n=len(added), **fields))
         return added
 
     def import_vector_to_sheet(self, path, drawing=None):
-        """Bestand > Importeren in 2D: de SVG of DXF op het werkblad, op zijn eigen plek.
+        """File > Import in 2D: the SVG or DXF on the worksheet, in its own place.
 
-        De posities uit het bestand blijven zoals ze zijn en lagen met dezelfde naam
-        worden samengevoegd; de nieuwe paden zijn meteen geselecteerd.
+        The positions from the file stay as they are and layers with the same name are
+        merged; the new paths are selected right away.
         """
         name = os.path.splitext(os.path.basename(path))[0] if path else "Vector"
         if drawing is None:
             try:
                 drawing = vector_import.load_vector(path)
             except Exception as e:
-                QMessageBox.critical(self, "Importeren mislukt", str(e))
+                QMessageBox.critical(self, tr("Import Failed"), str(e))
                 return None
-        added = self.add_drawing_to_sheet(drawing, f"contouren uit {name} toegevoegd")
+        added = self.add_drawing_to_sheet(drawing, tr("{n} outlines added from {name}"), name=name)
         if added is not None and drawing.warnings:
-            self.hint.setText(f"{len(added)} contouren uit {name} toegevoegd "
-                              f"({'; '.join(drawing.warnings)})")
+            self.hint.setText(tr("{n} outlines added from {name} ({warnings})").format(
+                n=len(added), name=name, warnings="; ".join(drawing.warnings)))
         return added
 
     def copy_to_sheet(self, options=None):
-        """Bewerken > Naar 2D-werkblad kopiëren: dezelfde keuzes als de 2D-export."""
+        """Edit > Copy to 2D Worksheet: the same choices as the 2D export."""
         opts = self.vector_export_options() if options is None else dict(options)
         if opts is None:
             return None
         try:
             drawing = self.vector_export_drawing(opts)
         except Exception as e:
-            QMessageBox.critical(self, "Kopiëren mislukt", str(e))
+            QMessageBox.critical(self, tr("Copy Failed"), str(e))
             return None
         if not drawing.paths:
             msg = self.vector_export_empty_message(opts, drawing)
             if drawing.warnings:
                 msg += "\n\n" + "\n".join(drawing.warnings)
-            QMessageBox.information(self, "Naar 2D-werkblad kopiëren", msg)
-            self.hint.setText("Er is niets gekopieerd.")
+            QMessageBox.information(self, tr("Copy to 2D Worksheet"), msg)
+            self.hint.setText(tr("Nothing was copied."))
             return None
-        return self.add_drawing_to_sheet(drawing, "contouren naar het werkblad gekopieerd")
+        return self.add_drawing_to_sheet(drawing, tr("{n} outlines copied to the worksheet"))
 
-    # ------------------------------------------------------------ 3D en werkblad samen
+    # ------------------------------------------------------------ 3D and worksheet together
     def _laser_layers(self):
-        """De lagen van het werkblad waar een bewerking aan hangt (niet de hulplijnen)."""
+        """The layers of the worksheet that have an operation (not the guides)."""
         return [(n, lay) for n, lay in self.doc.sheet.layers.items()
                 if lay.op != "none" and not lay.locked]
 
     def _add_laser_menu(self, menu):
-        """Rechtsklik in 3D: "Laseren / frezen" met een regel per laag van het werkblad."""
-        sm = menu.addMenu(icon("to_laser"), "Laseren / frezen")
+        """Right click in 3D: "Laser / Mill" with a line per layer of the worksheet."""
+        sm = menu.addMenu(icon("to_laser"), tr("Laser / Mill"))
         face = getattr(self, "_context_face", None)
         for name, lay in self._laser_layers():
             a = sm.addAction(swatch(lay.color or "#000000", 14),
@@ -3657,22 +3959,23 @@ class MainWindow(QMainWindow):
         return sm
 
     def send_selection_to_sheet(self, layer=None, face=None):
-        """De selectie in 3D als bewerking op het werkblad: vlakken op ware grootte,
-        geselecteerde groepen (platen) als bovenaanzicht.
+        """The 3D selection as an operation on the worksheet: faces at true size,
+        selected groups (plates) as a top view.
 
-        `face` is het vlak (ctx, fid) waarop met rechts geklikt is, ook als dat in een
-        groep ligt: dan gaat dat vlak, niet het bovenaanzicht van de hele groep (tenzij
-        het bij een selectie van meer vlakken hoort). Zonder `layer` wordt de laag gevraagd. De contouren komen rechts naast wat er al
-        op het werkblad staat. Is er nog geen plaatdikte, dan neemt het werkblad de
-        dikte van de geselecteerde platen over als die allemaal even dik zijn.
+        `face` is the face (ctx, fid) that was right-clicked, also when it lies in a
+        group: then that face goes, not the top view of the whole group (unless it is
+        part of a selection of more faces). Without `layer` the layer is asked. The
+        outlines go to the right of what is already on the worksheet. If there is no
+        sheet thickness yet, the worksheet takes the thickness of the selected plates
+        when they are all equally thick.
         """
         if layer is None or isinstance(layer, bool):
             names = [f"{n}   —   {OP_LABELS.get(l.op, l.op)}" for n, l in self._laser_layers()]
             if not names:
-                self.hint.setText("Het werkblad heeft geen laag met een bewerking.")
+                self.hint.setText(tr("The worksheet has no layer with an operation."))
                 return None
-            choice, ok = QInputDialog.getItem(self, "Naar laser of frees",
-                                              "Op welke laag (bewerking)?", names, 0, False)
+            choice, ok = QInputDialog.getItem(self, tr("To Laser or Mill"),
+                                              tr("On which layer (operation)?"), names, 0, False)
             if not ok:
                 return None
             layer = self._laser_layers()[names.index(choice)][0]
@@ -3689,10 +3992,10 @@ class MainWindow(QMainWindow):
             else:
                 drawing = None
         except Exception as e:
-            QMessageBox.critical(self, "Naar laser of frees", str(e))
+            QMessageBox.critical(self, tr("To Laser or Mill"), str(e))
             return None
         if drawing is None or not drawing.paths:
-            self.hint.setText("Selecteer eerst vlakken of platen (groepen) in het model.")
+            self.hint.setText(tr("First select faces or plates (groups) in the model."))
             return None
         sheet = self.doc.sheet
         lay = sheet.layers.get(layer)
@@ -3703,15 +4006,16 @@ class MainWindow(QMainWindow):
             thickness = self._face_plate_thickness(faces)
         else:
             thickness = sheet3d.solid_thickness(groups) if groups else None
-        added = self.add_drawing_to_sheet(drawing, f"contouren op laag {layer} gezet")
+        added = self.add_drawing_to_sheet(drawing, tr("{n} outlines put on layer {layer}"),
+                                          layer=layer)
         if added and thickness and not sheet.sheet_thickness:
             sheet.sheet_thickness = thickness
-            self.hint.setText(f"{len(added)} contouren op laag {layer} gezet; "
-                              f"plaatdikte {thickness:g} mm overgenomen")
+            self.hint.setText(tr("{n} outlines put on layer {layer}; sheet thickness {t:g} mm "
+                                 "taken over").format(n=len(added), layer=layer, t=thickness))
         return added
 
     def _face_plate_thickness(self, faces):
-        """De plaatdikte bij liggende vlakken in een groep: de hoogte van die groep."""
+        """The sheet thickness for horizontal faces in a group: the height of that group."""
         groups = []
         for c, i in faces:
             g = next((g for g in self.doc.groups if g.id == c), None)
@@ -3721,8 +4025,8 @@ class MainWindow(QMainWindow):
         return sheet3d.solid_thickness(groups)
 
     def _place_beside_sheet(self, drawing):
-        """Schuif een nieuwe tekening rechts naast de inhoud van het werkblad (of in de
-        hoek van de plaat als die nog leeg is), zodat niets over elkaar komt."""
+        """Move a new drawing to the right of the worksheet's content (or into the corner
+        of the sheet when it is still empty), so nothing overlaps."""
         pts = [p.pts for p in drawing.paths if len(p.pts)]
         if not pts:
             return
@@ -3741,16 +4045,16 @@ class MainWindow(QMainWindow):
             p.pts = np.ascontiguousarray(p.pts + shift)
 
     def sheet_to_model(self, checked=False, thickness=None):
-        """Werkblad > Onderdelen naar 3D-model: alles wat gesneden wordt als plaat.
+        """Worksheet > Parts to 3D Model: everything that is cut, as a plate.
 
-        Elk onderdeel wordt een eigen groep met de plaatdikte, op dezelfde X/Y als op
-        het werkblad. Een eerdere keer naar het model gezette onderdelen worden
-        vervangen; met een selectie op het werkblad gaan alleen die onderdelen.
+        Every part becomes its own group with the sheet thickness, at the same X/Y as
+        on the worksheet. Parts put into the model an earlier time are replaced; with a
+        selection on the worksheet only those parts go.
         """
         sheet = self.doc.sheet
         t = thickness or sheet.sheet_thickness
         if not t:
-            t, ok = QInputDialog.getDouble(self, "Plaatdikte", "Dikte van de plaat (mm):",
+            t, ok = QInputDialog.getDouble(self, tr("Sheet Thickness"), tr("Thickness of the sheet (mm):"),
                                            sheet3d.DEFAULT_THICKNESS, 0.1, 500.0, 2)
             if not ok:
                 return None
@@ -3758,11 +4062,11 @@ class MainWindow(QMainWindow):
         try:
             solids = sheet3d.part_solids(sheet, t, selected or None)
         except Exception as e:
-            QMessageBox.critical(self, "Onderdelen naar 3D-model", str(e))
+            QMessageBox.critical(self, tr("Parts to 3D Model"), str(e))
             return None
         if not solids:
-            self.hint.setText("Er staan geen gesloten snijcontouren op het werkblad "
-                              "(laag Snijden, Frezen of Boren).")
+            self.hint.setText(tr("There are no closed cutting outlines on the worksheet "
+                                 "(layer Cut, Mill or Drill)."))
             return None
         self.doc.checkpoint()
         if not sheet.sheet_thickness:
@@ -3781,32 +4085,33 @@ class MainWindow(QMainWindow):
         self.doc.notify()
         self.set_mode("3d")
         self.view.zoom_extents()
-        self.hint.setText(f"{len(groups)} onderdel{'en' if len(groups) != 1 else ''} van "
-                          f"{float(t):g} mm in het model gezet")
+        message = (tr("{n} part of {t:g} mm placed in the model") if len(groups) == 1
+                   else tr("{n} parts of {t:g} mm placed in the model"))
+        self.hint.setText(message.format(n=len(groups), t=float(t)))
         return groups
 
-    # ------------------------------------------------------------ export voor laser en frees
+    # ------------------------------------------------------------ export for laser and mill
     def sheet_layers_for_export(self) -> list:
-        """De lagen van het werkblad die iets voor de machine betekenen."""
+        """The layers of the worksheet that mean something to the machine."""
         return [n for n, lay in self.doc.sheet.layers.items()
                 if lay.visible and lay.op != "none"]
 
     def default_sheet_export_options(self) -> dict:
-        """De standaardkeuzes: alle zichtbare werklagen, correctie alleen bij frezen."""
+        """The default choices: all visible work layers, compensation only for milling."""
         names = self.sheet_layers_for_export()
         mill = any(self.doc.sheet.layers[n].op in MILL_OPS
                    and any(p.layer == n for p in self.doc.sheet.paths) for n in names)
         return {"layers": names, "compensate": mill, "per_layer": False, "per_sheet": False}
 
     def sheet_export_options(self, kind="svg"):
-        """Dialoog "Exporteren voor laser/frees"; None bij annuleren, anders een opties-dict."""
+        """The "Export for Laser/Mill" dialog; None on cancel, else an options dict."""
         dlg = SheetExportDialog(self, kind)
         if dlg.exec() != QDialog.Accepted:
             return None
         return dlg.options()
 
     def sheet_export_drawing(self, options) -> "Drawing":
-        """De tekening van de gekozen lagen, met de correctie erbij als die aan staat."""
+        """The drawing of the chosen layers, with the compensation when it is on."""
         sheet = self.doc.sheet
         names = [n for n in (options.get("layers") or ()) if n in sheet.layers]
         out = Drawing(layers={n: replace(sheet.layers[n], params=dict(sheet.layers[n].params))
@@ -3824,25 +4129,26 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def layer_file_name(path, name, kind) -> str:
-        """`bestandsnaam_laagnaam.svg`: de laagnaam netjes voor in een bestandsnaam."""
+        """`filename_layername.svg`: the layer name made fit for a file name."""
         base = os.path.splitext(path)[0]
-        safe = "".join(ch for ch in str(name) if ch not in '<>:"/\\|?*\n').strip(" .") or "laag"
+        safe = ("".join(ch for ch in str(name) if ch not in '<>:"/\\|?*\n').strip(" .")
+                or tr("layer"))
         return f"{base}_{safe}.{kind}"
 
     @staticmethod
     def sheet_file_name(path, index, kind) -> str:
-        """`bestandsnaam_plaat1.svg`: het bestand van één plaat."""
+        """`filename_sheet1.svg`: the file of one sheet (the word in the user's language)."""
         base = os.path.splitext(path)[0]
-        return f"{base}_plaat{int(index)}.{kind}"
+        return tr("{base}_sheet{index}.{ext}").format(base=base, index=int(index), ext=kind)
 
     def export_sheet(self, kind="svg", path=None, options=None):
-        """Exporteren > 2D-vector op het werkblad: "Exporteren voor laser/frees".
+        """Export > 2D vector on the worksheet: "Export for Laser/Mill".
 
-        Zonder `path` vraagt de dialoog welke lagen er weg mogen, of de kerf- en
-        freescorrectie toegepast moet worden en of elke laag een eigen bestand krijgt;
-        met een `path` gaan die keuzes standaard. Rasterlagen gaan gevuld weg, de rest
-        als haarlijn, en de bewerking en de instellingen van elke laag komen in de SVG
-        zodat Volura ze bij inlezen terugvindt.
+        Without `path` the dialog asks which layers may go, whether the kerf and cutter
+        compensation should be applied and whether every layer gets its own file; with a
+        `path` the default choices are used. Raster layers go out filled, the rest as
+        hairlines, and the operation and settings of every layer go into the SVG so
+        Volura finds them again when reading it.
         """
         kind = "dxf" if str(kind).lower() == "dxf" else "svg"
         if options is None:
@@ -3852,25 +4158,25 @@ class MainWindow(QMainWindow):
                 return None
         names = [n for n in (options.get("layers") or ()) if n in self.doc.sheet.layers]
         if not names:
-            QMessageBox.information(self, "Exporteren voor laser/frees",
-                                    "Kies minstens één laag met een bewerking. Een laag op "
-                                    "\"Geen\" of een verborgen laag gaat niet mee.")
-            self.hint.setText("Er is niets geëxporteerd.")
+            QMessageBox.information(self, tr("Export for Laser/Mill"),
+                                    tr("Choose at least one layer with an operation. A layer set "
+                                       "to \"None\" or a hidden layer does not go along."))
+            self.hint.setText(tr("Nothing was exported."))
             return None
         try:
             drawing = self.sheet_export_drawing(options)
         except Exception as e:
-            QMessageBox.critical(self, "Exporteren mislukt", str(e))
+            QMessageBox.critical(self, tr("Export Failed"), str(e))
             return None
         if not drawing.paths:
-            QMessageBox.information(self, "Exporteren voor laser/frees",
-                                    "Er staan geen contouren op de gekozen lagen. Teken iets, "
-                                    "of importeer een SVG- of DXF-bestand.")
-            self.hint.setText("Er is niets geëxporteerd.")
+            QMessageBox.information(self, tr("Export for Laser/Mill"),
+                                    tr("There are no outlines on the chosen layers. Draw "
+                                       "something, or import an SVG or DXF file."))
+            self.hint.setText(tr("Nothing was exported."))
             return None
         if path is None:
             path, _ = QFileDialog.getSaveFileName(
-                self, "Exporteren voor laser/frees", self.export_name("." + kind),
+                self, tr("Export for Laser/Mill"), self.export_name("." + kind),
                 "SVG (*.svg)" if kind == "svg" else "DXF (*.dxf)")
             if not path:
                 return None
@@ -3905,23 +4211,25 @@ class MainWindow(QMainWindow):
                 self._write_vector(drawing, path, kind, names, filled)
                 files.append(path)
         except Exception as e:
-            QMessageBox.critical(self, "Exporteren mislukt", str(e))
+            QMessageBox.critical(self, tr("Export Failed"), str(e))
             return None
-        where = files[0] if len(files) == 1 else f"{len(files)} bestanden ({files[0]})"
-        self.hint.setText(f"{len(drawing.paths)} contouren geëxporteerd naar {where}"
-                          + (" met kerf-/freescorrectie" if options.get("compensate") else ""))
+        where = (files[0] if len(files) == 1
+                 else tr("{n} files ({first})").format(n=len(files), first=files[0]))
+        message = (tr("{n} outlines exported to {where} with kerf/cutter compensation")
+                   if options.get("compensate") else tr("{n} outlines exported to {where}"))
+        self.hint.setText(message.format(n=len(drawing.paths), where=where))
         return files[0]
 
     @staticmethod
     def _write_vector(drawing, path, kind, layers, fill_layers=()):
-        """Eén tekening naar een SVG- of DXF-bestand schrijven, met de gekozen lagen."""
+        """Write one drawing to an SVG or DXF file, with the chosen layers."""
         if kind == "dxf":
             dxf.write_dxf(drawing, path, layers=layers)
         else:
             svg.write_svg(drawing, path, layers=layers, fill_layers=fill_layers)
 
     def import_dropped_file(self, path):
-        """Een gesleept bestand: .stl of .svg/.dxf importeren."""
+        """A dropped file: import .stl or .svg/.dxf."""
         ext = os.path.splitext(path)[1].lower()
         if vector_import.is_vector(path):
             if self.mode == "2d":
@@ -3977,27 +4285,28 @@ class MainWindow(QMainWindow):
         only = bool(self.doc.selected_groups())
         part_list = ops.parts(self.doc, only_selected=only)
         if not part_list:
-            QMessageBox.information(self, "Exporteren", "Er zijn geen volumes om te exporteren. "
-                                    "Teken een vlak en gebruik Duwen/trekken (P).")
+            QMessageBox.information(self, tr("Export"), tr("There are no volumes to export. "
+                                                           "Draw a face and use Push/Pull (P)."))
             return None
         bad = [p for p in part_list if p.problem]
         if bad:
             text = "\n".join(f"• {p.name}: {p.problem}" for p in bad)
             if not [p for p in part_list if p.manifold is not None]:
-                self.ask_export("Geen enkel onderdeel is een gesloten volume:\n\n" + text)
+                self.ask_export(tr("Not a single part is a closed volume:\n\n{parts}").format(
+                    parts=text))
                 return None
-            if not self.ask_export("Deze onderdelen zijn niet gesloten en worden overgeslagen:\n\n"
-                                   + text + "\n\nToch exporteren?"):
+            if not self.ask_export(tr("These parts are not closed and are skipped:\n\n{parts}"
+                                      "\n\nExport anyway?").format(parts=text)):
                 return None
         return part_list
 
     def ask_export(self, text):
-        """The export warning, with a button that opens the Printcontrole panel."""
+        """The export warning, with a button that opens the Print Check panel."""
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Warning)
-        box.setWindowTitle("Exporteren")
+        box.setWindowTitle(tr("Export"))
         box.setText(text)
-        b_open = box.addButton("Printcontrole openen", QMessageBox.ActionRole)
+        b_open = box.addButton(tr("Open Print Check"), QMessageBox.ActionRole)
         b_no = box.addButton(QMessageBox.No)
         b_yes = box.addButton(QMessageBox.Yes)
         box.setDefaultButton(b_no)
@@ -4016,60 +4325,65 @@ class MainWindow(QMainWindow):
         objs = self.export_objects()
         if not objs:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Exporteren als STL", self.export_name(".stl"), "STL (*.stl)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("Export as STL"), self.export_name(".stl"),
+                                              "STL (*.stl)")
         if not path:
             return
         try:
             n = fileio.export_stl(path, objs)
         except Exception as e:
-            QMessageBox.critical(self, "Export mislukt", str(e))
+            QMessageBox.critical(self, tr("Exporting Failed"), str(e))
             return
-        self.hint.setText(f"STL geëxporteerd ({n} driehoeken, waterdicht): {path}")
+        self.hint.setText(tr("STL exported ({n} triangles, watertight): {path}").format(n=n, path=path))
 
     def export_3mf(self):
         objs = self.export_objects()
         if not objs:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Exporteren als 3MF", self.export_name(".3mf"), "3MF (*.3mf)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("Export as 3MF"), self.export_name(".3mf"),
+                                              "3MF (*.3mf)")
         if not path:
             return
         try:
             used = fileio.export_3mf(path, objs, self.doc.materials,
                                      os.path.splitext(os.path.basename(path))[0])
         except Exception as e:
-            QMessageBox.critical(self, "Export mislukt", str(e))
+            QMessageBox.critical(self, tr("Exporting Failed"), str(e))
             return
-        lines = "\n".join(f"  extruder {e}: {n}" for n, e in used)
-        QMessageBox.information(self, "3MF geëxporteerd",
-                                f"{path}\n\nOnderdelen per filament:\n{lines}\n\n"
-                                "Open het bestand in PrusaSlicer, OrcaSlicer of Bambu Studio; "
-                                "elk kleurdeel staat al op de juiste extruder.")
+        lines = "\n".join(tr("  extruder {e}: {name}").format(e=e, name=n) for n, e in used)
+        QMessageBox.information(self, tr("3MF Exported"),
+                                tr("{path}\n\nParts per filament:\n{lines}\n\n"
+                                   "Open the file in PrusaSlicer, OrcaSlicer or Bambu Studio; "
+                                   "every color part is already on the right extruder.").format(
+                                    path=path, lines=lines))
 
     def export_stl_colors(self):
         objs = self.export_objects()
         if not objs:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "STL per kleur (basisnaam)", self.export_name(".stl"), "STL (*.stl)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("STL per Color (base name)"),
+                                              self.export_name(".stl"), "STL (*.stl)")
         if not path:
             return
         try:
             files = fileio.export_stl_per_color(path, objs, self.doc.materials)
         except Exception as e:
-            QMessageBox.critical(self, "Export mislukt", str(e))
+            QMessageBox.critical(self, tr("Exporting Failed"), str(e))
             return
-        QMessageBox.information(self, "STL per kleur", "Geschreven:\n" + "\n".join(files) +
-                                "\n\nLaad ze samen in je slicer als één object met meerdere onderdelen.")
+        QMessageBox.information(self, tr("STL per Color"),
+                                tr("Written:\n{files}\n\nLoad them together in your slicer as one "
+                                   "object with several parts.").format(files="\n".join(files)))
 
-    # ------------------------------------------------------------ 2D-vector export
+    # ------------------------------------------------------------ 2D vector export
     def vector_export_options(self):
-        """Dialoog '2D-vector exporteren'; None bij annuleren, anders een opties-dict."""
+        """The 'Export 2D Vector' dialog; None on cancel, else an options dict."""
         dlg = VectorExportDialog(self)
         if dlg.exec() != QDialog.Accepted:
             return None
         return dlg.options()
 
     def vector_export_drawing(self, options):
-        """De tekening bij deze keuzes: geselecteerde vlakken, bovenaanzicht of doorsnede."""
+        """The drawing for these choices: selected faces, top view or section."""
         doc = self.doc
         source = options.get("source", "top")
         if source == "faces":
@@ -4080,25 +4394,23 @@ class MainWindow(QMainWindow):
         return vector_export.drawing_top(doc, only)
 
     def vector_export_empty_message(self, options, drawing):
-        """Waarom er niets weg te schrijven is, in woorden die de gebruiker helpt."""
+        """Why there is nothing to write, in words that help the user."""
         source = options.get("source", "top")
         if source == "faces":
-            return ("Er is geen vlak geselecteerd. Klik een vlak aan (of zet er een "
-                    "rechthoek neer) en probeer het opnieuw.")
+            return tr("No face is selected. Click a face (or draw a rectangle) and try again.")
         only = bool(options.get("only_selected"))
         if source == "section" and ops.parts(self.doc, only_selected=only):
-            return (f"Op hoogte {format_length(float(options.get('z', 0.0)))} snijdt het model "
-                    "niets: er is daar geen volume.")
-        return ("Er zijn geen gesloten volumes om te exporteren. Teken een vlak en gebruik "
-                "Duwen/trekken (P), of maak de groep dicht met Printcontrole.")
+            return tr("At height {z} the model cuts nothing: there is no volume there.").format(
+                z=format_length(float(options.get('z', 0.0))))
+        return tr("There are no closed volumes to export. Draw a face and use Push/Pull (P), "
+                  "or close the group with Print Check.")
 
     def export_vector(self, kind="svg", path=None, options=None):
-        """Bestand > Exporteren > 2D-vector: de tekening naar SVG of DXF schrijven.
+        """File > Export > 2D Vector: write the drawing to SVG or DXF.
 
-        Zonder `options` vraagt de dialoog wat er weg moet; zonder `path` vraagt Qt
-        een bestandsnaam. Op het 2D-werkblad gaat de dialoog over het werkblad zelf
-        en worden alleen de zichtbare lagen weggeschreven. Geeft het geschreven pad
-        terug, of None.
+        Without `options` the dialog asks what should go; without `path` Qt asks for a
+        file name. On the 2D worksheet the dialog is about the worksheet itself and only
+        the visible layers are written. Returns the written path, or None.
         """
         kind = "dxf" if str(kind).lower() == "dxf" else "svg"
         if self.mode == "2d":
@@ -4109,18 +4421,18 @@ class MainWindow(QMainWindow):
         try:
             drawing = self.vector_export_drawing(opts)
         except Exception as e:
-            QMessageBox.critical(self, "Exporteren mislukt", str(e))
+            QMessageBox.critical(self, tr("Export Failed"), str(e))
             return None
         if not drawing.paths:
             msg = self.vector_export_empty_message(opts, drawing)
             if drawing.warnings:
                 msg += "\n\n" + "\n".join(drawing.warnings)
-            QMessageBox.information(self, "2D-vector exporteren", msg)
-            self.hint.setText("Er is niets geëxporteerd.")
+            QMessageBox.information(self, tr("Export 2D Vector"), msg)
+            self.hint.setText(tr("Nothing was exported."))
             return None
         if path is None:
             path, _ = QFileDialog.getSaveFileName(
-                self, "2D-vector exporteren", self.export_name("." + kind),
+                self, tr("Export 2D Vector"), self.export_name("." + kind),
                 "SVG (*.svg)" if kind == "svg" else "DXF (*.dxf)")
             if not path:
                 return None
@@ -4129,9 +4441,10 @@ class MainWindow(QMainWindow):
         try:
             (dxf.write_dxf if kind == "dxf" else svg.write_svg)(drawing, path)
         except Exception as e:
-            QMessageBox.critical(self, "Exporteren mislukt", str(e))
+            QMessageBox.critical(self, tr("Export Failed"), str(e))
             return None
-        self.hint.setText(f"{len(drawing.paths)} contouren geëxporteerd naar {path}")
+        self.hint.setText(tr("{n} outlines exported to {where}").format(n=len(drawing.paths),
+                                                                       where=path))
         return path
 
     # ------------------------------------------------------------ edit
@@ -4147,7 +4460,7 @@ class MainWindow(QMainWindow):
         self.doc.redo()
 
     def warn_locked(self):
-        """Bewerken > Vergrendelen: say in the status bar why nothing happened."""
+        """Edit > Lock: say in the status bar why nothing happened."""
         self.view.set_status(LOCKED_MSG)
 
     def unlocked(self, groups):
@@ -4202,7 +4515,7 @@ class MainWindow(QMainWindow):
         self.doc.set_selection([])
 
     def erase_guides(self):
-        """Bewerken > Hulplijnen wissen: every guide of the document, in one undo step."""
+        """Edit > Delete Guides: every guide of the document, in one undo step."""
         if not self.doc.guides:
             return
         self.doc.checkpoint()
@@ -4240,7 +4553,7 @@ class MainWindow(QMainWindow):
                 ents.unhide(fs, es)
 
     def hide_selected(self):
-        """Bewerken > Verbergen: hide the selection and remember what it was."""
+        """Edit > Hide: hide the selection and remember what it was."""
         items = [("g", g.id, g.id) for g in self.doc.selected_groups() if g.visible]
         items += [it for it in self.doc.selection if it[0] in ("f", "e")]
         if not items:
@@ -4261,7 +4574,7 @@ class MainWindow(QMainWindow):
         self.doc.notify()
 
     def unhide_selected(self):
-        """Bewerken > Zichtbaar maken > Geselecteerd (useful with Verborgen geometrie on)."""
+        """Edit > Unhide > Selected (useful with Hidden Geometry on)."""
         items = self._hidden_items(self.doc.selection)
         if not items:
             return
@@ -4270,7 +4583,7 @@ class MainWindow(QMainWindow):
         self.doc.notify()
 
     def unhide_last(self):
-        """Bewerken > Zichtbaar maken > Laatste: what Bewerken > Verbergen hid last."""
+        """Edit > Unhide > Last: what Edit > Hide hid last."""
         items = self._hidden_items(self.doc.last_hidden)
         if not items:
             return
@@ -4280,7 +4593,7 @@ class MainWindow(QMainWindow):
         self.doc.notify()
 
     def unhide_all(self):
-        """Bewerken > Zichtbaar maken > Alles: every hidden face, edge and group."""
+        """Edit > Unhide > All: every hidden face, edge and group."""
         hidden = any(not g.visible for g in self.doc.groups) or \
             any(e.hidden_f or e.hidden_e for e in self.doc.all_ents())
         if not hidden:
@@ -4294,7 +4607,7 @@ class MainWindow(QMainWindow):
         self.doc.notify()
 
     def lock_selected(self):
-        """Bewerken > Vergrendelen: the selected groups can no longer be changed."""
+        """Edit > Lock: the selected groups can no longer be changed."""
         groups = [g for g in self.doc.selected_groups() if not g.locked]
         if not groups:
             return
@@ -4304,7 +4617,7 @@ class MainWindow(QMainWindow):
         self.doc.notify()
 
     def unlock_selected(self):
-        """Bewerken > Ontgrendelen > Geselecteerd."""
+        """Edit > Unlock > Selected."""
         groups = [g for g in self.doc.selected_groups() if g.locked]
         if not groups:
             return
@@ -4314,7 +4627,7 @@ class MainWindow(QMainWindow):
         self.doc.notify()
 
     def unlock_all(self):
-        """Bewerken > Ontgrendelen > Alles."""
+        """Edit > Unlock > All."""
         groups = [g for g in self.doc.groups if g.locked]
         if not groups:
             return
@@ -4325,7 +4638,7 @@ class MainWindow(QMainWindow):
 
     def copy(self):
         self.clipboard = list(self.doc.selection)
-        self.hint.setText(f"{len(self.clipboard)} item(s) gekopieerd.")
+        self.hint.setText(tr("{n} item(s) copied.").format(n=len(self.clipboard)))
 
     def cut(self):
         if not self.doc.selection:
@@ -4339,7 +4652,7 @@ class MainWindow(QMainWindow):
         self._paste(np.array([10.0, 10.0, 0.0]), move_tool=True)
 
     def _paste_svg_from_clipboard(self):
-        """Bewerken > Plakken: SVG op het klembord (bijv. uit Inkscape) importeren."""
+        """Edit > Paste: import SVG from the clipboard (e.g. from Inkscape)."""
         md = QApplication.clipboard().mimeData()
         if md is None or not md.hasFormat("image/svg+xml"):
             return False
@@ -4347,9 +4660,9 @@ class MainWindow(QMainWindow):
         try:
             drawing = vector_import.load_svg_text(raw.decode("utf-8", "replace"))
         except Exception as e:
-            QMessageBox.critical(self, "Plakken mislukt", str(e))
+            QMessageBox.critical(self, tr("Paste Failed"), str(e))
             return True
-        self.import_vector_interactive(None, drawing=drawing, name="Geplakte SVG")
+        self.import_vector_interactive(None, drawing=drawing, name=tr("Pasted SVG"))
         return True
 
     def paste_at_location(self):
@@ -4411,7 +4724,7 @@ class MainWindow(QMainWindow):
         self.view.next_camera()
 
     def camera_fov(self, checked=False):
-        """Camera > Gezichtsveld: the Zoom tool with the field of view in the Measurements box."""
+        """Camera > Field of View: the Zoom tool with the field of view in the Measurements box."""
         self.set_tool("zoom")
         self.vcb.setText(fmt_deg(self.view.cam.fov))
         self.vcb.setFocus()
@@ -4454,7 +4767,7 @@ class MainWindow(QMainWindow):
         self.view.update()
 
     def toggle_guides(self, on):
-        """Beeld > Hulplijnen: show or hide the construction guides."""
+        """View > Guides: show or hide the construction guides."""
         self.settings.show_guides = bool(on)
         self.settings.save()
         self.view.update()
@@ -4473,8 +4786,8 @@ class MainWindow(QMainWindow):
     def _sel_groups(self, minimum=1):
         groups = self.doc.selected_groups()
         if len(groups) < minimum:
-            QMessageBox.information(self, "Volura", f"Selecteer minimaal {minimum} groep(en). "
-                                    "Maak eerst een groep van losse geometrie (G).")
+            QMessageBox.information(self, "Volura", tr("Select at least {n} group(s). First make a "
+                                                       "group of loose geometry (G).").format(n=minimum))
             return None
         return groups
 
@@ -4507,13 +4820,13 @@ class MainWindow(QMainWindow):
         self.doc.notify()
 
     def trim_solids(self):
-        """Gereedschap > Volumegereedschap > Bijsnijden: the second group minus the first."""
+        """Tools > Solid Tools > Trim: the second group minus the first."""
         groups = self._sel_groups(2)
         if not groups:
             return
         if len(groups) != 2:
-            QMessageBox.information(self, "Volura", "Selecteer precies twee groepen: de tweede "
-                                    "wordt met de eerste bijgesneden.")
+            QMessageBox.information(self, "Volura", tr("Select exactly two groups: the second is "
+                                                       "trimmed with the first."))
             return
         groups = self._in_selection_order(self.unlocked(groups))
         if len(groups) != 2:
@@ -4529,7 +4842,7 @@ class MainWindow(QMainWindow):
         self.doc.notify()
 
     def outer_shell(self):
-        """Gereedschap > Buitenschil: only the outside of the selected groups."""
+        """Tools > Outer Shell: only the outside of the selected groups."""
         groups = self.unlocked(self._sel_groups() or [])
         if not groups:
             return
@@ -4543,9 +4856,9 @@ class MainWindow(QMainWindow):
         self.doc.notify()
 
     def intersect_faces(self, with_model):
-        """Bewerken > Vlakken snijden: the cut lines of the selection go into the model.
+        """Edit > Intersect Faces: the cut lines of the selection go into the model.
 
-        "Met model" cuts with everything else in the model, "Met selectie" only with
+        "With Model" cuts with everything else in the model, "With Selection" only with
         the other selected items. The edges are added to the active context."""
         g = self.doc.group(self.doc.active) if self.doc.active != ROOT else None
         if g is not None and g.locked:
@@ -4553,8 +4866,8 @@ class MainWindow(QMainWindow):
             return
         sel = [it for it in self.doc.selection if it[0] in ("f", "g")]
         if not sel:
-            QMessageBox.information(self, "Volura", "Selecteer eerst de vlakken of groepen "
-                                    "waarvan je de snijlijnen wilt.")
+            QMessageBox.information(self, "Volura", tr("First select the faces or groups whose "
+                                                       "intersection lines you want."))
             return
         if with_model:
             items_a, items_b = sel, [it for it in ops.whole_items(self.doc) if it not in set(sel)]
@@ -4565,7 +4878,7 @@ class MainWindow(QMainWindow):
         if not new:
             self.doc.undo()
             self.doc.redo_stack.clear()
-            self.view.set_status("Geen snijlijnen gevonden.")
+            self.view.set_status(tr("No intersection lines found."))
             return
         self.doc.notify()
 
@@ -4609,19 +4922,19 @@ class MainWindow(QMainWindow):
 
     def insert_primitive(self, kind):
         fields = {
-            "box": [("Breedte (X)", 20), ("Diepte (Y)", 20), ("Hoogte (Z)", 20)],
-            "cylinder": [("Straal", 10), ("Hoogte", 20)],
-            "cone": [("Straal onder", 10), ("Straal boven", 0), ("Hoogte", 20)],
-            "sphere": [("Straal", 10)],
-            "torus": [("Hoofdstraal", 15), ("Buisstraal", 4)],
+            "box": [(tr("Width (X)"), 20), (tr("Depth (Y)"), 20), (tr("Height (Z)"), 20)],
+            "cylinder": [(tr("Radius"), 10), (tr("Height"), 20)],
+            "cone": [(tr("Bottom radius"), 10), (tr("Top radius"), 0), (tr("Height"), 20)],
+            "sphere": [(tr("Radius"), 10)],
+            "torus": [(tr("Major radius"), 15), (tr("Tube radius"), 4)],
         }[kind]
         dlg = QDialog(self)
-        dlg.setWindowTitle("Invoegen")
+        dlg.setWindowTitle(tr("Insert"))
         form = QFormLayout(dlg)
         spins = []
         for label, v in fields:
             sp = QDoubleSpinBox()
-            sp.setRange(0 if "boven" in label else 0.01, 10000)
+            sp.setRange(0 if label == tr("Top radius") else 0.01, 10000)
             sp.setDecimals(2)
             sp.setSuffix(" mm")
             sp.setValue(v)
@@ -4631,7 +4944,7 @@ class MainWindow(QMainWindow):
         seg.setRange(3, 512)
         seg.setValue(self.settings.circle_segments)
         if kind != "box":
-            form.addRow("Segmenten", seg)
+            form.addRow(tr("Segments"), seg)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(dlg.accept)
         bb.rejected.connect(dlg.reject)
@@ -4644,12 +4957,13 @@ class MainWindow(QMainWindow):
         try:
             m = ops.primitive(kind, *vals, segments=seg.value())
         except Exception as e:
-            QMessageBox.critical(self, "Invoegen", str(e))
+            QMessageBox.critical(self, tr("Insert"), str(e))
             return
         bx, by, _ = self.settings.bed_size
         lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
         m = m.translate((bx / 2 - (lo[0] + hi[0]) / 2, by / 2 - (lo[1] + hi[1]) / 2, -lo[2]))
-        names = {"box": "Balk", "cylinder": "Cilinder", "cone": "Kegel", "sphere": "Bol", "torus": "Torus"}
+        names = {"box": tr("Box"), "cylinder": tr("Cylinder"), "cone": tr("Cone"),
+                 "sphere": tr("Sphere"), "torus": tr("Torus")}
         self.doc.checkpoint()
         g = ops.group_from_manifold(self.doc, m, self.settings.current_color,
                                     f"{names[kind]} {self.doc.group_counter}")
@@ -4659,15 +4973,16 @@ class MainWindow(QMainWindow):
         self.doc.notify()
         self.set_tool("move")
 
-    # ------------------------------------------------------------ schroefdraad
-    THREAD_KINDS = [("Buitendraad op cilinder", "external"), ("Binnendraad in gat", "internal"),
-                    ("Nieuwe bout", "bolt"), ("Nieuwe moer of bus", "nut")]
+    # ------------------------------------------------------------ screw thread
+    THREAD_KINDS = [(tr("External thread on cylinder"), "external"),
+                    (tr("Internal thread in hole"), "internal"),
+                    (tr("New bolt"), "bolt"), (tr("New nut or sleeve"), "nut")]
 
     def _thread_target(self, kind):
-        """(ents, groep, center, as, straal, lengte) uit de selectie, of None.
+        """(ents, group, center, axis, radius, length) from the selection, or None.
 
-        Geldig: een geselecteerd cirkelvormig eindvlak (buitendraad) of opening
-        van een gat (binnendraad), of een groep die een cilinder/bus is."""
+        Valid: a selected circular end face (external thread) or the opening of a hole
+        (internal thread), or a group that is a cylinder/sleeve."""
         want = "outer" if kind == "external" else "hole"
         doc = self.doc
         for k, ctx, i in list(doc.selection):
@@ -4689,7 +5004,7 @@ class MainWindow(QMainWindow):
         kinds = self.THREAD_KINDS
         idx = next((i for i, (_, k) in enumerate(kinds) if k == preset), 0)
         dlg = QDialog(self)
-        dlg.setWindowTitle("Schroefdraad")
+        dlg.setWindowTitle(tr("Screw Thread"))
         form = QFormLayout(dlg)
         kind_cb = QComboBox()
         for label, _ in kinds:
@@ -4717,23 +5032,23 @@ class MainWindow(QMainWindow):
         clr_sp.setValue(threads.DEFAULT_CLEARANCE)
         starts_sp = QSpinBox()
         starts_sp.setRange(1, 4)
-        left_cb = QCheckBox("Linksdraad")
+        left_cb = QCheckBox(tr("Left-hand thread"))
         outer_sp = QDoubleSpinBox()
         outer_sp.setRange(2.0, 500.0)
         outer_sp.setDecimals(1)
         outer_sp.setSuffix(" mm")
         outer_sp.setValue(13.6)
-        hex_cb = QCheckBox("Zeskant (uitvinken voor een ronde bus)")
+        hex_cb = QCheckBox(tr("Hexagon (uncheck for a round sleeve)"))
         hex_cb.setChecked(True)
-        mate_cb = QCheckBox("Bijpassende moer/bout ook maken")
-        form.addRow("Soort", kind_cb)
-        form.addRow("Diameter", dia)
-        form.addRow("Spoed (ISO grof, vrij in te vullen)", pitch_cb)
-        form.addRow("Lengte / hoogte", len_sp)
-        form.addRow("Speling", clr_sp)
-        form.addRow("Aantal gangen", starts_sp)
+        mate_cb = QCheckBox(tr("Also make a matching nut/bolt"))
+        form.addRow(tr("Kind"), kind_cb)
+        form.addRow(tr("Diameter"), dia)
+        form.addRow(tr("Pitch (ISO coarse, free to enter)"), pitch_cb)
+        form.addRow(tr("Length / height"), len_sp)
+        form.addRow(tr("Clearance"), clr_sp)
+        form.addRow(tr("Number of starts"), starts_sp)
         form.addRow("", left_cb)
-        form.addRow("Buitenmaat moer/bus", outer_sp)
+        form.addRow(tr("Outer size of nut/sleeve"), outer_sp)
         form.addRow("", hex_cb)
         form.addRow("", mate_cb)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -4768,10 +5083,10 @@ class MainWindow(QMainWindow):
                                starts_sp.value(), left_cb.isChecked(), outer_sp.value(),
                                hex_cb.isChecked(), mate_cb.isChecked())
         except ValueError as e:
-            self.view.set_status(f"Schroefdraad mislukt: {e}")
+            self.view.set_status(tr("Screw thread failed: {error}").format(error=e))
 
     def _mate_group(self, man, label, near_bb, dx):
-        """Plaats een bijpassend onderdeel naast het bewerkte deel en maak er een groep van."""
+        """Put a matching part next to the edited part and make a group of it."""
         lo, hi = np.asarray(near_bb[:3]), np.asarray(near_bb[3:])
         man = man.translate((hi[0] + dx, (lo[1] + hi[1]) / 2.0, lo[2]))
         return ops.group_from_manifold(self.doc, man, self.settings.current_color, label)
@@ -4783,9 +5098,9 @@ class MainWindow(QMainWindow):
             t = self._thread_target(kind)
             if t is None:
                 self.view.set_status(
-                    "Selecteer eerst een groep (of het cirkelvormige vlak ervan) "
-                    "met een cilinder." if kind == "external" else
-                    "Selecteer eerst een groep (of het vlak met de opening) met een gat.")
+                    tr("First select a group (or its circular face) with a cylinder.")
+                    if kind == "external" else
+                    tr("First select a group (or the face with the opening) with a hole."))
                 return
             ents, g, center, axis, radius, depth = t
             if g is not None and g.locked:
@@ -4793,18 +5108,23 @@ class MainWindow(QMainWindow):
                 return
             m = ents.to_manifold()
             if m.status() != mf.Error.NoError or m.is_empty():
-                self.view.set_status("Dit onderdeel is geen gesloten volume.")
+                self.view.set_status(tr("This part is not a closed volume."))
                 return
+            near = g.name if g else tr("Loose geometry")
             if kind == "external":
                 res = threads.external_on(m, center, axis, radius, length, pitch=pitch,
                                           starts=starts, left=left)
-                label, near = "Buitendraad", (g.name if g else "Losse geometrie")
+                message = (tr("External thread M{d:g}x{p:g} put on {near} including a matching "
+                              "part.") if mate else
+                           tr("External thread M{d:g}x{p:g} put on {near}."))
             else:
                 res = threads.internal_in(m, center, axis, radius, length, clearance,
                                           pitch=pitch, starts=starts, left=left)
-                label, near = "Binnendraad", (g.name if g else "Losse geometrie")
+                message = (tr("Internal thread M{d:g}x{p:g} put on {near} including a matching "
+                              "part.") if mate else
+                           tr("Internal thread M{d:g}x{p:g} put on {near}."))
             if res.status() != mf.Error.NoError or res.is_empty():
-                self.view.set_status("Schroefdraad mislukt: het resultaat is geen geldig volume.")
+                self.view.set_status(tr("Screw thread failed: the result is not a valid volume."))
                 return
             doc.checkpoint()
             new_ents = Entities.from_manifold(res)
@@ -4818,28 +5138,30 @@ class MainWindow(QMainWindow):
                 if kind == "external":
                     nm = threads.nut(d, pitch, max(0.8 * d, 4 * pitch), outer_d, clearance,
                                      hex=hexagon, starts=starts, left=left)
-                    mg = self._mate_group(nm, f"Moer M{d:g}x{pitch:g}", bb, outer_d / 2 + 5)
+                    mg = self._mate_group(nm, tr("Nut M{d:g}x{p:g}").format(d=d, p=pitch), bb,
+                                          outer_d / 2 + 5)
                 else:
                     nm = threads.thread_solid(d, pitch, max(length, 2 * d), starts=starts,
                                               left=left)
-                    mg = self._mate_group(nm, f"Bout M{d:g}x{pitch:g}", bb, d + 5)
+                    mg = self._mate_group(nm, tr("Bolt M{d:g}x{p:g}").format(d=d, p=pitch), bb,
+                                          d + 5)
                 if mg is not None:
                     sel.append(("g", mg.id, mg.id))
             doc.set_selection(sel)
             doc.notify()
-            self.view.set_status(f"{label} M{d:g}x{pitch:g} gezet op {near}"
-                                 + (" inclusief bijpassend onderdeel." if mate else "."))
+            self.view.set_status(message.format(d=d, p=pitch, near=near))
             return
 
         if kind == "bolt":
             man = threads.thread_solid(d, pitch, length, starts=starts, left=left)
-            label = f"Bout M{d:g}x{pitch:g}"
+            label = tr("Bolt M{d:g}x{p:g}").format(d=d, p=pitch)
         else:
             man = threads.nut(d, pitch, length, outer_d, clearance, hex=hexagon,
                               starts=starts, left=left)
-            label = ("Moer " if hexagon else "Bus ") + f"M{d:g}x{pitch:g}"
+            label = (tr("Nut M{d:g}x{p:g}") if hexagon else tr("Sleeve M{d:g}x{p:g}")).format(
+                d=d, p=pitch)
         if man.status() != mf.Error.NoError or man.is_empty():
-            self.view.set_status("Schroefdraad mislukt: ongeldige afmetingen.")
+            self.view.set_status(tr("Screw thread failed: invalid dimensions."))
             return
         doc.checkpoint()
         bx, by, _ = self.settings.bed_size
@@ -4851,24 +5173,27 @@ class MainWindow(QMainWindow):
             if kind == "bolt":
                 nm = threads.nut(d, pitch, max(0.8 * d, 4 * pitch), outer_d, clearance,
                                  hex=hexagon, starts=starts, left=left)
-                mg = self._mate_group(nm, ("Moer " if hexagon else "Bus ") + f"M{d:g}x{pitch:g}",
-                                      man.bounding_box(), outer_d / 2 + 5)
+                mate_label = (tr("Nut M{d:g}x{p:g}") if hexagon
+                              else tr("Sleeve M{d:g}x{p:g}")).format(d=d, p=pitch)
+                mg = self._mate_group(nm, mate_label, man.bounding_box(), outer_d / 2 + 5)
             else:
                 nm = threads.thread_solid(d, pitch, max(2 * d, length), starts=starts, left=left)
-                mg = self._mate_group(nm, f"Bout M{d:g}x{pitch:g}", man.bounding_box(), d + 5)
+                mg = self._mate_group(nm, tr("Bolt M{d:g}x{p:g}").format(d=d, p=pitch),
+                                      man.bounding_box(), d + 5)
             if mg is not None:
                 sel.append(("g", mg.id, mg.id))
         doc.active = ROOT
         doc.set_selection(sel)
         doc.notify()
-        self.view.set_status(f"{label} geplaatst"
-                             + (" met bijpassend onderdeel." if mate else "."))
+        self.view.set_status((tr("{label} placed with a matching part.") if mate
+                              else tr("{label} placed.")).format(label=label))
 
-    # ------------------------------------------------------------ snijden & verbinden
-    CUT_JOINTS = [("Geen verbinding (alleen snijden)", "geen"),
-                  ("Pennen (aan het bovenste deel)", "pennen"),
-                  ("Gaten voor losse pennen", "losse pennen"),
-                  ("Zwaluwstaart", "zwaluwstaart")]
+    # ------------------------------------------------------------ cut & join
+    # (label, joints.KINDS identifier; the identifiers stay Dutch)
+    CUT_JOINTS = [(tr("No joint (cut only)"), "geen"),
+                  (tr("Pins (on the upper part)"), "pennen"),
+                  (tr("Holes for loose pins"), "losse pennen"),
+                  (tr("Dovetail"), "zwaluwstaart")]
 
     def _cut_model(self, groups):
         """One solid manifold of the selected groups, or None when they are not solid."""
@@ -4899,7 +5224,7 @@ class MainWindow(QMainWindow):
             return
         model = self._cut_model(groups)
         if model is None:
-            self.view.set_status("Snijden: de selectie is geen gesloten volume.")
+            self.view.set_status(tr("Cut: the selection is not a closed volume."))
             return
         if origin is None:
             bb = np.asarray(model.bounding_box())
@@ -4908,7 +5233,7 @@ class MainWindow(QMainWindow):
 
         d = joints.DEFAULTS
         dlg = QDialog(self)
-        dlg.setWindowTitle("Snijden en verbinden")
+        dlg.setWindowTitle(tr("Cut and Join"))
         form = QFormLayout(dlg)
         kind_cb = QComboBox()
         for label, _ in self.CUT_JOINTS:
@@ -4924,17 +5249,17 @@ class MainWindow(QMainWindow):
         td = self._spin(0.5, 100.0, d["dovetail_depth"])
         ta = self._spin(1.0, 60.0, d["dovetail_angle"], 1, "°")
         clr = self._spin(0.0, 2.0, d["clearance"], 2, " mm", 0.05)
-        sep = QCheckBox("Delen uit elkaar leggen (10 mm uit elkaar)")
-        flat = QCheckBox("Delen plat op het bed leggen")
-        form.addRow("Verbinding", kind_cb)
-        form.addRow("Pen-diameter", dia)
-        form.addRow("Pen-lengte", length)
-        form.addRow("Aantal pennen", count_cb)
-        form.addRow("Wanddikte rond gat", wall)
-        form.addRow("Staartbreedte", tw)
-        form.addRow("Staartdiepte", td)
-        form.addRow("Staarthoek", ta)
-        form.addRow("Speling", clr)
+        sep = QCheckBox(tr("Move the parts apart (10 mm apart)"))
+        flat = QCheckBox(tr("Lay the parts flat on the bed"))
+        form.addRow(tr("Joint"), kind_cb)
+        form.addRow(tr("Pin diameter"), dia)
+        form.addRow(tr("Pin length"), length)
+        form.addRow(tr("Number of pins"), count_cb)
+        form.addRow(tr("Wall thickness around hole"), wall)
+        form.addRow(tr("Tail width"), tw)
+        form.addRow(tr("Tail depth"), td)
+        form.addRow(tr("Tail angle"), ta)
+        form.addRow(tr("Clearance"), clr)
         form.addRow("", sep)
         form.addRow("", flat)
 
@@ -4969,11 +5294,11 @@ class MainWindow(QMainWindow):
         try:
             a, b, extras = joints.split_with_joint(model, origin, normal, kind, params)
         except Exception as e:
-            self.view.set_status(f"Snijden mislukt: {e}")
+            self.view.set_status(tr("Cut failed: {error}").format(error=e))
             return
         if (a.is_empty() or b.is_empty() or a.status() != mf.Error.NoError
                 or b.status() != mf.Error.NoError):
-            self.view.set_status("Snijden gaf geen twee geldige delen.")
+            self.view.set_status(tr("The cut did not give two valid parts."))
             return
         doc = self.doc
         color, name = groups[0].color, groups[0].name
@@ -4982,10 +5307,12 @@ class MainWindow(QMainWindow):
         first.ents = Entities.from_manifold(a)
         for g in groups[1:]:
             doc.remove_group(g.id)
-        part_b = doc.add_group(Entities.from_manifold(b), color, f"{name} (deel B)")
+        part_b = doc.add_group(Entities.from_manifold(b), color,
+                               tr("{name} (part B)").format(name=name))
         sel = [("g", first.id, first.id), ("g", part_b.id, part_b.id)]
         for i, pin in enumerate(extras):
-            pg = ops.group_from_manifold(doc, pin, self.settings.current_color, f"Pen {i + 1}")
+            pg = ops.group_from_manifold(doc, pin, self.settings.current_color,
+                                         tr("Pin {n}").format(n=i + 1))
             sel.append(("g", pg.id, pg.id))
         a_item, b_item = [("g", first.id, first.id)], [("g", part_b.id, part_b.id)]
         if flat:
@@ -5000,8 +5327,8 @@ class MainWindow(QMainWindow):
         doc.set_selection(sel)
         doc.notify()
         label = dict((k, l) for l, k in self.CUT_JOINTS)[kind].lower()
-        self.view.set_status(f"Model gesneden met {label}"
-                             + (f" en {len(extras)} losse pen(nen)." if extras else "."))
+        self.view.set_status((tr("Model cut with {joint} and {n} loose pin(s).") if extras
+                              else tr("Model cut with {joint}.")).format(joint=label, n=len(extras)))
 
     def _lay_part_flat(self, g, normal, sign):
         """Rotate a part about its centre so the cut face lies down, then drop it to the bed."""
@@ -5025,23 +5352,23 @@ class MainWindow(QMainWindow):
 
     def ask_text(self):
         dlg = QDialog(self)
-        dlg.setWindowTitle("3D-tekst")
+        dlg.setWindowTitle(tr("3D Text"))
         form = QFormLayout(dlg)
         ed = QLineEdit(getattr(self, "_last_text", "Volura"))
         font = QFontComboBox()
         font.setCurrentFont(self.font())
-        bold = QCheckBox("Vet")
+        bold = QCheckBox(tr("Bold"))
         bold.setChecked(True)
         h = QDoubleSpinBox()
         h.setRange(0.5, 1000)
         h.setValue(10)
         h.setSuffix(" mm")
-        form.addRow("Tekst", ed)
-        form.addRow("Lettertype", font)
+        form.addRow(tr("Text"), ed)
+        form.addRow(tr("Font"), font)
         form.addRow("", bold)
-        form.addRow("Hoogte hoofdletter", h)
-        form.addRow(QLabel("Na het plaatsen: Duwen/trekken. Alt ingedrukt = apart onderdeel\n"
-                           "(bijv. ingelegde tekst in een andere kleur)."))
+        form.addRow(tr("Cap height"), h)
+        form.addRow(QLabel(tr("After placing: Push/Pull. Alt held = separate part\n"
+                              "(e.g. inlaid text in another color).")))
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(dlg.accept)
         bb.rejected.connect(dlg.reject)
@@ -5060,28 +5387,32 @@ class MainWindow(QMainWindow):
         part_list = ops.parts(self.doc)
         msgs = ops.check_parts(part_list, self.settings.bed_size)
         if not part_list:
-            msgs = [("info", "Het model bevat nog geen volumes.")]
+            msgs = [("info", tr("The model has no volumes yet."))]
         loose = len(self.doc.root.loose_edges())
         if loose:
-            msgs.append(("info", f"{loose} losse rand(en) zonder vlak worden niet geprint."))
+            msgs.append(("info", tr("{n} loose edge(s) without a face are not printed.").format(
+                n=loose)))
+        # the levels are the identifiers of ops.check_parts (Dutch, not shown)
         icons = {"ok": "✔", "info": "ℹ", "waarschuwing": "⚠", "fout": "✖"}
-        colors = {"ok": "#2e7d32", "info": "#1565c0", "waarschuwing": "#e65100", "fout": "#c62828"}
-        html = "<h3>Printcontrole</h3><p>Elk onderdeel (groep of losse vorm) moet een gesloten volume zijn: " \
-               "geen gaten, geen dubbele of losse vlakken. Alleen gesloten volumes worden geëxporteerd.</p><ul>"
+        colors = {"ok": theme.color("ok"), "info": theme.color("info"),
+                  "waarschuwing": theme.color("warn"), "fout": theme.color("error")}
+        html = tr("<h3>Print Check</h3><p>Every part (group or loose shape) must be a closed "
+                  "volume: no holes, no double or loose faces. Only closed volumes are "
+                  "exported.</p>") + "<ul>"
         for level, text in msgs:
             html += f'<li style="color:{colors[level]}">{icons[level]} {text}</li>'
         html += "</ul>"
         dlg = QDialog(self)
-        dlg.setWindowTitle("Printcontrole")
+        dlg.setWindowTitle(tr(PANEL_PRINT_CHECK))
         dlg.resize(620, 420)
         lay = QVBoxLayout(dlg)
         tb = QTextBrowser()
         tb.setHtml(html)
         lay.addWidget(tb)
         row = QHBoxLayout()
-        b1 = QPushButton("Op bed plaatsen")
+        b1 = QPushButton(tr("Drop to Bed"))
         b1.clicked.connect(lambda: (self.drop_to_bed(), dlg.accept()))
-        b2 = QPushButton("Sluiten")
+        b2 = QPushButton(tr("Close"))
         b2.clicked.connect(dlg.accept)
         row.addWidget(b1)
         row.addStretch(1)
@@ -5090,42 +5421,11 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def show_help(self):
-        rows = "".join(f"<tr><td><b>{sc}</b></td><td>{label}</td></tr>" for _, label, _, sc in TOOL_INFO if sc)
-        html = f"""
-<h2>Volura - werkwijze</h2>
-<p>Volura werkt zoals SketchUp: teken een plat vlak en maak er met <b>Duwen/trekken</b> een volume van.</p>
-<ol>
-<li>Teken randen met Lijn (L), Rechthoek (R), Cirkel (C) of Veelhoek. Een gesloten vorm wordt een vlak.</li>
-<li>Randen splitsen elkaar, een lijn over een vlak splitst het vlak; met de Gum (E) wis je randen
-(of delen ervan) en worden vlakken weer samengevoegd.</li>
-<li>Duwen/trekken (P) werkt op elk vlak of deel van een vlak: omhoog = erbij, omlaag = uitsparing of gat.
-Typ een maat en Enter; de richting volgt je muis.</li>
-<li>Selecteer een vorm (driemaal klikken) en maak er een <b>groep</b> van (G): elke groep is een apart
-printbaar onderdeel met een eigen kleur. Dubbelklik op een groep om hem te bewerken.</li>
-<li><b>Meerkleuren</b>: houd <b>Alt</b> vast bij duwen/trekken: naar binnen maakt een inleg (uitsparing +
-vulling als aparte groep), naar buiten een apart onderdeel. Geef het een kleur met de verfemmer (B) en
-exporteer als 3MF.</li>
-</ol>
-<h3>Sneltoetsen</h3>
-<table cellpadding="3">{rows}
-<tr><td><b>A</b></td><td>Boog door 2 punten (in Tekenen &gt; Bogen ook Boog, Boog door 3 punten en Taartpunt)</td></tr>
-<tr><td><b>Shift+Z</b></td><td>Zoomen tot alles</td></tr>
-<tr><td><b>Middelste muisknop</b></td><td>Draaien, met Shift: pannen. Scrollwiel: zoomen</td></tr>
-<tr><td><b>Pijltjes</b></td><td>As vergrendelen (rechts = rood/X, links = groen/Y, omhoog = blauw/Z)</td></tr>
-<tr><td><b>Shift</b> (vasthouden)</td><td>Huidige richting vergrendelen</td></tr>
-<tr><td><b>Ctrl</b></td><td>Verplaatsen/roteren: kopie. Duwen/trekken: nieuw beginvlak</td></tr>
-<tr><td><b>Alt</b></td><td>Duwen/trekken: apart onderdeel / inleg</td></tr>
-<tr><td><b>G</b></td><td>Component of groep maken van de selectie</td></tr>
-<tr><td><b>Esc</b></td><td>Huidige bewerking annuleren</td></tr>
-<tr><td><b>Ctrl+Z / Ctrl+Y</b></td><td>Ongedaan maken / opnieuw</td></tr>
-</table>
-<h3>Maatinvoer (rechtsonder)</h3>
-<p>Begin gewoon te typen tijdens een bewerking. Voorbeelden: <code>25</code>, <code>2,5cm</code>,
-<code>40;20</code> (rechthoek), <code>64s</code> (segmenten), <code>10;0;5</code> (verplaatsing),
-<code>5x</code> of <code>/5</code> na een kopie (reeks), <code>45</code> (graden bij roteren).</p>
-"""
+        rows = "".join(f"<tr><td><b>{sc}</b></td><td>{tr(label)}</td></tr>"
+                       for _, label, _, sc in TOOL_INFO if sc)
+        html = tr(HELP_HTML).format(rows=rows)
         dlg = QDialog(self)
-        dlg.setWindowTitle("Volura help")
+        dlg.setWindowTitle(tr("Volura Help"))
         dlg.resize(700, 640)
         lay = QVBoxLayout(dlg)
         tb = QTextBrowser()
@@ -5135,7 +5435,7 @@ exporteer als 3MF.</li>
 
     # ------------------------------------------------------------ updates
     def check_for_updates_on_startup(self):
-        """Eén keer per dag stil kijken; alleen in de zelfstandige versie, nooit in een test."""
+        """Check quietly once a day; only in the standalone version, never in a test."""
         if is_offscreen() or not self.settings.check_updates or not getattr(sys, "frozen", False):
             return None
         q = qsettings()
@@ -5149,9 +5449,9 @@ exporteer als 3MF.</li>
         return self.check_for_updates(automatic=True)
 
     def check_for_updates(self, automatic=False):
-        """Help > Controleren op updates…: de nieuwste release op GitHub ophalen."""
+        """Help > Check for Updates…: fetch the newest release from GitHub."""
         if not automatic:
-            self.hint.setText("Zoeken naar een nieuwere versie…")
+            self.hint.setText(tr("Looking for a newer version…"))
         self._update_bridge = run_in_background(
             lambda progress: updater.latest_release(),
             lambda rel, err: self.on_update_result(rel, err, automatic))
@@ -5162,37 +5462,42 @@ exporteer als 3MF.</li>
             if not automatic:
                 self.hint.setText("")
                 detail = f"\n\n{error}" if error is not None else ""
-                QMessageBox.information(self, "Updates", "Volura kon GitHub niet bereiken of vond "
-                                        "geen release." + detail)
+                QMessageBox.information(self, tr("Updates"),
+                                        tr("Volura could not reach GitHub or found no release.")
+                                        + detail)
             return None
         if not updater.is_newer(release.version):
             if not automatic:
                 self.hint.setText("")
-                QMessageBox.information(self, "Updates", f"Je hebt de nieuwste versie ({__version__}).")
+                QMessageBox.information(self, tr("Updates"),
+                                        tr("You have the newest version ({version}).").format(
+                                            version=__version__))
             return None
         if automatic and qsettings().value(UPDATE_SKIP_KEY, "") == release.version:
             return None
-        self.hint.setText(f"Volura {release.version} is beschikbaar.")
+        self.hint.setText(tr("Volura {version} is available.").format(version=release.version))
         return self.offer_update(release)
 
     def offer_update(self, release):
-        """Vraag of de nieuwe versie er nu op moet; de installatie doet de rest."""
+        """Ask whether the new version should go on now; the installer does the rest."""
         box = QMessageBox(self)
-        box.setWindowTitle("Nieuwe versie van Volura")
+        box.setWindowTitle(tr("New Version of Volura"))
         box.setIcon(QMessageBox.Information)
-        box.setText(f"<b>Volura {release.version}</b> is beschikbaar. Je hebt nu {__version__}.")
+        box.setText(tr("<b>Volura {version}</b> is available. You now have {current}.").format(
+            version=release.version, current=__version__))
         if release.notes.strip():
             box.setDetailedText(release.notes.strip())
         self_install = updater.can_self_install() and bool(release.setup_url)
         if self_install:
-            box.setInformativeText("Volura downloadt de nieuwe versie, sluit af, installeert en "
-                                   "start daarna opnieuw. Je model wordt eerst bewaard als je dat wilt.")
-            go = box.addButton("Nu bijwerken", QMessageBox.AcceptRole)
+            box.setInformativeText(tr("Volura downloads the new version, closes, installs and "
+                                      "then starts again. Your model is saved first if you "
+                                      "want."))
+            go = box.addButton(tr("Update Now"), QMessageBox.AcceptRole)
         else:
-            box.setInformativeText("Download de nieuwe versie van de releasepagina op GitHub.")
-            go = box.addButton("Downloadpagina openen", QMessageBox.AcceptRole)
-        box.addButton("Later", QMessageBox.RejectRole)
-        skip = box.addButton("Deze versie overslaan", QMessageBox.DestructiveRole)
+            box.setInformativeText(tr("Download the new version from the release page on GitHub."))
+            go = box.addButton(tr("Open Download Page"), QMessageBox.AcceptRole)
+        box.addButton(tr("Later"), QMessageBox.RejectRole)
+        skip = box.addButton(tr("Skip This Version"), QMessageBox.DestructiveRole)
         box.exec()
         clicked = box.clickedButton()
         if clicked is skip:
@@ -5204,11 +5509,12 @@ exporteer als 3MF.</li>
         return None
 
     def install_update(self, release):
-        """Bewaar het model, download de installatie en laat die Volura vervangen."""
+        """Save the model, download the installer and let it replace Volura."""
         if not self.confirm_discard():
             return None
-        dlg = QProgressDialog(f"Volura {release.version} downloaden…", "Annuleren", 0, 100, self)
-        dlg.setWindowTitle("Bijwerken")
+        dlg = QProgressDialog(tr("Downloading Volura {version}…").format(version=release.version),
+                              tr("Cancel"), 0, 100, self)
+        dlg.setWindowTitle(tr("Updating"))
         dlg.setWindowModality(Qt.WindowModal)
         dlg.setMinimumDuration(0)
         dlg.setValue(0)
@@ -5223,14 +5529,16 @@ exporteer als 3MF.</li>
             dlg.reset()
             if error is not None:
                 if not isinstance(error, InterruptedError):
-                    QMessageBox.warning(self, "Bijwerken", f"Downloaden is niet gelukt:\n{error}")
+                    QMessageBox.warning(self, tr("Updating"),
+                                        tr("The download failed:\n{error}").format(error=error))
                 return
             try:
                 updater.run_installer(path)
             except OSError as e:
-                QMessageBox.warning(self, "Bijwerken", f"De installatie kon niet starten:\n{e}")
+                QMessageBox.warning(self, tr("Updating"),
+                                    tr("The installer could not start:\n{error}").format(error=e))
                 return
-            self.doc.dirty = False             # al bewaard of bewust weggegooid
+            self.doc.dirty = False             # already saved or deliberately discarded
             self.close()
 
         self._update_bridge = run_in_background(
@@ -5238,22 +5546,23 @@ exporteer als 3MF.</li>
         return dlg
 
     def about(self):
-        QMessageBox.about(self, "Over Volura",
+        QMessageBox.about(self, tr("About Volura"),
                           f"<h3>Volura {__version__}</h3>"
-                          "<p>Open source 3D-modelleerprogramma voor 3D-printen, met de werkwijze van "
-                          "SketchUp 2017.</p><p>Bij het exporteren wordt elk onderdeel gecontroleerd op een "
-                          "gesloten volume en foutloos geschreven als STL of meerkleuren-3MF.</p>"
-                          "<p>© 2026 L. van der Poel · Licentie: MIT</p>"
-                          "<p>Volura gebruikt open source software van derden:</p><ul>"
-                          "<li>Qt 6 en PySide6 (The Qt Company), LGPL v3. De Qt-bibliotheken staan als "
-                          "losse bestanden in de programmamap en mogen vervangen worden; broncode op "
-                          "<a href='https://code.qt.io'>code.qt.io</a>.</li>"
-                          "<li>Manifold (manifold3d), Apache 2.0</li>"
-                          "<li>NumPy, BSD 3-clause</li>"
-                          "<li>PyOpenGL, BSD-stijl</li>"
-                          "<li>Python, PSF-licentie</li></ul>"
-                          "<p>De volledige licentieteksten staan in THIRD_PARTY_LICENSES.txt "
-                          "naast het programma.</p>")
+                          + tr("<p>Open source 3D modeling program for 3D printing, with the "
+                               "workflow of SketchUp 2017.</p><p>On export every part is checked "
+                               "for a closed volume and written flawlessly as STL or multicolor "
+                               "3MF.</p>"
+                               "<p>© 2026 L. van der Poel · License: MIT</p>"
+                               "<p>Volura uses third-party open source software:</p><ul>"
+                               "<li>Qt 6 and PySide6 (The Qt Company), LGPL v3. The Qt libraries "
+                               "are separate files in the program folder and may be replaced; "
+                               "source code at <a href='https://code.qt.io'>code.qt.io</a>.</li>"
+                               "<li>Manifold (manifold3d), Apache 2.0</li>"
+                               "<li>NumPy, BSD 3-clause</li>"
+                               "<li>PyOpenGL, BSD-style</li>"
+                               "<li>Python, PSF license</li></ul>"
+                               "<p>The full license texts are in THIRD_PARTY_LICENSES.txt next to "
+                               "the program.</p>"))
 
     # ------------------------------------------------------------ context menu
     # ------------------------------------------------------------ context menu
@@ -5323,8 +5632,8 @@ exporteer als 3MF.</li>
 
     def show_area_selection(self):
         total = sum(self.face_area(self.doc.ents(c), i) for c, i in self._selected_faces())
-        QMessageBox.information(self, "Oppervlakte",
-                                f"Totale oppervlakte van de selectie: {total:.2f} mm²")
+        QMessageBox.information(self, tr("Area"),
+                                tr("Total area of the selection: {area:.2f} mm²").format(area=total))
 
     def show_area_material(self):
         ref = self._clicked_face()
@@ -5334,11 +5643,11 @@ exporteer als 3MF.</li>
         ents = self.doc.ents(c)
         color = ents.F[fid].color
         total = sum(self.face_area(ents, f) for f in ents.F if ents.F[f].color == color)
-        QMessageBox.information(self, "Oppervlakte",
-                                f"Totale oppervlakte van dit materiaal: {total:.2f} mm²")
+        QMessageBox.information(self, tr("Area"),
+                                tr("Total area of this material: {area:.2f} mm²").format(area=total))
 
     def align_view_to_face(self):
-        """Weergave uitlijnen: look straight at the face (view direction = -normal)."""
+        """Align View: look straight at the face (view direction = -normal)."""
         ref = self._clicked_face()
         if ref is None:
             return
@@ -5388,7 +5697,7 @@ exporteer als 3MF.</li>
         m = QMenu(self)
         sel = self.doc.selection
         if sel:
-            m.addAction("Entiteitsinfo", self.show_entity_info)
+            m.addAction(tr(PANEL_INFO), self.show_entity_info)
             m.addAction(self.a_delete)
             m.addAction(self.a_hide)
             sel_groups = self.doc.selected_groups()
@@ -5397,27 +5706,27 @@ exporteer als 3MF.</li>
                 m.addAction(self.a_unlock if all(g.locked for g in sel_groups) else self.a_lock)
             if self._selected_faces():
                 m.addSeparator()
-                sm = m.addMenu("Selecteren")
-                sm.addAction("Begrenzende randen", self.select_face_edges)
-                sm.addAction("Verbonden vlakken", self.select_connected_faces)
-                sm.addAction("Alles wat verbonden is", self.select_all_connected)
-                sm.addAction("Alles met hetzelfde materiaal", self.select_same_material)
-                om = m.addMenu("Oppervlakte")
-                om.addAction("Selectie", self.show_area_selection)
-                om.addAction("Materiaal", self.show_area_material)
-                fm = m.addMenu("Vlakken snijden")
+                sm = m.addMenu(tr("Select"))
+                sm.addAction(tr("Bounding Edges"), self.select_face_edges)
+                sm.addAction(tr("Connected Faces"), self.select_connected_faces)
+                sm.addAction(tr("All Connected"), self.select_all_connected)
+                sm.addAction(tr("All with Same Material"), self.select_same_material)
+                om = m.addMenu(tr("Area"))
+                om.addAction(tr("Selection"), self.show_area_selection)
+                om.addAction(tr("Material"), self.show_area_material)
+                fm = m.addMenu(tr("Intersect Faces"))
                 fm.addAction(self.a_cut_face_model)
                 fm.addAction(self.a_cut_face_sel)
-                m.addAction("Weergave uitlijnen", self.align_view_to_face)
-                m.addAction("Vlakken omkeren", self.reverse_selected_faces)
-                m.addAction("Vlakken oriënteren", self.orient_selected_faces)
-                m.addAction("Selectie zoomen", self.zoom_selection)
+                m.addAction(tr("Align View"), self.align_view_to_face)
+                m.addAction(tr("Reverse Faces"), self.reverse_selected_faces)
+                m.addAction(tr("Orient Faces"), self.orient_selected_faces)
+                m.addAction(tr("Zoom Selection"), self.zoom_selection)
             if self._selected_faces() or self.doc.selected_groups():
                 m.addSeparator()
                 self._add_laser_menu(m)
             m.addSeparator()
             if any(k in ("f", "g") for k, _, _ in sel):
-                cm = m.addMenu("Filamentkleur")
+                cm = m.addMenu(tr("Filament Color"))
                 for i, (name, color) in enumerate(self.doc.materials, 1):
                     a = cm.addAction(swatch(color), f"{i}: {name}")
                     a.triggered.connect(lambda checked=False, c=color: self.paint_selection(c))
@@ -5434,14 +5743,14 @@ exporteer als 3MF.</li>
                     m.addAction(self.a_trim)
                 m.addAction(self.a_shell)
                 m.addAction(self.a_split)
-            mm = m.addMenu("Spiegelen langs")
-            for i, naam in enumerate(("Rode as", "Groene as", "Blauwe as")):
+            mm = m.addMenu(tr("Flip Along"))
+            for i, naam in enumerate((tr("Red Axis"), tr("Green Axis"), tr("Blue Axis"))):
                 mm.addAction(naam, lambda checked=False, ax=i: self.mirror(ax))
             m.addAction(self.a_drop)
             m.addAction(self.a_center)
         else:
             m.addAction(self.a_sel_all)
-            m.addAction("Alles zichtbaar maken", self.unhide_all)
+            m.addAction(tr("Unhide All"), self.unhide_all)
         if self.doc.active != ROOT:
             m.addSeparator()
             m.addAction(self.a_close_group)
@@ -5460,7 +5769,7 @@ exporteer als 3MF.</li>
                 self.doc.set_selection([item] + [("e", item[1], e) for e in ents.face_edges(ents.F[item[2]])])
             else:
                 self.doc.set_selection([item])
-        # het vlak onder de muis, ook in een groep: "Laseren / frezen" neemt dát vlak
+        # the face under the mouse, also in a group: "Laser / Mill" takes that very face
         o, d = self.view.cam.ray(local.x(), local.y())
         fh = self.view.engine.pick_face(o, d) if pick[0] in ("face", "group") else None
         self._context_face = (fh[1], fh[2]) if fh else None
@@ -5490,19 +5799,20 @@ exporteer als 3MF.</li>
             e.ignore()
             return
         self.autosave_timer.stop()
+        self.spacemouse.stop()
         self.settings.save()
-        remove_autosave()       # netjes afgesloten: er is niets te herstellen
+        remove_autosave()       # closed properly: there is nothing to restore
         e.accept()
 
 
 def excepthook(exc_type, exc, tb):
-    """Een fout buiten de event-handlers: dezelfde log als daar, plus een melding."""
-    text = errors.log_exception(exc_type, exc, tb, note="onafgehandelde fout")
+    """An error outside the event handlers: the same log as there, plus a message."""
+    text = errors.log_exception(exc_type, exc, tb, note="unhandled error")
     if is_offscreen():
         return
     app = QApplication.instance()
     if app is not None:
-        QMessageBox.critical(None, "Volura - onverwachte fout", text[-3000:])
+        QMessageBox.critical(None, tr("Volura - Unexpected Error"), text[-3000:])
 
 
 def main(argv=None):
@@ -5515,6 +5825,7 @@ def main(argv=None):
     app.setApplicationName("Volura")
     app.setOrganizationName("Volura")
     app.setWindowIcon(icon("app"))
+    theme.apply(str(QSettings("Volura", "Volura").value("theme", theme.SYSTEM)), app)
     sys.excepthook = excepthook
     win = MainWindow()
     win.show()

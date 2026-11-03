@@ -1,15 +1,14 @@
-"""2D-vectorexport uit het 3D-model: geselecteerde vlakken, bovenaanzicht en doorsnede.
+"""2D vector export from the 3D model: selected faces, top view and section.
 
-De logica hier is bewust vrij van Qt: uit het document worden tekeningen
-(`volura.vector2d.Drawing`) gehaald -- de geselecteerde vlakken op ware grootte,
-het bovenaanzicht van de volumes en een doorsnede op hoogte Z -- en die gaan naar
-`volura.svg` of `volura.dxf`. De interface in `volura.app` bouwt hierop voort.
+The logic here is deliberately free of Qt: drawings (`volura.vector2d.Drawing`)
+are taken from the document -- the selected faces at true size, the top view of
+the solids and a section at height Z -- and passed to `volura.svg` or
+`volura.dxf`. The interface in `volura.app` builds on this.
 
-Alle maten zijn millimeters met Y omhoog. Bij het bovenaanzicht en de doorsnede
-blijven x en y van het model behouden, zodat de tekening op de oorsprong van het
-model uitgelijnd blijft; geselecteerde vlakken krijgen het lokale stelsel van hun
-eigen vlak, en vlakken die niet in hetzelfde vlak liggen worden naast elkaar
-gelegd met `GAP` ertussen.
+All sizes are millimetres with Y up. The top view and the section keep the x and y
+of the model, so the drawing stays aligned with the model origin; selected faces
+get the local frame of their own plane, and faces that do not lie in the same
+plane are placed side by side with `GAP` between them.
 """
 from __future__ import annotations
 
@@ -18,19 +17,20 @@ import manifold3d as mf
 
 from . import ops
 from .geom import default_u, normalize
+from .i18n import tr
 from .vector2d import Drawing, VPath, regions
 
-GAP = 5.0            # mm tussen vormen die niet in hetzelfde vlak liggen
-CLEAN_TOL = 1e-6     # mm: punten die dichter bij elkaar liggen, vallen samen
-LAYER = "0"          # alles komt op laag "0"
+GAP = 5.0            # mm between shapes that do not lie in the same plane
+CLEAN_TOL = 1e-6     # mm: points closer together than this merge
+LAYER = "0"          # everything goes on layer "0"
 
 
 # --------------------------------------------------------------------------
-#  2D-punten opschonen
+#  cleaning up 2D points
 # --------------------------------------------------------------------------
 
 def _dist_to_line(p, a, b):
-    """Afstand van `p` tot de lijn door `a` en `b`."""
+    """Distance from `p` to the line through `a` and `b`."""
     d = b - a
     L = float(np.hypot(d[0], d[1]))
     if L <= 1e-12:
@@ -39,13 +39,13 @@ def _dist_to_line(p, a, b):
 
 
 def clean_loop(pts, tol=CLEAN_TOL):
-    """Een gesloten polylijn oplonen: dubbele punten en punten op een rechte lijn weg.
+    """Clean up a closed polyline: remove duplicate points and points on a straight line.
 
-    `Manifold.slice` en `Manifold.project` geven een hoek vaak twee keer terug
-    (eens per aangrenzende driehoek) en een punt midden op een rechte lijn is ook
-    overbodig; zulke punten vallen weg. Een punt valt weg als het dichter dan
-    `tol` bij de lijn van zijn buren ligt, of dichter dan `tol` bij het vorige
-    punt. Er blijven minimaal drie punten over.
+    `Manifold.slice` and `Manifold.project` often return a corner twice (once per
+    adjacent triangle), and a point in the middle of a straight line is redundant
+    too; such points are dropped. A point is dropped when it lies closer than `tol`
+    to the line of its neighbours, or closer than `tol` to the previous point. At
+    least three points remain.
     """
     p = [np.asarray(q, dtype=float) for q in np.asarray(pts, dtype=float).reshape(-1, 2)]
     changed = True
@@ -67,16 +67,16 @@ def clean_loop(pts, tol=CLEAN_TOL):
 
 
 # --------------------------------------------------------------------------
-#  geselecteerde vlakken
+#  selected faces
 # --------------------------------------------------------------------------
 
 def plane_frame(n):
-    """Rechtshandig lokaal stelsel `(n, u, v)` dat alleen van de normaal afhangt.
+    """Right handed local frame `(n, u, v)` that depends only on the normal.
 
-    Twee coplanaire vlakken krijgen zo hetzelfde assenstelsel en blijven dus op
-    hun onderlinge plek staan. Een normaal die naar achteren wijst wordt omge-
-    draaid (hetzelfde adres als `brep.plane_key`), zodat een vlak altijd van voren
-    bekeken wordt: een platte tekening op de grond blijft boven boven liggen.
+    Two coplanar faces thus get the same axes and keep their relative position. A
+    normal pointing backwards is flipped (the same key as `brep.plane_key`), so a
+    face is always viewed from the front: a flat drawing on the ground keeps its
+    top side up.
     """
     n = normalize(np.asarray(n, dtype=float))
     for c in n:
@@ -93,12 +93,12 @@ def plane_frame(n):
 
 
 def _plane_key(n, origin):
-    """Sleutel van het vlak: dezelfde normaal en dezelfde afstand tot de oorsprong."""
+    """Key of the plane: the same normal and the same distance to the origin."""
     return tuple(round(float(c), 6) for c in n) + (round(float(np.dot(n, origin)), 4),)
 
 
 def _face_loops(ents, fid):
-    """(normaal, oorsprong, lussen) van een vlak, de lussen in zijn eigen 2D-stelsel."""
+    """(normal, origin, loops) of a face, the loops in its own 2D frame."""
     face = ents.F[fid]
     n, u, v = plane_frame(face.normal)
     origin = n * float(np.dot(n, ents.V[face.loops[0][0]]))
@@ -113,14 +113,14 @@ def _face_loops(ents, fid):
 
 
 def _shapes(loops, rule="nonzero"):
-    """Lussen als gevulde vormen [buitenrand, gaten], via `vector2d.regions`."""
+    """Loops as filled shapes [outer boundary, holes], via `vector2d.regions`."""
     paths = [VPath(np.ascontiguousarray(l, float), True, LAYER, True, rule, 1)
              for l in loops if len(l) >= 3]
     return regions(paths) if paths else []
 
 
 def _bbox(loops):
-    """(xmin, ymin, xmax, ymax) van een lijst lussen, of None als er geen zijn."""
+    """(xmin, ymin, xmax, ymax) of a list of loops, or None if there are none."""
     pts = [np.asarray(l, dtype=float).reshape(-1, 2) for l in loops if len(l)]
     if not pts:
         return None
@@ -130,10 +130,10 @@ def _bbox(loops):
 
 
 def _layout(bboxes, gap=GAP):
-    """Verschuiving per groep: de eerste blijft liggen, de rest schuift eronder.
+    """Offset per group: the first stays in place, the rest move below it.
 
-    De eerste groep bepaalt de plek van de tekening; de andere groepen gaan in
-    rijen onder elkaar, met `gap` mm tussenruimte en om de beurt naast elkaar.
+    The first group sets the position of the drawing; the other groups go in rows
+    below it, `gap` mm apart, side by side in turn.
     """
     if len(bboxes) < 2 or any(b is None for b in bboxes):
         return [(0.0, 0.0) for _ in bboxes]
@@ -143,7 +143,7 @@ def _layout(bboxes, gap=GAP):
     x, y = right + gap, bottom
     for b in bboxes[1:]:
         w, h = b[2] - b[0], b[3] - b[1]
-        if x + w > left + wrap:                       # nieuwe rij, lager
+        if x + w > left + wrap:                       # new row, lower down
             x, y = left, bottom - gap - h
             bottom = y
         shifts.append((x - b[0], y - b[1]))
@@ -152,13 +152,13 @@ def _layout(bboxes, gap=GAP):
 
 
 def drawing_from_faces(doc, selection=None, gap=GAP) -> Drawing:
-    """Elk geselecteerd vlak op ware grootte in zijn eigen vlak.
+    """Every selected face at true size in its own plane.
 
-    `selection` is een lijst selectie-items zoals `Document.selection` het doet,
-    `("f", ctx, fid)`; zonder argument is de actieve selectie het uitgangspunt.
-    Vlakken in hetzelfde vlak houden hun onderlinge plek, vlakken in verschillende
-    vlakken worden naast elkaar gelegd met `gap` mm ertussen. Een vlak met gaten
-    geeft één vorm: de buitenrand en de gaten horen bij één bronelement (`src`).
+    `selection` is a list of selection items as in `Document.selection`,
+    `("f", ctx, fid)`; without an argument the active selection is used. Faces in
+    the same plane keep their relative position, faces in different planes are
+    placed side by side with `gap` mm between them. A face with holes gives one
+    shape: the outer boundary and the holes belong to one source element (`src`).
     """
     items = doc.selection if selection is None else list(selection)
     order, by_plane = [], {}
@@ -197,20 +197,20 @@ def drawing_from_faces(doc, selection=None, gap=GAP) -> Drawing:
 
 
 # --------------------------------------------------------------------------
-#  bovenaanzicht en doorsnede
+#  top view and section
 # --------------------------------------------------------------------------
 
 def _sections(doc, only_selected, what, z=0.0):
-    """(doorsnedes per onderdeel, waarschuwingen) voor `project` of `slice`."""
+    """(sections per part, warnings) for `project` or `slice`."""
     out, warn = [], []
     for part in ops.parts(doc, only_selected=bool(only_selected)):
         if part.manifold is None:
-            warn.append(f"{part.name} overgeslagen: {part.problem}.")
+            warn.append(tr("{name} skipped: {problem}.").format(name=part.name, problem=part.problem))
             continue
         try:
             cs = part.manifold.project() if what == "top" else part.manifold.slice(float(z))
-        except Exception as e:                          # een kapot volume mag nooit crashen
-            warn.append(f"{part.name} overgeslagen: {e}.")
+        except Exception as e:                          # a broken solid must never crash
+            warn.append(tr("{name} skipped: {problem}.").format(name=part.name, problem=e))
             continue
         if cs.is_empty():
             continue
@@ -219,8 +219,8 @@ def _sections(doc, only_selected, what, z=0.0):
         if not polys:
             continue
         if what == "top":
-            # een projectie is vaak zelfkruisend; de positieve vulregel maakt er
-            # pas een normale vorm van (zoals Manifold.project aanbeveelt)
+            # a projection is often self-intersecting; only the positive fill rule
+            # turns it into a normal shape (as Manifold.project recommends)
             cs = mf.CrossSection(polys, mf.FillRule.NonZero)
             if cs.is_empty():
                 continue
@@ -229,7 +229,7 @@ def _sections(doc, only_selected, what, z=0.0):
 
 
 def _drawing_from_sections(sections, warn) -> Drawing:
-    """De vereniging van de doorsnedes als gesloten paden op laag "0"."""
+    """The union of the sections as closed paths on layer "0"."""
     drawing = Drawing()
     for text in warn:
         drawing.warn(text)
@@ -248,19 +248,19 @@ def _drawing_from_sections(sections, warn) -> Drawing:
 
 
 def drawing_top(doc, only_selected=False) -> Drawing:
-    """Bovenaanzicht (omtrek) van de volumes: `Manifold.project()` per onderdeel."""
+    """Top view (outline) of the solids: `Manifold.project()` per part."""
     sections, warn = _sections(doc, only_selected, "top")
     return _drawing_from_sections(sections, warn)
 
 
 def drawing_section(doc, z=0.0, only_selected=False) -> Drawing:
-    """Doorsnede op hoogte `z`: `Manifold.slice(z)` per onderdeel."""
+    """Section at height `z`: `Manifold.slice(z)` per part."""
     sections, warn = _sections(doc, only_selected, "section", z)
     return _drawing_from_sections(sections, warn)
 
 
 def section_z_default(doc):
-    """Het midden van het model in de hoogte: de standaardwaarde voor een doorsnede."""
+    """The vertical middle of the model: the default height for a section."""
     box = doc.model_bbox()
     if box is None:
         return 0.0

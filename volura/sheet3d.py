@@ -1,14 +1,14 @@
-"""Van werkblad naar model en terug: de onderdelen van de plaat als 3D-objecten.
+"""From worksheet to model and back: the parts of the sheet as 3D objects.
 
-Elk onderdeel op het werkblad (een buitenrand met alles erbinnen, zoals het nesten
-het ziet) wordt een plaat met de dikte van het werkblad: de contouren die door de
-plaat gaan (snijden, frezen buiten en binnen, boren) vormen de rand en de gaten,
-en een uitkamering haalt van boven de ingestelde diepte weg. Gravures en rasters
-blijven alleen op het werkblad. De onderdelen staan in het model op dezelfde plek
-als op het werkblad (X en Y gelijk), de onderkant op Z = 0.
+Every part on the worksheet (an outer boundary with everything inside it, as
+nesting sees it) becomes a plate with the thickness of the worksheet: the contours
+that go through the plate (cut, mill outside and inside, drill) form the edge and
+the holes, and a pocket removes the set depth from the top. Engravings and rasters
+stay on the worksheet only. The parts sit in the model at the same place as on the
+worksheet (X and Y equal), the bottom at Z = 0.
 
-De andere kant op (3D naar het werkblad) gaat met `vector_export`; hier staat
-alleen hoe die tekening op een laag van het werkblad komt.
+The other way (3D to the worksheet) goes through `vector_export`; this module only
+holds how that drawing ends up on a layer of the worksheet.
 """
 from __future__ import annotations
 
@@ -16,15 +16,16 @@ import numpy as np
 import manifold3d as mf
 
 from . import cam, nesting
+from .i18n import tr
 from .vector2d import Drawing, layer_param
 
-#: Bewerkingen die helemaal door de plaat gaan: zij bepalen de vorm van een onderdeel.
+#: Operations that go all the way through the plate: they determine the shape of a part.
 THROUGH_OPS = ("cut", "mill_outside", "mill_inside", "drill")
-#: Bewerkingen die maar tot een diepte gaan (van boven).
+#: Operations that only go to a depth (from the top).
 DEPTH_OPS = ("pocket",)
 
 DEFAULT_THICKNESS = 3.0
-NAME_PREFIX = "Werkblad"
+NAME_PREFIX = tr("Worksheet")       # only shown in group names, never searched for
 
 
 def _op(drawing, path):
@@ -43,14 +44,14 @@ def _section(paths) -> mf.CrossSection:
 
 
 def part_solids(drawing: Drawing, thickness, paths=None):
-    """[(naam, Manifold)] van de onderdelen die door de plaat gesneden worden.
+    """[(name, Manifold)] of the parts that are cut through the plate.
 
-    `paths` beperkt het tot de onderdelen waar die paden in zitten (de selectie).
-    Een onderdeel zonder gesloten buitenrand op een snijlaag levert niets op.
+    `paths` limits it to the parts those paths are in (the selection).
+    A part without a closed outer boundary on a cutting layer gives nothing.
     """
     t = float(thickness)
     if t <= 0:
-        raise ValueError("De plaatdikte moet groter dan 0 zijn.")
+        raise ValueError(tr("The sheet thickness must be greater than 0."))
     usable = [p for p in drawing.paths
               if cam._is_shape(p) and _op(drawing, p) in THROUGH_OPS + DEPTH_OPS]
     parts = nesting.parts_of(drawing, usable)
@@ -63,7 +64,7 @@ def part_solids(drawing: Drawing, thickness, paths=None):
             continue
         outer = part.paths[0]
         if _op(drawing, outer) not in THROUGH_OPS:
-            continue                       # een losse uitkamering is geen onderdeel
+            continue                       # a loose pocket is not a part
         through = [p for p in part.paths if _op(drawing, p) in THROUGH_OPS]
         cs = _section(through)
         if cs.is_empty():
@@ -79,12 +80,12 @@ def part_solids(drawing: Drawing, thickness, paths=None):
             man = man - pocket
         if man.is_empty():
             continue
-        out.append((f"{NAME_PREFIX} - deel {len(out) + 1}", man))
+        out.append((tr("{prefix} - part {n}").format(prefix=NAME_PREFIX, n=len(out) + 1), man))
     return out
 
 
 def solid_thickness(groups) -> float | None:
-    """De dikte van platen in het model: hun hoogte als die voor allemaal gelijk is."""
+    """The thickness of plates in the model: their height when it is the same for all."""
     heights = set()
     for g in groups:
         bb = g.bbox()
@@ -99,7 +100,7 @@ def solid_thickness(groups) -> float | None:
 
 
 def on_layer(drawing: Drawing, layer_name, color=None, op=None) -> Drawing:
-    """Dezelfde tekening met alle paden op laag `layer_name` (de bewerking in 3D gekozen)."""
+    """The same drawing with all paths on layer `layer_name` (the operation chosen in 3D)."""
     out = Drawing(warnings=list(drawing.warnings))
     lay = out.ensure_layer(layer_name, color or "#000000", op)
     for p in drawing.paths:

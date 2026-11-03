@@ -4,22 +4,26 @@ from __future__ import annotations
 import numpy as np
 
 from .geom import AXES, GROUND, Plane, closest_on_line_to_ray
+from .i18n import tr
 from .model import ROOT
 
 PICK_PX = 10.0
 EDGE_PX = 7.0
 
+_AXES_ON = (tr("On Red Axis"), tr("On Green Axis"), tr("On Blue Axis"))
 LABELS = {
-    "endpoint": "Eindpunt",
-    "origin": "Oorsprong",
-    "midpoint": "Middelpunt",
-    "edge": "Op rand",
-    "face": "Op vlak",
-    "guide": "Op hulplijn",
-    "guidepoint": "Hulppunt",
-    "axis": ("Op rode as", "Op groene as", "Op blauwe as"),
-    "axisline": ("Op rode as", "Op groene as", "Op blauwe as"),
-    "lock": "Vergrendeld",
+    "endpoint": tr("Endpoint"),
+    "origin": tr("Origin"),
+    "midpoint": tr("Midpoint"),
+    "edge": tr("On Edge"),
+    "edge_axis": (tr("On Edge / On Red Axis"), tr("On Edge / On Green Axis"),
+                  tr("On Edge / On Blue Axis")),
+    "face": tr("On Face"),
+    "guide": tr("On Guide"),
+    "guidepoint": tr("Guide Point"),
+    "axis": _AXES_ON,
+    "axisline": _AXES_ON,
+    "lock": tr("Locked"),
 }
 
 
@@ -37,14 +41,12 @@ class Inference:
 
     @property
     def label(self):
+        if self.kind == "edge" and self.axis is not None:
+            return LABELS["edge_axis"][self.axis]
         lab = LABELS.get(self.kind, "")
         if isinstance(lab, tuple):
-            text = lab[self.axis]
-        else:
-            text = lab
-        if self.kind == "edge" and self.axis is not None:
-            text += " / " + LABELS["axis"][self.axis].lower()
-        return text
+            return lab[self.axis]
+        return lab
 
 
 class GeoCache:
@@ -178,12 +180,12 @@ class InferenceEngine:
 
     @property
     def show_hidden(self):
-        """Beeld > Verborgen geometrie: hidden faces and edges can be picked too."""
+        """View > Hidden Geometry: hidden faces and edges can be picked too."""
         return bool(getattr(self.settings, "show_hidden", False))
 
     @property
     def show_guides(self):
-        """Beeld > Hulplijnen: hidden guides are not used for inference either."""
+        """View > Guides: hidden guides are not used for inference either."""
         return bool(getattr(self.settings, "show_guides", True))
 
     def invalidate(self):
@@ -191,19 +193,19 @@ class InferenceEngine:
 
     # --------------------------------------------------------- guides
     def guide_lines(self):
-        """The visible hulplijnen (infinite lines) of the document."""
+        """The visible guide lines (infinite lines) of the document."""
         if not self.show_guides:
             return []
         return [g for g in self.doc.guides if g.is_line]
 
     def guide_points(self):
-        """The visible hulppunten of the document."""
+        """The visible guide points of the document."""
         if not self.show_guides:
             return []
         return [g for g in self.doc.guides if not g.is_line]
 
     def _guide_crossings(self, guides, A, B):
-        """The points where hulplijnen other edges or other hulplijnen cross."""
+        """The points where guide lines cross edges or other guide lines."""
         if not guides:
             return np.zeros((0, 3))
         pts = []

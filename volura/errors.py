@@ -18,7 +18,9 @@ from datetime import datetime
 
 from PySide6.QtCore import QStandardPaths
 
-ERROR_STATUS = "Interne fout, zie volura.log"
+from .i18n import tr
+
+ERROR_STATUS = tr("Internal error, see volura.log")
 LOG_NAME = "volura.log"
 GL_ERROR_DRAIN_MAX = 10
 
@@ -114,13 +116,13 @@ def recover(view, depth=None):
         try:
             rollback(doc, depth)
         except Exception:
-            log_exception(note="rollback mislukt")
+            log_exception(note="rollback failed")
     tool = getattr(view, "tool", None)
     if tool is not None:
         try:
             tool.reset()
         except Exception:
-            log_exception(note="gereedschap terugzetten mislukt")
+            log_exception(note="resetting the tool failed")
     try:
         view.preview_transform = None
     except Exception:
@@ -128,7 +130,7 @@ def recover(view, depth=None):
     try:
         view.set_status(ERROR_STATUS)
     except Exception:
-        log_exception(note="statusmelding mislukt")
+        log_exception(note="status message failed")
 
 
 def safe_handler(fn=None, ret=None, boolean=False):
@@ -145,7 +147,7 @@ def safe_handler(fn=None, ret=None, boolean=False):
             try:
                 out = func(self, *args, **kwargs)
             except Exception:
-                log_exception(note=f"fout in {getattr(func, '__qualname__', 'event-handler')}")
+                log_exception(note=f"error in {getattr(func, '__qualname__', 'event-handler')}")
                 recover(self, depth)
                 out = ret
             return bool(out) if boolean else out

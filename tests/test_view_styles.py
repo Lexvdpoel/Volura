@@ -1,4 +1,4 @@
-"""Beeld > weergavestijlen: vlakstijl, achterliggende randen, verborgen geometrie.
+"""View > display styles: face style, back edges, hidden geometry.
 
 Runs without a display (Qt offscreen platform), like tests/test_ui_spec.py.
 """
@@ -42,13 +42,13 @@ def shortcut_of(action):
 
 
 def test_face_style_actions(win):
-    """Every Beeld > Vlakstijl choice sets Settings.face_style to its own value."""
+    """Every View > Face Style choice sets Settings.face_style to its own value."""
     for attr, value in STYLES.items():
         action = getattr(win, attr)
-        assert action.isCheckable(), f"'{action.text()}' moet aan/uit te vinken zijn"
+        assert action.isCheckable(), f"'{action.text()}' must be checkable"
         action.trigger()
         assert win.settings.face_style == value, \
-            f"{attr} moet face_style '{value}' zetten, werd {win.settings.face_style!r}"
+            f"{attr} must set face_style '{value}', got {win.settings.face_style!r}"
 
 
 @pytest.mark.parametrize("value", sorted(STYLES.values()))
@@ -56,11 +56,11 @@ def test_face_style_exclusive(win, value):
     """The four face styles are one exclusive choice: exactly one action is checked."""
     getattr(win, [k for k, v in STYLES.items() if v == value][0]).trigger()
     checked = [v for k, v in STYLES.items() if getattr(win, k).isChecked()]
-    assert checked == [value], f"er moet precies één vlakstijl aangevinkt zijn, nu {checked}"
+    assert checked == [value], f"exactly one face style must be checked, now {checked}"
 
 
 def test_xray_combines_with_any_style(win):
-    """Röntgen is a separate switch: it stays out of the exclusive face style group."""
+    """X-ray is a separate switch: it stays out of the exclusive face style group."""
     win.a_shaded.trigger()
     win.a_xray.trigger()
     assert win.settings.xray is True
@@ -73,9 +73,9 @@ def test_xray_combines_with_any_style(win):
 
 
 def test_back_edges_shortcut_and_toggle(win):
-    """Beeld > Randstijl > Achterliggende randen has shortcut K and toggles Settings.back_edges."""
+    """View > Edge Style > Back Edges has shortcut K and toggles Settings.back_edges."""
     a = win.a_back_edges
-    assert "K" in shortcut_of(a), f"'Achterliggende randen' moet sneltoets K hebben, heeft {shortcut_of(a)}"
+    assert "K" in shortcut_of(a), f"'Back Edges' must have shortcut K, has {shortcut_of(a)}"
     assert a.isCheckable() and a.isEnabled()
     was = win.settings.back_edges
     a.trigger()
@@ -85,7 +85,7 @@ def test_back_edges_shortcut_and_toggle(win):
 
 
 def test_hidden_geometry_and_hide_rest(win):
-    """Beeld > Verborgen geometrie and Componentbewerking > Rest van model verbergen toggle."""
+    """View > Hidden Geometry and Component Edit > Hide Rest of Model toggle."""
     for action, attr in ((win.a_hidden_geometry, "show_hidden"), (win.a_hide_rest, "hide_rest")):
         assert action.isCheckable() and action.isEnabled(), action.text()
         was = getattr(win.settings, attr)
@@ -96,7 +96,7 @@ def test_hidden_geometry_and_hide_rest(win):
 
 
 def test_guides_toggle(win):
-    """Beeld > Hulplijnen is a working toggle now: it shows and hides the guides."""
+    """View > Guides is a working toggle now: it shows and hides the guides."""
     assert win.a_guides.isCheckable() and win.a_guides.isEnabled()
     was = win.settings.show_guides
     win.a_guides.trigger()
@@ -161,8 +161,8 @@ def test_viewport_uses_the_face_style(win):
                                      [40.0, 30.0, 0.0], [0.0, 30.0, 0.0]]))
         ents.add_shape(pl, [loop])
         ents.pushpull(list(ents.F)[0], 10.0)
-    assert drawn(face_style="shaded")[0] > 0, "gearceerd tekent vlakken"
-    assert drawn(face_style="wireframe")[0] == 0, "draadmodel tekent geen vlakken"
-    assert drawn(face_style="hiddenline")[0] > 0, "verborgen lijnen tekent vlakken (wit)"
-    assert drawn(face_style="hiddenline")[1] == 0, "verborgen lijnen heeft geen belichting"
-    assert drawn(face_style="monochrome")[0] > 0, "monochroom tekent vlakken"
+    assert drawn(face_style="shaded")[0] > 0, "shaded draws faces"
+    assert drawn(face_style="wireframe")[0] == 0, "wireframe draws no faces"
+    assert drawn(face_style="hiddenline")[0] > 0, "hidden line draws faces (white)"
+    assert drawn(face_style="hiddenline")[1] == 0, "hidden line has no lighting"
+    assert drawn(face_style="monochrome")[0] > 0, "monochrome draws faces"

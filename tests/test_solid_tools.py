@@ -1,4 +1,4 @@
-"""The SketchUp 2017 volume tools: Buitenschil, Bijsnijden and Vlakken snijden.
+"""The SketchUp 2017 Solid Tools: Outer Shell, Trim and Intersect Faces.
 
 The box is the same 40 x 30 x 10 mm box as box() in tests/test_brep.py (12000 mm3),
 so the expected volumes are the ones SketchUp 2017 gives for the same shapes.
@@ -55,7 +55,7 @@ def two_boxes(doc):
     return a, b
 
 
-# ------------------------------------------------------------------ Buitenschil
+# ------------------------------------------------------------------ Outer Shell
 
 def test_outer_shell_of_two_overlapping_boxes_is_the_union():
     doc = Document()
@@ -83,7 +83,7 @@ def test_outer_shell_of_one_box_is_that_box():
 def test_outer_shell_removes_a_fully_enclosed_cavity():
     doc = Document()
     hollow = mf.Manifold.cube((10, 10, 10)) - mf.Manifold.cube((6, 6, 6)).translate((2, 2, 2))
-    g = ops.group_from_manifold(doc, hollow, "#f2f2f2", "hol")
+    g = ops.group_from_manifold(doc, hollow, "#f2f2f2", "hollow")
     assert volume(g.ents) == 784.0
     res = ops.outer_shell(doc, [g])
     assert volume(res.ents) == 1000.0             # only the outside is left
@@ -91,9 +91,9 @@ def test_outer_shell_removes_a_fully_enclosed_cavity():
 
 def test_outer_shell_drops_a_part_that_lies_inside_another():
     doc = Document()
-    outer = ops.group_from_manifold(doc, mf.Manifold.cube((10, 10, 10)), "#f2f2f2", "bol")
+    outer = ops.group_from_manifold(doc, mf.Manifold.cube((10, 10, 10)), "#f2f2f2", "outer")
     inner = ops.group_from_manifold(doc, mf.Manifold.cube((2, 2, 2)).translate((4, 4, 4)),
-                                    "#d23b3b", "bin")
+                                    "#d23b3b", "inner")
     res = ops.outer_shell(doc, [outer, inner])
     assert volume(res.ents) == 1000.0
     assert len(doc.groups) == 1
@@ -103,12 +103,12 @@ def test_outer_shell_needs_a_closed_volume():
     doc = Document()
     e = Entities()
     rect(e, 0, 0, 40, 30)
-    g = doc.add_group(e, "#f2f2f2", "vlak")
+    g = doc.add_group(e, "#f2f2f2", "face")
     with pytest.raises(ValueError):
         ops.outer_shell(doc, [g, doc.add_group(box(), "#2f6fd6", "B")])
 
 
-# ------------------------------------------------------------------- Bijsnijden
+# ------------------------------------------------------------------------- Trim
 
 def test_trim_cuts_the_second_group_with_the_first():
     doc = Document()
@@ -130,11 +130,11 @@ def test_trim_leaves_the_first_group_unchanged():
 
 def test_trim_of_a_group_inside_another_removes_it():
     doc = Document()
-    outer = ops.group_from_manifold(doc, mf.Manifold.cube((10, 10, 10)), "#f2f2f2", "bol")
+    outer = ops.group_from_manifold(doc, mf.Manifold.cube((10, 10, 10)), "#f2f2f2", "outer")
     inner = ops.group_from_manifold(doc, mf.Manifold.cube((2, 2, 2)).translate((4, 4, 4)),
-                                    "#d23b3b", "bin")
+                                    "#d23b3b", "inner")
     assert ops.trim(doc, outer, inner) is None
-    assert [g.name for g in doc.groups] == ["bol"]
+    assert [g.name for g in doc.groups] == ["outer"]
 
 
 def test_trim_needs_two_closed_volumes():
@@ -142,16 +142,16 @@ def test_trim_needs_two_closed_volumes():
     a, _ = two_boxes(doc)
     e = Entities()
     rect(e, 0, 0, 40, 30)
-    flat = doc.add_group(e, "#3fa34d", "vlak")
+    flat = doc.add_group(e, "#3fa34d", "face")
     with pytest.raises(ValueError):
         ops.trim(doc, a, flat)
 
 
-# ------------------------------------------------------------- Vlakken snijden
+# ------------------------------------------------------------- Intersect Faces
 
 def box_and_plate(doc):
     doc.root = box()
-    g = doc.add_group(plate(), "#2f6fd6", "plaat")
+    g = doc.add_group(plate(), "#2f6fd6", "plate")
     return g
 
 
@@ -213,10 +213,10 @@ def win():
 
 
 def test_volume_tools_are_no_longer_placeholders(win):
-    for a, text in ((win.a_shell, "Buitenschil"), (win.a_trim, "Bijsnijden"),
-                    (win.a_cut_face_model, "Met model"), (win.a_cut_face_sel, "Met selectie")):
+    for a, text in ((win.a_shell, "Outer Shell"), (win.a_trim, "Trim"),
+                    (win.a_cut_face_model, "With Model"), (win.a_cut_face_sel, "With Selection")):
         assert clean(a.text()) == text
-        assert a.isEnabled(), f"{text} is nog een placeholder"
+        assert a.isEnabled(), f"{text} is still a placeholder"
 
 
 def test_outer_shell_action_is_one_undo_step(win):
@@ -265,7 +265,7 @@ def test_intersect_faces_action_with_selection(win):
 
 
 def test_intersect_faces_action_without_cut_lines(win):
-    """Groepen die elkaar niet raken: er is niets te snijden en er blijft geen undo-stap."""
+    """Groups that do not touch: there is nothing to cut and no undo step is left."""
     a = win.doc.add_group(box(), "#f2f2f2", "A")
     win.doc.add_group(moved_box([0, 0, 30]), "#2f6fd6", "B")
     win.doc.set_selection([("g", a.id, a.id), ("g", win.doc.groups[1].id, win.doc.groups[1].id)])
@@ -281,13 +281,13 @@ def test_intersect_faces_is_in_the_context_menu(win):
                                  [np.array([[0, 0], [40, 0], [40, 30], [0, 30]], dtype=float)])[0]
     win.doc.set_selection([("f", ROOT, fid)])
     menu = win.build_context_menu()
-    cut = next(a.menu() for a in menu.actions() if clean(a.text()) == "Vlakken snijden")
-    assert [clean(a.text()) for a in cut.actions()] == ["Met model", "Met selectie"]
-    assert all(a.isEnabled() for a in cut.actions()), "Vlakken snijden moet werken"
+    cut = next(a.menu() for a in menu.actions() if clean(a.text()) == "Intersect Faces")
+    assert [clean(a.text()) for a in cut.actions()] == ["With Model", "With Selection"]
+    assert all(a.isEnabled() for a in cut.actions()), "Intersect Faces must work"
 
 
 def test_solid_tools_are_in_the_group_context_menu(win):
     a, b = two_boxes(win.doc)
     win.doc.set_selection([("g", a.id, a.id), ("g", b.id, b.id)])
     items = [clean(a.text()) for a in win.build_context_menu().actions() if not a.isSeparator()]
-    assert "Buitenschil" in items and "Bijsnijden" in items
+    assert "Outer Shell" in items and "Trim" in items

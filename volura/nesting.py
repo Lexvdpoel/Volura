@@ -1,24 +1,24 @@
-"""Automatisch nesten: onderdelen zo zuinig mogelijk op één of meer platen schikken.
+"""Automatic nesting: arrange parts as economically as possible on one or more sheets.
 
-Geen Qt in dit bestand. Het werkt op het gedeelde 2D-model uit `volura/vector2d.py`
-en de nestingdiepte uit `volura/cam.py`, en is daarom los te testen en in het
-werkblad, de export en de freespaden weer te gebruiken.
+No Qt in this file. It works on the shared 2D model from `volura/vector2d.py` and the
+nesting depth from `volura/cam.py`, and can therefore be tested on its own and reused
+in the worksheet, the export and the milling paths.
 
-Een *onderdeel* (`Part`) is een buitenrand met alles wat erbinnen ligt (gaten,
-eilanden, gravures en open paden), zodat het als één geheel over de plaat beweegt.
-Losse open paden zonder buitenrand vormen een eigen onderdeel op hun bounding box.
+A *part* (`Part`) is an outer boundary with everything that lies inside it (holes,
+islands, engravings and open paths), so it moves across the sheet as one whole.
+Loose open paths without an outer boundary form a part of their own on their bounding
+box.
 
-`nest` schikt de onderdelen met "bottom-left fill": grootste eerst, en per
-onderdeel en rotatie de laagste-dan-meest-linkse plek waar het, opgeblazen met de
-halve tussenruimte, geen ander onderdeel raakt en binnen de plaat min de marge valt.
-De plaat is bij een rotatie van 0, 90, 180 of 270 graden altijd even groot, dus de
-geometrie blijft binnen de plaat; de rotatie gebeurt rond het eigen hoekpunt.
+`nest` arranges the parts with "bottom-left fill": largest first, and per part and
+rotation the lowest-then-leftmost place where it, inflated by half the gap, touches no
+other part and falls within the sheet minus the margin. The sheet is always the same
+size at a rotation of 0, 90, 180 or 270 degrees, so the geometry stays within the
+sheet; the rotation happens around the part's own corner.
 
-Een plaats wordt teruggegeven als `(part, sheet_index, angle, dx, dy)`: draai het
-onderdeel met `angle` graden en zet de onderkant-linkerhoek van zijn omvang op
-`(dx, dy)` binnen die plaat. `place_transform` maakt er de 3x3-matrix van die alle
-paden van het onderdeel meenemen; tel daar de oorsprong van de plaat bij op
-(`sheet_origins`) om op het werkblad te landen.
+A placement is returned as `(part, sheet_index, angle, dx, dy)`: rotate the part by
+`angle` degrees and put the bottom-left corner of its extent at `(dx, dy)` within that
+sheet. `place_transform` turns it into the 3x3 matrix that carries all paths of the
+part along; add the origin of the sheet (`sheet_origins`) to land on the worksheet.
 """
 from __future__ import annotations
 
@@ -29,18 +29,19 @@ import numpy as np
 import manifold3d as mf
 
 from . import cam
+from .i18n import tr
 from .vector2d import (SHEET_SPACING, Drawing, VPath, _point_in_poly, polygon_area)
 
-EPS = 1e-9            # rakende boxen tellen niet als overlap
-AREA_EPS = 1e-6       # een doorsnede kleiner dan dit (mm²) is geen overlap
+EPS = 1e-9            # touching boxes do not count as overlap
+AREA_EPS = 1e-6       # an intersection smaller than this (mm²) is not an overlap
 
 
 # --------------------------------------------------------------------------
-#  plaatmeetkunde
+#  sheet geometry
 # --------------------------------------------------------------------------
 
 def sheet_origins(drawing) -> list[tuple[float, float]]:
-    """De linkeronderhoek van elke plaat: plaat i staat op (i * (breedte + 50), 0)."""
+    """The bottom-left corner of every sheet: sheet i is at (i * (width + 50), 0)."""
     w, h = drawing.sheet_w, drawing.sheet_h
     if not w or not h:
         return []
@@ -49,13 +50,13 @@ def sheet_origins(drawing) -> list[tuple[float, float]]:
 
 
 def sheet_rects(drawing) -> list[tuple[float, float, float, float]]:
-    """Het volle plaatvlak (x0, y0, x1, y1) per plaat."""
+    """The full sheet area (x0, y0, x1, y1) per sheet."""
     w, h = float(drawing.sheet_w or 0.0), float(drawing.sheet_h or 0.0)
     return [(ox, oy, ox + w, oy + h) for ox, oy in sheet_origins(drawing)]
 
 
 def usable_rects(drawing) -> list[tuple[float, float, float, float]]:
-    """Het bruikbare vlak van elke plaat: de plaat min de marge langs de rand."""
+    """The usable area of every sheet: the sheet minus the margin along the edge."""
     m = float(drawing.sheet_margin or 0.0)
     return [(x0 + m, y0 + m, x1 - m, y1 - m) for x0, y0, x1, y1 in sheet_rects(drawing)]
 
@@ -70,7 +71,7 @@ def _points_in_rect(pts, rect, tol=EPS) -> bool:
 
 
 def outside_paths(drawing, paths=None) -> list:
-    """Paden die (deels) buiten elke plaat of in de marge liggen; leeg zonder plaat."""
+    """Paths that lie (partly) outside every sheet or in the margin; empty without a sheet."""
     rects = usable_rects(drawing)
     if not rects:
         return []
@@ -80,7 +81,7 @@ def outside_paths(drawing, paths=None) -> list:
 
 
 # --------------------------------------------------------------------------
-#  onderdelen
+#  parts
 # --------------------------------------------------------------------------
 
 def _bbox_of(paths):
@@ -98,16 +99,16 @@ def _bbox_area(bbox) -> float:
 
 @dataclass
 class Part:
-    """Een buitenrand met alles erbinnen, of een bos losse open paden op hun box."""
+    """An outer boundary with everything inside it, or a bunch of loose open paths on their box."""
 
     paths: list = field(default_factory=list)
-    outline: np.ndarray | None = None      # buitenrand (tegen de klok in) of None
+    outline: np.ndarray | None = None      # outer boundary (counter-clockwise) or None
     bbox: tuple = (0.0, 0.0, 0.0, 0.0)
     area: float = 0.0
 
     @property
     def shape(self) -> np.ndarray:
-        """De omtrek waarmee het onderdeel op de plaat gelegd wordt."""
+        """The outline with which the part is laid on the sheet."""
         if self.outline is not None:
             return np.asarray(self.outline, dtype=float)
         x0, y0, x1, y1 = self.bbox
@@ -123,11 +124,11 @@ def part_area(part: Part) -> float:
 
 
 def parts_of(drawing, paths=None) -> list[Part]:
-    """Groepeer paden in onderdelen: een buitenrand (diepte 0) met alles erbinnen.
+    """Group paths into parts: an outer boundary (depth 0) with everything inside it.
 
-    Gaten, eilanden, gravures en open paden die binnen een buitenrand liggen, gaan
-    met die buitenrand mee. Losse open paden zonder buitenrand vormen samen met de
-    paden rond hetzelfde punt een eigen onderdeel op hun bounding box.
+    Holes, islands, engravings and open paths that lie inside an outer boundary go
+    along with that boundary. Loose open paths without an outer boundary form, together
+    with the paths around the same point, a part of their own on their bounding box.
     """
     paths = list(paths if paths is not None else drawing.paths)
     closed = [p for p in paths if cam._is_shape(p)]
@@ -151,7 +152,7 @@ def parts_of(drawing, paths=None) -> list[Part]:
             continue
         spot = cam._interior_point(np.asarray(p.pts, dtype=float))
         owner = _owner(spot, outer_index)
-        if owner is None:                       # dieper dan 0 maar zonder buitenrand
+        if owner is None:                       # deeper than 0 but without an outer boundary
             poly = np.asarray(p.pts, dtype=float)
             parts.append(Part(paths=[p], outline=poly))
         else:
@@ -161,7 +162,7 @@ def parts_of(drawing, paths=None) -> list[Part]:
         spot = np.asarray(p.pts, dtype=float).mean(axis=0)
         owner = _owner(spot, outer_index)
         if owner is None:
-            parts.append(Part(paths=[p]))       # los open pad: eigen onderdeel op de box
+            parts.append(Part(paths=[p]))       # loose open path: a part of its own on its box
         else:
             owner.paths.append(p)
 
@@ -182,7 +183,7 @@ def _owner(spot, outer_index) -> Part | None:
 
 
 # --------------------------------------------------------------------------
-#  transformatie van een plaats
+#  transformation of a placement
 # --------------------------------------------------------------------------
 
 def _rot(angle_deg) -> np.ndarray:
@@ -192,7 +193,7 @@ def _rot(angle_deg) -> np.ndarray:
 
 
 def _norm_rot(shape, angle_deg):
-    """Vorm draaien en zo schuiven dat de omvang in de oorsprong begint."""
+    """Rotate the shape and move it so its extent starts at the origin."""
     shape = np.asarray(shape, dtype=float)
     bmin = shape.min(axis=0)
     R = _rot(angle_deg)
@@ -202,7 +203,7 @@ def _norm_rot(shape, angle_deg):
 
 
 def place_transform(part: Part, angle, dx, dy, origin=(0.0, 0.0)) -> np.ndarray:
-    """3x3-matrix die het onderdeel naar `(dx, dy)` op een plaat zet (met rotatie)."""
+    """3x3 matrix that puts the part at `(dx, dy)` on a sheet (with rotation)."""
     norm, R, bmin, rmin = _norm_rot(part_shape(part), angle)
     M = np.eye(3, dtype=float)
     M[:2, :2] = R
@@ -212,7 +213,7 @@ def place_transform(part: Part, angle, dx, dy, origin=(0.0, 0.0)) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------
-#  nesten
+#  nesting
 # --------------------------------------------------------------------------
 
 def _section(loops) -> mf.CrossSection:
@@ -221,7 +222,7 @@ def _section(loops) -> mf.CrossSection:
 
 
 def _inflated(norm_shape, gap) -> mf.CrossSection:
-    """De houd-over-ruimte rond een onderdeel: zijn vorm met de halve tussenruimte."""
+    """The keep-out space around a part: its shape grown by half the gap."""
     cs = _section([np.asarray(norm_shape, dtype=float)])
     if gap <= 0:
         return cs
@@ -238,7 +239,7 @@ def _bbox_overlap(a, b) -> bool:
 
 
 def _edge_candidates(placed, margin, gap):
-    """Hoeken van de geplaatste omvangbakken (met tussenruimte) en de plaathoek."""
+    """Corners of the placed bounding boxes (with gap) and the sheet corner."""
     xs = {margin}
     ys = {margin}
     for entry in placed:
@@ -251,7 +252,7 @@ def _edge_candidates(placed, margin, gap):
 
 
 def _grid_candidates(margin, sheet_w, sheet_h, step):
-    """Grof raster als terugval voor vormen wier hoek niet op een boxhoek valt."""
+    """Coarse grid as a fallback for shapes whose corner does not fall on a box corner."""
     step = max(float(step), 1.0)
     xs = np.arange(margin, sheet_w - margin + EPS, step)
     ys = np.arange(margin, sheet_h - margin + EPS, step)
@@ -259,7 +260,7 @@ def _grid_candidates(margin, sheet_w, sheet_h, step):
 
 
 def _fits(cx, cy, w, h, infl, placed, sheet_w, sheet_h, margin, gap):
-    """Past het onderdeel op `(cx, cy)`: binnen de marge en zonder overlap."""
+    """Does the part fit at `(cx, cy)`: within the margin and without overlap."""
     if (cx < margin - EPS or cy < margin - EPS or
             cx + w > sheet_w - margin + EPS or cy + h > sheet_h - margin + EPS):
         return None
@@ -281,7 +282,7 @@ def _fits(cx, cy, w, h, infl, placed, sheet_w, sheet_h, margin, gap):
 
 
 def _try_place(templates, placed, sheet_w, sheet_h, margin, gap):
-    """Eerste (laagste-, dan meest-linkse) plek voor een onderdeel op deze plaat."""
+    """First (lowest, then leftmost) place for a part on this sheet."""
     for (cx, cy) in _edge_candidates(placed, margin, gap):
         for (a, w, h, infl) in templates:
             res = _fits(cx, cy, w, h, infl, placed, sheet_w, sheet_h, margin, gap)
@@ -311,35 +312,36 @@ def _templates(part: Part, rotations, usable_w, usable_h, gap):
 
 def nest(parts, sheet_w, sheet_h, margin, gap, rotations=(0, 90, 180, 270),
          max_sheets=20) -> list[tuple]:
-    """Schik de onderdelen over zoveel platen als nodig, grootste eerst.
+    """Arrange the parts over as many sheets as needed, largest first.
 
-    Geeft per onderdeel `(part, sheet_index, angle, dx, dy)`. Een onderdeel dat
-    groter is dan de plaat (ook gedraaid) of meer platen dan `max_sheets` geeft een
-    `ValueError` met een duidelijke tekst.
+    Returns `(part, sheet_index, angle, dx, dy)` per part. A part that is larger than
+    the sheet (also when rotated) or more sheets than `max_sheets` gives a
+    `ValueError` with a clear text.
     """
     parts = [p for p in parts if p.paths]
     if not parts:
         return []
     sheet_w, sheet_h = float(sheet_w), float(sheet_h)
     if sheet_w <= 0 or sheet_h <= 0:
-        raise ValueError("Het plaatformaat moet groter dan nul zijn.")
+        raise ValueError(tr("The sheet size must be greater than zero."))
     margin = max(0.0, float(margin))
     gap = max(0.0, float(gap))
     usable_w, usable_h = sheet_w - 2 * margin, sheet_h - 2 * margin
     if usable_w <= EPS or usable_h <= EPS:
-        raise ValueError("De marge is zo breed dat er niets op de plaat past.")
+        raise ValueError(tr("The margin is so wide that nothing fits on the sheet."))
     rots = tuple(rotations) if rotations else (0,)
 
     ordered = sorted(parts, key=lambda p: -part_area(p))
     placements: list[tuple] = []
-    sheets: list[list] = []          # per plaat: (cx, cy, box, ibox, crosssection)
+    sheets: list[list] = []          # per sheet: (cx, cy, box, ibox, crosssection)
     for part in ordered:
         templates = _templates(part, rots, usable_w, usable_h, gap)
         if not templates:
             w, h = _footprint(part_shape(part))
             raise ValueError(
-                f"Onderdeel van {w:.0f} × {h:.0f} mm past niet op een plaat van "
-                f"{sheet_w:.0f} × {sheet_h:.0f} mm met marge {margin:g} mm.")
+                tr("A part of {w:.0f} × {h:.0f} mm does not fit on a sheet of "
+                   "{sheet_w:.0f} × {sheet_h:.0f} mm with a margin of {margin:g} mm.").format(
+                    w=w, h=h, sheet_w=sheet_w, sheet_h=sheet_h, margin=margin))
         found = None
         index = None
         for si, placed in enumerate(sheets):
@@ -349,15 +351,16 @@ def nest(parts, sheet_w, sheet_h, margin, gap, rotations=(0, 90, 180, 270),
                 break
         if found is None:
             if len(sheets) >= max_sheets:
-                raise ValueError(f"Er zijn meer dan {max_sheets} platen nodig voor "
-                                 f"{len(parts)} onderdelen.")
+                raise ValueError(tr("More than {max_sheets} sheets are needed for "
+                                    "{n} parts.").format(max_sheets=max_sheets, n=len(parts)))
             sheets.append([])
             index = len(sheets) - 1
             found = _try_place(templates, sheets[index], sheet_w, sheet_h, margin, gap)
-            if found is None:                        # leeg en toch te groot
+            if found is None:                        # empty and still too large
                 w, h = _footprint(part_shape(part))
                 raise ValueError(
-                    f"Onderdeel van {w:.0f} × {h:.0f} mm past niet op de plaat.")
+                    tr("A part of {w:.0f} × {h:.0f} mm does not fit on the sheet.").format(
+                        w=w, h=h))
         angle, cx, cy, (box, ibox, moved) = found
         sheets[index].append((cx, cy, box, ibox, moved))
         placements.append((part, index, angle, cx, cy))
@@ -371,11 +374,11 @@ def _footprint(shape):
 
 
 # --------------------------------------------------------------------------
-#  benuttingsgraad en per plaat exporteren
+#  utilization and exporting per sheet
 # --------------------------------------------------------------------------
 
 def utilization(placements, sheet_w, sheet_h, sheet_index=None) -> float:
-    """Deel van de plaatoppervlakte dat door onderdelen bedekt is (0..1)."""
+    """Fraction of the sheet area covered by parts (0..1)."""
     area = sum(part_area(p) for (p, si, *_rest) in placements
                if sheet_index is None or si == sheet_index)
     n = 1 if sheet_index is not None else max(1, _sheet_count(placements))
@@ -389,7 +392,7 @@ def _sheet_count(placements) -> int:
 
 
 def sheet_subdrawing(drawing, index, paths=None):
-    """Een losse tekening voor één plaat: die plaat als pagina, zijn oorsprong als 0."""
+    """A separate drawing for one sheet: that sheet as the page, its origin as 0."""
     origins = sheet_origins(drawing)
     ox, oy = origins[index] if index < len(origins) else (0.0, 0.0)
     w, h = float(drawing.sheet_w or 0.0), float(drawing.sheet_h or 0.0)

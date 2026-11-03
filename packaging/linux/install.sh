@@ -1,8 +1,8 @@
 #!/bin/sh
-# Zet een uitgepakte Volura-build in ~/.local/opt/volura en maakt een menu-item.
+# Installs an unpacked Volura build in ~/.local/opt/volura and adds a menu entry.
 #   tar xzf Volura-linux-x86_64.tar.gz
 #   cd Volura && ./install.sh
-# Met VOLURA_PREFIX kies je een andere plek; `./install.sh --remove` haalt het weer weg.
+# VOLURA_PREFIX picks another location; `./install.sh --remove` removes it again.
 set -e
 
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -13,22 +13,22 @@ ICONS="$HOME/.local/share/icons/hicolor/256x256/apps"
 
 case "$DEST" in
     ""|"/"|"$HOME"|"$HOME/.local")
-        echo "fout: VOLURA_PREFIX wijst naar $DEST, dat is te gevaarlijk om te vervangen" >&2
+        echo "error: VOLURA_PREFIX points to $DEST, which is too dangerous to replace" >&2
         exit 1 ;;
 esac
 
 if [ "$1" = "--remove" ]; then
     rm -rf "$DEST" "$BIN/volura" "$APPS/volura.desktop" "$ICONS/volura.png"
-    echo "Volura is verwijderd uit $DEST"
+    echo "Volura has been removed from $DEST"
     exit 0
 fi
 
 if [ ! -f "$HERE/Volura" ]; then
-    echo "fout: in $HERE ligt geen Volura; pak eerst Volura-linux-x86_64.tar.gz uit" >&2
+    echo "error: there is no Volura in $HERE; unpack Volura-linux-x86_64.tar.gz first" >&2
     exit 1
 fi
 if [ ! -f "$HERE/volura.desktop" ]; then
-    echo "fout: volura.desktop ontbreekt naast dit script" >&2
+    echo "error: volura.desktop is missing next to this script" >&2
     exit 1
 fi
 
@@ -46,8 +46,8 @@ sed "s|^Exec=.*|Exec=$DEST/Volura %f|" "$HERE/volura.desktop" > "$APPS/volura.de
 update-desktop-database "$APPS" 2>/dev/null || true
 gtk-update-icon-cache "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
 
-echo "Volura staat in $DEST en is te starten uit het menu (Grafisch > Volura)."
+echo "Volura is installed in $DEST and can be started from the menu (Graphics > Volura)."
 case ":$PATH:" in
-    *":$BIN:"*) echo "Of gewoon met: volura" ;;
-    *) echo "Voeg $BIN nog toe aan je PATH om 'volura' te kunnen typen." ;;
+    *":$BIN:"*) echo "Or simply with: volura" ;;
+    *) echo "Add $BIN to your PATH to be able to type 'volura'." ;;
 esac

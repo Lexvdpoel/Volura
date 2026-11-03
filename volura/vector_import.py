@@ -1,13 +1,13 @@
-"""Vectorbestanden (SVG, DXF) importeren in de 3D-omgeving.
+"""Importing vector files (SVG, DXF) into the 3D environment.
 
-De logica hier is bewust vrij van Qt: ze leest een tekening (via `volura.svg` of
-`volura.dxf`), schaalt en verankert haar, en zet haar om naar vlakken, randen of
-een geextrudeerd volume in het B-rep-model. Zo is alles zonder venster te testen.
-De interface in `volura.app` en het gereedschap in `volura.tools` bouwen hierop.
+The logic here is deliberately free of Qt: it reads a drawing (via `volura.svg` or
+`volura.dxf`), scales and anchors it, and turns it into faces, edges or an
+extruded solid in the B-rep model. That way everything can be tested without a
+window. The interface in `volura.app` and the tool in `volura.tools` build on this.
 
-Alle 2D-maten zijn millimeters met Y omhoog (het gedeelde model van
-`volura.vector2d`); `plane` is het vlak waarop geplaatst wordt (grond of een vlak
-van een model) met een rechtshandig lokaal stelsel `(u, v, n)`.
+All 2D sizes are millimetres with Y up (the shared model of `volura.vector2d`);
+`plane` is the plane to place on (the ground or a face of a model) with a right
+handed local frame `(u, v, n)`.
 """
 from __future__ import annotations
 
@@ -18,41 +18,42 @@ import manifold3d as mf
 
 from . import dxf, svg
 from .geom import extrude_cs
+from .i18n import tr
 from .vector2d import regions
 
 VECTOR_EXTENSIONS = (".svg", ".dxf")
 
 
 def is_vector(path) -> bool:
-    """True als `path` een vectorbestand is (SVG of DXF, ook met hoofdletters)."""
+    """True if `path` is a vector file (SVG or DXF, also in upper case)."""
     return os.path.splitext(str(path))[1].lower() in VECTOR_EXTENSIONS
 
 
 def load_vector(path):
-    """Een SVG- of DXF-bestand als 2D-tekening; de keuze volgt de extensie."""
+    """An SVG or DXF file as a 2D drawing; the extension decides which."""
     ext = os.path.splitext(str(path))[1].lower()
     if ext == ".svg":
         return svg.read_svg(path)
     if ext == ".dxf":
         return dxf.read_dxf(path)
-    raise ValueError("Alleen SVG- en DXF-bestanden kunnen als vector worden geïmporteerd.")
+    raise ValueError(tr("Only SVG and DXF files can be imported as vectors."))
 
 
 def load_svg_text(text):
-    """SVG-tekst (bijv. van het klembord) als 2D-tekening."""
+    """SVG text (e.g. from the clipboard) as a 2D drawing."""
     return svg.read_svg(text)
 
 
 def prepare(drawing, scale=1.0, target_width=None, anchor="center"):
-    """Schaal en veranker een tekening; geef (regios, open_padenvoort.
+    """Scale and anchor a drawing; return (regions, open paths).
 
-    `target_width` (in mm) wint van `scale`: de breedte van de omhullende wordt
-    dan exact `target_width` en de hoogte schaalt in verhouding mee. Daarna wordt
-    de tekening verschoven zodat het ankerpunt -- het midden ("center") of de
-    linkerbenedenhoek ("lower_left") van de omhullende -- in de oorsprong ligt.
+    `target_width` (in mm) wins over `scale`: the width of the bounding box then
+    becomes exactly `target_width` and the height scales along. Then the drawing is
+    shifted so that the anchor -- the centre ("center") or the lower left corner
+    ("lower_left") of the bounding box -- lies at the origin.
 
-    De gesloten vormen komen terug als regios (via `vector2d.regions`, gaten
-    volgens de vulregel van de bron) en de open paden als een lijst `(N, 2)`-arrays.
+    The closed shapes come back as regions (via `vector2d.regions`, holes following
+    the fill rule of the source) and the open paths as a list of `(N, 2)` arrays.
     """
     b = drawing.bounds()
     if b is None:
@@ -77,12 +78,12 @@ def prepare(drawing, scale=1.0, target_width=None, anchor="center"):
 
 
 def place_faces(ents, plane, regios, open_paden, offset):
-    """Maak van de regios vlakken en van de open paden randen op `plane`.
+    """Turn the regions into faces and the open paths into edges on `plane`.
 
-    `regios` is de lijst vormen uit `prepare` (eerste lus buitenrand, rest gaten);
-    elk wordt één vlak met `ents.add_shape`. `open_paden` worden randen met
-    `ents.add_segment`. `offset` is de 2D-verschuiving in het lokale stelsel van
-    `plane` (waar het ankerpunt terechtkomt). Geeft de nieuwe vlak-ids terug.
+    `regios` is the list of shapes from `prepare` (first loop the outer boundary, the
+    rest holes); each becomes one face with `ents.add_shape`. `open_paden` become
+    edges with `ents.add_segment`. `offset` is the 2D shift in the local frame of
+    `plane` (where the anchor ends up). Returns the new face ids.
     """
     offset = np.asarray(offset, dtype=float).reshape(2)
     created = []
@@ -101,7 +102,7 @@ def place_faces(ents, plane, regios, open_paden, offset):
 
 
 def cross_section(regios, offset=(0.0, 0.0)):
-    """Eén doorsnede van alle regios (gaten blijven gaten), verschoven met `offset`."""
+    """One cross-section of all regions (holes stay holes), shifted by `offset`."""
     offset = np.asarray(offset, dtype=float).reshape(2)
     sections = []
     for shape in regios:
@@ -120,12 +121,12 @@ def cross_section(regios, offset=(0.0, 0.0)):
 
 
 def place_extruded(doc, plane, regios, offset, height, color, name):
-    """Extrudeer de regios tot één groep loodrecht op `plane`, langs de normaal.
+    """Extrude the regions into one group perpendicular to `plane`, along the normal.
 
-    De hoogte gaat langs de normaal van `plane` (naar buiten bij een modelvlak);
-    een negatieve hoogte drukt in (aan de andere kant van het vlak). Het resultaat
-    is altijd één losse groep: het onderliggende model blijft onveranderd. Geeft de
-    nieuwe groep terug, of None als er niets te extruderen viel.
+    The height runs along the normal of `plane` (outwards for a model face); a
+    negative height pushes in (to the other side of the face). The result is always
+    one separate group: the underlying model stays unchanged. Returns the new group,
+    or None if there was nothing to extrude.
     """
     from . import ops
     cs = cross_section(regios, offset)

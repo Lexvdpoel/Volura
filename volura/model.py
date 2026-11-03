@@ -4,7 +4,7 @@ Like SketchUp, the model is loose geometry (edges and faces) plus groups. A
 group is a separate piece of geometry with its own color; for 3D printing every
 group (and every closed shell of loose geometry) is one printable part.
 
-Construction geometry (hulplijnen en hulppunten) lives next to it: it helps you
+Construction geometry (guide lines and guide points) lives next to it: it helps you
 draw, but is never printed or exported.
 
 Next to the 3D model every document has one 2D sheet (`Document.sheet`, a
@@ -18,22 +18,25 @@ from PySide6.QtCore import QObject, Signal
 
 from .brep import Entities
 from .geom import normalize
+from .i18n import tr, tr_noop
 from .vector2d import Drawing
 
+# Names are translated when a new document gets them (see Document.reset); a saved file
+# keeps the names it was saved with. Materials are matched by color, never by name.
 DEFAULT_MATERIALS = [
-    ("Wit", "#f2f2f2"),
-    ("Zwart", "#2b2b2b"),
-    ("Rood", "#d23b3b"),
-    ("Blauw", "#2f6fd6"),
-    ("Geel", "#f2c230"),
-    ("Groen", "#3fa34d"),
-    ("Oranje", "#f08a24"),
-    ("Grijs", "#9a9a9a"),
+    (tr_noop("White"), "#f2f2f2"),
+    (tr_noop("Black"), "#2b2b2b"),
+    (tr_noop("Red"), "#d23b3b"),
+    (tr_noop("Blue"), "#2f6fd6"),
+    (tr_noop("Yellow"), "#f2c230"),
+    (tr_noop("Green"), "#3fa34d"),
+    (tr_noop("Orange"), "#f08a24"),
+    (tr_noop("Gray"), "#9a9a9a"),
 ]
 
 ROOT = 0
 
-LOCKED_MSG = "Deze groep is vergrendeld."
+LOCKED_MSG = tr("This group is locked.")
 
 
 class Group:
@@ -43,7 +46,7 @@ class Group:
         self.color = color
         self.ents = ents
         self.visible = visible
-        self.locked = locked      # Bewerken > Vergrendelen: cannot be moved, painted or edited
+        self.locked = locked      # Edit > Lock: cannot be moved, painted or edited
 
     def bbox(self):
         return self.ents.bbox()
@@ -92,18 +95,18 @@ class Document(QObject):
         self.root = Entities()
         self.groups: list[Group] = []
         self.guides: list[Guide] = []
-        self.materials = [list(m) for m in DEFAULT_MATERIALS]
+        self.materials = [[tr(n), c] for n, c in DEFAULT_MATERIALS]
         self.active = ROOT
         self.next_gid = 1
         self.group_counter = 1
         self.next_guide_id = 1
         self.selection = []          # ("f"|"e", ctx, id) or ("g", gid, gid) or ("guide", ROOT, gid)
-        self.last_hidden = []        # what Bewerken > Verbergen hid last
+        self.last_hidden = []        # what Edit > Hide hid last
         self.undo_stack = []
         self.redo_stack = []
         self.path = None
         self.dirty = False
-        # het 2D-werkblad: één tekening naast het 3D-model, met de standaardlagen
+        # the 2D worksheet: one drawing next to the 3D model, with the default layers
         self.sheet = Drawing.new_sheet()
 
     # ------------------------------------------------------------ guides
@@ -114,7 +117,7 @@ class Document(QObject):
         return None
 
     def add_guide(self, point, direction=None):
-        """A new hulplijn (with direction) or hulppunt (without)."""
+        """A new guide line (with direction) or guide point (without)."""
         g = Guide(self.next_guide_id, point, direction)
         self.next_guide_id += 1
         self.guides.append(g)
@@ -204,8 +207,8 @@ class Document(QObject):
         self.load_sheet(sheet)
 
     def load_sheet(self, sheet: "Drawing"):
-        """De inhoud van `sheet` over het werkblad van dit document, zonder nieuw object."""
-        src = sheet.copy()            # nooit paden delen met een undo-staat
+        """Copy the contents of `sheet` onto this document's worksheet, without a new object."""
+        src = sheet.copy()            # never share paths with an undo state
         self.sheet.paths = src.paths
         self.sheet.layers = src.layers
         self.sheet.sheet_w = src.sheet_w
@@ -299,7 +302,7 @@ class Document(QObject):
     # ------------------------------------------------------------ groups
     def add_group(self, ents, color, name=None):
         if name is None:
-            name = f"Onderdeel {self.group_counter}"
+            name = tr("Part {n}").format(n=self.group_counter)
             self.group_counter += 1
         g = Group(self.next_gid, name, color, ents)
         self.next_gid += 1

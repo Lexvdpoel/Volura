@@ -1,4 +1,4 @@
-"""De zelfstandige versie levert de licenties van alles wat PyInstaller meeneemt mee."""
+"""The standalone build ships the licences of everything PyInstaller bundles."""
 import importlib.util
 import os
 from pathlib import Path
@@ -25,7 +25,7 @@ def test_third_party_licenses(tmp_path):
     assert "LicenseRef-Qt-Commercial" not in text
 
 
-def test_build_schrijft_licenties():
+def test_build_writes_licenses():
     src = (ROOT / "packaging" / "build.py").read_text(encoding="utf-8")
     assert "licenses.write(app)" in src
     assert os.path.isfile(ROOT / "packaging" / "licenses" / "LGPL-3.0.txt")

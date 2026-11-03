@@ -1,9 +1,9 @@
-"""Afronden (fillet) en afschuinen (chamfer) van randen.
+"""Filleting and chamfering edges.
 
-De verwachte volumes zijn met de hand gerekend langs de rand heen gekeken: een
-afschuining van d mm langs een rechte hoek haalt per mm lengte een driehoek van
-d*d/2 af, een afronding van r mm bij een rechte hoek de wig r*r - pi*r*r/4. Bij
-de cilinder is dat het doorsnede-oppervlak van de wig, rondgedraaid (Pappus).
+The expected volumes are worked out by hand, looking along the edge: a chamfer
+of d mm along a right angle removes a triangle of d*d/2 per mm of length, a fillet
+of r mm at a right angle the wedge r*r - pi*r*r/4. For the cylinder it is the
+cross-section area of the wedge, revolved (Pappus).
 
 Runs without a display (Qt offscreen platform), like tests/test_ui_spec.py.
 """
@@ -37,21 +37,21 @@ def P(*p):
 
 
 def prism(poly2d, h=10.0):
-    """ Een prisma langs z door een veelhoek (tegen de klok in)."""
+    """A prism along z through a polygon (counterclockwise)."""
     return mf.Manifold.extrude(mf.CrossSection([np.asarray(poly2d, dtype=float)]), h)
 
 
 def cube():
-    return mf.Manifold.cube((10, 10, 10))          # 0..10 in x, y en z
+    return mf.Manifold.cube((10, 10, 10))          # 0..10 in x, y and z
 
 
 def top_edge():
-    """De bovenrand langs x van de kubus (y = 10, z = 10) met zijn twee vlakken."""
+    """The top edge along x of the cube (y = 10, z = 10) with its two faces."""
     return (P(0, 10, 10), P(10, 10, 10), P(0, 0, 1), P(0, 1, 0))
 
 
 def rim(man, z, inside=False):
-    """Alle randen van de ring op hoogte z: (p0, p1, normale bovenkant, normale wand)."""
+    """All edges of the ring at height z: (p0, p1, top normal, wall normal)."""
     V, _T = mesh_arrays(man)
     ring = [p for p in V if abs(p[2] - z) < 1e-6]
     ring.sort(key=lambda p: math.atan2(p[1], p[0]))
@@ -71,7 +71,7 @@ def volume(man):
     return man.volume()
 
 
-# ------------------------------------------------------------------ rechthoekige rand
+# ------------------------------------------------------------------ right-angled edge
 
 def test_chamfer_of_one_cube_edge():
     m = cube()
@@ -92,7 +92,7 @@ def test_fillet_is_smaller_and_chamfer_lies_inside_it():
     m = cube()
     f = volume(fillet.apply(m, [top_edge()], 2.0, "fillet"))
     c = volume(fillet.apply(m, [top_edge()], 2.0, "chamfer"))
-    assert f < volume(m) and c < f            # een afschuining haalt meer af
+    assert f < volume(m) and c < f            # a chamfer removes more
 
 
 def test_edge_is_convex_or_concave():
@@ -103,10 +103,10 @@ def test_edge_is_convex_or_concave():
     assert not fillet.is_convex(l, P(0, 0, 0), P(0, 0, 10), P(1, 0, 0), P(0, 1, 0), 2.0)
 
 
-# ------------------------------------------------------------------ schuine vlakken
+# ------------------------------------------------------------------ slanted faces
 
 def wedge():
-    """Prisma met een binnenhoek van 135° tussen een horizontaal en een schuin vlak."""
+    """Prism with an inner angle of 135° between a horizontal and a slanted face."""
     return prism([(0, -5), (15, -5), (10, 0), (0, 0)])
 
 
@@ -117,10 +117,10 @@ def test_fillet_of_edge_between_slanted_and_flat_face():
     res = fillet.apply(m, [edge], 2.0, "fillet")
     assert res.status().name == "NoError"
     assert volume(res) < volume(m)
-    assert volume(res) > volume(m) - 2 * 2 * 10          # niet meer weg dan de wig van de hoek
+    assert volume(res) > volume(m) - 2 * 2 * 10          # no more removed than the wedge of the corner
 
 
-# ------------------------------------------------------------------ langs een ronding
+# ------------------------------------------------------------------ along a curve
 
 def cylinder():
     return mf.Manifold.cylinder(10, 10, 10, 48)
@@ -133,13 +133,13 @@ def test_fillet_of_whole_cylinder_rim():
     res = fillet.apply(m, edges, 2.0, "fillet")
     assert res.status().name == "NoError"
     removed = volume(m) - volume(res)
-    a = (1 - math.pi / 4) * 2 ** 2          # doorsnede van de wig bij een rechte hoek
+    a = (1 - math.pi / 4) * 2 ** 2          # cross-section of the wedge at a right angle
     assert a * 2 * math.pi * 8 < removed < a * 2 * math.pi * 10
 
 
 def test_fillet_of_a_smooth_rim_stays_a_solid():
-    """De keten van de cilinderrand blijft één gesloten volume, ook met een holle
-    rand ertussen (de binnenrand van een bus)."""
+    """The chain of the cylinder rim stays one closed volume, also with a concave
+    edge in between (the inner rim of a tube)."""
     outer = mf.Manifold.extrude(mf.CrossSection([np.column_stack([
         np.cos(np.arange(48) * 2 * math.pi / 48) * 12,
         np.sin(np.arange(48) * 2 * math.pi / 48) * 12])]), 10)
@@ -154,7 +154,7 @@ def test_fillet_of_a_smooth_rim_stays_a_solid():
 
 
 def cube_edges():
-    """De 12 randen van de kubus 0..10 met de buitennormalen van hun twee vlakken."""
+    """The 12 edges of the cube 0..10 with the outward normals of their two faces."""
     out = []
     for axis in range(3):
         others = [i for i in range(3) if i != axis]
@@ -180,10 +180,10 @@ def test_fillet_of_every_cube_edge_is_a_solid():
     assert 900 < volume(res) < 1000
 
 
-# ------------------------------------------------------------------ holle hoek
+# ------------------------------------------------------------------ concave corner
 
 def l_profile():
-    """L-profiel van 10 x 10 met een binnenhoek van 270° in (0, 0)."""
+    """L profile of 10 x 10 with an inner angle of 270° at (0, 0)."""
     return prism([(-5, -5), (5, -5), (5, 0), (0, 0), (0, 5), (-5, 5)])
 
 
@@ -196,7 +196,7 @@ def test_fillet_of_a_concave_corner_adds_material():
     assert volume(res) - volume(m) == pytest.approx((4 - math.pi) * 10, rel=0.02)
 
 
-# ------------------------------------------------------------------ de gereedschappen
+# ------------------------------------------------------------------ the tools
 
 def test_tools_are_registered():
     tools = {cls.name: cls for cls in TOOL_CLASSES}
@@ -218,16 +218,16 @@ def win():
 def test_fillet_and_chamfer_are_in_the_print_tools_menu_and_toolbar(win):
     menu = win.print_tools_menu
     texts = [clean(a.text()) for a in menu.actions() if not a.isSeparator()]
-    assert "Afronden" in texts and "Afschuinen" in texts
+    assert "Fillet" in texts and "Chamfer" in texts
     bar = win.findChild(QToolBar, "PrintToolsToolbar")
     assert bar is not None and not bar.isHidden()
     assert win.toolBarArea(bar).name == "RightToolBarArea"
     buttons = [clean(a.text()) for a in bar.actions() if not a.isSeparator()]
-    assert "Afronden" in buttons and "Afschuinen" in buttons
+    assert "Fillet" in buttons and "Chamfer" in buttons
 
 
 def cube_group(win):
-    g = ops.group_from_manifold(win.doc, cube(), "#f2f2f2", "blok")
+    g = ops.group_from_manifold(win.doc, cube(), "#f2f2f2", "block")
     win.doc.enter_group(g.id)
     return g
 
@@ -238,7 +238,7 @@ def top_edge_id(ents):
         if abs(a[1] - 10) < 1e-6 and abs(a[2] - 10) < 1e-6 and abs(b[1] - 10) < 1e-6 \
                 and abs(b[2] - 10) < 1e-6:
             return e
-    raise AssertionError("geen bovenrand")
+    raise AssertionError("no top edge")
 
 
 def test_fillet_tool_applies_the_typed_radius_to_a_group(win):
@@ -249,15 +249,15 @@ def test_fillet_tool_applies_the_typed_radius_to_a_group(win):
     steps = len(win.doc.undo_stack)
     tool.vcb_enter("2")
     assert volume(g.ents.to_manifold()) == pytest.approx(1000 - (4 - math.pi) * 10, rel=0.01)
-    assert g.name == "blok" and g.color == "#f2f2f2"
-    assert len(win.doc.undo_stack) == steps + 1          # één undo-stap
+    assert g.name == "block" and g.color == "#f2f2f2"
+    assert len(win.doc.undo_stack) == steps + 1          # one undo step
     win.undo()
     assert volume(g.ents.to_manifold()) == pytest.approx(1000.0)
 
 
 def test_chamfer_tool_uses_the_distance_label(win):
-    assert win.view.tools["chamfer"].vcb_label() == "Afstand"
-    assert win.view.tools["fillet"].vcb_label() == "Straal"
+    assert win.view.tools["chamfer"].vcb_label() == "Distance"
+    assert win.view.tools["fillet"].vcb_label() == "Radius"
     g = cube_group(win)
     tool = win.view.tools["chamfer"]
     tool.reset()
@@ -274,31 +274,31 @@ def test_fillet_tool_marks_the_chosen_edges(win):
     tool.picked = [(g.id, top_edge_id(g.ents))]
     tool._show()
     assert win.view.hover == ("edges", [(g.id, tool.picked[0][1])])
-    assert "Straal" in tool.status_text() or "raad" in tool.status_text()
+    assert "Radius" in tool.status_text() or "radius" in tool.status_text()
 
 
 def test_fillet_tool_needs_a_closed_volume(win):
     ents = Entities()
     ents.add_shape(GROUND, [np.array([[0, 0], [10, 0], [10, 10], [0, 10]], dtype=float)])
-    g = win.doc.add_group(ents, "#f2f2f2", "vlak")
+    g = win.doc.add_group(ents, "#f2f2f2", "face")
     win.doc.enter_group(g.id)
     win.set_tool("fillet")
     tool = win.view.tools["fillet"]
     tool.reset()
     tool.picked = [(g.id, next(iter(ents.E)))]
     tool.apply(2.0)
-    assert "Selecteer eerst een groep" in win.hint.text()
-    assert len(g.ents.F) == 1 and len(g.ents.E) == 4        # er is niets aan het vlak gedaan
+    assert "Select a group" in win.hint.text()
+    assert len(g.ents.F) == 1 and len(g.ents.E) == 4        # nothing was done to the face
 
 
 def test_fillet_tool_picks_the_whole_smooth_chain(win):
-    """Een klik op één randje van de gladde cilinderrand kiest de hele keten."""
+    """A click on one segment of the smooth cylinder rim picks the whole chain."""
     m = cylinder()
-    g = ops.group_from_manifold(win.doc, m, "#f2f2f2", "cilinder")
+    g = ops.group_from_manifold(win.doc, m, "#f2f2f2", "cylinder")
     win.doc.enter_group(g.id)
     ents = g.ents
     soft = [e for e in ents.E if e in ents.soft]
-    assert soft, "de randen van de cilinder zijn niet glad"
+    assert soft, "the edges of the cylinder are not smooth"
     chain = fillet.soft_chain(ents, soft[0])
     assert len(chain) > 2
     assert set(chain) <= set(soft)
@@ -319,7 +319,7 @@ def test_fillet_tool_without_selection_says_so(win):
     tool = win.view.tools["fillet"]
     tool.reset()
     tool.apply(2.0)
-    assert "rand" in win.hint.text().lower()
+    assert "edge" in win.hint.text().lower()
 
 
 def test_fillet_rejects_a_zero_radius(win):

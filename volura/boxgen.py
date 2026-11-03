@@ -1,39 +1,38 @@
-"""Dozen met vingerlassen: de rekenkern voor het lasersnijden van dozen.
+"""Boxes with finger joints: the computational core for laser cutting boxes.
 
-Geen Qt in dit bestand. Het werkt op het gedeelde 2D-model uit `volura/vector2d.py`
-en de plaatinstellingen van het werkblad, en is daarom los te testen en in het werkblad,
-de export en het 3D-model weer te gebruiken.
+No Qt in this file. It works on the shared 2D model from `volura/vector2d.py` and the
+sheet settings of the worksheet, and can therefore be tested on its own and reused in the
+worksheet, the export and the 3D model.
 
-Een **vingerlas** is een verlijmde hoek van twee panelen van dezelfde dikte: het ene
-paneel heeft uitsteeksels (de mannelijke kant), het andere evenveel uitsparingen
-(de vrouwelijke kant) op dezelfde plaatsen. `finger_edge` geeft die tandenrand als
-polylijn in een eigen vlak: `x` langs de rand van 0 tot `length`, `y` van 0 (de
-nominaal rand) tot `t` (de diepte van de tand). Bij de mannelijke kant staat de tand
-omhoog (diepte `t`), bij de vrouwelijke kant staat daar de uitsparing, zodat de twee
-in elkaar passen. Een laser haalt langs de snijlijn de halve kerf weg; de vingers gaan
-daarom `kerf / 2` breder en de uitsparingen `kerf / 2` smaller, zodat de las strak past.
+A **finger joint** is a glued corner of two panels of the same thickness: one panel
+has protrusions (the male side), the other as many recesses (the female side) at the
+same places. `finger_edge` gives that toothed edge as a polyline in its own plane: `x`
+along the edge from 0 to `length`, `y` from 0 (the nominal edge) to `t` (the depth of
+the tooth). On the male side the tooth points up (depth `t`), on the female side the
+recess sits there, so the two fit together. A laser removes half the kerf along the
+cut line; the fingers are therefore `kerf / 2` wider and the recesses `kerf / 2`
+narrower, so the joint fits tightly.
 
-Een **paneel** (`Panel`) is de snijcontour van één vlak van de doos, plus de matrix
-die het op zijn plek in de doos zet: `position3d` voert het lokale vlak `(u, v)` met
-`u` naar rechts en `v` omhoog over in de wereld van het 3D-model, en de plaats van het
-paneel is `position3d @ (u, v, 0..thickness)`. `panels_to_drawing` legt de contouren op
-de snijlaag van een werkblad (met de paneelnaam klein gegraveerd in het midden),
-`panels_to_manifolds` zet ze om in geëxtrudeerde volumes voor in het 3D-model.
+A **panel** (`Panel`) is the cut contour of one face of the box, plus the matrix that
+puts it in its place in the box: `position3d` maps the local plane `(u, v)` with `u` to
+the right and `v` up into the world of the 3D model, and the place of the panel is
+`position3d @ (u, v, 0..thickness)`. `panels_to_drawing` puts the contours on the
+cutting layer of a worksheet (with the panel name engraved small in the middle),
+`panels_to_manifolds` turns them into extruded volumes for the 3D model.
 
-De hoeken: waar drie panelen samenkomen mag geen gat en geen overlap zitten. Daarom
-bezit één paneel elke hoek. De bodem bezit de onderste laag van de doos (haar randen
-zijn overal vrouwelijk en de zijkanten hebben aan hun onderkant vingers), de voor- en
-achterkant bezitten de verticale hoekkolommen (mannelijk op hun zijkanten, de linker-
-en rechterkant zijn daar vrouwelijk) en het deksel bezit de bovenste laag (mannelijk
-op zijn vier randen, de zijkanten zijn daar vrouwelijk). De vingers van de linker- en
-rechterkant aan hun onderkant beginnen pas voorbij de hoekkolommen, want daar heeft de
-bodem al het alleenrecht.
+The corners: where three panels meet there must be no hole and no overlap. Therefore
+one panel owns each corner. The bottom owns the lowest layer of the box (its edges are
+female everywhere and the sides have fingers at their bottom), the front and back own
+the vertical corner columns (male on their sides, the left and right side are female
+there) and the lid owns the top layer (male on its four edges, the sides are female
+there). The fingers of the left and right side at their bottom only start beyond the
+corner columns, because there the bottom has the sole right.
 
-Aan de onderkant van de wanden staat bovendien `ends = SLOT`: het eerste en het laatste
-vak van die las is geen vinger maar materiaal van de bodem. Zo houdt de bodem op elke
-hoek een plein van `t` × `t` dat met twee volle randen aan de plaat vastzit. Zonder die
-fase raken de uitsparingen van twee loodrechte randen elkaar in precies één punt,
-kruist de omtrek van de bodem zichzelf en hangt het hoekplein aan niets.
+At the bottom of the walls there is moreover `ends = SLOT`: the first and the last
+cell of that joint is not a finger but material of the bottom. That way the bottom
+keeps a square of `t` × `t` at every corner that is attached to the plate with two full
+edges. Without that phase the recesses of two perpendicular edges touch in exactly one
+point, the outline of the bottom crosses itself and the corner square hangs on nothing.
 """
 from __future__ import annotations
 
@@ -43,37 +42,40 @@ from dataclasses import dataclass, field
 import numpy as np
 import manifold3d as mf
 
-from .vector2d import Drawing, VPath
+from .i18n import tr
+from .vector2d import DEFAULT_LAYERS, Drawing, VPath
 
 MALE = "male"
 FEMALE = "female"
-TOOTH = "tooth"         # het eerste en het laatste vak van een las is een vinger
-SLOT = "slot"           # ... en is het tegengestelde, waardoor de hoek een plein houdt
+TOOTH = "tooth"         # the first and the last cell of a joint is a finger
+SLOT = "slot"           # ... or the opposite, so the corner keeps a square
 
-#: vingerbreedte als veelvoud van de materiaaldikte (standaard van de dialoog)
+#: finger width as a multiple of the material thickness (default of the dialog)
 FINGER_FACTOR = 2.5
-#: dikte om aan te nemen als de plaatinstellingen geen materiaaldikte kennen (mm)
+#: thickness to assume when the sheet settings know no material thickness (mm)
 DEFAULT_THICKNESS = 3.0
-MIN_FINGERS = 3          # een las zonder vingers houdt niet
+MIN_FINGERS = 3          # a joint without fingers does not hold
 LID_KINDS = ("none", "closed")
-LID_LABELS = {"none": "Geen deksel", "closed": "Vast deksel"}
+LID_LABELS = {"none": tr("No lid"), "closed": tr("Fixed lid")}
 
-#: de Nederlandse namen van de panelen, zoals het 3D-model ze toont
-PANEL_LABELS = {"bodem": "bodem", "voor": "voor", "achter": "achter",
-                "links": "links", "rechts": "rechts", "deksel": "deksel"}
+#: the names of the panels, as the 3D model shows them and as they are engraved
+PANEL_LABELS = {"bottom": tr("base"), "front": tr("front"), "back": tr("back"),
+                "left": tr("left"), "right": tr("right"), "lid": tr("lid")}
+
+#: the default layers for the contours and the panel names (in the current language)
+_LAYER_BY_OP = {op: name for name, _color, op in DEFAULT_LAYERS}
 
 
 # --------------------------------------------------------------------------
-#  de tandenrand
+#  the toothed edge
 # --------------------------------------------------------------------------
 
 def finger_count(length, finger_w) -> int:
-    """Het aantal vingers: het grootste oneven getal n met length / n >= finger_w.
+    """The number of fingers: the largest odd number n with length / n >= finger_w.
 
-    Een oneven aantal zorgt dat beide einden van de rand een vinger (of een
-    uitsparing) hebben; dan sluit de las van een paneel aan op de hoek. Is de rand te
-    kort voor drie vingers, dan worden het er toch drie: een las met één vinger houdt
-    niets.
+    An odd number makes both ends of the edge have a finger (or a recess); then the
+    joint of a panel connects to the corner. If the edge is too short for three
+    fingers, there are three anyway: a joint with one finger holds nothing.
     """
     L = abs(float(length))
     fw = abs(float(finger_w))
@@ -86,7 +88,7 @@ def finger_count(length, finger_w) -> int:
 
 
 def _step_line(length, depth, spans) -> np.ndarray:
-    """De polylijn van een stapfunctie: `depth` hoog binnen `spans`, daarbuiten 0."""
+    """The polyline of a step function: `depth` high within `spans`, 0 outside."""
     L, h = float(length), float(depth)
     keep = sorted((max(0.0, min(L, float(a))), max(0.0, min(L, float(b))))
                   for a, b in spans if float(b) > float(a))
@@ -111,22 +113,22 @@ def _step_line(length, depth, spans) -> np.ndarray:
 
 
 def finger_edge(length, t, finger_w, male, kerf=0.0, ends="tooth") -> np.ndarray:
-    """De 2D-zaagtandrand van een lasverbinding, als polylijn ``(N, 2)``.
+    """The 2D toothed edge of a joint, as a polyline ``(N, 2)``.
 
-    De rand loopt langs de x-as van 0 tot `length`; `y` is 0 of `t` (de diepte van de
-    tand). Het getal vingers komt uit `finger_count` en is oneven, dus beide einden van
-    de rand zijn gelijk en passen de twee kanten van dezelfde lengte precies in elkaar:
-    het gebied tussen de mannelijke rand en y = 0 en het gebied tussen de vrouwelijke
-    rand en y = 0 vullen elkaar.
+    The edge runs along the x axis from 0 to `length`; `y` is 0 or `t` (the depth of the
+    tooth). The number of fingers comes from `finger_count` and is odd, so both ends of
+    the edge are equal and the two sides of the same length fit exactly together:
+    the area between the male edge and y = 0 and the area between the female edge and
+    y = 0 complement each other.
 
-    `ends` is de fase aan de einden van de rand. Met "tooth" is het eerste en het laatste
-    vak een vinger (mannelijk) of een uitsparing (vrouwelijk); met "slot" is dat juist
-    het tegengestelde, zodat de mannelijke kant daar materiaal overlaat voor de hoek.
-    Twee kanten die in elkaar moeten passen, gebruiken dezelfde `ends`.
+    `ends` is the phase at the ends of the edge. With "tooth" the first and the last cell
+    is a finger (male) or a recess (female); with "slot" it is the opposite, so the male
+    side leaves material there for the corner. Two sides that must fit together use the
+    same `ends`.
 
-    `kerf` is de breedte van de snedespleet: de vingers worden er `kerf / 2` breder op
-    elke kant en de uitsparingen `kerf / 2` smaller, zodat de las na het snijden strak
-    past. Bij `kerf = 0` zijn de twee kanten elkaars spiegelbeeld in de tandbreedte.
+    `kerf` is the width of the cut gap: the fingers become `kerf / 2` wider on each side
+    and the recesses `kerf / 2` narrower, so the joint fits tightly after cutting. With
+    `kerf = 0` the two sides are each other's mirror image in tooth width.
     """
     L = abs(float(length))
     h = abs(float(t))
@@ -136,11 +138,11 @@ def finger_edge(length, t, finger_w, male, kerf=0.0, ends="tooth") -> np.ndarray
     n = finger_count(L, finger_w)
     step = L / n
     first = 0 if str(ends or "tooth").strip().lower() != "slot" else 1
-    teeth = [(i * step, (i + 1) * step) for i in range(first, n, 2)]   # vinger of uitsparing
+    teeth = [(i * step, (i + 1) * step) for i in range(first, n, 2)]   # finger or recess
     if male:
-        spans = [(a - 0.5 * k, b + 0.5 * k) for a, b in teeth]        # vingers breder
+        spans = [(a - 0.5 * k, b + 0.5 * k) for a, b in teeth]        # fingers wider
     else:
-        spans, x = [], 0.0                                            # uitsparingen smaller
+        spans, x = [], 0.0                                            # recesses narrower
         for a, b in teeth:
             a, b = a + 0.5 * k, b - 0.5 * k
             if a > x:
@@ -152,14 +154,14 @@ def finger_edge(length, t, finger_w, male, kerf=0.0, ends="tooth") -> np.ndarray
 
 
 def tooth_area(edge, length) -> float:
-    """Het gebied tussen de tandenrand `edge` en de nominaal rand y = 0 (mm²)."""
+    """The area between the toothed edge `edge` and the nominal edge y = 0 (mm²)."""
     L = abs(float(length))
     pts = _close_teeth(edge, L)
     return float(abs(_area(pts)))
 
 
 def _close_teeth(edge, length) -> np.ndarray:
-    """De tandenrand gesloten met de nominaal rand: het gebied van de tanden."""
+    """The toothed edge closed with the nominal edge: the area of the teeth."""
     pts = np.asarray(edge, dtype=float)
     if not len(pts):
         return np.zeros((0, 2), dtype=float)
@@ -175,18 +177,18 @@ def _close_teeth(edge, length) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------
-#  panelen
+#  panels
 # --------------------------------------------------------------------------
 
 @dataclass(eq=False)
 class Panel:
-    """Eén vlak van de doos: de snijcontour en de plek die hij in het model krijgt."""
+    """One face of the box: the cut contour and the place it gets in the model."""
 
     name: str
     outline: VPath
     position3d: np.ndarray
     thickness: float
-    edges: dict = field(default_factory=dict)     # de las per rand, voor nazicht
+    edges: dict = field(default_factory=dict)     # the joint per edge, for inspection
 
     @property
     def points(self) -> np.ndarray:
@@ -196,7 +198,7 @@ class Panel:
         return np.asarray(self.position3d, dtype=float)
 
     def placed(self, pts=None) -> np.ndarray:
-        """De contour (of punten) in de wereld van het 3D-model, op zijn plek in de doos."""
+        """The contour (or points) in the world of the 3D model, in its place in the box."""
         p = self.points if pts is None else np.asarray(pts, dtype=float)
         M = self.matrix()
         q = np.column_stack([p[:, 0], p[:, 1], np.zeros(len(p)), np.ones(len(p))])
@@ -212,13 +214,13 @@ def _area(pts) -> float:
 
 
 def _clean(pts) -> np.ndarray:
-    """Opeenvolgende gelijke punten weg, ook over de sluiting, en naalden eruit.
+    """Remove consecutive equal points, also across the closure, and remove needles.
 
-    Een naald is een hoekpunt waar het pad terugloopt over zichzelf: `a → b → a`. Die
-    ontstaan op een hoek van `links` en `rechts`, waar de uitsparing van de verticale las
-    precies tot op de onderkant doorloopt en het plein van `t` × `t` daar wegsnijdt. Zo'n
-    naald snijdt een spleet van nul breed en is voor een laser zinloos werk; de hoek en
-    zijn dubbeling vallen daarom weg.
+    A needle is a vertex where the path runs back over itself: `a → b → a`. They
+    arise at a corner of `left` and `right`, where the recess of the vertical joint
+    runs exactly down to the bottom and cuts away the square of `t` × `t` there. Such a
+    needle cuts a gap of zero width and is pointless work for a laser; the vertex and
+    its duplicate are therefore dropped.
     """
     out: list[np.ndarray] = []
     for q in np.asarray(pts, dtype=float).reshape(-1, 2):
@@ -246,12 +248,12 @@ def _clean(pts) -> np.ndarray:
 
 
 def _toothed(p0, p1, inward, q0, q1, gender, line, depth) -> list[np.ndarray]:
-    """De punten van een getande rand, in looprichting van `p0` naar `p1`.
+    """The points of a toothed edge, in the direction of travel from `p0` to `p1`.
 
-    De tanden staan op de nominaal rand tussen `p0` en `p1`; `line` is de polylijn uit
-    `finger_edge`, waarvan de x-coördinaat de afstand langs de las is, gemeten vanaf
-    `q0` in de richting van `q1`. De tand wijst bij de mannelijke kant uit het paneel
-    (tegen `inward` in), bij de vrouwelijke kant snijdt hij `depth` diep naar binnen.
+    The teeth sit on the nominal edge between `p0` and `p1`; `line` is the polyline from
+    `finger_edge`, whose x coordinate is the distance along the joint, measured from
+    `q0` in the direction of `q1`. On the male side the tooth points out of the panel
+    (against `inward`), on the female side it cuts `depth` deep inwards.
     """
     p0, p1 = np.asarray(p0, float), np.asarray(p1, float)
     d = p1 - p0
@@ -273,7 +275,7 @@ def _toothed(p0, p1, inward, q0, q1, gender, line, depth) -> list[np.ndarray]:
 
     if not len(pts):
         return []
-    # de wand van de eerste en de laatste tand: op de nominaal rand, op dezelfde plek
+    # the wall of the first and the last tooth: on the nominal edge, at the same place
     out: list[np.ndarray] = [point(pts[0][0], 0.0)]
     for q, y in pts:
         off = -float(y) if gender == MALE else h - float(y)
@@ -283,12 +285,12 @@ def _toothed(p0, p1, inward, q0, q1, gender, line, depth) -> list[np.ndarray]:
 
 
 def _rect_outline(a, b, edges, depth, finger_w, kerf) -> tuple[np.ndarray, dict]:
-    """De gesloten omtrek van een rechthoek `a` × `b` met per rand een las.
+    """The closed outline of a rectangle `a` × `b` with a joint per edge.
 
-    `edges` is een lijst van vier keer `None` of `(gender, lengte, q0, q1[, ends])`, in
-    tegen klokzin rond de rechthoek: onder, rechts, boven, links. `q0` en `q1` zijn de
-    einden van de las in de coördinaten van het paneel; `q0` is waar de tandenrand van
-    `finger_edge` begint. `ends` is de fase aan de einden van die rand.
+    `edges` is a list of four times `None` or `(gender, length, q0, q1[, ends])`,
+    counter-clockwise around the rectangle: bottom, right, top, left. `q0` and `q1` are
+    the ends of the joint in the coordinates of the panel; `q0` is where the toothed
+    edge of `finger_edge` starts. `ends` is the phase at the ends of that edge.
     """
     corners = [np.array([0.0, 0.0]), np.array([a, 0.0]), np.array([a, b]), np.array([0.0, b])]
     pts: list[np.ndarray] = []
@@ -297,7 +299,7 @@ def _rect_outline(a, b, edges, depth, finger_w, kerf) -> tuple[np.ndarray, dict]
         p0, p1 = corners[i], corners[(i + 1) % 4]
         spec = edges[i] if i < len(edges) else None
         d = p1 - p0
-        inward = np.array([-float(d[1]), float(d[0])], dtype=float)   # links van de looprichting
+        inward = np.array([-float(d[1]), float(d[0])], dtype=float)   # left of the direction
         n = float(np.hypot(*inward))
         if n > 1e-12:
             inward = inward / n
@@ -312,11 +314,11 @@ def _rect_outline(a, b, edges, depth, finger_w, kerf) -> tuple[np.ndarray, dict]
     return _clean(pts), kinds
 
 
-RANDEN = ("onder", "rechts", "boven", "links")
+RANDEN = ("onder", "rechts", "boven", "links")     # keys of Panel.edges (data, not shown)
 
 
 def _matrix(x_col, y_col, z_col, off) -> np.ndarray:
-    """4×4-matrix die (u, v, dikte) op de plek van het paneel zet (echte draaiing)."""
+    """4×4 matrix that puts (u, v, thickness) at the place of the panel (a true rotation)."""
     M = np.eye(4, dtype=float)
     M[:3, :3] = np.column_stack([np.asarray(x_col, float), np.asarray(y_col, float),
                                  np.asarray(z_col, float)])
@@ -330,29 +332,29 @@ Z = np.array([0.0, 0.0, 1.0])
 
 
 def box_panels(w, d, h, t, finger_w=None, inner=True, lid="none", kerf=0.0) -> list[Panel]:
-    """De panelen van een doos met vingerlassen, in de volgorde van de doos.
+    """The panels of a box with finger joints, in the order of the box.
 
-    `w`, `d` en `h` zijn de binnenmaten (`inner=True`) of de buitenmaten van de doos in
-    millimeters, `t` is de materiaaldikte en `finger_w` de gewenste vingerbreedte
-    (standaard `2.5 × t`). `lid` is "none" (open doos, de wanden lopen tot de bovenrand)
-    of "closed" (vast deksel, een zesde paneel dat in de bovenrand van de wanden valt).
-    `kerf` corrigeert de snedespleet van de laser, alleen in de vingerlassen. De getekende
-    panelen overlappen elkaar dan met precies die kerf, want de snede haalt die weer weg.
+    `w`, `d` and `h` are the inner dimensions (`inner=True`) or the outer dimensions of
+    the box in millimetres, `t` is the material thickness and `finger_w` the desired
+    finger width (default `2.5 × t`). `lid` is "none" (open box, the walls run up to the
+    top edge) or "closed" (fixed lid, a sixth panel that drops into the top edge of the
+    walls). `kerf` compensates the cut gap of the laser, only in the finger joints. The
+    drawn panels then overlap each other by exactly that kerf, because the cut removes it.
 
-    Elk paneel draagt `position3d`: de matrix die zijn vlak op zijn plek in de doos zet,
-    zodat `panels_to_manifolds` er direct een geëxtrudeerd volume van kan maken.
+    Every panel carries `position3d`: the matrix that puts its plane in its place in the
+    box, so `panels_to_manifolds` can make an extruded volume of it directly.
     """
     w, d, h, t = float(w), float(d), float(h), float(t)
     lid = str(lid or "none").strip().lower()
     if lid not in LID_KINDS:
-        raise ValueError('Deksel is "none" (geen) of "closed" (vast deksel).')
+        raise ValueError(tr('Lid is "none" (no lid) or "closed" (fixed lid).'))
     if min(w, d, h) <= 0.0:
-        raise ValueError("Breedte, diepte en hoogte moeten groter dan nul zijn.")
+        raise ValueError(tr("Width, depth and height must be greater than zero."))
     if t <= 0.0:
-        raise ValueError("De materiaaldikte moet groter dan nul zijn.")
+        raise ValueError(tr("The material thickness must be greater than zero."))
     fw = FINGER_FACTOR * t if finger_w is None else float(finger_w)
     if fw <= 0.0:
-        raise ValueError("De vingerbreedte moet groter dan nul zijn.")
+        raise ValueError(tr("The finger width must be greater than zero."))
     k = max(0.0, float(kerf or 0.0))
 
     if inner:
@@ -360,45 +362,45 @@ def box_panels(w, d, h, t, finger_w=None, inner=True, lid="none", kerf=0.0) -> l
         H = h + 2.0 * t if lid == "closed" else h + t
     else:
         W, D, H = w, d, h
-    iw, id_ = W - 2.0 * t, D - 2.0 * t          # binnenmaat = wandlengte van voor en achter
+    iw, id_ = W - 2.0 * t, D - 2.0 * t          # inner size = wall length of front and back
     if min(iw, id_) <= 0.0:
-        raise ValueError("De doos is kleiner dan twee keer de materiaaldikte.")
+        raise ValueError(tr("The box is smaller than twice the material thickness."))
     if lid == "closed" and H - 2.0 * t <= 0.0:
-        raise ValueError("De doos is te laag voor bodem, wanden en deksel.")
-    wall = H - t                                # hoogte van een wand (de bodem is de laag eronder)
+        raise ValueError(tr("The box is too low for bottom, walls and lid."))
+    wall = H - t                                # height of a wall (the bottom is the layer below)
 
     def spec(gender, length, q0, q1, ends="tooth"):
         return (gender, length, np.asarray(q0, float), np.asarray(q1, float), ends)
 
-    # -- de bodem: volle buitenmaat, overal vrouwelijk (hij bezit de onderste laag).
-    #    De laden van de wanden beginnen pas voorbij het eerste vak, dus de bodem houdt
-    #    aan elke hoek een plein van `t` × `t` dat met een volle rand aan de plaat vast
-    #    zit; anders raakt het hoekplein de rest van de bodem in slechts één punt.
+    # -- the bottom: full outer size, female everywhere (it owns the lowest layer).
+    #    The slots of the walls only start beyond the first cell, so the bottom keeps
+    #    a square of `t` × `t` at every corner that is attached to the plate with a full
+    #    edge; otherwise the corner square touches the rest of the bottom in only one point.
     bottom_edges = [
-        spec(FEMALE, iw, (t, 0.0), (W - t, 0.0), SLOT),        # voor
-        spec(FEMALE, id_, (W, D - t), (W, t), SLOT),           # rechts
-        spec(FEMALE, iw, (W - t, D), (t, D), SLOT),            # achter
-        spec(FEMALE, id_, (0.0, t), (0.0, D - t), SLOT),       # links
+        spec(FEMALE, iw, (t, 0.0), (W - t, 0.0), SLOT),        # front
+        spec(FEMALE, id_, (W, D - t), (W, t), SLOT),           # right
+        spec(FEMALE, iw, (W - t, D), (t, D), SLOT),            # back
+        spec(FEMALE, id_, (0.0, t), (0.0, D - t), SLOT),       # left
     ]
-    # -- voor en achter: mannelijk onderaan en op beide verticale randen
+    # -- front and back: male at the bottom and on both vertical edges
     side_edges = [
-        spec(MALE, iw, (0.0, 0.0), (iw, 0.0), SLOT),           # vingers in de bodem
+        spec(MALE, iw, (0.0, 0.0), (iw, 0.0), SLOT),           # fingers into the bottom
         spec(MALE, wall, (iw, 0.0), (iw, wall)),
         spec(FEMALE, iw, (0.0, wall), (iw, wall)) if lid == "closed" else None,
         spec(MALE, wall, (0.0, 0.0), (0.0, wall)),
     ]
-    # -- links: vrouwelijk op de verticale randen, onderaan voorbij de hoekkolommen
+    # -- left: female on the vertical edges, at the bottom beyond the corner columns
     left_edges = [
         spec(MALE, id_, (t, 0.0), (D - t, 0.0), SLOT),
         spec(FEMALE, wall, (D, 0.0), (D, wall)),
         spec(FEMALE, id_, (t, wall), (D - t, wall)) if lid == "closed" else None,
         spec(FEMALE, wall, (0.0, 0.0), (0.0, wall)),
     ]
-    # -- rechts: hetzelfde, maar de las van het deksel loopt er in omgekeerde richting
+    # -- right: the same, but the joint of the lid runs in the opposite direction there
     right_edges = [left_edges[0], left_edges[1],
                    spec(FEMALE, id_, (D - t, wall), (t, wall)) if lid == "closed" else None,
                    left_edges[3]]
-    # -- deksel: binnenmaat, overal mannelijk (het bezit de bovenste laag)
+    # -- lid: inner size, male everywhere (it owns the top layer)
     lid_edges = [
         spec(MALE, iw, (0.0, 0.0), (iw, 0.0)),
         spec(MALE, id_, (iw, 0.0), (iw, id_)),
@@ -411,34 +413,41 @@ def box_panels(w, d, h, t, finger_w=None, inner=True, lid="none", kerf=0.0) -> l
         return Panel(name, VPath(pts, True, filled=True), M, t, kinds)
 
     panels = [
-        panel("bodem", W, D, bottom_edges, _matrix(X, Y, Z, (0.0, 0.0, 0.0))),
-        panel("voor", iw, wall, side_edges, _matrix(X, Z, -Y, (t, t, t))),
-        panel("achter", iw, wall, side_edges, _matrix(-X, Z, Y, (W - t, D - t, t))),
-        panel("links", D, wall, left_edges, _matrix(Y, Z, X, (0.0, 0.0, t))),
-        panel("rechts", D, wall, right_edges, _matrix(-Y, Z, -X, (W, D, t))),
+        panel(PANEL_LABELS["bottom"], W, D, bottom_edges, _matrix(X, Y, Z, (0.0, 0.0, 0.0))),
+        panel(PANEL_LABELS["front"], iw, wall, side_edges, _matrix(X, Z, -Y, (t, t, t))),
+        panel(PANEL_LABELS["back"], iw, wall, side_edges, _matrix(-X, Z, Y, (W - t, D - t, t))),
+        panel(PANEL_LABELS["left"], D, wall, left_edges, _matrix(Y, Z, X, (0.0, 0.0, t))),
+        panel(PANEL_LABELS["right"], D, wall, right_edges, _matrix(-Y, Z, -X, (W, D, t))),
     ]
     if lid == "closed":
-        panels.append(panel("deksel", iw, id_, lid_edges, _matrix(X, Y, Z, (t, t, H - t))))
+        panels.append(panel(PANEL_LABELS["lid"], iw, id_, lid_edges,
+                            _matrix(X, Y, Z, (t, t, H - t))))
     return panels
 
 
 # --------------------------------------------------------------------------
-#  naar werkblad en 3D-model
+#  to worksheet and 3D model
 # --------------------------------------------------------------------------
 
-def panels_to_drawing(panels, layer="Snijden", label_layer="Graveren",
+def panels_to_drawing(panels, layer=None, label_layer=None,
                       labels=True, height=4.0, gap=2.0) -> Drawing:
-    """De contouren van de panelen op een tekening, elk paneel als één bron.
+    """The contours of the panels on a drawing, each panel as one source.
 
-    De snijcontouren komen op `layer` (snijden) en de paneelnamen — als kleine
-    tekstcontouren in het midden van het paneel — op `label_layer` (graveren). Paden die
-    bij elkaar horen krijgen hetzelfde bronnummer, zodat het automatisch schikken een
-    paneel met zijn gravure als één geheel verplaatst.
+    The cut contours go on `layer` (cut) and the panel names — as small text contours
+    in the middle of the panel — on `label_layer` (engrave). Without a name these are
+    the default Cut and Engrave layers in the current language; a caller that merges into
+    an existing sheet passes `sheet.default_layer("cut")` and `("engrave")`, so an old
+    sheet with Dutch layer names gets no second cut layer. Paths that belong together get
+    the same source number, so automatic arranging moves a panel with its engraving as
+    one whole.
 
-    De panelen zijn elk in hun eigen vlak getekend en liggen daarom in de tekening
-    naast elkaar (van links naar rechts, met `gap` ertussen), zodat ze elkaar niet in de
-    weg zitten en het nesten ze als losse onderdelen herkent.
+    The panels are each drawn in their own plane and therefore lie side by side in the
+    drawing (from left to right, with `gap` in between), so they do not get in each
+    other's way and nesting recognises them as separate parts.
     """
+    layer = layer or _LAYER_BY_OP["cut"]
+    if label_layer is None:
+        label_layer = _LAYER_BY_OP["engrave"]
     dr = Drawing()
     dr.ensure_layer(layer, "#ff0000", "cut")
     if labels and label_layer:
@@ -458,7 +467,7 @@ def panels_to_drawing(panels, layer="Snijden", label_layer="Graveren",
 
 
 def label_loops(panel, height=4.0) -> list[np.ndarray]:
-    """De contouren van de paneelnaam, gecentreerd in het midden van het paneel."""
+    """The contours of the panel name, centred in the middle of the panel."""
     pts = panel.points
     if len(pts) < 3:
         return []
@@ -468,8 +477,8 @@ def label_loops(panel, height=4.0) -> list[np.ndarray]:
         return []
     from PySide6.QtGui import QGuiApplication
     if QGuiApplication.instance() is None:
-        return []                         # letters hebben een Qt-app nodig; deze kern is dat niet
-    from . import fonts                   # Qt: pas hier, deze kern is Qt-vrij
+        return []                         # letters need a Qt app; this core is not one
+    from . import fonts                   # Qt: only here, this core is Qt-free
     try:
         h = min(float(height), 0.4 * float(min(span)))
         loops = fonts.text_loops(panel.name, height=max(0.5, h))
@@ -493,13 +502,13 @@ def label_loops(panel, height=4.0) -> list[np.ndarray]:
 
 
 def panels_to_manifolds(panels) -> list:
-    """Elk paneel geëxtrudeerd met zijn dikte en getransformeerd naar zijn plek.
+    """Every panel extruded with its thickness and transformed to its place.
 
-    Met `kerf` overlappen de panelen hier precies de kerf van de laser: de getekende
-    vinger is aan elke kant `kerf / 2` breder en de gleuf evenveel smaller, omdat de
-    snedespleet dat er later afhaalt. Het model toont daarom de panelen zoals ze van de
-    laser komen en niet de doos na de montage; de vereniging van alle panelen is wel
-    precies de wand van de doos.
+    With `kerf` the panels overlap here by exactly the kerf of the laser: the drawn
+    finger is `kerf / 2` wider on each side and the slot as much narrower, because the
+    cut gap removes that later. The model therefore shows the panels as they come off
+    the laser and not the box after assembly; the union of all panels is exactly the
+    wall of the box, though.
     """
     out = []
     for p in panels:
@@ -510,7 +519,7 @@ def panels_to_manifolds(panels) -> list:
 
 
 def box_size(w, d, h, t, inner=True, lid="none"):
-    """(breedte, diepte, hoogte) van de afgewerkte doos, voor de melding in de statusbalk."""
+    """(width, depth, height) of the finished box, for the message in the status bar."""
     w, d, h, t = float(w), float(d), float(h), float(t)
     closed = str(lid or "none").strip().lower() == "closed"
     if inner:

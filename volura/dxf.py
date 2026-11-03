@@ -1,22 +1,22 @@
-"""DXF lezen en schrijven naar het gedeelde 2D-model (`volura.vector2d`).
+"""Read and write DXF to and from the shared 2D model (`volura.vector2d`).
 
-DXF is het uitwisselingsformaat van frees- en lasersoftware (Fusion, Estlcam,
-VCarve). Dit leest en schrijft ASCII-DXF met alleen de standaardbibliotheek en
-numpy (geen ezdxf).
+DXF is the exchange format of milling and laser software (Fusion, Estlcam,
+VCarve). This reads and writes ASCII DXF using only the standard library and
+numpy (no ezdxf).
 
-Bij het lezen worden eenheden uit `$INSUNITS` naar millimeters gebracht, worden
-entiteiten uit `ENTITIES` en uit blokken via `INSERT` gevolgd (invoegpunt,
-schaal, rotatie, geneste blokken) en worden bogen uit bulges, cirkels, ellipsen
-en NURBS-splines (geëvalueerd met de Boor) adaptief afgevlakt. De
-extrusierichting (210/220/230) bepaalt het objectcoördinatenstelsel; een
-extrusie van (0, 0, -1) -- veel voorkomend in CAD-bestanden -- spiegelt de X.
-Lagen komen uit de LAYER-tabel en de laag (8) per entiteit, kleuren uit ACI (62)
-of true color (420), waarbij BYLAYER en BYBLOCK de laagkleur volgen. Losse
-lijn- en boogstukken worden daarna aaneengeregen tot gesloten contouren.
+When reading, units from `$INSUNITS` are converted to millimetres, entities in
+`ENTITIES` and in blocks via `INSERT` are followed (insertion point, scale,
+rotation, nested blocks), and arcs from bulges, circles, ellipses and NURBS
+splines (evaluated with de Boor) are flattened adaptively. The extrusion
+direction (210/220/230) defines the object coordinate system; an extrusion of
+(0, 0, -1) -- common in CAD files -- mirrors X. Layers come from the LAYER table
+and the per-entity layer (8), colours from ACI (62) or true colour (420), with
+BYLAYER and BYBLOCK following the layer colour. Loose line and arc pieces are
+then chained into closed contours.
 
-Bij het schrijven ontstaat DXF R12 (AC1009) voor maximale compatibiliteit:
-`POLYLINE`/`VERTEX`/`SEQEND` (met gesloten vlag), `LINE` voor tweepuntspaden en
-`CIRCLE` voor gesloten paden die op een cirkel liggen (handig voor boorgaten).
+Writing produces DXF R12 (AC1009) for maximum compatibility:
+`POLYLINE`/`VERTEX`/`SEQEND` (with the closed flag), `LINE` for two-point paths
+and `CIRCLE` for closed paths that lie on a circle (handy for drill holes).
 """
 from __future__ import annotations
 
@@ -26,15 +26,16 @@ import os
 import numpy as np
 
 from . import fileio
+from .i18n import tr
 from .vector2d import Drawing, Layer, TOL, arc_points, ellipse_arc_points, join_open_paths
 
-# Eenheden uit $INSUNITS, omgerekend naar millimeters (0 of ontbrekend = mm).
+# Units from $INSUNITS, converted to millimetres (0 or missing = mm).
 INSUNITS_MM = {1: 25.4, 2: 304.8, 3: 3048.006096, 4: 1.0, 5: 10.0, 6: 1000.0,
                7: 100000.0, 8: 10000000.0, 9: 10000.0, 10: 1.0, 11: 0.0254,
                12: 0.254, 13: 0.0254, 14: 25400.0, 15: 254000.0, 16: 25.4,
                17: 2540.0, 18: 0.1}
 
-# Standaard-ACI-kleuren (index -> rgb); overige indexen leveren grijs op.
+# Standard ACI colours (index -> rgb); other indexes give grey.
 ACI_RGB = {1: (255, 0, 0), 2: (255, 255, 0), 3: (0, 255, 0), 4: (0, 255, 255),
            5: (0, 0, 255), 6: (255, 0, 255), 7: (0, 0, 0), 8: (128, 128, 128),
            9: (192, 192, 192)}
@@ -42,32 +43,33 @@ ACI_RGB = {1: (255, 0, 0), 2: (255, 255, 0), 3: (0, 255, 0), 4: (0, 255, 255),
 BYLAYER = 256
 BYBLOCK = 0
 
-# Entiteiten die we bewust overslaan, met de melding die erbij hoort.
+# Entities we skip on purpose, with the matching message.
+_TEXT_SKIPPED = tr("Text in the DXF was skipped; convert text to paths to mill it.")
 SKIP_MESSAGES = {
-    "TEXT": "Tekst in de DXF is overgeslagen; zet tekst om naar paden om mee te frezen.",
-    "MTEXT": "Tekst in de DXF is overgeslagen; zet tekst om naar paden om mee te frezen.",
-    "ATTDEF": "Tekst in de DXF is overgeslagen; zet tekst om naar paden om mee te frezen.",
-    "ATTRIB": "Tekst in de DXF is overgeslagen; zet tekst om naar paden om mee te frezen.",
-    "HATCH": "Arcering (HATCH) in de DXF is overgeslagen.",
-    "SOLID": "Vlak (SOLID) in de DXF is overgeslagen.",
-    "TRACE": "Vlak (TRACE) in de DXF is overgeslagen.",
-    "DIMENSION": "Maat (DIMENSION) in de DXF is overgeslagen.",
-    "LEADER": "Aanwijzering (LEADER) in de DXF is overgeslagen.",
-    "TOLERANCE": "Tolerantie (TOLERANCE) in de DXF is overgeslagen.",
+    "TEXT": _TEXT_SKIPPED,
+    "MTEXT": _TEXT_SKIPPED,
+    "ATTDEF": _TEXT_SKIPPED,
+    "ATTRIB": _TEXT_SKIPPED,
+    "HATCH": tr("Hatch (HATCH) in the DXF was skipped."),
+    "SOLID": tr("Face (SOLID) in the DXF was skipped."),
+    "TRACE": tr("Face (TRACE) in the DXF was skipped."),
+    "DIMENSION": tr("Dimension (DIMENSION) in the DXF was skipped."),
+    "LEADER": tr("Leader (LEADER) in the DXF was skipped."),
+    "TOLERANCE": tr("Tolerance (TOLERANCE) in the DXF was skipped."),
 }
 
 SUPPORTED = {"LINE", "LWPOLYLINE", "POLYLINE", "CIRCLE", "ARC", "ELLIPSE", "SPLINE"}
 
 
 # --------------------------------------------------------------------------
-#  bron en groepcodeparen
+#  source and group code pairs
 # --------------------------------------------------------------------------
 
 BINARY_MAGIC = b"AutoCAD Binary DXF"
 
 
 def _data(source) -> bytes:
-    """De bron (pad, bytes of tekst) als bytes; binaire DXF wordt geweigerd."""
+    """The source (path, bytes or text) as bytes; binary DXF is refused."""
     if isinstance(source, (bytes, bytearray, memoryview)):
         data = bytes(source)
     elif hasattr(source, "read"):
@@ -82,8 +84,7 @@ def _data(source) -> bytes:
     else:
         data = _read_file(str(source))
     if data[:len(BINARY_MAGIC)] == BINARY_MAGIC:
-        raise ValueError("Binaire DXF wordt niet ondersteund; sla het bestand op als "
-                         "ASCII-DXF.")
+        raise ValueError(tr("Binary DXF is not supported; save the file as ASCII DXF."))
     return data
 
 
@@ -92,7 +93,7 @@ def _read_file(path) -> bytes:
         with open(path, "rb") as f:
             return f.read()
     except OSError as exc:
-        raise ValueError(f"Kan het DXF-bestand niet openen: {exc}") from exc
+        raise ValueError(tr("Cannot open the DXF file: {error}").format(error=exc)) from exc
 
 
 def _decode(data: bytes) -> str:
@@ -105,10 +106,10 @@ def _decode(data: bytes) -> str:
 
 
 def _pairs(text: str):
-    """De groepcode/waarde-paren als lijst van (code, waarde).
+    """The group code/value pairs as a list of (code, value).
 
-    Leest robuust: spaties rond code en waarde, \\r\\n en lege regels ertussen
-    worden genegeerd. Een waarde mag zelf spaties bevatten.
+    Reads robustly: spaces around code and value, \\r\\n and blank lines in
+    between are ignored. A value may itself contain spaces.
     """
     lines = [ln.strip() for ln in text.splitlines()]
     lines = [ln for ln in lines if ln != ""]
@@ -123,7 +124,7 @@ def _pairs(text: str):
 
 
 # --------------------------------------------------------------------------
-#  kleuren
+#  colours
 # --------------------------------------------------------------------------
 
 def _hex(rgb) -> str:
@@ -131,7 +132,7 @@ def _hex(rgb) -> str:
 
 
 def aci_to_hex(aci) -> str:
-    """ACI-kleur als #rrggbb; onbekende indexen worden grijs."""
+    """ACI colour as #rrggbb; unknown indexes become grey."""
     try:
         aci = int(aci)
     except (TypeError, ValueError):
@@ -141,7 +142,7 @@ def aci_to_hex(aci) -> str:
 
 
 def hex_to_aci(color) -> int:
-    """ACI-kleur die het dichtst bij `color` (#rrggbb) ligt."""
+    """The ACI colour closest to `color` (#rrggbb)."""
     s = str(color or "#000000").strip().lstrip("#")
     if len(s) == 3:
         s = "".join(ch * 2 for ch in s)
@@ -168,15 +169,15 @@ def _true_color(value):
 
 
 # --------------------------------------------------------------------------
-#  objectcoördinatenstelsel
+#  object coordinate system
 # --------------------------------------------------------------------------
 
 def _ocs_matrix(extrusion) -> np.ndarray:
-    """2x2 matrix die OCS-punten (x, y) naar WCS brengt voor deze extrusierichting.
+    """2x2 matrix that maps OCS points (x, y) to WCS for this extrusion direction.
 
-    Een extrusie van (0, 0, 1) is de identiteit; (0, 0, -1) spiegelt de X (het
-    objectcoördinatenstelsel staat dan "op zijn kop"). Overige richtingen volgen
-    het willekeurig-as-algoritme van DXF.
+    An extrusion of (0, 0, 1) is the identity; (0, 0, -1) mirrors X (the object
+    coordinate system is then "upside down"). Other directions follow the DXF
+    arbitrary axis algorithm.
     """
     N = np.asarray(extrusion, dtype=float)
     if N.shape != (3,):
@@ -201,11 +202,11 @@ def _ocs_matrix(extrusion) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------
-#  bogen uit bulges
+#  arcs from bulges
 # --------------------------------------------------------------------------
 
 def bulge_arc(p0, p1, bulge, tol=TOL) -> np.ndarray:
-    """Bogen tussen `p0` en `p1` uit de bulge; punten na `p0` tot en met `p1`."""
+    """Arc between `p0` and `p1` from the bulge; the points after `p0` up to and including `p1`."""
     p0 = np.asarray(p0, dtype=float)
     p1 = np.asarray(p1, dtype=float)
     if abs(bulge) < 1e-10:
@@ -227,7 +228,7 @@ def bulge_arc(p0, p1, bulge, tol=TOL) -> np.ndarray:
 
 
 def _vertices_and_bulges(pairs):
-    """Punten en bulges van een (LW)POLYLINE, in volgorde, met bulge 0 als ontbreekt."""
+    """Points and bulges of an (LW)POLYLINE, in order, with bulge 0 when missing."""
     verts, bulges = [], []
     x = y = None
     bulge = None
@@ -258,7 +259,7 @@ def _vertices_and_bulges(pairs):
 
 
 def _polyline_from_vertices(verts, bulges, closed, tol=TOL):
-    """Punten en bulges van een (LW)POLYLINE als polylijn met bogen."""
+    """Points and bulges of an (LW)POLYLINE as a polyline with arcs."""
     n = len(verts)
     if n == 0:
         return np.zeros((0, 2)), False
@@ -308,7 +309,7 @@ def _de_boor(degree, knots, pw, span, u):
 
 
 def nurbs_points(degree, knots, ctrl, weights=None, samples_per_span=24):
-    """NURBS-curve als polylijn, geëvalueerd met de Boor (rationaal met gewichten)."""
+    """NURBS curve as a polyline, evaluated with de Boor (rational with weights)."""
     ctrl = np.asarray(ctrl, dtype=float).reshape(-1, 2)
     n = len(ctrl) - 1
     if n < 1 or degree < 1 or len(knots) < n + degree + 2:
@@ -337,11 +338,11 @@ def nurbs_points(degree, knots, ctrl, weights=None, samples_per_span=24):
 
 
 # --------------------------------------------------------------------------
-#  entiteiten
+#  entities
 # --------------------------------------------------------------------------
 
 class _Ent:
-    """Eén entiteit: een tipoog en de groepcode/waarde-paren eronder."""
+    """One entity: a type and the group code/value pairs under it."""
 
     __slots__ = ("type", "pairs")
 
@@ -376,7 +377,7 @@ class _Ent:
 
 
 def _iter_entities(tokens):
-    """Groepen van (code, waarde) om naar entiteiten; POLYLINE/VERTEX/SEQEND samen."""
+    """Turn (code, value) groups into entities; POLYLINE/VERTEX/SEQEND together."""
     ents = []
     cur = None
 
@@ -415,7 +416,7 @@ def _iter_entities(tokens):
 
 
 def _sections(pairs):
-    """De paren per sectienaam (HEADER, TABLES, BLOCKS, ENTITIES)."""
+    """The pairs per section name (HEADER, TABLES, BLOCKS, ENTITIES)."""
     secs = {}
     i, n = 0, len(pairs)
     while i < n:
@@ -435,23 +436,23 @@ def _sections(pairs):
 
 
 # --------------------------------------------------------------------------
-#  lezen
+#  reading
 # --------------------------------------------------------------------------
 
 def read_dxf(source, tol=TOL) -> Drawing:
-    """Een ASCII-DXF (pad, bytes of tekst) als 2D-tekening in millimeters.
+    """An ASCII DXF (path, bytes or text) as a 2D drawing in millimetres.
 
-    Eenheden uit `$INSUNITS` worden omgerekend; entiteiten in `ENTITIES` en in
-    blokken via `INSERT` worden gevolgd; bogen, cirkels, ellipsen en NURBS worden
-    afgevlakt; extrusie (0, 0, -1) spiegelt de X; lagen en kleuren komen uit de
-    LAYER-tabel en de entiteit. Losse lijnstukken worden aaneengeregen. Niet-
-    navolgbare inhoud (tekst, arcering, maten) geeft een melding in
+    Units from `$INSUNITS` are converted; entities in `ENTITIES` and in blocks via
+    `INSERT` are followed; arcs, circles, ellipses and NURBS are flattened;
+    extrusion (0, 0, -1) mirrors X; layers and colours come from the LAYER table
+    and the entity. Loose line segments are chained together. Content that cannot
+    be followed (text, hatches, dimensions) gives a message in
     `Drawing.warnings`.
     """
     data = _data(source)
     pairs = _pairs(_decode(data))
     if not pairs:
-        raise ValueError("Dit is geen DXF-bestand: er zijn geen groepcodeparen gevonden.")
+        raise ValueError(tr("This is not a DXF file: no group code pairs were found."))
     return _Reader(pairs, float(tol)).run()
 
 
@@ -466,7 +467,7 @@ class _Reader:
         self.blocks = {}
         self.noticed = set()
 
-    # -- voorlezen ---------------------------------------------------------
+    # -- pre-reading -------------------------------------------------------
 
     def run(self):
         secs = _sections(self.pairs)
@@ -527,7 +528,7 @@ class _Reader:
                     self.blocks[name] = _iter_entities(body)
             i += 1
 
-    # -- lagen -------------------------------------------------------------
+    # -- layers ------------------------------------------------------------
 
     def _notice(self, kind, text):
         if kind not in self.noticed:
@@ -556,7 +557,7 @@ class _Reader:
         if layer not in self.drawing.layers:
             self.drawing.ensure_layer(layer, self.layer_color.get(layer, color))
 
-    # -- entiteiten --------------------------------------------------------
+    # -- entities ----------------------------------------------------------
 
     def _emit(self, ent, M, depth, seen):
         t = ent.type
@@ -585,20 +586,20 @@ class _Reader:
     def _insert(self, ent, M, depth, seen):
         name = ent.get(2, "")
         if name in seen:
-            self._notice("recur", "Geneste kopie (INSERT) met een lus is gestopt.")
+            self._notice("recur", tr("Nested copy (INSERT) with a loop was stopped."))
             return
         block = self.blocks.get(name)
         if block is None:
-            self._notice("missing", f"Blok {name} van INSERT staat niet in het bestand.")
+            self._notice("missing", tr("Block {name} of INSERT is not in the file.").format(name=name))
             return
         if depth > 16:
-            self._notice("deep", "Kopieën (INSERT) te diep genest; er wordt gestopt.")
+            self._notice("deep", tr("Copies (INSERT) nested too deeply; stopping."))
             return
         rows = int(ent.num(70, 1))
         cols = int(ent.num(71, 1))
         if rows > 1 or cols > 1:
-            self._notice("array", "Rijen en kolommen van INSERT zijn overgeslagen; "
-                                  "alleen het eerste exemplaar is gelezen.")
+            self._notice("array", tr("Rows and columns of INSERT were skipped; "
+                                     "only the first instance was read."))
         ip = np.array([ent.num(10, 0.0), ent.num(20, 0.0)]) * self.factor
         sx, sy = ent.num(41, 1.0), ent.num(42, 1.0)
         rot = math.radians(ent.num(50, 0.0))
@@ -697,7 +698,7 @@ class _Reader:
 
 
 # --------------------------------------------------------------------------
-#  schrijven
+#  writing
 # --------------------------------------------------------------------------
 
 def _fmt(v) -> str:
@@ -730,12 +731,12 @@ def _is_circle(pts, tol=0.01):
 
 
 def write_dxf(drawing, path=None, layers=None, detect_circles=True) -> str:
-    """De tekening als DXF R12-tekst; ook naar `path` geschreven indien gegeven.
+    """The drawing as DXF R12 text; also written to `path` when given.
 
-    `POLYLINE`/`VERTEX`/`SEQEND` voor gesloten en lange paden, `LINE` voor
-    tweepuntspaden en `CIRCLE` voor gesloten paden van minstens 16 punten die
-    binnen 0,01 mm op een cirkel liggen (met `detect_circles`). Verborgen lagen
-    worden overgeslagen; lagen in `layers` beperken de uitvoer. Eindigt met `EOF`.
+    `POLYLINE`/`VERTEX`/`SEQEND` for closed and long paths, `LINE` for two-point
+    paths and `CIRCLE` for closed paths of at least 16 points that lie on a circle
+    within 0.01 mm (with `detect_circles`). Hidden layers are skipped; layers in
+    `layers` limit the output. Ends with `EOF`.
     """
     wanted = set(layers) if layers is not None else None
     out = []

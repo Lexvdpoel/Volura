@@ -12,6 +12,7 @@ from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainterPath, QPen
 
 from . import fillet, icons, ops, vector_import
 from .brep import Entities
+from .i18n import tr
 from .geom import (AXES, MeshData, Plane, arc_from_bulge, arc_from_center, arc_through_3,
                    circle_points, closest_on_line_to_ray, extrude_cs, normalize, point_in_polys,
                    rotated_rect, rotation_matrix, simplify_polyline)
@@ -53,9 +54,9 @@ def parse_number(text):
         raise ValueError(text)
 
 
-MEASURE_LABEL = "Afmetingen"     # the Measurements box label of a tool without one of its own
+MEASURE_LABEL = tr("Measurements")     # the Measurements box label of a tool without one of its own
 
-LENGTH_PRECISION = 2      # decimals shown in length labels (Modelinfo > Eenheden)
+LENGTH_PRECISION = 2      # decimals shown in length labels (Model Info > Units)
 
 
 def set_length_precision(decimals):
@@ -108,7 +109,7 @@ class Tool:
     name = ""
     status = ""                     # the instruction of the first step, see status_text()
     measure_label = MEASURE_LABEL   # the label of the Measurements box, see vcb_label()
-    cursor_icon = "select"          # SketchUp toont het icoon van het gereedschap als aanwijzer
+    cursor_icon = "select"          # SketchUp shows the tool's icon as the mouse pointer
     _cursor = None
 
     def __init__(self, view):
@@ -196,7 +197,7 @@ class Tool:
         return False
 
     def vcb_enter(self, text):
-        raise ValueError("geen invoer verwacht")
+        raise ValueError(tr("no input expected"))
 
     def draw(self, view):
         pass
@@ -219,7 +220,7 @@ class Tool:
             traceback.print_exc()
             self.doc.undo()
             self.doc.redo_stack.clear()
-            self.view.set_status(f"Bewerking mislukt: {ex}")
+            self.view.set_status(tr("Operation failed: {error}").format(error=ex))
             return None
         self.doc.notify()
         return result
@@ -338,11 +339,11 @@ class Tool:
         return pick
 
     def warn_locked(self):
-        """Bewerken > Vergrendelen: say in the status bar why nothing happened."""
+        """Edit > Lock: say in the status bar why nothing happened."""
         self.view.set_status(LOCKED_MSG)
 
     def show_hidden(self):
-        """Beeld > Verborgen geometrie: hidden faces and edges can be selected."""
+        """View > Hidden Geometry: hidden faces and edges can be selected."""
         return bool(getattr(self.settings, "show_hidden", False))
 
 
@@ -350,8 +351,8 @@ class Tool:
 
 class OrbitTool(Tool):
     name = "orbit"
-    status = ("Sleep met de linkermuisknop om het model te draaien. "
-              "Shift + slepen pant, de middelste muisknop doet dat altijd.")
+    status = tr("Drag with the left mouse button to orbit the model. "
+                "Shift + drag pans, the middle mouse button always does.")
     measure_label = ""
     cursor_icon = "orbit"
 
@@ -373,8 +374,8 @@ class OrbitTool(Tool):
 
 class PanTool(OrbitTool):
     name = "pan"
-    status = ("Sleep met de linkermuisknop om het model te verschuiven. "
-              "Middelste muisknop pant altijd, Shift + slepen ook.")
+    status = tr("Drag with the left mouse button to pan the model. "
+                "The middle mouse button always pans, so does Shift + drag.")
     measure_label = ""
     cursor_icon = "pan"
 
@@ -386,9 +387,9 @@ class PanTool(OrbitTool):
 
 class ZoomTool(OrbitTool):
     name = "zoom"
-    status = ("Sleep met de linkermuisknop omhoog/omlaag om te zoomen. "
-              "Typ een gezichtsveld in graden en druk op Enter.")
-    measure_label = "Gezichtsveld"
+    status = tr("Drag up/down with the left mouse button to zoom. "
+                "Type a field of view in degrees and press Enter.")
+    measure_label = tr("Field of View")
     cursor_icon = "zoom"
 
     def activate(self):
@@ -406,15 +407,15 @@ class ZoomTool(OrbitTool):
         self.view.commit_camera()
 
     def show_fov(self):
-        """Camera > Gezichtsveld: the current field of view in the Measurements box."""
+        """Camera > Field of View: the current field of view in the Measurements box."""
         self.vcb_value = fmt_deg(self.view.cam.fov)
         self.view.update_vcb()
 
 
 class ZoomWindowTool(Tool):
-    """Camera > Zoomvenster: drag a rectangle and zoom the camera into it."""
+    """Camera > Zoom Window: drag a rectangle and zoom the camera into it."""
     name = "zoomwindow"
-    status = "Sleep een kader over het gebied waarop je wilt inzoomen."
+    status = tr("Drag a window around the area you want to zoom in on.")
     measure_label = ""
     cursor_icon = "zoom"
 
@@ -461,8 +462,8 @@ class ZoomWindowTool(Tool):
 
 class SelectTool(Tool):
     name = "select"
-    status = ("Selecteer objecten. Shift = toevoegen/verwijderen. Ctrl = toevoegen. "
-              "Ctrl+Shift = verwijderen.")
+    status = tr("Select objects. Shift = add/remove. Ctrl = add. "
+                "Ctrl+Shift = remove.")
     measure_label = ""
     cursor_icon = "select"
 
@@ -597,7 +598,7 @@ class SelectTool(Tool):
 
 class EraserTool(Tool):
     name = "eraser"
-    status = "Selecteer objecten om te wissen. Ctrl = verzachten, Shift = verbergen."
+    status = tr("Select objects to erase. Ctrl = soften, Shift = hide.")
     measure_label = ""
     cursor_icon = "eraser"
 
@@ -686,7 +687,7 @@ class EraserTool(Tool):
 
 class PaintTool(Tool):
     name = "paint"
-    status = "Selecteer een object om te verven."
+    status = tr("Select an object to paint.")
     measure_label = ""
     cursor_icon = "paint"
 
@@ -741,15 +742,15 @@ class PaintTool(Tool):
 
 class LineTool(Tool):
     name = "line"
-    status = "Selecteer beginpunt."
-    measure_label = "Lengte"
+    status = tr("Select start point.")
+    measure_label = tr("Length")
     cursor_icon = "line"
 
     def status_text(self):
         if not self.pts:
-            return "Selecteer beginpunt."
-        return ("Selecteer eindpunt of typ een lengte. "
-                "Shift = vergrendel richting; pijltoetsen = vergrendel as.")
+            return tr("Select start point.")
+        return tr("Select end point or type a length. "
+                  "Shift = lock direction; arrow keys = lock axis.")
 
     def reset(self):
         super().reset()
@@ -795,12 +796,12 @@ class LineTool(Tool):
 
     def vcb_enter(self, text):
         if not self.pts or self.inf is None:
-            raise ValueError("klik eerst een beginpunt")
+            raise ValueError(tr("click a start point first"))
         L = parse_length(text)
         anchor = self.pts[-1]
         d = self.lock_dir if self.lock_dir is not None else self.inf.point - anchor
         if np.linalg.norm(d) < 1e-9:
-            raise ValueError("geen richting")
+            raise ValueError(tr("no direction"))
         self.add_point(anchor + normalize(d) * L)
 
     def draw(self, view):
@@ -812,11 +813,11 @@ class LineTool(Tool):
 
 
 class FreehandTool(Tool):
-    """Tekenen > Lijnen > Uit de vrije hand: sleep een lijn in het vlak onder de
-    cursor; bij het loslaten wordt ze vereenvoudigd en als randen toegevoegd."""
+    """Draw > Lines > Freehand: drag a line in the plane under the cursor; on release
+    it is simplified and added as edges."""
     name = "freehand"
-    status = "Sleep met de linkermuisknop om uit de vrije hand te tekenen."
-    measure_label = "Afmetingen"
+    status = tr("Drag with the left mouse button to draw freehand.")
+    measure_label = MEASURE_LABEL
     cursor_icon = "freehand"
 
     TOL_PX = 3.0    # points that deviate less than this many pixels disappear
@@ -825,8 +826,8 @@ class FreehandTool(Tool):
 
     def status_text(self):
         if self.drawing:
-            return ("Sleep de lijn uit de vrije hand; eindig bij het beginpunt en de vorm "
-                    "sluit zich tot een vlak.")
+            return tr("Drag the freehand line; end at the start point and the shape "
+                      "closes into a face.")
         return self.status
 
     def reset(self):
@@ -876,9 +877,9 @@ class FreehandTool(Tool):
         gap = float(np.linalg.norm(pts[-1] - pts[0]))
         if gap <= self.CLOSE_PX * ps:
             if gap > 1e-9:
-                pts = np.concatenate([pts, pts[:1]])   # laatste punt = eerste punt
+                pts = np.concatenate([pts, pts[:1]])   # last point = first point
             if len(pts) < 4:
-                return None                            # te weinig hoekpunten voor een vlak
+                return None                            # too few corners for a face
         return pts
 
     def mouse_release(self, e, x, y):
@@ -905,11 +906,16 @@ class FreehandTool(Tool):
 
 # ------------------------------------------------------------------ 2D shapes
 
+# The status bar text after an arrow key forces the drawing plane (index = axis).
+FORCED_PLANE_MSG = (tr("Drawing plane perpendicular to the red axis."),
+                    tr("Drawing plane perpendicular to the green axis."),
+                    tr("Drawing plane perpendicular to the blue axis."))
+
 class ShapeTool(Tool):
     """Base for rectangle/circle/polygon: the first click fixes the plane."""
     cursor_icon = "rectangle"
-    step1 = "Selecteer eerste hoek."
-    step2 = "Selecteer tegenoverliggende hoek of typ waarden."
+    step1 = tr("Select first corner.")
+    step2 = tr("Select opposite corner or type values.")
 
     def status_text(self):
         return self.step1 if self.p0 is None else self.step2
@@ -930,9 +936,8 @@ class ShapeTool(Tool):
         if e.key() in ARROWS and self.p0 is None:
             ax = ARROWS[e.key()]
             self.forced_axis = None if self.forced_axis == ax else ax
-            names = ("rode", "groene", "blauwe")
             self.view.set_status(
-                f"Tekenvlak loodrecht op de {names[ax]} as." if self.forced_axis is not None else self.status_text())
+                FORCED_PLANE_MSG[ax] if self.forced_axis is not None else self.status_text())
             return True
         return False
 
@@ -996,8 +1001,8 @@ class ShapeTool(Tool):
 
 class RectangleTool(ShapeTool):
     name = "rectangle"
-    status = "Selecteer eerste hoek."
-    measure_label = "Afmetingen"
+    status = tr("Select first corner.")
+    measure_label = MEASURE_LABEL
 
     def loop2d(self):
         if self.cur is None:
@@ -1015,10 +1020,10 @@ class RectangleTool(ShapeTool):
 
     def vcb_enter(self, text):
         if self.p0 is None:
-            raise ValueError("klik eerst de eerste hoek")
+            raise ValueError(tr("click the first corner first"))
         vals = split_values(text, (2,))
         if len(vals) != 2:
-            raise ValueError("geef breedte;hoogte")
+            raise ValueError(tr("enter width;height"))
         w, h = parse_length(vals[0]), parse_length(vals[1])
         sx = -1 if self.cur is not None and self.cur[0] < 0 else 1
         sy = -1 if self.cur is not None and self.cur[1] < 0 else 1
@@ -1029,26 +1034,26 @@ class RectangleTool(ShapeTool):
         super().draw(view)
         if self.p0 is not None and self.cur is not None:
             c = self.plane.to_world(self.plane.to_local(self.p0) + self.cur / 2)
-            view.add_label(c, f"{abs(self.cur[0]):.2f} × {abs(self.cur[1]):.2f} mm")
+            view.add_label(c, tr("{w:.2f} × {h:.2f} mm").format(w=abs(self.cur[0]), h=abs(self.cur[1])))
 
 
 class RotatedRectangleTool(Tool):
-    """Tekenen > Vormen > Gedraaide rechthoek: de eerste twee hoeken bepalen de eerste
-    zijde (ook schuin), de muis bepaalt daarna de breedte loodrecht op die zijde."""
+    """Draw > Shapes > Rotated Rectangle: the first two corners fix the first side
+    (at any angle), then the mouse sets the width perpendicular to that side."""
     name = "rotrect"
-    status = "Selecteer eerste hoek."
-    measure_label = "Lengte"
+    status = tr("Select first corner.")
+    measure_label = tr("Length")
     cursor_icon = "rotrect"
 
     def status_text(self):
         if self.p0 is None:
-            return "Selecteer eerste hoek."
+            return tr("Select first corner.")
         if self.p1 is None:
-            return "Selecteer de tweede hoek van de eerste zijde of typ een lengte."
-        return "Selecteer de breedte of typ een waarde."
+            return tr("Select the second corner of the first side or type a length.")
+        return tr("Select the width or type a value.")
 
     def vcb_label(self):
-        return "Lengte" if self.p1 is None else "Breedte"
+        return tr("Length") if self.p1 is None else tr("Width")
 
     def reset(self):
         super().reset()
@@ -1067,9 +1072,8 @@ class RotatedRectangleTool(Tool):
         if e.key() in ARROWS and self.p0 is None:
             ax = ARROWS[e.key()]
             self.forced_axis = None if self.forced_axis == ax else ax
-            names = ("rode", "groene", "blauwe")
             self.view.set_status(
-                f"Tekenvlak loodrecht op de {names[ax]} as." if self.forced_axis is not None else self.status_text())
+                FORCED_PLANE_MSG[ax] if self.forced_axis is not None else self.status_text())
             return True
         return False
 
@@ -1108,7 +1112,7 @@ class RotatedRectangleTool(Tool):
             return False
         self.p1 = self.cur
         self.width = 0.0
-        self.view.set_status("Beweeg de breedte en klik, of typ een breedte.")
+        self.view.set_status(tr("Move to set the width and click, or type a width."))
         return True
 
     def mouse_press(self, e, x, y):
@@ -1126,7 +1130,7 @@ class RotatedRectangleTool(Tool):
         self.finish()
 
     def mouse_release(self, e, x, y):
-        """Sleep van de ene hoek naar de andere bepaalt die zijde ook."""
+        """Dragging from one corner to the other also sets that side."""
         if self.p0 is None:
             return
         anchor = self.p0 if self.p1 is None else self.p1
@@ -1156,11 +1160,11 @@ class RotatedRectangleTool(Tool):
 
     def vcb_enter(self, text):
         if self.p0 is None:
-            raise ValueError("klik eerst de eerste hoek")
+            raise ValueError(tr("click the first corner first"))
         vals = split_values(text, (1, 2))
         L = parse_length(vals[0])
         if self.p1 is None:
-            if len(vals) > 1:                      # lengte;hoek vanaf de u-as van het tekenvlak
+            if len(vals) > 1:                      # length;angle from the u axis of the drawing plane
                 a = math.radians(parse_number(vals[1]))
                 d = math.cos(a) * self.plane.u + math.sin(a) * self.plane.v
             else:
@@ -1171,10 +1175,10 @@ class RotatedRectangleTool(Tool):
             self.p1 = self.p0 + d * L
             self.cur = self.p1
             self.width = 0.0
-            self.view.set_status("Beweeg de breedte en klik, of typ een breedte.")
+            self.view.set_status(tr("Move to set the width and click, or type a width."))
             return
         if len(vals) > 1:
-            raise ValueError("typ nu alleen de breedte")
+            raise ValueError(tr("now type only the width"))
         self.width = abs(L) * (1.0 if self.width >= 0 else -1.0)
         self.finish()
 
@@ -1205,15 +1209,15 @@ class CircleTool(ShapeTool):
     def snap_cur(self, cur):
         L = float(np.linalg.norm(cur))
         return cur if L < 1e-9 else cur / L * self.snap_len(L)
-    status = "Selecteer middelpunt."
-    step1 = "Selecteer middelpunt."
-    step2 = "Selecteer straal of typ een waarde."
-    measure_label = "Straal"
+    status = tr("Select center point.")
+    step1 = tr("Select center point.")
+    step2 = tr("Select radius or type a value.")
+    measure_label = tr("Radius")
     default_segments = None
 
     def vcb_label(self):
         """SketchUp: before the centre is picked the box holds the number of sides."""
-        return "Zijden" if self.p0 is None else "Straal"
+        return tr("Sides") if self.p0 is None else tr("Radius")
 
     def reset(self):
         super().reset()
@@ -1244,12 +1248,12 @@ class CircleTool(ShapeTool):
         if t.endswith("s"):
             n = int(parse_number(t[:-1]))
             if n < 3:
-                raise ValueError("minimaal 3 segmenten")
+                raise ValueError(tr("at least 3 segments"))
             self.segments = n
-            self.view.set_status(f"{n} segmenten.")
+            self.view.set_status(tr("{n} segments.").format(n=n))
             return
         if self.p0 is None:
-            raise ValueError("klik eerst het middelpunt")
+            raise ValueError(tr("click the center point first"))
         self.radius = abs(parse_length(t))
         self.finish()
 
@@ -1273,7 +1277,7 @@ class ArcBase(Tool):
     plane and the arc is one undo step of edges, like the Line tool."""
     cursor_icon = "arc"
     default_segments = 12
-    measure_label = "Hoek"
+    measure_label = tr("Angle")
 
     def reset(self):
         super().reset()
@@ -1286,9 +1290,8 @@ class ArcBase(Tool):
         if e.key() in ARROWS and not self.busy():
             ax = ARROWS[e.key()]
             self.forced_axis = None if self.forced_axis == ax else ax
-            names = ("rode", "groene", "blauwe")
             self.view.set_status(
-                f"Tekenvlak loodrecht op de {names[ax]} as." if self.forced_axis is not None else self.status_text())
+                FORCED_PLANE_MSG[ax] if self.forced_axis is not None else self.status_text())
             return True
         return False
 
@@ -1299,9 +1302,9 @@ class ArcBase(Tool):
             return False
         n = int(parse_number(t[:-1]))
         if n < 2:
-            raise ValueError("minimaal 2 segmenten")
+            raise ValueError(tr("at least 2 segments"))
         self.segments = n
-        self.view.set_status(f"{n} segmenten.")
+        self.view.set_status(tr("{n} segments.").format(n=n))
         return True
 
     def commit_edges(self, pairs):
@@ -1322,18 +1325,18 @@ class ArcBase(Tool):
 class Arc2Tool(ArcBase):
     name = "arc2"
     cursor_icon = "arc2"
-    status = "Selecteer beginpunt."
-    measure_label = "Lengte"
+    status = tr("Select start point.")
+    measure_label = tr("Length")
 
     def status_text(self):
         if self.p0 is None:
-            return "Selecteer beginpunt."
+            return tr("Select start point.")
         if self.p1 is None:
-            return "Selecteer eindpunt of typ een lengte."
-        return "Selecteer een uitstulping of typ een hoogte."
+            return tr("Select end point or type a length.")
+        return tr("Select a bulge or type a height.")
 
     def vcb_label(self):
-        return "Lengte" if self.p1 is None else "Uitstulping"
+        return tr("Length") if self.p1 is None else tr("Bulge")
 
     def reset(self):
         super().reset()
@@ -1398,7 +1401,7 @@ class Arc2Tool(ArcBase):
         self.finish()
 
     def mouse_release(self, e, x, y):
-        """Sleep van het eerste naar het tweede punt bepaalt ook de koorde."""
+        """Dragging from the first to the second point also sets the chord."""
         if self.p0 is not None and self.p1 is None and self.end is not None:
             s, _ = self.view.cam.project(self.p0)
             if np.hypot(s[0][0] - x, s[0][1] - y) > 8:
@@ -1416,11 +1419,11 @@ class Arc2Tool(ArcBase):
         if self.segments_input(text):
             return
         if self.p0 is None:
-            raise ValueError("klik eerst het beginpunt")
+            raise ValueError(tr("click the start point first"))
         if self.p1 is None:
             d = None if self.end is None else self.end - self.p0
             if d is None or np.linalg.norm(d) < 1e-9:
-                raise ValueError("beweeg eerst naar het eindpunt")
+                raise ValueError(tr("move to the end point first"))
             self.p1 = self.p0 + normalize(d) * abs(parse_length(text))
             self.view.set_status(self.status_text())
             return
@@ -1444,19 +1447,19 @@ class Arc2Tool(ArcBase):
 
 class ArcTool(ArcBase):
     name = "arc"
-    status = "Selecteer middelpunt."
-    measure_label = "Straal"
+    status = tr("Select center point.")
+    measure_label = tr("Radius")
     pie = False
 
     def status_text(self):
         if self.center is None:
-            return "Selecteer middelpunt."
+            return tr("Select center point.")
         if self.start is None:
-            return "Selecteer beginpunt van de boog of typ een straal."
-        return "Draai de boog of typ een hoek in graden."
+            return tr("Select start point of the arc or type a radius.")
+        return tr("Turn the arc or type an angle in degrees.")
 
     def vcb_label(self):
-        return "Straal" if self.start is None else "Hoek"
+        return tr("Radius") if self.start is None else tr("Angle")
 
     def reset(self):
         super().reset()
@@ -1492,7 +1495,7 @@ class ArcTool(ArcBase):
         ref = normalize(self.start - self.center)
         deg = math.degrees(math.atan2(float(np.dot(np.cross(ref, v), self.plane.n)), float(ref @ v)))
         snap = round(deg / 15.0) * 15.0
-        return snap if abs(deg - snap) < 2.5 else deg  # 15° steps, like Roteren
+        return snap if abs(deg - snap) < 2.5 else deg  # 15° steps, like Rotate
 
     def mouse_press(self, e, x, y):
         if self.center is None:
@@ -1511,7 +1514,7 @@ class ArcTool(ArcBase):
         self.finish()
 
     def mouse_release(self, e, x, y):
-        """Sleep vanaf het middelpunt om direct de straal te kiezen."""
+        """Drag from the center point to pick the radius right away."""
         if self.center is not None and self.start is None and self.cur is not None:
             s, _ = self.view.cam.project(self.center)
             if np.hypot(s[0][0] - x, s[0][1] - y) > 8:
@@ -1538,7 +1541,7 @@ class ArcTool(ArcBase):
         if self.segments_input(text):
             return
         if self.center is None:
-            raise ValueError("klik eerst het middelpunt")
+            raise ValueError(tr("click the center point first"))
         if self.start is None:
             d = None if self.cur is None else self.cur - self.center
             if d is None or np.linalg.norm(d) < 1e-9:
@@ -1573,27 +1576,27 @@ class ArcTool(ArcBase):
 class PieTool(ArcTool):
     name = "pie"
     cursor_icon = "pie"
-    status = "Selecteer middelpunt."
+    status = tr("Select center point.")
     pie = True
 
     def status_text(self):
         if self.center is not None and self.start is not None:
-            return "Draai de taartpunt of typ een hoek in graden."
+            return tr("Turn the pie or type an angle in degrees.")
         return super().status_text()
 
 
 class Arc3Tool(ArcBase):
     name = "arc3"
     cursor_icon = "arc3"
-    status = "Selecteer beginpunt."
-    measure_label = "Segmenten"
+    status = tr("Select start point.")
+    measure_label = tr("Segments")
 
     def status_text(self):
         if not self.pts:
-            return "Selecteer beginpunt."
+            return tr("Select start point.")
         if len(self.pts) == 1:
-            return "Selecteer een punt op de boog."
-        return "Selecteer het eindpunt van de boog."
+            return tr("Select a point on the arc.")
+        return tr("Select the end point of the arc.")
 
     def reset(self):
         super().reset()
@@ -1642,7 +1645,7 @@ class Arc3Tool(ArcBase):
     def vcb_enter(self, text):
         if self.segments_input(text):
             return
-        raise ValueError("typ het aantal segmenten, bv. 12s")
+        raise ValueError(tr("type the number of segments, e.g. 12s"))
 
     def draw(self, view):
         if self.pts:
@@ -1659,7 +1662,7 @@ class Arc3Tool(ArcBase):
 class TextTool(Tool):
     """3D text: places the outlines of a text as faces that you push/pull."""
     name = "text"
-    status = "Klik op een vlak of de grond om de tekst te plaatsen. Daarna duwen/trekken (Alt = inleg)."
+    status = tr("Click on a face or the ground to place the text. Then Push/Pull (Alt = inlay).")
     measure_label = ""
     cursor_icon = "text"
 
@@ -1722,15 +1725,15 @@ class TextTool(Tool):
 class VectorPlaceTool(Tool):
     """Import: place the contours of an SVG/DXF so they follow the cursor.
 
-    Zelfde opbouw als `TextTool`: de vormen volgen de cursor op het vlak of de
-    grond eronder, klik plaatst als één undo-stap, Esc annuleert. In het meetvak
-    (label "Hoek") kan een draaihoek getypt worden. Zonder extrusie gaat het daarna
-    naar Duwen/trekken (zoals tekst); met extrusie wordt de nieuwe groep geselecteerd.
+    Built like `TextTool`: the shapes follow the cursor on the face or the ground
+    below it, a click places them as one undo step, Esc cancels. A rotation angle can
+    be typed in the Measurements box (label "Angle"). Without extrusion it then goes
+    to Push/Pull (like text); with extrusion the new group is selected.
     """
     name = "vectorplace"
-    status = ("Klik op een vlak of de grond om de tekening te plaatsen. "
-              "Typ een hoek in graden om te draaien; Esc annuleert.")
-    measure_label = "Hoek"
+    status = tr("Click on a face or the ground to place the drawing. "
+                "Type an angle in degrees to rotate; Esc cancels.")
+    measure_label = tr("Angle")
     cursor_icon = "text"
 
     def reset(self):
@@ -1787,7 +1790,7 @@ class VectorPlaceTool(Tool):
         open_edges = bool(opts.get("open_edges", True))
         offset = plane.to_local(point)
         color = opts.get("color") or self.current_color()
-        name = opts.get("name") or "Vector"
+        name = opts.get("name") or tr("Vector")
         height = float(opts.get("height", 3.0))
         ents = self.ents
         made = {}
@@ -1838,15 +1841,15 @@ class VectorPlaceTool(Tool):
 
 class PushPullTool(Tool):
     name = "pushpull"
-    status = "Selecteer een vlak om te duwen of te trekken."
-    measure_label = "Afstand"
+    status = tr("Select a face to push or pull.")
+    measure_label = tr("Distance")
     cursor_icon = "pushpull"
     last_distance = None
 
     def status_text(self):
         if self.target is None:
-            return "Selecteer een vlak om te duwen of te trekken."
-        return "Beweeg om te duwen/trekken of typ een afstand. Ctrl = nieuw vlak."
+            return tr("Select a face to push or pull.")
+        return tr("Move to push/pull or type a distance. Ctrl = new face.")
 
     def reset(self):
         super().reset()
@@ -1942,7 +1945,7 @@ class PushPullTool(Tool):
             self.target, self.sign = tgt, sign
             self.apply(sign * (-v if sign * d0 < 0 else v))
         else:
-            raise ValueError("klik eerst op een vlak")
+            raise ValueError(tr("click on a face first"))
 
     def apply(self, dist):
         if self.target is None or abs(dist) < 1e-6:
@@ -1993,7 +1996,7 @@ class PushPullTool(Tool):
         view.draw_lines([p0, p1], (0.3, 0.3, 0.3, 1), 1, stipple=True, on_top=True)
         label = fmt_len(self.sign * self.dist)
         if self.mods & Qt.AltModifier:
-            label += "  (apart onderdeel)"
+            label = tr("{length}  (separate part)").format(length=label)
         view.add_label(p1, label)
         view.draw_inference(self.inf)
 
@@ -2002,14 +2005,14 @@ class PushPullTool(Tool):
 
 class OffsetTool(Tool):
     name = "offset"
-    status = "Selecteer een vlak om een verschoven kopie van de rand te tekenen."
-    measure_label = "Afstand"
+    status = tr("Select a face to draw an offset copy of its edge.")
+    measure_label = tr("Distance")
     cursor_icon = "offset"
 
     def status_text(self):
         if self.target is None:
-            return "Selecteer een vlak om te verschuiven."
-        return "Beweeg om te verschuiven of typ een afstand."
+            return tr("Select a face to offset.")
+        return tr("Move to offset or type a distance.")
 
     def reset(self):
         super().reset()
@@ -2056,7 +2059,7 @@ class OffsetTool(Tool):
 
     def vcb_enter(self, text):
         if self.target is None:
-            raise ValueError("klik eerst op een vlak")
+            raise ValueError(tr("click on a face first"))
         v = abs(parse_length(text))
         self.apply(-v if self.off <= 0 else v)
 
@@ -2157,8 +2160,8 @@ def sweep_solid(profile, pts, closed):
 
 class FollowMeTool(Tool):
     name = "followme"
-    status = ("Klik op het profielvlak dat langs het pad geveegd wordt. Selecteer daarvoor de "
-              "randen van het pad (of een vlak; dan is zijn buitenrand het pad).")
+    status = tr("Click the profile face that is swept along the path. Select the path's "
+                "edges first (or a face; then its outer edge is the path).")
     measure_label = ""
     cursor_icon = "followme"
 
@@ -2203,7 +2206,7 @@ class FollowMeTool(Tool):
         if f is None:
             return
         if f[0] != self.doc.active:
-            self.view.set_status("Volg mij: het profiel moet in de huidige context liggen.")
+            self.view.set_status(tr("Follow Me: the profile must lie in the current context."))
             return
         self.apply(f[1])
 
@@ -2211,12 +2214,12 @@ class FollowMeTool(Tool):
         path = follow_path(self.ents, *self.doc.selected_geometry())
         self.path = path
         if path is None:
-            self.view.set_status("Volg mij: de selectie is geen aaneengesloten pad van randen.")
+            self.view.set_status(tr("Follow Me: the selection is not a connected path of edges."))
             return
         _, _, eids = path
         man, _ = self._sweep(fid)
         if man is None:
-            self.view.set_status("Volg mij gaf geen gesloten volume")
+            self.view.set_status(tr("Follow Me did not make a closed volume"))
             return
         result = Entities.from_manifold(man, color=self.ents.F[fid].color)
         ents = self.ents
@@ -2287,14 +2290,14 @@ class TransformTool(Tool):
 
 class MoveTool(TransformTool):
     name = "move"
-    status = "Selecteer object om te verplaatsen. Ctrl = kopieren."
-    measure_label = "Afstand"
+    status = tr("Select object to move. Ctrl = copy.")
+    measure_label = tr("Distance")
     cursor_icon = "move"
 
     def status_text(self):
         if self.base is None:
-            return "Selecteer object om te verplaatsen. Ctrl = kopieren."
-        return "Selecteer doelpunt of typ een afstand."
+            return tr("Select object to move. Ctrl = copy.")
+        return tr("Select target point or type a distance.")
 
     def reset(self):
         super().reset()
@@ -2375,7 +2378,7 @@ class MoveTool(TransformTool):
                 self.commit(run)
                 return
         if self.base is None:
-            raise ValueError("klik eerst een basispunt")
+            raise ValueError(tr("click a base point first"))
         vals = split_values(t, (1, 3))
         if len(vals) == 3:
             off = np.array([parse_length(v) for v in vals])
@@ -2383,7 +2386,7 @@ class MoveTool(TransformTool):
             L = parse_length(vals[0])
             d = self.lock_dir if self.lock_dir is not None else self.offset
             if np.linalg.norm(d) < 1e-9:
-                raise ValueError("beweeg eerst in een richting")
+                raise ValueError(tr("move in a direction first"))
             off = normalize(d) * L
         self.apply(off)
 
@@ -2410,16 +2413,16 @@ class MoveTool(TransformTool):
 
 class RotateTool(TransformTool):
     name = "rotate"
-    status = "Selecteer middelpunt."
-    measure_label = "Hoek"
+    status = tr("Select center point.")
+    measure_label = tr("Angle")
     cursor_icon = "rotate"
 
     def status_text(self):
         if self.center is None:
-            return "Selecteer middelpunt."
+            return tr("Select center point.")
         if self.ref is None:
-            return "Selecteer beginpunt van de hoek."
-        return "Selecteer eindpunt van de hoek of typ een hoek."
+            return tr("Select start point of the angle.")
+        return tr("Select end point of the angle or type an angle.")
 
     def reset(self):
         super().reset()
@@ -2499,7 +2502,7 @@ class RotateTool(TransformTool):
 
     def vcb_enter(self, text):
         if self.center is None:
-            raise ValueError("klik eerst het draaipunt")
+            raise ValueError(tr("click the pivot point first"))
         if self.ref is None:
             self.ref = self.plane.u
         self.apply(parse_number(text.replace("°", "")))
@@ -2544,14 +2547,14 @@ class RotateTool(TransformTool):
 
 class ScaleTool(TransformTool):
     name = "scale"
-    status = "Selecteer een greep om te schalen. Ctrl = rond middelpunt, Shift = uniform."
-    measure_label = "Schaal"
+    status = tr("Select a grip to scale. Ctrl = about center, Shift = uniform.")
+    measure_label = tr("Scale factor")
     cursor_icon = "scale"
 
     def status_text(self):
         if self.p0 is None:
-            return "Selecteer een greep om te schalen. Ctrl = rond middelpunt, Shift = uniform."
-        return "Beweeg om te schalen of typ een factor."
+            return tr("Select a grip to scale. Ctrl = about center, Shift = uniform.")
+        return tr("Move to scale or type a factor.")
 
     def reset(self):
         super().reset()
@@ -2616,11 +2619,11 @@ class ScaleTool(TransformTool):
         else:
             f = np.full(3, parse_number(vals[0]))
         if np.any(np.abs(f) < 1e-6):
-            raise ValueError("factor mag niet 0 zijn")
+            raise ValueError(tr("factor must not be 0"))
         if self.p0 is None:
             items = list(self.doc.selection)
             if not items:
-                raise ValueError("selecteer eerst iets")
+                raise ValueError(tr("select something first"))
             self.items = items
             bb = ops.selection_bbox(self.doc, items)
             self.anchor = np.array([(bb[0][0] + bb[1][0]) / 2, (bb[0][1] + bb[1][1]) / 2, bb[0][2]])
@@ -2656,7 +2659,7 @@ _PLUS_CURSOR = None
 
 
 def plus_cursor():
-    """The cursor of the Meetlint when it makes guides: a crosshair with a green +."""
+    """The cursor of the Tape Measure when it makes guides: a crosshair with a green +."""
     global _PLUS_CURSOR
     if _PLUS_CURSOR is None:
         from PySide6.QtGui import QCursor, QPainter, QPixmap
@@ -2680,16 +2683,16 @@ def plus_cursor():
 
 class TapeTool(Tool):
     name = "tape"
-    status = "Selecteer beginpunt om te meten."
-    measure_label = "Lengte"
+    status = tr("Select start point to measure.")
+    measure_label = tr("Length")
     cursor_icon = "tape"
 
     def status_text(self):
         if self.edge is not None:
-            return "Beweeg om de hulplijn te plaatsen of typ een afstand."
+            return tr("Move to place the guide or type a distance.")
         if self.a is None:
-            return "Selecteer beginpunt om te meten."
-        return "Selecteer eindpunt of typ een afstand."
+            return tr("Select start point to measure.")
+        return tr("Select end point or type a distance.")
 
     def reset(self):
         super().reset()
@@ -2701,7 +2704,7 @@ class TapeTool(Tool):
         self.offset = None             # unit offset direction, perpendicular to the edge
         self.distance = 0.0
         if not hasattr(self, "make_guides"):
-            self.make_guides = True    # Ctrl wisselt naar "alleen meten"
+            self.make_guides = True    # Ctrl switches to "measure only"
 
     def activate(self):
         self.reset()
@@ -2776,7 +2779,8 @@ class TapeTool(Tool):
             self.inf = self.engine.infer(x, y)
             self.update_offset(self.inf.point)
             self.set_vcb(fmt_len(self.shown_distance()))
-            self.view.set_status(f"Hulplijn evenwijdig aan de rand op {fmt_len(self.shown_distance())}")
+            self.view.set_status(tr("Guide parallel to the edge at {length}").format(
+                length=fmt_len(self.shown_distance())))
             return
         anchor = self.a if self.b is None else None
         self.inf = self.engine.infer(x, y, anchor=anchor, lock=self.lock_line(anchor))
@@ -2807,14 +2811,14 @@ class TapeTool(Tool):
             self.view.hover = None
         else:
             # SketchUp: on a face or in empty space the tape measure does nothing
-            self.view.set_status("Klik op een rand voor een hulplijn, of op een punt om te meten.")
+            self.view.set_status(tr("Click an edge for a guide, or a point to measure."))
 
     def key_press(self, e):
         if e.key() == Qt.Key_Control and not e.isAutoRepeat():
             self.make_guides = not self.make_guides
             self.set_cursor()
-            self.view.set_status("Meetlint maakt hulplijnen." if self.make_guides else
-                                 "Meetlint meet alleen, zonder hulplijnen.")
+            self.view.set_status(tr("Tape Measure makes guides.") if self.make_guides else
+                                 tr("Tape Measure only measures, without guides."))
             return True
         return self.handle_lock_keys(e, None if self.edge is not None else
                                      (self.a if self.b is None else None))
@@ -2825,7 +2829,7 @@ class TapeTool(Tool):
             self.place_offset(dist)
             return
         if self.a is None:
-            raise ValueError("klik eerst een punt")
+            raise ValueError(tr("click a point first"))
         self.finish_measure(dist=dist)
 
     def draw(self, view):
@@ -2849,19 +2853,19 @@ class TapeTool(Tool):
 # ------------------------------------------------------------------ protractor
 
 class ProtractorTool(Tool):
-    """Gereedschap > Gradenboog: a guide line through a centre at a typed angle."""
+    """Tools > Protractor: a guide line through a centre at a typed angle."""
 
     name = "protractor"
-    status = "Selecteer middelpunt van de gradenboog."
-    measure_label = "Hoek"
+    status = tr("Select center point of the protractor.")
+    measure_label = tr("Angle")
     cursor_icon = "rotate"
 
     def status_text(self):
         if self.center is None:
-            return "Selecteer middelpunt van de gradenboog."
+            return tr("Select center point of the protractor.")
         if self.ref is None:
-            return "Selecteer beginrichting van de hoek."
-        return "Selecteer de hoek of typ een waarde in graden."
+            return tr("Select start direction of the angle.")
+        return tr("Select the angle or type a value in degrees.")
 
     def reset(self):
         super().reset()
@@ -2933,7 +2937,7 @@ class ProtractorTool(Tool):
 
     def vcb_enter(self, text):
         if self.center is None:
-            raise ValueError("klik eerst het middelpunt")
+            raise ValueError(tr("click the center point first"))
         if self.ref is None:
             self.ref = self.plane.u
         self.place(parse_number(text.replace("°", "")))
@@ -2972,10 +2976,10 @@ class ProtractorTool(Tool):
 # ------------------------------------------------------------------ cut plane
 
 class CutPlaneTool(Tool):
-    """Printhulpmiddelen > Snijden: leg een snijvlak en knip het model in tweeën."""
+    """Print Tools > Cut: place a cutting plane and cut the model in two."""
     name = "cutplane"
-    status = ("Klik op een vlak (of in het model) om het snijvlak te leggen; daarna kies je de "
-              "verbinding: pennen, losse pennen of een zwaluwstaart.")
+    status = tr("Click on a face (or in the model) to place the cutting plane; then choose the "
+                "joint: pins, loose pins or a dovetail.")
     measure_label = ""
     cursor_icon = "cutplane"
 
@@ -3011,23 +3015,23 @@ class CutPlaneTool(Tool):
 
 
 class EdgeSizeTool(Tool):
-    """Afronden en afschuinen: randen kiezen, maat in het meetvak, met Enter toe passen.
+    """Fillet and chamfer: pick edges, size in the Measurements box, apply with Enter.
 
-    Een klik op een gladde (soft) rand kiest de hele aaneengesloten keten, een klik
-    op een vlak kiest al zijn randen. Shift doet er een bij of haalt er een af.
-    De bewerking werkt op de actieve context: de groep die bewerkt wordt, of de
-    losse geometrie (die dan een gesloten volume moet zijn)."""
+    A click on a smooth (soft) edge picks the whole connected chain, a click on a
+    face picks all its edges. Shift adds or removes one.
+    The operation works on the active context: the group being edited, or the
+    loose geometry (which must then be a closed volume)."""
     mode = "fillet"
-    measure_label = "Straal"
+    measure_label = tr("Radius")
     cursor_icon = "fillet"
     default_size = 1.0
     last_size = None
 
     def reset(self):
         super().reset()
-        self.picked = []              # (ctx, eid) van de gekozen randen
+        self.picked = []              # (ctx, eid) of the picked edges
         self.size = None
-        self._toggled = None          # wat de laatste klik deed (om een dubbelklik terug te draaien)
+        self._toggled = None          # what the last click did (to undo it on a double click)
         self.vcb_value = format_length(self.last_size or self.default_size)
 
     def busy(self):
@@ -3036,11 +3040,11 @@ class EdgeSizeTool(Tool):
     def status_text(self):
         if not self.picked:
             return self.status
-        what = "straal" if self.mode == "fillet" else "afstand"
-        return (f"{self.vcb_label()}: typ een {what} en druk op Enter, "
-                "of dubbelklik om toe te passen.")
+        if self.mode == "fillet":
+            return tr("Radius: type a radius and press Enter, or double-click to apply.")
+        return tr("Distance: type a distance and press Enter, or double-click to apply.")
 
-    # -- kiezen ------------------------------------------------------------
+    # -- picking ----------------------------------------------------------
     def _pick(self, x, y):
         eh = self.engine.pick_edge(x, y, only={self.doc.active}, px=7.0)
         gh = self.engine.pick_guide(x, y, px=5.0)
@@ -3052,7 +3056,7 @@ class EdgeSizeTool(Tool):
         return None
 
     def _edges_of(self, item):
-        """De randen die bij een klik horen: een gladde keten of alle randen van een vlak."""
+        """The edges that belong to a click: a smooth chain or all edges of a face."""
         kind, ctx, i = item
         ents = self.doc.ents(ctx)
         if ents is None:
@@ -3064,7 +3068,7 @@ class EdgeSizeTool(Tool):
         return ctx, fillet.soft_chain(ents, i)
 
     def _show(self, extra=None):
-        """De gekozen randen oranje markeren (met de rand onder de cursor erbij)."""
+        """Mark the picked edges in orange (plus the edge under the cursor)."""
         if not self.picked and extra is None:
             self.view.hover = None
             return
@@ -3106,7 +3110,7 @@ class EdgeSizeTool(Tool):
         self.view.update_vcb()
 
     def double_click(self, e, x, y):
-        """Dubbelklik past toe met de laatste maat; de klik erbij koos geen rand bij."""
+        """A double click applies with the last size; its own click picked no extra edge."""
         if self._toggled and self._toggled[0] == "added":
             self.picked = [p for p in self.picked if p not in {(self._toggled[1], i)
                                                                for i in self._toggled[2]}]
@@ -3115,21 +3119,21 @@ class EdgeSizeTool(Tool):
     def vcb_enter(self, text):
         self.apply(parse_length(text))
 
-    # -- toepassen ----------------------------------------------------------
+    # -- applying ----------------------------------------------------------
     def apply(self, size):
         size = float(size)
         if size <= 0:
-            raise ValueError("de maat moet groter dan 0 zijn")
+            raise ValueError(tr("the size must be greater than 0"))
         if not self.picked:
-            self.view.set_status("Klik eerst op een rand die afgerond of afgeschuind moet worden.")
+            self.view.set_status(tr("First click an edge to fillet or chamfer."))
             return
         ctx = self.picked[0][0]
         if any(c != ctx for c, _i in self.picked):
-            self.view.set_status("Afronden werkt binnen één groep of één gesloten volume.")
+            self.view.set_status(tr("Fillet works within one group or one closed volume."))
             return
         ents = self.doc.ents(ctx)
         if ents is None:
-            self.view.set_status("Selecteer eerst een groep.")
+            self.view.set_status(tr("Select a group first."))
             return
         eids = [i for _c, i in self.picked]
         try:
@@ -3137,12 +3141,12 @@ class EdgeSizeTool(Tool):
         except Exception:
             man = mf.Manifold()
         if man.is_empty() or man.status() != mf.Error.NoError:
-            self.view.set_status("Selecteer eerst een groep met een gesloten volume.")
+            self.view.set_status(tr("Select a group with a closed volume first."))
             return
         ok, bad = fillet.edge_data(ents, eids)
         if not ok:
-            self.view.set_status("Die randen horen niet bij twee vlakken; kies randen van een "
-                                 "gesloten volume.")
+            self.view.set_status(tr("Those edges do not belong to two faces; pick edges of a "
+                                    "closed volume."))
             return
         edges = [(p0, p1, n1, n2) for (_eid, p0, p1, n1, n2) in ok]
         colors = ops.ents_face_colors(ents)
@@ -3152,11 +3156,11 @@ class EdgeSizeTool(Tool):
         def run():
             res = fillet.apply(man, edges, size, self.mode, segments)
             if res.is_empty() or res.status() != mf.Error.NoError:
-                raise ValueError("de maat is te groot voor dit volume")
+                raise ValueError(tr("the size is too large for this volume"))
             new = Entities.from_manifold(res)
             g = self.doc.group(ctx) if ctx != ROOT else None
             if g is not None:
-                g.ents = new                  # naam en kleur van de groep blijven
+                g.ents = new                  # the group's name and colour stay
             else:
                 for f in new.F:
                     new.set_face_color(f, color or self.current_color())
@@ -3168,7 +3172,7 @@ class EdgeSizeTool(Tool):
         self.reset()
         self.set_vcb(format_length(size))
         if bad:
-            self.view.set_status(f"{len(bad)} randen overgeslagen: die horen niet bij twee vlakken.")
+            self.view.set_status(tr("{n} edges skipped: they do not belong to two faces.").format(n=len(bad)))
 
     def draw(self, view):
         self._show()
@@ -3177,18 +3181,18 @@ class EdgeSizeTool(Tool):
 class FilletTool(EdgeSizeTool):
     name = "fillet"
     mode = "fillet"
-    status = ("Klik op de randen die afgerond moeten worden. Shift = toevoegen/verwijderen, "
-              "klik op een gladde rand = de hele keten, klik op een vlak = al zijn randen.")
-    measure_label = "Straal"
+    status = tr("Click the edges to fillet. Shift = add/remove, "
+                "click a smooth edge = the whole chain, click a face = all its edges.")
+    measure_label = tr("Radius")
     cursor_icon = "fillet"
 
 
 class ChamferTool(EdgeSizeTool):
     name = "chamfer"
     mode = "chamfer"
-    status = ("Klik op de randen die afgeschuind moeten worden. Shift = toevoegen/verwijderen, "
-              "klik op een gladde rand = de hele keten, klik op een vlak = al zijn randen.")
-    measure_label = "Afstand"
+    status = tr("Click the edges to chamfer. Shift = add/remove, "
+                "click a smooth edge = the whole chain, click a face = all its edges.")
+    measure_label = tr("Distance")
     cursor_icon = "chamfer"
 
 

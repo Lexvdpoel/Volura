@@ -1,4 +1,4 @@
-"""Modelinfo, Voorkeuren (met aanpasbare sneltoetsen) en het welkomstscherm.
+"""Model Info, Preferences (with editable shortcuts) and the welcome screen.
 
 Runs without a display (Qt offscreen platform), like tests/test_ui_spec.py.
 """
@@ -122,10 +122,11 @@ def test_dialogs_can_be_made_without_showing(win):
     from volura.app import ModelInfoDialog, PreferencesDialog, WelcomeDialog
     dialogs = (ModelInfoDialog(win), PreferencesDialog(win), WelcomeDialog(win))
     for dlg in dialogs:
-        assert not dlg.isVisible(), f"{dlg.windowTitle()} staat op zichzelf, maar wordt niet getoond"
+        assert not dlg.isVisible(), f"{dlg.windowTitle()} stands on its own, but is not shown"
         assert dlg.windowTitle()
-    assert ModelInfoDialog(win).page_titles == ["Eenheden", "Statistieken", "Printbed"]
-    assert PreferencesDialog(win).page_titles == ["Algemeen", "Tekenen", "Sneltoetsen"]
+    assert ModelInfoDialog(win).page_titles == ["Units", "Statistics", "Print Bed"]
+    assert PreferencesDialog(win).page_titles == ["General", "Display", "Drawing", "3D Mouse",
+                                                 "Shortcuts"]
 
 
 def test_model_info_has_a_page_list_and_a_page_per_title(win):
@@ -143,14 +144,14 @@ def test_model_info_statistics(win):
     from volura.app import ModelInfoDialog
     doc = win.doc
     before = len(doc.groups)
-    g = ops.group_from_manifold(doc, ops.primitive("box", 20, 20, 20), "#d23b3b", "Blok")
+    g = ops.group_from_manifold(doc, ops.primitive("box", 20, 20, 20), "#d23b3b", "Block")
     try:
         dlg = ModelInfoDialog(win)
-        assert dlg.stats["Groepen"].text() == str(before + 1)
-        assert dlg.stats["Losse vlakken"].text() == str(len(doc.root.F))
-        assert dlg.stats["Losse randen"].text() == str(len(doc.root.E))
-        assert dlg.stats["Volume in totaal"].text().startswith("8.000"), \
-            f"een blok van 20×20×20 mm is 8 cm³, nu {dlg.stats['Volume in totaal'].text()}"
+        assert dlg.stats["Groups"].text() == str(before + 1)
+        assert dlg.stats["Loose faces"].text() == str(len(doc.root.F))
+        assert dlg.stats["Loose edges"].text() == str(len(doc.root.E))
+        assert dlg.stats["Total volume"].text().startswith("8.000"), \
+            f"a 20×20×20 mm block is 8 cm³, now {dlg.stats['Total volume'].text()}"
     finally:
         doc.remove_group(g.id)
 
@@ -185,7 +186,7 @@ def test_preferences_general_and_drawing(win):
         again = PreferencesDialog(win)
         assert again.segments.value() == 24
         assert again.split_lines.isChecked() and not again.split_lines.isEnabled(), \
-            "Lijnen automatisch splitsen staat vast aan en is uitgeschakeld"
+            "Split lines automatically is always on and disabled"
     finally:
         win.settings.circle_segments = was
         win.view.tools["circle"].segments = was
@@ -197,10 +198,10 @@ def test_welcome_screen_looks_like_sketchup(win):
     dlg = WelcomeDialog(win)
     text = " ".join(l.text() for l in dlg.findChildren(QLabel))
     assert "Volura" in text
-    for step in ("Teken een vorm", "Duwen/trekken", "Exporteer"):
-        assert step in text, f"stap {step} ontbreekt in het welkomstscherm"
-    assert "Begin met Volura" in [b.text() for b in dlg.findChildren(QPushButton)]
-    assert "Altijd tonen bij opstarten" in dlg.show_at_start.text()
+    for step in ("Draw a shape", "Push/Pull", "Export"):
+        assert step in text, f"step {step} is missing from the welcome screen"
+    assert "Start Using Volura" in [b.text() for b in dlg.findChildren(QPushButton)]
+    assert "Always show at startup" in dlg.show_at_start.text()
 
 
 # ---------------------------------------------------------------- units and fmt_len
@@ -210,7 +211,7 @@ def test_fmt_len_respects_the_precision():
     try:
         for decimals, want in ((0, "12 mm"), (1, "12.3 mm"), (2, "12.35 mm"), (3, "12.346 mm")):
             tools.set_length_precision(decimals)
-            assert tools.fmt_len(12.3456) == want, f"{decimals} decimalen"
+            assert tools.fmt_len(12.3456) == want, f"{decimals} decimals"
     finally:
         tools.set_length_precision(was)
 
@@ -223,7 +224,7 @@ def test_model_info_units_are_kept_and_used(win):
     dlg.accept()
     try:
         assert win.settings.length_precision == 0
-        assert win.settings.length_snap == 0.0, "uit vinken betekent geen lengte-afronding"
+        assert win.settings.length_snap == 0.0, "unchecked means no length snapping"
         assert tools.fmt_len(12.3456) == "12 mm"
         again = type(win.settings)()
         assert again.length_precision == 0 and again.length_snap == 0.0
@@ -263,37 +264,37 @@ def test_shortcut_page_lists_the_commands_grouped_per_menu(win):
     tree = dlg.shortcuts.tree
     groups = [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())]
     menus = [clean(a.text()) for a in win.menuBar().actions() if a.menu() is not None]
-    assert groups == menus + [app_module.OTHER_COMMANDS], "één groep per menu, in dezelfde volgorde"
+    assert groups == menus + [app_module.OTHER_COMMANDS], "one group per menu, in the same order"
     paths = win.command_paths()
-    for path in ("Bestand/Nieuw", "Venster/Modelinfo", "Venster/Voorkeuren", "Help/Welkom bij Volura",
-                 "Overig/Op bed plaatsen"):
-        assert path in paths, f"{path} ontbreekt in de lijst"
-    assert paths["Bestand/Nieuw"] is win.a_new
-    assert len(paths) == len(set(id(a) for a in paths.values())), "elke opdracht staat er precies één keer in"
-    item = dlg.shortcuts.items["Bestand/Nieuw"]
-    assert item.text(0) == "Nieuw" and "Ctrl+N" in item.text(1)
-    assert "Recente bestanden" not in " ".join(paths), "recente bestanden zijn geen opdracht"
+    for path in ("File/New", "Window/Model Info", "Window/Preferences", "Help/Welcome to Volura",
+                 "Other/Drop to Bed"):
+        assert path in paths, f"{path} is missing from the list"
+    assert paths["File/New"] is win.a_new
+    assert len(paths) == len(set(id(a) for a in paths.values())), "every command is listed exactly once"
+    item = dlg.shortcuts.items["File/New"]
+    assert item.text(0) == "New" and "Ctrl+N" in item.text(1)
+    assert "Recent Files" not in " ".join(paths), "recent files are not a command"
 
 
 def test_shortcut_filter(win):
     from volura.app import PreferencesDialog
     dlg = PreferencesDialog(win)
-    dlg.shortcuts.filter.setText("opslaan")
-    assert not dlg.shortcuts.items["Bestand/Opslaan"].isHidden()
-    assert dlg.shortcuts.items["Bestand/Nieuw"].isHidden()
+    dlg.shortcuts.filter.setText("save")
+    assert not dlg.shortcuts.items["File/Save"].isHidden()
+    assert dlg.shortcuts.items["File/New"].isHidden()
     dlg.shortcuts.filter.setText("")
-    assert not dlg.shortcuts.items["Bestand/Nieuw"].isHidden()
+    assert not dlg.shortcuts.items["File/New"].isHidden()
 
 
 def test_assigned_shortcut_comes_back_in_a_new_window(win, fresh):
     from volura.app import PreferencesDialog
     dlg = PreferencesDialog(win)
-    assert dlg.shortcuts.select_command("Bestand/Nieuw")
+    assert dlg.shortcuts.select_command("File/New")
     dlg.shortcuts.key_edit.setKeySequence(QKeySequence("Ctrl+Alt+J"))
-    assert dlg.shortcuts.add_shortcut(), "de '+'-knop wijst de sneltoets toe"
+    assert dlg.shortcuts.add_shortcut(), "the '+' button assigns the shortcut"
     assert shortcuts_of(win.a_new) == ["Ctrl+N", "Ctrl+Alt+J"]
-    assert shortcut_keys() == ["shortcuts/Bestand/Nieuw"]
-    assert "Ctrl+Alt+J" in dlg.shortcuts.items["Bestand/Nieuw"].text(1)
+    assert shortcut_keys() == ["shortcuts/File/New"]
+    assert "Ctrl+Alt+J" in dlg.shortcuts.items["File/New"].text(1)
     again = fresh()
     assert shortcuts_of(again.a_new) == ["Ctrl+N", "Ctrl+Alt+J"]
 
@@ -303,15 +304,15 @@ def test_shortcut_that_is_in_use_moves_when_confirmed(win, fresh, monkeypatch):
     box = FakeBox(FakeBox.Yes)
     monkeypatch.setattr(app_module, "QMessageBox", box)
     dlg = PreferencesDialog(win)
-    assert dlg.shortcuts.select_command("Bestand/Nieuw")
+    assert dlg.shortcuts.select_command("File/New")
     dlg.shortcuts.key_edit.setKeySequence(QKeySequence("Ctrl+S"))
     assert dlg.shortcuts.add_shortcut()
-    assert box.asked, "er wordt gevraagd of de sneltoets overgezet mag worden"
+    assert box.asked, "the user is asked whether the shortcut may move"
     assert "Ctrl+S" in shortcuts_of(win.a_new)
     assert "Ctrl+S" not in shortcuts_of(win.a_save)
     again = fresh()
     assert "Ctrl+S" in shortcuts_of(again.a_new)
-    assert "Ctrl+S" not in shortcuts_of(again.a_save), "Opslaan houdt zijn lijst zonder Ctrl+S"
+    assert "Ctrl+S" not in shortcuts_of(again.a_save), "Save keeps its list without Ctrl+S"
 
 
 def test_shortcut_that_is_in_use_stays_when_refused(win, monkeypatch):
@@ -319,7 +320,7 @@ def test_shortcut_that_is_in_use_stays_when_refused(win, monkeypatch):
     box = FakeBox(FakeBox.No)
     monkeypatch.setattr(app_module, "QMessageBox", box)
     dlg = PreferencesDialog(win)
-    assert dlg.shortcuts.select_command("Bestand/Nieuw")
+    assert dlg.shortcuts.select_command("File/New")
     dlg.shortcuts.key_edit.setKeySequence(QKeySequence("Ctrl+S"))
     assert not dlg.shortcuts.add_shortcut()
     assert box.asked
@@ -335,14 +336,14 @@ def test_assigned_shortcut_works_in_the_window(win):
     from volura.app import PreferencesDialog
     win.set_tool("select")
     dlg = PreferencesDialog(win)
-    assert dlg.shortcuts.select_command("Gereedschap/Gum")
+    assert dlg.shortcuts.select_command("Tools/Eraser")
     dlg.shortcuts.key_edit.setKeySequence(QKeySequence("Ctrl+Alt+J"))
     assert dlg.shortcuts.add_shortcut()
     win.show()
     try:
         QApplication.processEvents()
         QTest.keyClick(win, Qt.Key_J, Qt.AltModifier | Qt.ControlModifier)
-        assert win.view.tool.name == "eraser", "de nieuwe sneltoets doet iets"
+        assert win.view.tool.name == "eraser", "the new shortcut does something"
     finally:
         win.set_tool("select")
         win.hide()
@@ -351,14 +352,14 @@ def test_assigned_shortcut_works_in_the_window(win):
 def test_remove_shortcut_and_restore_everything(win):
     from volura.app import PreferencesDialog
     dlg = PreferencesDialog(win)
-    assert dlg.shortcuts.select_command("Bestand/Nieuw")
+    assert dlg.shortcuts.select_command("File/New")
     dlg.shortcuts.key_edit.setKeySequence(QKeySequence("Ctrl+N"))
-    assert dlg.shortcuts.remove_shortcut(), "de '−'-knop haalt de sneltoets af"
+    assert dlg.shortcuts.remove_shortcut(), "the '−' button removes the shortcut"
     assert shortcuts_of(win.a_new) == []
-    assert shortcut_keys() == ["shortcuts/Bestand/Nieuw"]
+    assert shortcut_keys() == ["shortcuts/File/New"]
     dlg.shortcuts.restore_all()
     assert "Ctrl+N" in shortcuts_of(win.a_new)
-    assert shortcut_keys() == [], "Alles herstellen wist de eigen sneltoetsen ook uit QSettings"
+    assert shortcut_keys() == [], "Restore all also clears the custom shortcuts from QSettings"
 
 
 # ---------------------------------------------------------------- what opens what
@@ -367,21 +368,21 @@ def test_print_setup_opens_model_info_on_the_bed_page(win, monkeypatch):
     opened = []
     monkeypatch.setattr(app_module, "ModelInfoDialog", FakeDialog(opened, "modelinfo"))
     win.a_print_setup.trigger()
-    assert opened == [("modelinfo", "Printbed")], \
-        "Bestand > Printer instellen opent Modelinfo op de pagina Printbed"
+    assert opened == [("modelinfo", "Print Bed")], \
+        "File > Printer Setup opens Model Info on the Print Bed page"
     win.a_model_info.trigger()
-    assert opened == [("modelinfo", "Printbed"), ("modelinfo", 0)]
+    assert opened == [("modelinfo", "Print Bed"), ("modelinfo", 0)]
 
 
-def test_venster_and_help_open_the_new_dialogs(win, monkeypatch):
+def test_window_and_help_open_the_new_dialogs(win, monkeypatch):
     opened = []
     monkeypatch.setattr(app_module, "ModelInfoDialog", FakeDialog(opened, "modelinfo"))
-    monkeypatch.setattr(app_module, "PreferencesDialog", FakeDialog(opened, "voorkeuren"))
-    monkeypatch.setattr(app_module, "WelcomeDialog", FakeDialog(opened, "welkom"))
+    monkeypatch.setattr(app_module, "PreferencesDialog", FakeDialog(opened, "preferences"))
+    monkeypatch.setattr(app_module, "WelcomeDialog", FakeDialog(opened, "welcome"))
     win.a_model_info.trigger()
     win.a_prefs.trigger()
     win.a_welcome.trigger()
-    assert opened == [("modelinfo", 0), ("voorkeuren", 0), ("welkom", 0)]
+    assert opened == [("modelinfo", 0), ("preferences", 0), ("welcome", 0)]
 
 
 # ---------------------------------------------------------------- the welcome screen at startup
@@ -391,7 +392,7 @@ def test_welcome_checkbox_is_kept(win):
     q = settings()
     q.setValue("show_welcome", True)
     q.sync()
-    assert welcome_enabled(), "standaard staat het welkomstscherm aan"
+    assert welcome_enabled(), "the welcome screen is on by default"
     off = WelcomeDialog(win)
     off.show_at_start.setChecked(False)
     try:
@@ -409,7 +410,7 @@ def test_welcome_is_not_shown_when_running_offscreen(win, monkeypatch):
     monkeypatch.setattr(type(win), "show_welcome", lambda self, checked=False: calls.append(1))
     monkeypatch.setattr(app_module, "welcome_enabled", lambda: True)
     win.show_welcome_on_startup()
-    assert calls == [], "tests draaien offscreen: geen welkomstscherm"
+    assert calls == [], "tests run offscreen: no welcome screen"
 
 
 def test_welcome_is_shown_at_startup_when_it_is_on(win, monkeypatch):

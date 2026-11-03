@@ -136,7 +136,7 @@ def test_arc_tools_are_registered():
     from volura.tools import TOOL_CLASSES
     tools = {cls.name: cls for cls in TOOL_CLASSES}
     for name in ("arc", "arc2", "arc3", "pie"):
-        assert name in tools, f"gereedschap {name} ontbreekt in TOOL_CLASSES"
+        assert name in tools, f"tool {name} is missing from TOOL_CLASSES"
     assert tools["arc2"].default_segments == 12
 
 

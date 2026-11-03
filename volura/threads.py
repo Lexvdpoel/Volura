@@ -1,19 +1,19 @@
-"""Schroefdraad (ISO metrisch) voor 3D-printen.
+"""Screw threads (ISO metric) for 3D printing.
 
-Een schroefdraad wordt als "schroefoppervlak" gebouwd: een rooster van ringen in
-z (stap hooguit pitch/16) en hoeken (segments), waarbij elk punt de straal
-r(theta, z) krijgt die het ISO-profiel heeft op positie
+A thread is built as a "screw surface": a grid of rings in z (step at most
+pitch/16) and angles (segments), where every point gets the radius r(theta, z)
+that the ISO profile has at position
 
     u = (z - starts * pitch * theta / (2 pi)) mod pitch
 
-langs de schroeflijn. Boven en onder sluit een vlakke deksel (driehoekswaaier
-naar het middelpunt) het lichaam af, zodat het resultaat altijd een gesloten
-manifold is: geschikt voor boolean-operaties en STL/3MF-export.
+along the helix. A flat cap at the top and bottom (a triangle fan to the centre)
+closes the solid, so the result is always a closed manifold: suitable for
+boolean operations and STL/3MF export.
 
-ISO-profiel: flankhoek 60 graden, H = 0.866 * pitch, buitendiameter major_d,
-kerndiameter major_d - 1.0825 * pitch, afgeplatte top (H/8) en bodem (H/4).
-``internal=True`` geeft het lichaam dat uit een bus gesneden wordt om binnendraad
-te maken: dezelfde vorm met elke straal vergroot om de speling te geven.
+ISO profile: flank angle 60 degrees, H = 0.866 * pitch, major diameter major_d,
+minor diameter major_d - 1.0825 * pitch, flattened crest (H/8) and root (H/4).
+``internal=True`` gives the solid that is cut out of a sleeve to make an internal
+thread: the same shape with every radius enlarged to give the clearance.
 """
 from __future__ import annotations
 
@@ -23,50 +23,51 @@ import numpy as np
 import manifold3d as mf
 
 from .geom import affine, circle_points, manifold_from_mesh, normalize, rotation_matrix
+from .i18n import tr
 
 TAN30 = math.tan(math.pi / 6)
 
-# grove ISO-spoed per gangbare metrische maat (mm)
+# coarse ISO pitch per common metric size (mm)
 ISO_PITCH = {3: 0.5, 4: 0.7, 5: 0.8, 6: 1.0, 8: 1.25, 10: 1.5, 12: 1.75, 16: 2.0, 20: 2.5}
 
-DEFAULT_CLEARANCE = 0.15    # mm radiale speling: bout en moer passen na het printen
+DEFAULT_CLEARANCE = 0.15    # mm radial clearance: bolt and nut fit after printing
 
 
 def iso_pitch(diameter):
-    """Standaard grove spoed bij een metrische diameter (dichtstbijzijnde maat)."""
+    """Standard coarse pitch for a metric diameter (nearest size)."""
     sizes = sorted(ISO_PITCH)
     best = min(sizes, key=lambda d: abs(math.log(d / max(diameter, 1e-6))))
     return ISO_PITCH[best]
 
 
-# ------------------------------------------------------------------ rekern
+# ------------------------------------------------------------------ computing
 
 def _profile_radius(u, pitch, r_major, r_minor):
-    """Straal van het ISO-profiel op positie u in [0, pitch) (0 = kruin)."""
+    """Radius of the ISO profile at position u in [0, pitch) (0 = crest)."""
     H = math.sqrt(3.0) / 2.0 * pitch
-    u_c = H / 8.0 * TAN30          # halve breedte van de afgeplatte kruin
-    q = np.minimum(u, pitch - u)   # afstand tot de dichtstbijzijnde kruin
+    u_c = H / 8.0 * TAN30          # half width of the flattened crest
+    q = np.minimum(u, pitch - u)   # distance to the nearest crest
     r = r_major - np.maximum(q - u_c, 0.0) / TAN30
     return np.maximum(r, r_minor)
 
 
 def thread_solid(major_d, pitch, length, internal=False, clearance=0.0, starts=1,
                  left=False, segments=64, chamfer=True):
-    """Schroefdraad-lichaam langs de Z-as van z=0 tot z=length (manifold3d).
+    """Thread solid along the Z axis from z=0 to z=length (manifold3d).
 
-    ``internal=True`` is het snijlichaam voor binnendraad: dezelfde vorm met elke
-    straal + clearance. ``chamfer`` schuint de eerste en laatste halve spoed af
-    onder 45 graden, zodat de draad makkelijk aangrijpt.
+    ``internal=True`` is the cutting solid for an internal thread: the same shape with
+    every radius + clearance. ``chamfer`` bevels the first and last half pitch at
+    45 degrees, so the thread engages easily.
     """
     major_d, pitch, length = float(major_d), float(pitch), float(length)
     if major_d <= 0 or pitch <= 0 or length <= 0:
-        raise ValueError("major_d, pitch en length moeten groter dan 0 zijn")
+        raise ValueError(tr("major_d, pitch and length must be greater than 0"))
     starts = max(1, int(starts))
     segments = max(12, int(segments))
     r_major = major_d / 2.0 + clearance
     r_minor = (major_d - 1.0825 * pitch) / 2.0 + clearance
     if r_minor <= 0:
-        raise ValueError("te grove spoed voor deze diameter")
+        raise ValueError(tr("pitch too coarse for this diameter"))
     sign = -1.0 if left else 1.0
 
     n = max(2, int(math.ceil(length / (pitch / 16.0))))
@@ -79,7 +80,7 @@ def thread_solid(major_d, pitch, length, internal=False, clearance=0.0, starts=1
         half = pitch / 2.0
         cut = np.maximum(half - zs, 0.0)[:, None] + np.maximum(zs - (length - half), 0.0)[:, None]
         if internal:
-            r = r + cut          # het snijlichaam wordt aan de uiteinden wijder: schuine instap
+            r = r + cut          # the cutting solid widens at the ends: a chamfered entry
         else:
             r = np.maximum(r - cut, max(0.02, 0.1 * r_minor))
 
@@ -105,7 +106,7 @@ def thread_solid(major_d, pitch, length, internal=False, clearance=0.0, starts=1
 
 
 def _place(man, center, axis):
-    """Transformeer een lichaam dat langs +Z van 0 ligt naar (center, axis)."""
+    """Transform a solid lying along +Z from 0 to (center, axis)."""
     a = normalize(np.asarray(axis, dtype=float))
     center = np.asarray(center, dtype=float)
     z = np.array([0.0, 0.0, 1.0])
@@ -119,7 +120,7 @@ def _place(man, center, axis):
 
 def external_on(manifold, center, axis, radius, length, pitch=1.5, clearance=0.0,
                 starts=1, left=False, segments=64):
-    """Vervang een cilinder in het lichaam door buitendraad met buitendiameter 2*radius."""
+    """Replace a cylinder in the solid by an external thread with major diameter 2*radius."""
     cyl = _place(mf.Manifold.cylinder(length, radius, radius, max(16, int(segments))),
                  center, axis)
     thread = _place(thread_solid(2.0 * radius, pitch, length, clearance=clearance,
@@ -129,7 +130,7 @@ def external_on(manifold, center, axis, radius, length, pitch=1.5, clearance=0.0
 
 def internal_in(manifold, center, axis, radius, length, clearance=DEFAULT_CLEARANCE,
                 pitch=1.5, starts=1, left=False, segments=64):
-    """Snijd binnendraad in een gat met straal radius (major_d = 2*radius)."""
+    """Cut an internal thread into a hole with radius radius (major_d = 2*radius)."""
     thread = _place(thread_solid(2.0 * radius, pitch, length, internal=True,
                                  clearance=clearance, starts=starts, left=left,
                                  segments=segments), center, axis)
@@ -138,11 +139,11 @@ def internal_in(manifold, center, axis, radius, length, clearance=DEFAULT_CLEARA
 
 def nut(major_d, pitch, height, outer_d=None, clearance=DEFAULT_CLEARANCE, hex=True,
         starts=1, left=False, segments=64):
-    """Losse moer (zeskant) of bus (rond) met binnendraad, van z=0 tot z=height."""
+    """Separate nut (hexagonal) or sleeve (round) with internal thread, from z=0 to z=height."""
     if outer_d is None:
         outer_d = major_d * 1.7
     if outer_d <= major_d:
-        raise ValueError("de buitenmaat van een moer moet groter zijn dan de draad")
+        raise ValueError(tr("the outer size of a nut must be larger than the thread"))
     if hex:
         pts = circle_points(outer_d / 2.0 / math.cos(math.pi / 6.0), 6)
         body = mf.Manifold.extrude(mf.CrossSection([pts]), height)
@@ -154,13 +155,13 @@ def nut(major_d, pitch, height, outer_d=None, clearance=DEFAULT_CLEARANCE, hex=T
     return body - hole
 
 
-# ------------------------------------------------- selectie -> draadcontext
+# ------------------------------------------------- selection -> thread context
 
 def circle_loop(points, min_points=12):
-    """(middelpunt, straal) als de lus een volledige cirkel is, anders (None, 0).
+    """(centre, radius) if the loop is a full circle, else (None, 0).
 
-    Een cirkel is hier: minstens ``min_points`` punten met dezelfde afstand tot
-    het gemiddelde en een gesloten hoekdekking.
+    A circle here is: at least ``min_points`` points at the same distance from
+    their mean, covering the full angle.
     """
     P = np.asarray(points, dtype=float)
     if len(P) < min_points:
@@ -181,12 +182,12 @@ def circle_loop(points, min_points=12):
     ang = np.sort(np.arctan2((P - c) @ v, (P - c) @ u))
     gaps = np.diff(np.concatenate([ang, [ang[0] + 2.0 * math.pi]]))
     if float(gaps.max()) > 2.5 * 2.0 * math.pi / len(P):
-        return None, 0.0        # een boog, geen volledige cirkel
+        return None, 0.0        # an arc, not a full circle
     return c, r
 
 
 def _loop_area(P):
-    """Oppervlakte van een vlakke lus (Newell), ongevoelig voor de volgorde."""
+    """Area of a planar loop (Newell), independent of the orientation."""
     c = P.mean(axis=0)
     n = np.zeros(3)
     for a, b in zip(P - c, np.roll(P - c, -1, axis=0)):
@@ -195,12 +196,12 @@ def _loop_area(P):
 
 
 def face_thread_context(ents, fid, want="outer"):
-    """(center, axis, radius, length) van een cirkelvormig vlak of gat in een lichaam.
+    """(center, axis, radius, length) of a circular face or hole in a solid.
 
-    ``want``: "outer" voor het eindvlak van een cilinder (buitendraad), "hole"
-    voor de opening van een gat (binnendraad). De as wijst het lichaam in.
-    from_manifold garandeert niet dat loops[0] de buitenlus is, dus de lussen
-    worden op grootte vergeleken.
+    ``want``: "outer" for the end face of a cylinder (external thread), "hole"
+    for the opening of a hole (internal thread). The axis points into the solid.
+    from_manifold does not guarantee that loops[0] is the outer loop, so the loops
+    are compared by size.
     """
     if fid not in ents.F or not ents.V:
         return None
@@ -227,7 +228,7 @@ def face_thread_context(ents, fid, want="outer"):
 
 
 def group_thread_context(ents, want="outer"):
-    """Context uit het grootste cirkelvormige vlak van een lichaam (bijv. een cilinder)."""
+    """Context from the largest circular face of a solid (e.g. a cylinder)."""
     best = None
     for fid in ents.visible_faces() if hasattr(ents, "visible_faces") else list(ents.F):
         tc = face_thread_context(ents, fid, want)

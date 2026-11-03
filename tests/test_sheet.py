@@ -1,9 +1,9 @@
-"""Het 2D-werkblad naast het 3D-model.
+"""The 2D worksheet next to the 3D model.
 
-Het werkblad (`Document.sheet`) gaat mee in het bestand en door undo en redo;
-`SheetView` tekent het en de gereedschappen uit `volura.sheettools` bewerken het;
-het venster schakelt tussen 3D en 2D en voegt er import, export en
-"Naar 2D-werkblad kopiëren" aan toe.
+The worksheet (`Document.sheet`) goes into the file and through undo and redo;
+`SheetView` draws it and the tools from `volura.sheettools` edit it;
+the window switches between 3D and 2D and adds import, export and
+"Copy to 2D Worksheet".
 
 Run with:  python -m pytest tests
 """
@@ -43,7 +43,7 @@ def win():
     from PySide6.QtCore import QCoreApplication
     w = MainWindow()
     w.doc.dirty = False
-    QCoreApplication.processEvents()            # de uitgestelde beginweergave nu afhandelen
+    QCoreApplication.processEvents()            # handle the deferred initial view now
     w.resize(1000, 700)
     w.view.resize(1000, 700)
     yield w
@@ -52,7 +52,7 @@ def win():
 
 
 def sheet_doc():
-    """Document met één vierkant en één lijn op het werkblad."""
+    """Document with one square and one line on the worksheet."""
     doc = Document()
     doc.sheet.add_path(SQUARE, closed=True, layer="0")
     doc.sheet.add_path([[30, 30], [60, 45]], layer="0")
@@ -97,14 +97,14 @@ def drag(view, a, b, mods=Qt.NoModifier):
 
 
 def type_in(view, text):
-    """Typen in het meetvak zoals in het venster: toetsen, daarna Enter."""
+    """Type in the Measurements box as in the window: keys, then Enter."""
     for ch in text:
         view.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_unknown, Qt.NoModifier, ch))
     view.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Return, Qt.NoModifier, "\r"))
 
 
 def cube_in(win, w=10, d=10, h=10):
-    """Kubus van losse geometrie in het 3D-model van het venster."""
+    """Cube of loose geometry in the 3D model of the window."""
     doc = win.doc
     doc.root.add_shape(GROUND, [np.array([[0, 0], [w, 0], [w, d], [0, d]], float)])
     doc.root.pushpull(next(iter(doc.root.F)), -h)
@@ -126,24 +126,24 @@ def _signed(loop):
     return 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
 
 
-# ------------------------------------------------------------------ 1. model en bestand
+# ------------------------------------------------------------------ 1. model and file
 
-def test_reset_geeft_leeg_werkblad():
+def test_reset_gives_empty_worksheet():
     doc = Document()
     assert isinstance(doc.sheet, Drawing)
-    # een nieuw werkblad krijgt de standaardlagen; "0" blijft de eerste
+    # a new worksheet gets the default layers; "0" stays the first
     assert doc.sheet.paths == [] and list(doc.sheet.layers)[0] == "0"
-    assert {"Snijden", "Graveren", "Hulplijnen"} <= set(doc.sheet.layers)
+    assert {"Cut", "Engrave", "Guides"} <= set(doc.sheet.layers)
     doc.sheet.add_path(SQUARE, closed=True)
     doc.reset()
     assert doc.sheet.paths == []
 
 
-def test_werkblad_gaat_mee_naar_het_bestand(tmp_path):
+def test_worksheet_goes_into_the_file(tmp_path):
     doc = Document()
-    doc.sheet.add_path(SQUARE, closed=True, layer="snij", filled=True, src=1)
-    doc.sheet.add_path([[0, 0], [5, 5]], layer="graveer")
-    lay = doc.sheet.ensure_layer("graveer")
+    doc.sheet.add_path(SQUARE, closed=True, layer="cutting", filled=True, src=1)
+    doc.sheet.add_path([[0, 0], [5, 5]], layer="engraving")
+    lay = doc.sheet.ensure_layer("engraving")
     lay.color, lay.op, lay.visible = "#ff0000", "engrave", False
     doc.sheet.sheet_w, doc.sheet.sheet_h = 300.0, 200.0
     path = str(tmp_path / "model.volura")
@@ -153,31 +153,31 @@ def test_werkblad_gaat_mee_naar_het_bestand(tmp_path):
     fileio.load_document(back, path)
     assert back.sheet.paths == doc.sheet.paths
     assert sorted(back.sheet.layers) == sorted(doc.sheet.layers)
-    got = back.sheet.layers["graveer"]
+    got = back.sheet.layers["engraving"]
     assert (got.color, got.op, got.visible, got.locked) == ("#ff0000", "engrave", False, False)
     assert (back.sheet.sheet_w, back.sheet.sheet_h) == (300.0, 200.0)
 
 
-def test_bestand_zonder_werkblad_laadt_als_leeg(tmp_path):
+def test_file_without_worksheet_loads_as_empty(tmp_path):
     doc = Document()
     doc.sheet.add_path(SQUARE, closed=True)
-    path = tmp_path / "oud.volura"
+    path = tmp_path / "old.volura"
     fileio.save_document(doc, str(path))
     with zipfile.ZipFile(path) as z:
         data = json.loads(z.read("document.json"))
     assert "sheet" in data
     del data["sheet"]
-    old = tmp_path / "oud2.volura"
+    old = tmp_path / "old2.volura"
     with zipfile.ZipFile(old, "w") as z:
         z.writestr("document.json", json.dumps(data))
     back = Document()
-    fileio.load_document(back, str(old))           # een bestand van vóór het werkblad
+    fileio.load_document(back, str(old))           # a file from before the worksheet
     assert back.sheet.paths == [] and list(back.sheet.layers) == ["0"]
 
 
-# ------------------------------------------------------------------ 2. undo en redo
+# ------------------------------------------------------------------ 2. undo and redo
 
-def test_undo_en_redo_herstellen_het_werkblad():
+def test_undo_and_redo_restore_the_worksheet():
     doc = Document()
     doc.root.add_shape(GROUND, [np.array(SQUARE, float)])
     faces = len(doc.root.F)
@@ -193,7 +193,7 @@ def test_undo_en_redo_herstellen_het_werkblad():
     assert np.allclose(pts_of(doc.sheet.paths[0]), np.array(SQUARE, float))
     doc.undo()
     assert doc.sheet.paths == []
-    assert len(doc.root.F) == faces, "het 3D-model is niet veranderd"
+    assert len(doc.root.F) == faces, "the 3D model has not changed"
     doc.redo()
     assert len(doc.sheet.paths) == 2
     doc.redo()
@@ -201,7 +201,7 @@ def test_undo_en_redo_herstellen_het_werkblad():
     assert len(doc.root.F) == faces
 
 
-def test_3d_undo_laadt_het_werkblad_ongemoeid():
+def test_3d_undo_leaves_the_worksheet_alone():
     doc = Document()
     doc.sheet.add_path(SQUARE, closed=True)
     doc.root.add_shape(GROUND, [np.array(SQUARE, float)])
@@ -213,7 +213,7 @@ def test_3d_undo_laadt_het_werkblad_ongemoeid():
     assert len(doc.sheet.paths) == 1 and np.allclose(doc.sheet.bounds(), (0, 0, 10, 10))
 
 
-def test_2D_wijziging_maakt_het_document_dirty():
+def test_2D_change_makes_the_document_dirty():
     doc = Document()
     seen = []
     doc.changed.connect(lambda: seen.append(1))
@@ -224,9 +224,9 @@ def test_2D_wijziging_maakt_het_document_dirty():
     assert doc.dirty and seen
 
 
-# ------------------------------------------------------------------ 3. het werkblad zelf
+# ------------------------------------------------------------------ 3. the worksheet itself
 
-def test_rondreis_door_het_scherm():
+def test_round_trip_through_the_screen():
     v = view_of(sheet_doc())
     for point in ((0.0, 0.0), (12.5, -7.25), (-40.0, 33.5)):
         for _ in range(3):
@@ -236,7 +236,7 @@ def test_rondreis_door_het_scherm():
         v.zoom_extents()
 
 
-def test_wiel_zoomt_rond_de_cursor():
+def test_wheel_zooms_around_the_cursor():
     from PySide6.QtGui import QWheelEvent
     v = view_of(sheet_doc())
     screen = QPointF(300.0, 220.0)
@@ -245,10 +245,10 @@ def test_wiel_zoomt_rond_de_cursor():
                      Qt.NoModifier, Qt.NoScrollPhase, False)
     v.wheelEvent(ev)
     assert v.scale > 0
-    assert np.allclose(v.to_world(screen), before, atol=1e-6), "het punt onder de cursor blijft"
+    assert np.allclose(v.to_world(screen), before, atol=1e-6), "the point under the cursor stays"
 
 
-def test_zoom_passend_zet_alles_in_beeld():
+def test_zoom_extents_brings_everything_into_view():
     v = view_of(sheet_doc())
     v.scale = 0.02
     v.zoom_extents()
@@ -257,24 +257,24 @@ def test_zoom_passend_zet_alles_in_beeld():
     assert box[0] <= b[0] and box[1] <= b[1] and box[2] >= b[2] and box[3] >= b[3]
 
 
-def test_raster_stapt_1_5_10_50_100():
+def test_grid_steps_1_5_10_50_100():
     steps = [grid_step(s) for s in (8.0, 2.0, 1.0, 0.5, 0.1)]
     assert steps == [1.0, 5.0, 10.0, 50.0, 100.0]
     assert grid_step(0.01) > 100.0 and grid_step(100.0) < 1.0
 
 
-def test_klik_kiest_het_dichtstbijzijnde_pad():
+def test_click_picks_the_nearest_path():
     v = view_of(sheet_doc())
     sq, ln = v.doc.sheet.paths
     s = v.to_screen((0.0, 5.0))
     assert v.path_at(s.x(), s.y()) is sq
     s2 = v.to_screen((45.0, 37.5))
     assert v.path_at(s2.x(), s2.y()) is ln
-    s3 = v.to_screen((5.0, 5.0))                      # binnen het vierkant, maar nergens langs
+    s3 = v.to_screen((5.0, 5.0))                      # inside the square, but near no edge
     assert v.path_at(s3.x(), s3.y()) is None
 
 
-def test_kaderselectie_links_naar_rechts_en_rechts_naar_links():
+def test_box_selection_left_to_right_and_right_to_left():
     doc = Document()
     inside = doc.sheet.add_path([[0, 0], [10, 0], [10, 10], [0, 10]], closed=True)
     crossing = doc.sheet.add_path([[5, 5], [100, 5]])
@@ -287,33 +287,33 @@ def test_kaderselectie_links_naar_rechts_en_rechts_naar_links():
     left = (a.x(), a.y())
     right = (b.x(), b.y())
 
-    window = v.paths_in_band(left, right)             # links naar rechts: alles erin
+    window = v.paths_in_band(left, right)             # left to right: entirely inside
     assert any(p is inside for p in window)
     assert not any(p is crossing for p in window)
     assert not any(p is far for p in window)
 
-    crossing_sel = v.paths_in_band(right, left)       # rechts naar links: ook wat het raakt
+    crossing_sel = v.paths_in_band(right, left)       # right to left: also what it touches
     assert any(p is inside for p in crossing_sel)
     assert any(p is crossing for p in crossing_sel)
     assert not any(p is far for p in crossing_sel)
 
 
-def test_kaderselectie_door_het_gereedschap():
+def test_box_selection_by_the_tool():
     v = view_of(sheet_doc())
     sq, ln = v.doc.sheet.paths
     a = v.to_screen((-5.0, -5.0))
     b = v.to_screen((20.0, 20.0))
     drag(v, (a.x(), a.y()), (b.x(), b.y()))
-    assert v.selected == [sq], "links naar rechts: alleen wat er helemaal in ligt"
+    assert v.selected == [sq], "left to right: only what lies entirely inside"
     c = v.to_screen((50.0, 50.0))
     d = v.to_screen((8.0, 8.0))
     drag(v, (c.x(), c.y()), (d.x(), d.y()))
-    assert {id(p) for p in v.selected} == {id(sq), id(ln)}, "rechts naar links: ook wat het raakt"
+    assert {id(p) for p in v.selected} == {id(sq), id(ln)}, "right to left: also what it touches"
     drag(v, (d.x(), d.y()), (c.x(), c.y()))
-    assert v.selected == [], "links naar rechts ligt hier niets helemaal in"
+    assert v.selected == [], "left to right nothing lies entirely inside here"
 
 
-def test_shift_voegt_toe_en_haalt_weg():
+def test_shift_adds_and_removes():
     v = view_of(sheet_doc())
     sq, ln = v.doc.sheet.paths
     s = v.to_screen((0.0, 5.0))
@@ -326,7 +326,7 @@ def test_shift_voegt_toe_en_haalt_weg():
     assert v.selected == [sq]
 
 
-def test_verborgen_laag_is_niet_te_zien_of_te_kiezen():
+def test_hidden_layer_cannot_be_seen_or_picked():
     doc = sheet_doc()
     doc.sheet.layers["0"].visible = False
     v = view_of(doc)
@@ -337,7 +337,7 @@ def test_verborgen_laag_is_niet_te_zien_of_te_kiezen():
     assert v.selected == []
 
 
-def test_muiscoordinaten_in_de_statusbalk():
+def test_mouse_coordinates_in_the_status_bar():
     v = view_of(sheet_doc())
     got = []
     v.coords_changed.connect(got.append)
@@ -346,25 +346,25 @@ def test_muiscoordinaten_in_de_statusbalk():
     assert got and "12.00" in got[-1] and "8.00" in got[-1]
 
 
-def test_werkblad_tekent_zichzelf(tmp_path):
+def test_worksheet_draws_itself(tmp_path):
     from PySide6.QtGui import QImage
     v = view_of(sheet_doc())
     image = QImage(900, 600, QImage.Format_ARGB32)
     image.fill(0)
-    v.render(image)                                   # raster, asen, paden en gereedschap
+    v.render(image)                                   # grid, axes, paths and tool
 
     def dark():
         return sum(1 for y in range(0, 600, 2) for x in range(0, 900, 2)
                    if image.pixelColor(x, y).lightness() < 200)
 
-    assert dark() > 50, "het werkblad tekent niets"
+    assert dark() > 50, "the worksheet draws nothing"
 
 
-# ------------------------------------------------------------------ 4. gereedschappen
+# ------------------------------------------------------------------ 4. tools
 
 def test_SHEET_TOOLS_register():
     names = [cls.name for cls in SHEET_TOOLS]
-    # de vier gereedschappen eronder, daarna de tekengereedschappen
+    # the four basic tools first, then the drawing tools
     assert names[:4] == ["select", "move", "rotate", "scale"]
     assert {"line", "rectangle", "roundrect", "circle", "ellipse", "arc", "centerarc",
             "polygon", "text", "offset"} <= set(names)
@@ -372,7 +372,7 @@ def test_SHEET_TOOLS_register():
     assert set(v.tools) == set(names)
 
 
-def test_verplaatsen_met_getypte_afstand():
+def test_move_with_typed_distance():
     doc = sheet_doc()
     v = view_of(doc)
     sq = doc.sheet.paths[0]
@@ -384,7 +384,7 @@ def test_verplaatsen_met_getypte_afstand():
     assert np.allclose(pts_of(sq), np.array(SQUARE, float) + np.array([10.0, 5.0]))
 
 
-def test_verplaatsen_met_losse_afstand_langs_de_muis():
+def test_move_with_single_distance_along_the_mouse():
     doc = sheet_doc()
     v = view_of(doc)
     sq = doc.sheet.paths[0]
@@ -398,7 +398,7 @@ def test_verplaatsen_met_losse_afstand_langs_de_muis():
     assert np.allclose(pts_of(sq), np.array(SQUARE, float) + np.array([5.0, 0.0]))
 
 
-def test_verplaatsen_klik_klik_en_kopie_met_ctrl():
+def test_move_click_click_and_copy_with_ctrl():
     doc = sheet_doc()
     v = view_of(doc)
     sq = doc.sheet.paths[0]
@@ -415,13 +415,13 @@ def test_verplaatsen_klik_klik_en_kopie_met_ctrl():
     d = v.to_screen((0.0, 40.0))
     click(v, c.x(), c.y(), Qt.ControlModifier)
     click(v, d.x(), d.y(), Qt.ControlModifier)
-    assert len(doc.sheet.paths) == n + 1, "met Ctrl wordt er een kopie bij gezet"
+    assert len(doc.sheet.paths) == n + 1, "with Ctrl a copy is added"
     assert np.allclose(pts_of(sq), np.array(SQUARE, float) + np.array([25.0, 0.0]))
     copy = doc.sheet.paths[-1]
     assert np.allclose(pts_of(copy), np.array(SQUARE, float) + np.array([25.0, 40.0]))
 
 
-def test_draaien_90_graden():
+def test_rotate_90_degrees():
     doc = sheet_doc()
     v = view_of(doc)
     sq = doc.sheet.paths[0]
@@ -433,21 +433,21 @@ def test_draaien_90_graden():
     assert np.allclose(pts_of(sq), np.array([[0, 0], [0, 10], [-10, 10], [-10, 0]], float))
 
 
-def test_draaien_door_te_klikken():
+def test_rotate_by_clicking():
     doc = sheet_doc()
     v = view_of(doc)
     sq = doc.sheet.paths[0]
     v.set_selection([sq])
     v.set_tool("rotate")
-    c = v.to_screen((5.0, 5.0))                       # middelpunt van het vierkant
+    c = v.to_screen((5.0, 5.0))                       # centre of the square
     click(v, c.x(), c.y())
-    p = v.to_screen((5.0, 25.0))                      # 90° linksom vanaf de eerste klik
+    p = v.to_screen((5.0, 25.0))                      # 90° counterclockwise from the first click
     click(v, p.x(), p.y())
     assert np.allclose(np.sort(pts_of(sq), axis=0), np.sort(np.array(SQUARE, float), axis=0),
                        atol=1e-6)
 
 
-def test_schalen_2x():
+def test_scale_2x():
     doc = sheet_doc()
     v = view_of(doc)
     sq = doc.sheet.paths[0]
@@ -459,19 +459,19 @@ def test_schalen_2x():
     assert np.allclose(pts_of(sq), np.array([[-5, -5], [15, -5], [15, 15], [-5, 15]], float))
 
 
-def test_schalen_door_te_slepen():
+def test_scale_by_dragging():
     doc = sheet_doc()
     v = view_of(doc)
     sq = doc.sheet.paths[0]
     v.set_selection([sq])
     v.set_tool("scale")
-    a = v.to_screen((15.0, 5.0))                      # afstand 10 mm vanaf het midden
-    b = v.to_screen((25.0, 5.0))                      # nu 20 mm: factor 2
+    a = v.to_screen((15.0, 5.0))                      # distance 10 mm from the centre
+    b = v.to_screen((25.0, 5.0))                      # now 20 mm: factor 2
     drag(v, (a.x(), a.y()), (b.x(), b.y()))
     assert np.allclose(pts_of(sq), np.array([[-5, -5], [15, -5], [15, 15], [-5, 15]], float))
 
 
-def test_spiegelen_rond_het_midden_van_de_selectie():
+def test_mirror_around_the_center_of_the_selection():
     doc = Document()
     p = doc.sheet.add_path([[0, 0], [10, 0], [10, 4]], closed=False)
     v = view_of(doc)
@@ -482,7 +482,7 @@ def test_spiegelen_rond_het_midden_van_de_selectie():
     assert np.allclose(pts_of(p), np.array([[10, 4], [0, 4], [0, 0]], float))
 
 
-def test_alles_selecteren_en_wissen():
+def test_select_all_and_delete():
     doc = sheet_doc()
     v = view_of(doc)
     v.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_A, Qt.ControlModifier, "a"))
@@ -492,7 +492,7 @@ def test_alles_selecteren_en_wissen():
     v.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier, "\x1b"))
 
 
-def test_esc_en_gereedschapstoetsen():
+def test_esc_and_tool_keys():
     v = view_of(sheet_doc())
     v.set_selection(list(v.doc.sheet.paths))
     v.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier, "\x1b"))
@@ -503,7 +503,7 @@ def test_esc_en_gereedschapstoetsen():
         assert v.tool.name == name
 
 
-def test_elke_bewerking_is_one_undo_stap():
+def test_every_operation_is_one_undo_step():
     doc = sheet_doc()
     v = view_of(doc)
     sq, ln = doc.sheet.paths
@@ -515,29 +515,29 @@ def test_elke_bewerking_is_one_undo_stap():
     b = v.to_screen((7.0, 3.0))
     click(v, a.x(), a.y())
     click(v, b.x(), b.y())
-    assert len(doc.undo_stack) == steps + 1, "verplaatsen is één undo-stap"
+    assert len(doc.undo_stack) == steps + 1, "moving is one undo step"
     doc.undo()
     assert len(doc.sheet.paths) == len(before)
     assert all(np.allclose(pts_of(a), b) for a, b in zip(doc.sheet.paths, before))
 
 
-# ------------------------------------------------------------------ 5. 3D en 2D in het venster
+# ------------------------------------------------------------------ 5. 3D and 2D in the window
 
 def sheet_toolbar(win):
     return next((b for b in win.findChildren(QToolBar) if b.objectName() == "SheetToolbar"), None)
 
 
-def test_werkbalk_sheettoolbar_is_only_in_2d(win):
+def test_sheettoolbar_is_only_in_2d(win):
     bar = sheet_toolbar(win)
-    assert bar is not None, "werkbalk met objectName 'SheetToolbar' ontbreekt"
-    assert bar.isHidden(), "in 3D is de werkbalk van het werkblad niet te zien"
+    assert bar is not None, "toolbar with objectName 'SheetToolbar' is missing"
+    assert bar.isHidden(), "in 3D the worksheet toolbar is not visible"
     win.set_mode("2d")
     assert not bar.isHidden()
     win.set_mode("3d")
     assert bar.isHidden()
 
 
-def test_set_mode_verandert_het_3d_model_niet(win):
+def test_set_mode_does_not_change_the_3d_model(win):
     cube_in(win)
     win.view.set_view("iso")
     win.view.zoom_extents()
@@ -553,10 +553,10 @@ def test_set_mode_verandert_het_3d_model_niet(win):
     assert win.doc.root.state() == model and win.view.cam.state() == cam
 
 
-def test_in_2d_wijken_de_3d_werkbalken_en_gereedschappen(win):
+def test_in_2d_the_3d_toolbars_and_tools_step_aside(win):
     shown = [b for b in (win.tb_main, win.tb_tools, win.tb_print) if not b.isHidden()]
     win.set_mode("2d")
-    assert all(b.isHidden() for b in shown), "de 3D-werkbalken zijn verborgen in 2D"
+    assert all(b.isHidden() for b in shown), "the 3D toolbars are hidden in 2D"
     assert not win.tool_actions["pushpull"].isEnabled()
     assert not win.a_delete.isEnabled()
     win.set_mode("3d")
@@ -564,26 +564,26 @@ def test_in_2d_wijken_de_3d_werkbalken_en_gereedschappen(win):
     assert win.tool_actions["pushpull"].isEnabled()
 
 
-def test_beeld_menu_en_statusbalk_schakelen(win):
-    beeld = next(m for m in win.menuBar().findChildren(QMenu)
-                 if m.title().replace("&", "") == "Beeld")
+def test_view_menu_and_status_bar_switch(win):
+    view = next(m for m in win.menuBar().findChildren(QMenu)
+                 if m.title().replace("&", "") == "View")
     labels = [a.text().replace("&", "").replace("…", "")
-              for a in beeld.actions() if not a.isSeparator()]
-    assert "2D-werkblad" in labels and "Werkbalken" in labels
-    assert labels.index("Werkbalken") < labels.index("2D-werkblad")
-    assert win.a_sheet.text().replace("&", "") == "2D-werkblad"
+              for a in view.actions() if not a.isSeparator()]
+    assert "2D Worksheet" in labels and "Toolbars" in labels
+    assert labels.index("Toolbars") < labels.index("2D Worksheet")
+    assert win.a_sheet.text().replace("&", "") == "2D Worksheet"
     assert win.a_sheet.isCheckable()
     assert "Ctrl+Shift+2" in [s.toString() for s in win.a_sheet.shortcuts()]
-    assert win.mode_button.text() == "3D | 2D", "de knop rechtsonder schakelt tussen 3D en 2D"
+    assert win.mode_button.text() == "3D | 2D", "the button at the bottom right switches between 3D and 2D"
     win.toggle_sheet_mode()
     assert win.mode == "2d" and win.a_sheet.isChecked()
-    assert "2D-werkblad" in win.mode_button.toolTip()
+    assert "2D worksheet" in win.mode_button.toolTip()
     win.mode_button.click()
     assert win.mode == "3d" and not win.a_sheet.isChecked()
-    assert "3D-model" in win.mode_button.toolTip()
+    assert "3D model" in win.mode_button.toolTip()
 
 
-def test_modus_hoort_niet_bij_het_bestand(win, tmp_path):
+def test_mode_does_not_belong_to_the_file(win, tmp_path):
     win.set_mode("2d")
     win.doc.sheet.add_path(SQUARE, closed=True)
     path = str(tmp_path / "m.volura")
@@ -593,72 +593,72 @@ def test_modus_hoort_niet_bij_het_bestand(win, tmp_path):
         data = json.loads(z.read("document.json"))
     assert "sheet" in data and "mode" not in data
     win.file_open(path)
-    assert win.mode == "2d", "laden verandert de gekozen modus niet"
+    assert win.mode == "2d", "loading does not change the chosen mode"
     assert len(win.doc.sheet.paths) == 1
 
 
-# ------------------------------------------------------------------ 6. import en export
+# ------------------------------------------------------------------ 6. import and export
 
-def test_importeren_in_2d_naar_het_werkblad(win, tmp_path):
+def test_import_in_2d_goes_to_the_worksheet(win, tmp_path):
     src = Drawing()
-    src.add_path(SQUARE, closed=True, layer="snij", filled=True, src=1)
-    src.add_path([[40, 0], [50, 0], [50, 10]], closed=False, layer="graveer")
-    path = str(tmp_path / "tekening.svg")
+    src.add_path(SQUARE, closed=True, layer="cutting", filled=True, src=1)
+    src.add_path([[40, 0], [50, 0], [50, 10]], closed=False, layer="engraving")
+    path = str(tmp_path / "drawing.svg")
     svg.write_svg(src, path)
 
     win.set_mode("2d")
     added = win.import_vector_to_sheet(path)
     assert added and len(added) == len(win.doc.sheet.paths)
-    assert np.allclose(win.doc.sheet.bounds(), src.bounds(), atol=1e-3), "posities blijven"
-    assert {"snij", "graveer"} <= set(win.doc.sheet.layers)
+    assert np.allclose(win.doc.sheet.bounds(), src.bounds(), atol=1e-3), "positions stay"
+    assert {"cutting", "engraving"} <= set(win.doc.sheet.layers)
     assert win.mode == "2d"
     assert set(id(p) for p in win.sheet_view.selected) == {id(p) for p in added}
 
     again = win.import_vector_to_sheet(path)
-    # lagen worden op naam samengevoegd: er komen er twee bij, ook bij de tweede keer
+    # layers are merged by name: two are added, also the second time
     before = len(win.doc.sheet.layers)
     assert len(again) == 2
     win.import_vector_to_sheet(path)
-    assert len(win.doc.sheet.layers) == before, "lagen worden op naam samengevoegd"
+    assert len(win.doc.sheet.layers) == before, "layers are merged by name"
 
 
-def test_importeren_in_3d_blijft_naar_het_model_gaan(win, tmp_path):
+def test_import_in_3d_still_goes_to_the_model(win, tmp_path):
     src = Drawing()
     src.add_path(SQUARE, closed=True, layer="0", filled=True, src=1)
-    path = str(tmp_path / "blok.svg")
+    path = str(tmp_path / "block.svg")
     svg.write_svg(src, path)
     assert win.mode == "3d"
     win.import_vector(path, options={"anchor": "center", "open_edges": True})
-    assert win.doc.sheet.paths == [], "in 3D gaat importeren naar het model"
+    assert win.doc.sheet.paths == [], "in 3D importing goes to the model"
     assert win.doc.root.F or win.doc.root.E
 
 
-def test_exporteren_in_2d_schrijft_zichtbare_lagen(win, tmp_path):
+def test_export_in_2d_writes_visible_layers(win, tmp_path):
     doc = win.doc
-    doc.sheet.add_path(SQUARE, closed=True, layer="snij", filled=True, src=1)
-    doc.sheet.add_path([[50, 0], [60, 0]], layer="graveer")
-    doc.sheet.layers["graveer"].visible = False
+    doc.sheet.add_path(SQUARE, closed=True, layer="cutting", filled=True, src=1)
+    doc.sheet.add_path([[50, 0], [60, 0]], layer="engraving")
+    doc.sheet.layers["engraving"].visible = False
     win.set_mode("2d")
 
-    a = str(tmp_path / "blad.svg")
+    a = str(tmp_path / "sheet.svg")
     assert win.export_vector("svg", path=a) == a
     back = svg.read_svg(a)
-    assert {p.layer for p in back.paths} == {"snij"}
+    assert {p.layer for p in back.paths} == {"cutting"}
     assert abs(total_area(back) - 100.0) < 1e-3
 
-    b = str(tmp_path / "blad.dxf")
+    b = str(tmp_path / "sheet.dxf")
     assert win.export_vector("dxf", path=b) == b
-    assert {p.layer for p in dxf.read_dxf(b).paths} == {"snij"}
-    assert "contouren geëxporteerd naar" in win.hint.text()
+    assert {p.layer for p in dxf.read_dxf(b).paths} == {"cutting"}
+    assert "outlines exported to" in win.hint.text()
 
 
-def test_naar_2d_werkblad_kopieren_met_bovenaanzicht(win):
+def test_copy_to_2d_worksheet_with_top_view(win):
     cube_in(win, 10, 10, 10)
     model = win.doc.root.state()
     added = win.copy_to_sheet({"source": "top"})
     assert added and len(added) == 1
     assert win.mode == "2d"
-    assert win.doc.root.state() == model, "het 3D-model blijft onveranderd"
+    assert win.doc.root.state() == model, "the 3D model stays unchanged"
     p = added[0]
     assert p.closed and np.allclose(np.sort(pts_of(p), axis=0),
                                     np.sort(np.array(SQUARE, float), axis=0), atol=1e-6)
@@ -666,7 +666,7 @@ def test_naar_2d_werkblad_kopieren_met_bovenaanzicht(win):
     assert win.sheet_view.selected == added
 
 
-def test_naar_2d_werkblad_kopieren_van_lege_opbrengst(win, monkeypatch):
+def test_copy_to_2d_worksheet_with_empty_result(win, monkeypatch):
     class Box:
         def __init__(self):
             self.messages = []
@@ -684,20 +684,20 @@ def test_naar_2d_werkblad_kopieren_van_lege_opbrengst(win, monkeypatch):
     assert win.copy_to_sheet({"source": "top"}) is None
     assert win.doc.sheet.paths == []
     assert box.messages and "volume" in box.messages[0]
-    assert win.hint.text() == "Er is niets gekopieerd."
+    assert win.hint.text() == "Nothing was copied."
 
 
-def test_kopieren_kan_ook_doorsnede_en_vlakken(win):
+def test_copy_can_also_do_section_and_faces(win):
     cube_in(win, 10, 10, 10)
     for opts in ({"source": "section", "z": 5.0}, {"source": "faces"}):
         win.doc.set_selection([("f", 0, f) for f in list(win.doc.root.F)[:1]])
         added = win.copy_to_sheet(dict(opts))
         assert added and win.doc.sheet.paths, opts
         win.doc.undo()
-    assert win.doc.sheet.paths == [], "undo haalt beide kopieen weer weg"
+    assert win.doc.sheet.paths == [], "undo removes both copies again"
 
 
-def test_pannen_met_de_middelste_knop_en_spatie():
+def test_pan_with_the_middle_button_and_space():
     v = view_of(sheet_doc())
     before = QPointF(v.origin)
     p = QPointF(400.0, 300.0)
@@ -713,19 +713,19 @@ def test_pannen_met_de_middelste_knop_en_spatie():
     v.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Space, Qt.NoModifier, " "))
     start = QPointF(v.origin)
     drag(v, (400.0, 300.0), (350.0, 300.0))
-    assert v.origin.x() == pytest.approx(start.x() - 50), "spatie + slepen pant"
+    assert v.origin.x() == pytest.approx(start.x() - 50), "space + drag pans"
     v.keyReleaseEvent(QKeyEvent(QEvent.KeyRelease, Qt.Key_Space, Qt.NoModifier, " "))
     start = QPointF(v.origin)
     drag(v, (400.0, 300.0), (420.0, 300.0))
-    assert v.origin.x() == pytest.approx(start.x()), "zonder spatie slepen is geen pannen"
+    assert v.origin.x() == pytest.approx(start.x()), "dragging without space does not pan"
 
 
-def test_plaatrechthoek_en_laagkleuren_worden_getekend():
+def test_sheet_rectangle_and_layer_colors_are_drawn():
     from PySide6.QtGui import QImage
     doc = Document()
     doc.sheet.sheet_w, doc.sheet.sheet_h = 300.0, 200.0
-    doc.sheet.add_path(SQUARE, closed=True, layer="snij")
-    doc.sheet.layers["snij"].color = "#0000ff"
+    doc.sheet.add_path(SQUARE, closed=True, layer="cutting")
+    doc.sheet.layers["cutting"].color = "#0000ff"
     v = view_of(doc)
     v.zoom_extents()
     image = QImage(900, 600, QImage.Format_ARGB32)
@@ -737,39 +737,39 @@ def test_plaatrechthoek_en_laagkleuren_worden_getekend():
                    if image.pixelColor(x, y).blue() > 150
                    and image.pixelColor(x, y).red() < 120)
 
-    assert blues() > 20, "de laagkleur wordt niet getekend"
+    assert blues() > 20, "the layer color is not drawn"
     v.set_selection(list(doc.sheet.paths))
     v.render(image)
-    assert blues() > 20, "een geselecteerd pad is ook blauw"
-    doc.sheet.layers["snij"].visible = False
+    assert blues() > 20, "a selected path is blue too"
+    doc.sheet.layers["cutting"].visible = False
     v.render(image)
-    assert blues() == 0, "een verborgen laag is niet te zien"
+    assert blues() == 0, "a hidden layer is not visible"
 
 
-def test_ongeldige_invoer_in_het_meetvak():
+def test_invalid_input_in_the_measurements_box():
     doc = sheet_doc()
     v = view_of(doc)
     v.set_selection([doc.sheet.paths[0]])
     v.set_tool("move")
     a = v.to_screen((0.0, 0.0))
     click(v, a.x(), a.y())
-    v.submit_vcb("nee")
-    assert "Ongeldige invoer" in v._status_shown
+    v.submit_vcb("no")
+    assert "Invalid input" in v._status_shown
     assert np.allclose(pts_of(doc.sheet.paths[0]), np.array(SQUARE, float))
 
 
-def test_een_interne_fout_in_2d_geeft_alleen_een_melding(monkeypatch):
+def test_an_internal_error_in_2d_only_gives_a_message(monkeypatch):
     doc = sheet_doc()
     v = view_of(doc)
     logged = []
     monkeypatch.setattr(errors, "log_exception", lambda *a, **k: logged.append(k))
-    v.tools["select"].mouse_press = lambda e, x, y: (_ for _ in ()).throw(RuntimeError("kapot"))
-    click(v, 100.0, 100.0)                     # de app mag gewoon doorgaan
-    assert logged, "de fout wordt gelogd"
+    v.tools["select"].mouse_press = lambda e, x, y: (_ for _ in ()).throw(RuntimeError("broken"))
+    click(v, 100.0, 100.0)                     # the app may simply carry on
+    assert logged, "the error is logged"
     assert errors.ERROR_STATUS in v._status_shown
 
 
-def test_meetvak_in_de_statusbalk_werkt_in_2d(win):
+def test_measurements_box_in_the_status_bar_works_in_2d(win):
     cube_in(win)
     win.copy_to_sheet({"source": "top"})
     sv = win.sheet_view

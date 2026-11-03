@@ -1,14 +1,14 @@
-"""Maakt de icoonbestanden van Volura.
+"""Makes the icon files of Volura.
 
-    python packaging/make_icons.py                 # icoon uit volura/icons.py
+    python packaging/make_icons.py                 # icon from volura/icons.py
     python packaging/make_icons.py --from assets/volura.ico
     python packaging/make_icons.py --size 512 --out /tmp
 
-Dat maakt `assets/volura.png` van 256 x 256 pixels (het icoon dat op Linux in
-`~/.local/share/icons/hicolor/256x256/apps` komt) en `assets/volura.ico` voor
-de Windows-build. `--from` pakt een bestaand icoon of plaatje en zet het op de
-juiste maat; zonder `--from` tekent het script het icoon uit `volura/icons.py`.
-Het script werkt zonder beeldscherm (Qt offscreen).
+This makes `assets/volura.png` of 256 x 256 pixels (the icon that goes into
+`~/.local/share/icons/hicolor/256x256/apps` on Linux) and `assets/volura.ico` for
+the Windows build. `--from` takes an existing icon or image and scales it to the
+right size; without `--from` the script draws the icon from `volura/icons.py`.
+The script works without a display (Qt offscreen).
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ DEFAULT_SIZE = 256
 
 
 def from_svg(size):
-    """Het icoon van de app zoals het in de werkbalk ook getekend wordt."""
+    """The app icon as it is also drawn in the toolbar."""
     from volura.icons import SVG
 
     renderer = QSvgRenderer(QByteArray(f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -45,10 +45,10 @@ def from_svg(size):
 
 
 def from_file(path, size):
-    """Een bestaand icoon (volura.ico) of plaatje op de juiste maat zetten."""
+    """Scale an existing icon (volura.ico) or image to the right size."""
     image = QImage(str(path))
     if image.isNull():
-        raise SystemExit(f"{path} is geen leesbaar plaatje")
+        raise SystemExit(f"{path} is not a readable image")
     if image.width() != size or image.height() != size:
         image = image.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
     return image
@@ -59,21 +59,21 @@ def write(image, out, size):
     png = out / "volura.png"
     ico = out / "volura.ico"
     if not image.save(str(png), "PNG"):
-        raise SystemExit(f"{png} niet geschreven")
+        raise SystemExit(f"{png} not written")
     if not image.save(str(ico), "ICO"):
-        raise SystemExit(f"{ico} niet geschreven")
+        raise SystemExit(f"{ico} not written")
     check = QImage(str(png))
     print(f"{png}  ({check.width()} x {check.height()})")
     print(f"{ico}  ({check.width()} x {check.height()})")
     if (check.width(), check.height()) != (size, size):
-        raise SystemExit(f"{png} is {check.width()} x {check.height()}, geen {size} x {size}")
+        raise SystemExit(f"{png} is {check.width()} x {check.height()}, not {size} x {size}")
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--from", dest="source", help="bestaand icoon of plaatje, bijvoorbeeld assets/volura.ico")
-    ap.add_argument("--out", default=str(ROOT / "assets"), help="map voor volura.png en volura.ico")
-    ap.add_argument("--size", type=int, default=DEFAULT_SIZE, help="vierkante maat van de PNG (256)")
+    ap.add_argument("--from", dest="source", help="existing icon or image, for example assets/volura.ico")
+    ap.add_argument("--out", default=str(ROOT / "assets"), help="folder for volura.png and volura.ico")
+    ap.add_argument("--size", type=int, default=DEFAULT_SIZE, help="square size of the PNG (256)")
     args = ap.parse_args(argv)
 
     size = max(16, args.size)

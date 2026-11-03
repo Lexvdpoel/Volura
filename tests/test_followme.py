@@ -1,4 +1,4 @@
-"""Gereedschap > Volg mij (SketchUp's Follow Me).
+"""Tools > Follow Me (SketchUp's Follow Me).
 
 The expected volumes are the ones SketchUp 2017 makes: a profile of 2 x 2 mm
 along a straight path of 10 mm is a bar of 4 x 10 = 40 mm3, and the same profile
@@ -107,7 +107,7 @@ def draw_profile(win, normal, center, a, b):
     loop = square(normal, center, a, b)
     pl = Plane(center, normal)
     fids = win.doc.root.add_shape(pl, [pl.to_local(loop)])
-    assert fids, "het profiel gaf geen vlak"
+    assert fids, "the profile gave no face"
     return fids[0]
 
 
@@ -117,7 +117,7 @@ def follow(win, fid):
 
 
 def test_menu_action_selects_the_tool(win):
-    assert win.a_follow_me.isEnabled(), "Volg mij is nog een placeholder"
+    assert win.a_follow_me.isEnabled(), "Follow Me is still a placeholder"
     win.a_follow_me.trigger()
     assert win.view.tool.name == "followme"
 
@@ -131,8 +131,8 @@ def test_follow_me_sweeps_the_selected_path_over_the_profile(win):
     m = root.to_manifold()
     assert m.status().name == "NoError", m.status()
     assert abs(m.volume() - 40.0) <= TOL * 40.0, m.volume()
-    assert fid not in root.F, "SketchUp gebruikt het profiel op"
-    assert not root.open_edges(), "het resultaat is niet gesloten"
+    assert fid not in root.F, "SketchUp uses up the profile"
+    assert not root.open_edges(), "the result is not closed"
 
 
 def test_follow_me_cleans_up_the_path_edges(win):
@@ -141,7 +141,7 @@ def test_follow_me_cleans_up_the_path_edges(win):
     fid = draw_profile(win, (1, 0, 0), P(0, 0, 0), P(0, 1, 0), P(0, 0, 1))
     win.doc.set_selection([("e", ROOT, e) for e in edges])
     follow(win, fid)
-    assert not [e for e in root.E if not root.e2f.get(e)], "het pad ligt nog als losse randen in het model"
+    assert not [e for e in root.E if not root.e2f.get(e)], "the path is still in the model as loose edges"
 
 
 def test_follow_me_around_a_closed_path_in_the_model(win):
@@ -182,8 +182,8 @@ def test_follow_me_does_nothing_when_the_path_is_not_one_chain(win):
     win.doc.set_selection([("e", ROOT, e) for e in a + b])
     win.set_tool("followme")
     win.view.tools["followme"].apply(fid)
-    assert dict(root.F) == before, "een onderbroken pad mag niets doen"
-    assert any("pad" in m.lower() for m in msgs), msgs
+    assert dict(root.F) == before, "a broken path must do nothing"
+    assert any("path" in m.lower() for m in msgs), msgs
 
 
 def test_follow_me_needs_a_profile_face(win):
@@ -222,8 +222,8 @@ def test_follow_me_says_so_when_nothing_is_selected_as_a_path(win):
     win.view.status_changed.connect(msgs.append)
     win.set_tool("followme")
     win.view.tools["followme"].apply(fid)
-    assert dict(root.F) == before, "zonder pad mag er niets veranderen"
-    assert any("pad" in m.lower() for m in msgs), msgs
+    assert dict(root.F) == before, "without a path nothing may change"
+    assert any("path" in m.lower() for m in msgs), msgs
 
 
 def test_follow_me_previews_the_solid_while_hovering(win):
@@ -239,7 +239,7 @@ def test_follow_me_previews_the_solid_while_hovering(win):
     xy, _ = win.view.cam.project(P(0, 0, 0))
     tool.mouse_move(None, float(xy[0][0]), float(xy[0][1]))
     assert win.view.hover == ("face", ROOT, fid), win.view.hover
-    assert tool.preview is not None and len(tool.preview.tris) == 12, " geen voorbeeld van het geveegde volume"
+    assert tool.preview is not None and len(tool.preview.tris) == 12, "no preview of the swept solid"
     assert tool.path is not None and len(tool.path[0]) == 2
 
 
@@ -254,7 +254,7 @@ def test_round_profile_along_a_straight_path_is_a_bar():
 
 
 def test_profile_along_a_curved_path(win):
-    """Een kwart cirkelboog van r=20 met een 2 x 2 profiel: 4 x 10 n mm3."""
+    """A quarter circle arc of r=20 with a 2 x 2 profile: 4 x 10 pi mm3."""
     root = win.doc.root
     pts = [P(20 * math.cos(t), 20 * math.sin(t)) for t in np.linspace(0, math.pi / 2, 13)]
     ids = draw_path(win, pts)
@@ -266,4 +266,4 @@ def test_profile_along_a_curved_path(win):
     m = root.to_manifold()
     assert m.status().name == "NoError", m.status()
     assert abs(m.volume() - 40 * math.pi) <= 0.01 * 40 * math.pi, m.volume()
-    assert root.soft, "de vouwen van een boog worden verzacht, zoals in SketchUp"
+    assert root.soft, "the folds of an arc are softened, as in SketchUp"

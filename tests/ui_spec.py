@@ -1,4 +1,4 @@
-"""The SketchUp 2017 user interface that Volura mimics (Dutch labels).
+"""The SketchUp 2017 user interface that Volura mimics (English labels).
 
 Recorded from SketchUp Make 2017 (menus, submenus, default shortcuts, the
 "Getting Started" toolbar and the Default Tray). Each menu lists its items in
@@ -10,162 +10,160 @@ and a trailing "…"). Shortcuts are the SketchUp defaults.
 """
 
 MENUS = [
-    ("Bestand", [
-        ("Nieuw", "Ctrl+N"),
-        ("Openen", "Ctrl+O"),
+    ("File", [
+        ("New", "Ctrl+N"),
+        ("Open", "Ctrl+O"),
         "---",
-        ("Opslaan", "Ctrl+S"),
-        ("Opslaan als", None),
-        ("Kopie opslaan als", None),
+        ("Save", "Ctrl+S"),
+        ("Save As", None),
+        ("Save a Copy As", None),
         "---",
-        ("Importeren", None),
-        ("Exporteren >", None),
+        ("Import", None),
+        ("Export >", None),
         "---",
-        ("Printer instellen", None),        # SketchUp: Print Setup  -> printbed / printer
-        ("Printcontrole", None),            # SketchUp: Print Preview -> print check
-        ("Afdrukken", "Ctrl+P"),            # SketchUp: Print -> export 3MF for the slicer
+        ("Printer Setup", None),            # SketchUp: Print Setup  -> printbed / printer
+        ("Print Check", None),              # SketchUp: Print Preview -> print check
+        ("Print", "Ctrl+P"),                # SketchUp: Print -> export 3MF for the slicer
         "---",
-        ("Afsluiten", None),
+        ("Exit", None),
     ]),
-    ("Bewerken", [
-        ("Ongedaan maken", "Alt+Backspace"),
-        ("Opnieuw", "Ctrl+Y"),
+    ("Edit", [
+        ("Undo", "Alt+Backspace"),
+        ("Redo", "Ctrl+Y"),
         "---",
-        ("Knippen", "Shift+Del"),
-        ("Kopiëren", "Ctrl+C"),
-        ("Plakken", "Ctrl+V"),
-        ("Plakken op locatie", None),
-        ("Wissen", "Del"),
-        ("Hulplijnen wissen", None),
+        ("Cut", "Shift+Del"),
+        ("Copy", "Ctrl+C"),
+        ("Paste", "Ctrl+V"),
+        ("Paste In Place", None),
+        ("Delete", "Del"),
+        ("Delete Guides", None),
         "---",
-        ("Alles selecteren", "Ctrl+A"),
-        ("Niets selecteren", "Ctrl+T"),
+        ("Select All", "Ctrl+A"),
+        ("Select None", "Ctrl+T"),
         "---",
-        ("Verbergen", None),
-        ("Zichtbaar maken >", None),
+        ("Hide", None),
+        ("Unhide >", None),
         "---",
-        ("Vergrendelen", None),
-        ("Ontgrendelen >", None),
+        ("Lock", None),
+        ("Unlock >", None),
         "---",
-        ("Component maken", "G"),
-        ("Groep maken", None),
-        ("Groep/component sluiten", None),
+        ("Make Component", "G"),
+        ("Make Group", None),
+        ("Close Group/Component", None),
         "---",
-        ("Vlakken snijden >", None),
+        ("Intersect Faces >", None),
     ]),
-    ("Beeld", [
-        ("Werkbalken", None),
+    ("View", [
+        ("Toolbars", None),
         "---",
-        ("Verborgen geometrie", None),
-        ("Assen", None),
-        ("Hulplijnen", None),
-        ("Printbed", None),                 # Volura
+        ("Hidden Geometry", None),
+        ("Axes", None),
+        ("Guides", None),
+        ("Print Bed", None),                # Volura
         "---",
-        ("Randstijl >", None),
-        ("Vlakstijl >", None),
-        ("Componentbewerking >", None),
+        ("Edge Style >", None),
+        ("Face Style >", None),
+        ("Component Edit >", None),
     ]),
     ("Camera", [
-        ("Vorige", None),
-        ("Volgende", None),
-        ("Standaardweergaven >", None),
+        ("Previous", None),
+        ("Next", None),
+        ("Standard Views >", None),
         "---",
-        ("Parallelle projectie", None),
-        ("Perspectief", None),
+        ("Parallel Projection", None),
+        ("Perspective", None),
         "---",
-        ("Draaien", "O"),
-        ("Pannen", "H"),
-        ("Zoomen", "Z"),
-        ("Gezichtsveld", None),
-        ("Zoomvenster", "Ctrl+Shift+W"),
-        ("Zoomen tot alles", "Ctrl+Shift+E"),
+        ("Orbit", "O"),
+        ("Pan", "H"),
+        ("Zoom", "Z"),
+        ("Field of View", None),
+        ("Zoom Window", "Ctrl+Shift+W"),
+        ("Zoom Extents", "Ctrl+Shift+E"),
     ]),
-    ("Tekenen", [
-        ("Lijnen >", None),
-        ("Bogen >", None),
-        ("Vormen >", None),
+    ("Draw", [
+        ("Lines >", None),
+        ("Arcs >", None),
+        ("Shapes >", None),
         "---",
-        ("Basisvormen >", None),            # Volura (SketchUp: Sandbox position)
+        ("Basic Shapes >", None),           # Volura (SketchUp: Sandbox position)
     ]),
-    ("Gereedschap", [
-        ("Selecteren", "Space"),
-        ("Gum", "E"),
-        ("Verfemmer", "B"),
+    ("Tools", [
+        ("Select", "Space"),
+        ("Eraser", "E"),
+        ("Paint Bucket", "B"),
         "---",
-        ("Verplaatsen", "M"),
-        ("Roteren", "Q"),
-        ("Schalen", "S"),
+        ("Move", "M"),
+        ("Rotate", "Q"),
+        ("Scale", "S"),
         "---",
-        ("Duwen/trekken", "P"),
-        ("Volg mij", None),
-        ("Verschuiving", "F"),
+        ("Push/Pull", "P"),
+        ("Follow Me", None),
+        ("Offset", "F"),
         "---",
-        ("Buitenschil", None),
-        ("Volumegereedschap >", None),
+        ("Outer Shell", None),
+        ("Solid Tools >", None),
         "---",
-        ("Meetlint", "T"),
-        ("Gradenboog", None),
+        ("Tape Measure", "T"),
+        ("Protractor", None),
         "---",
-        ("3D-tekst", None),
+        ("3D Text", None),
     ]),
-    ("Venster", [
-        ("Standaardvenster >", None),
+    ("Window", [
+        ("Default Tray >", None),
         "---",
-        ("Modelinfo", None),
-        ("Voorkeuren", None),
+        ("Model Info", None),
+        ("Preferences", None),
     ]),
     ("Help", [
-        ("Welkom bij Volura", None),
-        ("Sneltoetsen", None),
+        ("Welcome to Volura", None),
+        ("Keyboard Shortcuts", None),
         "---",
-        ("Over Volura", None),
+        ("About Volura", None),
     ]),
 ]
 
 SUBMENUS = {
-    ("Bestand", "Exporteren"): [("3D-model (STL)", None), ("Meerkleuren 3MF", None), ("STL per kleur", None)],
-    ("Bewerken", "Zichtbaar maken"): [("Geselecteerd", None), ("Laatste", None), ("Alles", None)],
-    ("Bewerken", "Ontgrendelen"): [("Geselecteerd", None), ("Alles", None)],
-    ("Bewerken", "Vlakken snijden"): [("Met model", None), ("Met selectie", None)],
-    ("Beeld", "Randstijl"): [("Randen", None), ("Achterliggende randen", "K")],
-    ("Beeld", "Vlakstijl"): [("Röntgen", None), "---", ("Draadmodel", None), ("Verborgen lijnen", None),
-                             ("Gearceerd", None), ("Monochroom", None)],
-    ("Beeld", "Componentbewerking"): [("Rest van model verbergen", None)],
-    ("Camera", "Standaardweergaven"): [("Boven", None), ("Onder", None), ("Voor", None), ("Achter", None),
-                                       ("Links", None), ("Rechts", None), ("Iso", None)],
-    ("Tekenen", "Lijnen"): [("Lijn", "L"), ("Uit de vrije hand", None)],
-    ("Tekenen", "Bogen"): [("Boog", None), ("Boog door 2 punten", "A"), ("Boog door 3 punten", None),
-                           ("Taartpunt", None)],
-    ("Tekenen", "Vormen"): [("Rechthoek", "R"), ("Gedraaide rechthoek", None), ("Cirkel", "C"),
-                            ("Veelhoek", None)],
-    ("Tekenen", "Basisvormen"): [("Kubus / balk", None), ("Cilinder", None), ("Kegel", None), ("Bol", None),
-                                 ("Torus", None)],
-    ("Gereedschap", "Volumegereedschap"): [("Snijpunt", None), ("Samenvoegen", None), ("Aftrekken", None),
-                                           ("Bijsnijden", None), ("Splitsen", None)],
-    ("Venster", "Standaardvenster"): [("Entiteitsinfo", None), ("Materialen", None), ("Overzicht", None)],
+    ("File", "Export"): [("3D Model (STL)", None), ("Multicolor 3MF", None), ("STL per Color", None)],
+    ("Edit", "Unhide"): [("Selected", None), ("Last", None), ("All", None)],
+    ("Edit", "Unlock"): [("Selected", None), ("All", None)],
+    ("Edit", "Intersect Faces"): [("With Model", None), ("With Selection", None)],
+    ("View", "Edge Style"): [("Edges", None), ("Back Edges", "K")],
+    ("View", "Face Style"): [("X-ray", None), "---", ("Wireframe", None), ("Hidden Line", None),
+                             ("Shaded", None), ("Monochrome", None)],
+    ("View", "Component Edit"): [("Hide Rest of Model", None)],
+    ("Camera", "Standard Views"): [("Top", None), ("Bottom", None), ("Front", None), ("Back", None),
+                                   ("Left", None), ("Right", None), ("Iso", None)],
+    ("Draw", "Lines"): [("Line", "L"), ("Freehand", None)],
+    ("Draw", "Arcs"): [("Arc", None), ("2 Point Arc", "A"), ("3 Point Arc", None), ("Pie", None)],
+    ("Draw", "Shapes"): [("Rectangle", "R"), ("Rotated Rectangle", None), ("Circle", "C"), ("Polygon", None)],
+    ("Draw", "Basic Shapes"): [("Box", None), ("Cylinder", None), ("Cone", None), ("Sphere", None),
+                               ("Torus", None)],
+    ("Tools", "Solid Tools"): [("Intersect", None), ("Union", None), ("Subtract", None),
+                               ("Trim", None), ("Split", None)],
+    ("Window", "Default Tray"): [("Entity Info", None), ("Materials", None), ("Outliner", None)],
 }
 
 # The "Getting Started" toolbar, left to right ("|" = separator). Volura replaces the
 # 3D Warehouse / Extension buttons at the end with its print buttons.
-TOOLBAR = ["Selecteren", "Gum", "Lijn", "Boog door 2 punten", "Rechthoek", "Duwen/trekken", "Verschuiving",
-           "Verplaatsen", "Roteren", "Schalen", "|", "Meetlint", "3D-tekst", "Verfemmer", "|", "Draaien",
-           "Pannen", "Zoomen", "Zoomen tot alles", "|", "Printcontrole", "Afdrukken"]
+TOOLBAR = ["Select", "Eraser", "Line", "2 Point Arc", "Rectangle", "Push/Pull", "Offset",
+           "Move", "Rotate", "Scale", "|", "Tape Measure", "3D Text", "Paint Bucket", "|", "Orbit",
+           "Pan", "Zoom", "Zoom Extents", "|", "Print Check", "Print"]
 
 # Buttons with a drop-down arrow in SketchUp: toolbar label -> the drawing tools it offers
 TOOLBAR_DROPDOWNS = {
-    "Lijn": ["Lijn", "Uit de vrije hand"],
-    "Boog door 2 punten": ["Boog", "Boog door 2 punten", "Boog door 3 punten", "Taartpunt"],
-    "Rechthoek": ["Rechthoek", "Gedraaide rechthoek", "Cirkel", "Veelhoek"],
+    "Line": ["Line", "Freehand"],
+    "2 Point Arc": ["Arc", "2 Point Arc", "3 Point Arc", "Pie"],
+    "Rectangle": ["Rectangle", "Rotated Rectangle", "Circle", "Polygon"],
 }
 
-# Right click on a face (SketchUp order). Items for groups are added after "Wissen"/"Verbergen".
-CONTEXT_FACE = ["Entiteitsinfo", "Wissen", "Verbergen", "---", "Selecteren >", "Oppervlakte >",
-                "Vlakken snijden >", "Weergave uitlijnen", "Vlakken omkeren", "Vlakken oriënteren",
-                "Selectie zoomen"]
+# Right click on a face (SketchUp order). Items for groups are added after "Delete"/"Hide".
+CONTEXT_FACE = ["Entity Info", "Delete", "Hide", "---", "Select >", "Area >",
+                "Intersect Faces >", "Align View", "Reverse Faces", "Orient Faces",
+                "Zoom Selection"]
 
 # The Default Tray: one dock on the right with collapsible panels in this order
-TRAY_TITLE = "Standaardvenster"
-TRAY_PANELS = ["Entiteitsinfo", "Materialen", "Overzicht"]
+TRAY_TITLE = "Default Tray"
+TRAY_PANELS = ["Entity Info", "Materials", "Outliner"]
 
 # The Measurements box in the status bar (bottom right)
-MEASUREMENTS_LABEL_DEFAULT = "Afmetingen"
+MEASUREMENTS_LABEL_DEFAULT = "Measurements"

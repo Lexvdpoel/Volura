@@ -1,8 +1,8 @@
-"""SVG/DXF importeren in 3D, plaatsen op een vlak en extruderen.
+"""Importing SVG/DXF into 3D, placing on a face and extruding.
 
-De zuivere logica (`volura.vector_import`) is zonder venster te testen; het
-laatste blok controleert dat het venster het gereedschap heeft en via een pad
-(dialoog overgeslagen) iets in het document plaatst.
+The pure logic (`volura.vector_import`) can be tested without a window; the
+last block checks that the window has the tool and, given a path
+(dialog skipped), places something in the document.
 
 Run with:  python -m pytest tests
 """
@@ -36,16 +36,16 @@ SVG_HEAD = ('<svg xmlns="http://www.w3.org/2000/svg" '
 # ------------------------------------------------------------------ helpers
 
 def svg_rect_with_hole():
-    """Rechthoek 20x10 mm met een rond gat r=2, als één element met evenwijdig vulregel."""
+    """Rectangle 20x10 mm with a round hole r=2, as one element with the evenodd fill rule."""
     body = ('<path fill="#000000" fill-rule="evenodd" '
             'd="M0 0 H20 V10 H0 Z M10 5 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 Z"/>')
     return read_svg((SVG_HEAD + body + "</svg>").encode())
 
 
 def dxf_rect_with_hole():
-    """Dezelfde rechthoek in DXF: buitenrand tegen de klok in, gat met de klok mee."""
+    """The same rectangle in DXF: outer edge counterclockwise, hole clockwise."""
     outer = [(0, 0), (20, 0), (20, 10), (0, 10)]
-    circle = arc_points((10, 5), 2.0, 2.0 * math.pi, 0.0, 0.005)[:-1]   # met de klok mee
+    circle = arc_points((10, 5), 2.0, 2.0 * math.pi, 0.0, 0.005)[:-1]   # clockwise
     hole = [(float(x), float(y)) for x, y in circle]
 
     def lwp(verts):
@@ -86,107 +86,107 @@ def top_plane(ents):
     return ents.face_plane(fid)
 
 
-# ------------------------------------------------------------------ SVG: vlak met gat
+# ------------------------------------------------------------------ SVG: face with hole
 
 def test_svg_face_with_hole_on_ground():
     drawing = svg_rect_with_hole()
-    regios, opens = vi.prepare(drawing)
-    assert len(regios) == 1 and len(regios[0]) == 2 and opens == []
+    regions, opens = vi.prepare(drawing)
+    assert len(regions) == 1 and len(regions[0]) == 2 and opens == []
 
     ents = Entities()
-    created = vi.place_faces(ents, GROUND, regios, opens, np.zeros(2))
+    created = vi.place_faces(ents, GROUND, regions, opens, np.zeros(2))
     assert len(ents.F) == 1 and len(created) == 1
     assert len(ents.F[created[0]].loops) == 2
 
-    outer, hole = regios[0]
+    outer, hole = regions[0]
     expected = abs(polygon_area(outer)) - abs(polygon_area(hole))
     assert abs(face_area(ents, created[0]) - expected) < 1e-6 * 200
 
 
-# ------------------------------------------------------------------ SVG: geextrudeerd volume
+# ------------------------------------------------------------------ SVG: extruded volume
 
 def test_svg_extruded_group_volume():
     drawing = svg_rect_with_hole()
-    regios, opens = vi.prepare(drawing)
-    area = region_area(regios[0])
+    regions, opens = vi.prepare(drawing)
+    area = region_area(regions[0])
 
     doc = Document()
-    g = vi.place_extruded(doc, GROUND, regios, np.zeros(2), 5.0, "#ff0000", "Test")
+    g = vi.place_extruded(doc, GROUND, regions, np.zeros(2), 5.0, "#ff0000", "Test")
     assert g is not None and len(doc.groups) == 1
     m = g.ents.to_manifold()
     assert m.status() == mf.Error.NoError and not m.is_empty()
     assert abs(m.volume() - 5.0 * area) <= 1e-3 * 5.0 * area
 
 
-# ------------------------------------------------------------------ op het bovenvlak van een kubus
+# ------------------------------------------------------------------ on the top face of a cube
 
 def test_place_on_top_face_of_cube():
     drawing = svg_rect_with_hole()
-    regios, _ = vi.prepare(drawing)
+    regions, _ = vi.prepare(drawing)
 
     doc = box_doc()
     pl = top_plane(doc.root)
     assert abs(pl.origin[2] - 10.0) < 1e-6
 
     ents = Entities()
-    vi.place_faces(ents, pl, regios, [], np.zeros(2))
+    vi.place_faces(ents, pl, regions, [], np.zeros(2))
     zs = np.array([ents.V[v][2] for v in ents.V])
     assert np.allclose(zs, 10.0, atol=1e-6)
 
-    g = vi.place_extruded(doc, pl, regios, np.zeros(2), 5.0, "#00ff00", "Op")
+    g = vi.place_extruded(doc, pl, regions, np.zeros(2), 5.0, "#00ff00", "On")
     zc = np.array([g.ents.V[v][2] for v in g.ents.V])
     assert zc.min() >= 10.0 - 1e-6 and zc.max() <= 15.0 + 1e-6
     assert abs(zc.min() - 10.0) < 1e-6 and abs(zc.max() - 15.0) < 1e-6
 
 
-# ------------------------------------------------------------------ doelbreedte schaalt in verhouding
+# ------------------------------------------------------------------ target width scales proportionally
 
 def test_target_width_scales_proportionally():
-    drawing = svg_rect_with_hole()          # 20 breed, 10 hoog
-    regios, _ = vi.prepare(drawing, target_width=50.0)
-    pts = np.concatenate(regios[0])
+    drawing = svg_rect_with_hole()          # 20 wide, 10 high
+    regions, _ = vi.prepare(drawing, target_width=50.0)
+    pts = np.concatenate(regions[0])
     w = pts[:, 0].max() - pts[:, 0].min()
     h = pts[:, 1].max() - pts[:, 1].min()
     assert abs(w - 50.0) < 1e-6
     assert abs(h - 25.0) < 1e-6
 
 
-# ------------------------------------------------------------------ open pad: randen, geen vlakken
+# ------------------------------------------------------------------ open path: edges, no faces
 
 def test_open_path_makes_edges_only():
     drawing = read_svg((SVG_HEAD + '<polyline points="0,0 10,0 10,5" '
                         'fill="none" stroke="#000000"/></svg>').encode())
-    regios, opens = vi.prepare(drawing)
-    assert regios == [] and len(opens) == 1
+    regions, opens = vi.prepare(drawing)
+    assert regions == [] and len(opens) == 1
 
     ents = Entities()
-    created = vi.place_faces(ents, GROUND, regios, opens, np.zeros(2))
+    created = vi.place_faces(ents, GROUND, regions, opens, np.zeros(2))
     assert created == [] and len(ents.F) == 0
     assert len(ents.E) == 2
 
 
-# ------------------------------------------------------------------ DXF geeft hetzelfde resultaat
+# ------------------------------------------------------------------ DXF gives the same result
 
 def test_dxf_same_result_as_svg():
     drawing = dxf_rect_with_hole()
-    regios, opens = vi.prepare(drawing)
-    assert len(regios) == 1 and len(regios[0]) == 2 and opens == []
+    regions, opens = vi.prepare(drawing)
+    assert len(regions) == 1 and len(regions[0]) == 2 and opens == []
 
     ents = Entities()
-    created = vi.place_faces(ents, GROUND, regios, opens, np.zeros(2))
+    created = vi.place_faces(ents, GROUND, regions, opens, np.zeros(2))
     assert len(ents.F) == 1 and len(ents.F[created[0]].loops) == 2
-    outer, hole = regios[0]
+    outer, hole = regions[0]
     expected = abs(polygon_area(outer)) - abs(polygon_area(hole))
     assert abs(face_area(ents, created[0]) - expected) < 1e-6 * 200
 
     doc = Document()
-    g = vi.place_extruded(doc, GROUND, regios, np.zeros(2), 5.0, "#ff0000", "Dxf")
+    g = vi.place_extruded(doc, GROUND, regions, np.zeros(2), 5.0, "#ff0000", "Dxf")
     m = g.ents.to_manifold()
     assert m.status() == mf.Error.NoError
-    assert abs(m.volume() - 5.0 * region_area(regios[0])) <= 1e-3 * 5.0 * region_area(regios[0])
+    assert abs(m.volume() - 5.0 * region_area(regions[0])) <= 1e-3 * 5.0 * region_area(regions[0])
 
 
-# ------------------------------------------------------------------ het venster
+# ------------------------------------------------------------------ the window
 
 @pytest.fixture()
 def win():
@@ -205,13 +205,13 @@ def test_window_has_vectorplace_tool(win):
 def test_window_import_via_path_places_something(win):
     svg = (SVG_HEAD + '<rect x="0" y="0" width="20" height="10" fill="#000000"/></svg>')
     with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "tekening.svg")
+        path = os.path.join(tmp, "drawing.svg")
         with open(path, "w", encoding="utf-8") as f:
             f.write(svg)
 
         opts = {"scale": 1.0, "target_width": None, "anchor": "center",
                 "open_edges": True, "extrude": False, "height": 3.0,
-                "color": "#ff0000", "name": "Vlak"}
+                "color": "#ff0000", "name": "Face"}
         win.import_vector(path, opts)
         assert len(win.doc.root.F) == 1
 

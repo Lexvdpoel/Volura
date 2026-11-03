@@ -1,17 +1,17 @@
-"""Bouwt een zelfstandige versie van Volura met PyInstaller.
+"""Builds a standalone version of Volura with PyInstaller.
 
     python packaging/build.py
 
     Windows -> dist/Volura/Volura.exe  + dist/Volura-windows-x86_64.zip
-               + dist/Volura-windows-setup.exe (als Inno Setup 6 er is)
+               + dist/Volura-windows-setup.exe (when Inno Setup 6 is present)
     Linux   -> dist/Volura/Volura      + dist/Volura-linux-x86_64.tar.gz
     macOS   -> dist/Volura/Volura.app  + dist/Volura-macos-<arch>.zip
 
-PyInstaller kan niet cross-compileren: bouw op het platform waarvoor je bouwt.
-De workflow in .github/workflows/build.yml doet dat voor Windows en Linux.
-De licenties (LICENSE.txt en THIRD_PARTY_LICENSES.txt, zie licenses.py) gaan altijd
-mee. Bij de Linux-build gaan ook `volura.desktop` en `install.sh` mee; dat script zet
-Volura in ~/.local/opt/volura en het menu-item in ~/.local/share/applications.
+PyInstaller cannot cross-compile: build on the platform you are building for.
+The workflow in .github/workflows/build.yml does that for Windows and Linux.
+The licenses (LICENSE.txt and THIRD_PARTY_LICENSES.txt, see licenses.py) are always
+included. The Linux build also includes `volura.desktop` and `install.sh`; that script
+puts Volura in ~/.local/opt/volura and the menu entry in ~/.local/share/applications.
 """
 from __future__ import annotations
 
@@ -38,13 +38,13 @@ def target():
     """('windows', 'x86_64') / ('linux', 'x86_64') / ..."""
     system = SYSTEMS.get(sys.platform)
     if system is None:
-        raise SystemExit(f"Volura bouwt niet op {sys.platform}; bouw op Windows, Linux of macOS.")
+        raise SystemExit(f"Volura does not build on {sys.platform}; build on Windows, Linux or macOS.")
     machine = (platform.machine() or "unknown").lower()
     return system, ARCHES.get(machine, machine)
 
 
 def icon(system):
-    """Het icoon dat PyInstaller kan gebruiken; op Linux zet het desktop-bestand het icoon."""
+    """The icon PyInstaller can use; on Linux the desktop file sets the icon."""
     name = {"windows": "volura.ico", "macos": "volura.icns"}.get(system)
     path = ASSETS / name if name else None
     return path if path is not None and path.is_file() else None
@@ -60,6 +60,7 @@ def pyinstaller(system):
         "--add-data", f"{ASSETS / 'volura.png'}{os.pathsep}assets",
         "--collect-submodules", "OpenGL.platform",
         "--collect-submodules", "OpenGL.arrays",
+        "--collect-submodules", "volura.locale",      # loaded by name (i18n.table)
         "--collect-binaries", "manifold3d",
         "main.py",
     ]
@@ -68,7 +69,7 @@ def pyinstaller(system):
 
 
 def executable(system):
-    """Wat PyInstaller als programma neerzet; op macOS is dat een .app-bundel."""
+    """What PyInstaller produces as the program; on macOS that is an .app bundle."""
     if system == "windows":
         return DIST / "Volura" / "Volura.exe"
     if system == "macos":
@@ -77,7 +78,7 @@ def executable(system):
 
 
 def add_linux_files():
-    """Het build-script zelf is platformonafhankelijk; alleen Linux krijgt menu-item en icoon."""
+    """The build script itself is platform independent; only Linux gets a menu entry and icon."""
     app = DIST / "Volura"
     for name in LINUX_EXTRA:
         src = LINUX_DIR / name
@@ -96,23 +97,23 @@ def archive(system, arch):
     app = DIST / "Volura"
     binary = executable(system)
     if not binary.exists():
-        raise SystemExit(f"PyInstaller heeft {binary} niet gemaakt; kijk in de melding hierboven.")
+        raise SystemExit(f"PyInstaller did not create {binary}; see the message above.")
     binary.chmod(binary.stat().st_mode | 0o755)
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import licenses
-    licenses.write(app)            # LICENSE.txt en THIRD_PARTY_LICENSES.txt naast het programma
+    licenses.write(app)            # LICENSE.txt and THIRD_PARTY_LICENSES.txt next to the program
     if system == "linux":
         add_linux_files()
         fmt = "gztar"
     else:
         fmt = "zip"
     made = Path(shutil.make_archive(str(DIST / name), fmt, str(DIST), "Volura"))
-    print(f"Klaar: {made}  ({round(made.stat().st_size / 1e6, 1)} MB)")
+    print(f"Done: {made}  ({round(made.stat().st_size / 1e6, 1)} MB)")
     return made
 
 
 def find_iscc():
-    """De Inno Setup-compiler: op het PATH of op een van de gebruikelijke plekken."""
+    """The Inno Setup compiler: on the PATH or in one of the usual places."""
     found = shutil.which("iscc") or shutil.which("ISCC")
     if found:
         return Path(found)
@@ -131,26 +132,26 @@ def version():
 
 
 def installer():
-    """dist/Volura-windows-setup.exe: de installatie, ook gebruikt door de automatische update."""
+    """dist/Volura-windows-setup.exe: the installer, also used by the automatic update."""
     iscc = find_iscc()
     if iscc is None:
-        print("Inno Setup 6 niet gevonden: geen installatie gemaakt (alleen de zip).")
+        print("Inno Setup 6 not found: no installer made (only the zip).")
         return None
     subprocess.run([str(iscc), "/Q", f"/DAppVersion={version()}", str(INSTALLER)], check=True)
     made = DIST / "Volura-windows-setup.exe"
-    print(f"Klaar: {made}  ({round(made.stat().st_size / 1e6, 1)} MB)")
+    print(f"Done: {made}  ({round(made.stat().st_size / 1e6, 1)} MB)")
     return made
 
 
 def main():
     system, arch = target()
-    print(f"Volura bouwen voor {system}-{arch} (Python {platform.python_version()})")
+    print(f"Building Volura for {system}-{arch} (Python {platform.python_version()})")
     pyinstaller(system)
     archive(system, arch)
     if system == "windows":
         installer()
-    print("Nu uitpakken en starten"
-          + (", daarna ./install.sh voor het menu" if system == "linux" else "."))
+    print("Now unpack and start it"
+          + (", then run ./install.sh for the menu entry" if system == "linux" else "."))
 
 
 if __name__ == "__main__":
