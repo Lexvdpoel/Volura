@@ -570,11 +570,27 @@ def parts(doc: Document, only_selected=False):
     return out
 
 
+def color_id(color):
+    """'#rrggbb' as a number + 1, to tag triangles with their face color (0 = no color,
+    so black stays distinguishable)."""
+    try:
+        return int(str(color).lstrip("#")[:6], 16) + 1
+    except ValueError:
+        return 0
+
+
+def id_color(value):
+    """The color of a triangle tag, or None for an untagged triangle."""
+    value = int(value)
+    return f"#{(value - 1) & 0xFFFFFF:06x}" if value > 0 else None
+
+
 def _part(name, color, ents, fids):
     open_e = ents.open_edges(fids)
     if open_e:
         return Part(name, color, problem=tr("not closed: {n} open or doubled edge(s)").format(n=len(open_e)))
-    m = ents.to_manifold(fids)
+    # every triangle carries the color of its face (a painted face, or the part color)
+    m = ents.to_manifold(fids, face_ids={f: color_id(ents.F[f].color or color) for f in fids})
     if m.status() != mf.Error.NoError or m.is_empty():
         return Part(name, color, problem=tr("not a valid volume ({status})").format(status=m.status().name))
     if m.volume() < 0:

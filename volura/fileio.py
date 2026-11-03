@@ -17,7 +17,7 @@ from .brep import Entities, Face
 from .geom import Plane, manifold_from_mesh, mesh_arrays
 from .i18n import tr
 from .model import ROOT, Document, Group, Guide
-from .ops import print_parts, union_all
+from .ops import id_color, print_parts, union_all
 from .vector2d import Drawing
 
 FORMAT_VERSION = 2
@@ -210,11 +210,41 @@ def export_stl_per_color(path, part_list, materials):
 
 # ------------------------------------------------------------------ 3MF
 
+def paint_code(extruder):
+    """A whole triangle painted with this extruder, in the code of the slicers' color brush.
+
+    OrcaSlicer / Bambu Studio (paint_color) and PrusaSlicer (slic3rpe:mmu_segmentation)
+    store painted triangles as a hex string of bits: two bits "not split", then the state;
+    states 1 and 2 fit in two bits, from 3 on the bits are 11 plus four bits of state - 3.
+    The nibbles are written last first: extruder 1 = "4", 2 = "8", 3 = "0C", 4 = "1C".
+    """
+    k = int(extruder)
+    if k == 1:
+        return "4"
+    if k == 2:
+        return "8"
+    if 3 <= k <= 18:
+        return f"{k - 3:X}C"
+    return ""
+
+
+def triangle_colors(man):
+    """The face color of every triangle of a Manifold (None where it has none)."""
+    mesh = man.to_mesh64()
+    ids = np.asarray(mesh.face_id, dtype=np.int64) if len(mesh.face_id) else None
+    n = len(np.asarray(mesh.tri_verts).reshape(-1, 3))
+    if ids is None or len(ids) != n:
+        return [None] * n
+    return [id_color(i) for i in ids]
+
+
 def export_3mf(path, part_list, materials, name="Volura"):
-    """Multi-color 3MF: one object, one part per color.
+    """Multi-color 3MF: one object, one part per color, painted faces as painted triangles.
 
     Colors are stored as 3MF base materials. The part/extruder assignment is written
     both in the PrusaSlicer layout and in the Bambu Studio / OrcaSlicer layout.
+    Faces painted in another color than their part become painted triangles, which
+    OrcaSlicer, Bambu Studio and PrusaSlicer read as their own color painting.
     Extruder numbers follow the material order.
     """
     parts = print_parts(part_list)
@@ -231,6 +261,7 @@ def export_3mf(path, part_list, materials, name="Volura"):
 
     parts.sort(key=lambda p: extruder(p[0]))
     used = [p[0] for p in parts]
+    painted = []
 
     # One mesh object per color, joined as components of a single parent object.
     # Every slicer then sees one object made of several parts.
@@ -241,22 +272,34 @@ def export_3mf(path, part_list, materials, name="Volura"):
         v, t = mesh_arrays(m)
         oid = k + 2
         cname = escape(names.get(color.lower(), color))
+        tris = []
+        for (a, b, c), tc in zip(t, triangle_colors(m)):
+            paint = ""
+            if tc is not None and tc.lower() != color.lower():
+                code = paint_code(extruder(tc))
+                if code:
+                    paint = f' paint_color="{code}" slic3rpe:mmu_segmentation="{code}"'
+                    if tc.lower() not in painted and tc.lower() not in used:
+                        painted.append(tc.lower())
+            tris.append(f'<triangle v1="{a}" v2="{b}" v3="{c}"{paint}/>')
         mesh_xml.append(
             f'<object id="{oid}" type="model" name="{cname}" pid="1" pindex="{k}"><mesh><vertices>\n'
             + "\n".join(f'<vertex x="{x:.6f}" y="{y:.6f}" z="{z:.6f}"/>' for x, y, z in v)
             + '\n</vertices><triangles>\n'
-            + "\n".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in t)
+            + "\n".join(tris)
             + '\n</triangles></mesh></object>\n')
         comp_xml.append(f'<component objectid="{oid}"/>')
         volumes.append((toff, toff + len(t) - 1, color, oid))
         toff += len(t)
 
     bases = "".join(
-        f'<base name="{escape(names.get(c.lower(), c))}" displaycolor="{c.upper()}FF"/>' for c in used)
+        f'<base name="{escape(names.get(c.lower(), c))}" displaycolor="{c.upper()}FF"/>'
+        for c in used + painted)
     model = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<model unit="millimeter" xml:lang="en-US" '
-        'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">\n'
+        'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" '
+        'xmlns:slic3rpe="http://schemas.slic3r.org/3mf/2017/06">\n'
         f'<metadata name="Application">Volura-{__version__}</metadata>\n'
         f'<metadata name="Title">{escape(name)}</metadata>\n'
         '<resources>\n'
@@ -315,4 +358,5 @@ def export_3mf(path, part_list, materials, name="Volura"):
         "Metadata/model_settings.config": bambu_config,
     }
     atomic_write(path, lambda tmp: write_zip(tmp, files))
-    return [(names.get(c.lower(), c), extruder(c)) for c in used]
+    return sorted(((names.get(c.lower(), c), extruder(c)) for c in used + painted),
+                  key=lambda item: item[1])

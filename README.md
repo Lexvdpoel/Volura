@@ -51,7 +51,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - Export:
   - **STL**: all (or the selected) parts merged into one watertight object
   - **Multicolor 3MF**: one object with one part per filament color, already assigned to the right
-    extruder (PrusaSlicer, OrcaSlicer, Bambu Studio)
+    extruder (PrusaSlicer, OrcaSlicer, Bambu Studio). Faces painted with the Paint Bucket in another
+    color are exported as painted triangles, which these slicers show and print as their own color
+    painting
   - **STL per color**
   - Where parts with different colors overlap, the part made later wins
 - Native file format `.volura` (files from version 0.1 are converted), STL import, unlimited undo
@@ -197,6 +199,10 @@ Middle mouse button = orbit, Shift + middle mouse button = pan, scroll wheel = z
 
 Loose geometry that forms a closed volume also counts as a part; make it a group (triple-click, G)
 to give it a color of its own.
+
+Only the surface needs a color? Paint faces with the Paint Bucket (B): in the slicer those faces get
+the filament of their color, the rest of the part keeps the part's filament. The slicer shows its own
+filament colors; the extruder number is the position of the color in the filament panel.
 
 ## Project structure
 

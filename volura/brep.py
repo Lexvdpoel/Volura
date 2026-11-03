@@ -1651,24 +1651,31 @@ class Entities:
         allp = np.concatenate(pts3)
         return allp[tris], tris
 
-    def to_manifold(self, fids=None):
+    def to_manifold(self, fids=None, face_ids=None):
+        """The faces as a Manifold. `face_ids` ({face: int}) tags every triangle of a face;
+        Manifold keeps these tags through booleans (the 3MF export uses them for colors)."""
         fids = list(self.F) if fids is None else list(fids)
         if not fids:
             return mf.Manifold()
         vids = sorted({v for f in fids for loop in self.F[f].loops for v in loop})
         idx = {v: i for i, v in enumerate(vids)}
-        tris = []
+        tris, tags = [], []
         for f in fids:
             face = self.F[f]
             ids = [v for loop in face.loops for v in loop]
             _, t = self.face_triangles(f)
             for a, b, c in t:
                 tris.append((idx[ids[a]], idx[ids[b]], idx[ids[c]]))
+                if face_ids is not None:
+                    tags.append(face_ids.get(f, 0))
         if not tris:
             return mf.Manifold()
         verts = np.array([self.V[v] for v in vids], dtype=np.float64)
+        extra = {}
+        if face_ids is not None:
+            extra["face_id"] = np.array(tags, dtype=np.uint64)
         mesh = mf.Mesh64(vert_properties=np.ascontiguousarray(verts),
-                         tri_verts=np.ascontiguousarray(np.array(tris, dtype=np.uint64)))
+                         tri_verts=np.ascontiguousarray(np.array(tris, dtype=np.uint64)), **extra)
         return mf.Manifold(mesh)
 
     def shells(self):
