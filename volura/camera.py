@@ -62,32 +62,76 @@ class Camera:
         self.ortho = False
         self.width = 1
         self.height = 1
+        self._d = None   # cached matrices, see _derived
 
     # ---------------------------------------------------------- matrices
-    @property
-    def eye(self):
-        y, p = math.radians(self.yaw), math.radians(self.pitch)
-        d = np.array([math.cos(p) * math.cos(y), math.cos(p) * math.sin(y), math.sin(p)])
-        return self.target + d * self.distance
+    def _signature(self):
+        """A key for every property the matrices below depend on.
 
-    def basis(self):
-        f = normalize(self.target - self.eye)
+        The camera is changed by assigning to its attributes (orbit, pan, zoom, fit,
+        a resize or a direct ``cam.yaw = ...``), never in place, so comparing the
+        current values with the cached ones detects any change without hooks."""
+        t = self.target
+        return (float(t[0]), float(t[1]), float(t[2]), float(self.distance),
+                float(self.yaw), float(self.pitch), float(self.fov),
+                bool(self.ortho), self.width, self.height)
+
+    def _derived(self):
+        """(sig, eye, f, r, u, view, proj, viewproj), rebuilt only when the camera moves.
+
+        ``project`` is called many times per mouse move and every frame; without this
+        it rebuilt the basis (a normalize and two cross products) and both matrices
+        each time. The returned arrays are shared, so callers must not edit them."""
+        sig = self._signature()
+        d = self._d
+        if d is not None and d[0] == sig:
+            return d
+        y, p = math.radians(self.yaw), math.radians(self.pitch)
+        dirv = np.array([math.cos(p) * math.cos(y), math.cos(p) * math.sin(y), math.sin(p)])
+        eye = self.target + dirv * self.distance
+        f = normalize(self.target - eye)
         r = np.cross(f, [0.0, 0.0, 1.0])
         if np.linalg.norm(r) < 1e-6:
-            r = np.array([-math.sin(math.radians(self.yaw)), math.cos(math.radians(self.yaw)), 0.0])
+            r = np.array([-math.sin(y), math.cos(y), 0.0])
             if self.pitch > 0:
                 r = -r
         r = normalize(r)
         u = np.cross(r, f)
-        return f, r, u
+        V = np.eye(4)
+        V[0, :3], V[1, :3], V[2, :3] = r, u, -f
+        V[:3, 3] = -V[:3, :3] @ eye
+        aspect = self.width / max(1, self.height)
+        near, far = self.clip()
+        Pr = np.zeros((4, 4))
+        if self.ortho:
+            hh = self.half_height()
+            w = hh * aspect
+            far += self.distance
+            near = -far
+            Pr[0, 0], Pr[1, 1] = 1 / w, 1 / hh
+            Pr[2, 2] = -2 / (far - near)
+            Pr[2, 3] = -(far + near) / (far - near)
+            Pr[3, 3] = 1
+        else:
+            t = 1 / math.tan(math.radians(self.fov) / 2)
+            Pr[0, 0], Pr[1, 1] = t / aspect, t
+            Pr[2, 2] = (far + near) / (near - far)
+            Pr[2, 3] = 2 * far * near / (near - far)
+            Pr[3, 2] = -1
+        d = (sig, eye, f, r, u, V, Pr, Pr @ V)
+        self._d = d
+        return d
+
+    @property
+    def eye(self):
+        return self._derived()[1]
+
+    def basis(self):
+        d = self._derived()
+        return d[2], d[3], d[4]
 
     def view_matrix(self):
-        f, r, u = self.basis()
-        e = self.eye
-        M = np.eye(4)
-        M[0, :3], M[1, :3], M[2, :3] = r, u, -f
-        M[:3, 3] = -M[:3, :3] @ e
-        return M
+        return self._derived()[5]
 
     def clip(self):
         near = max(self.distance * 0.002, 0.01)
@@ -98,30 +142,12 @@ class Camera:
         return self.distance * math.tan(math.radians(self.fov) / 2)
 
     def proj_matrix(self):
-        aspect = self.width / max(1, self.height)
-        near, far = self.clip()
-        M = np.zeros((4, 4))
-        if self.ortho:
-            h = self.half_height()
-            w = h * aspect
-            far += self.distance
-            near = -far
-            M[0, 0], M[1, 1] = 1 / w, 1 / h
-            M[2, 2] = -2 / (far - near)
-            M[2, 3] = -(far + near) / (far - near)
-            M[3, 3] = 1
-        else:
-            t = 1 / math.tan(math.radians(self.fov) / 2)
-            M[0, 0], M[1, 1] = t / aspect, t
-            M[2, 2] = (far + near) / (near - far)
-            M[2, 3] = 2 * far * near / (near - far)
-            M[3, 2] = -1
-        return M
+        return self._derived()[6]
 
     # ---------------------------------------------------------- mapping
     def ray(self, x, y):
         """World ray (origin, direction) through a widget pixel."""
-        f, r, u = self.basis()
+        _, _, f, r, u = self._derived()[:5]
         aspect = self.width / max(1, self.height)
         nx = (2 * x / self.width - 1)
         ny = (1 - 2 * y / self.height)
@@ -136,7 +162,7 @@ class Camera:
     def project(self, pts):
         """World points (n,3) -> screen (n,2) and a visibility mask."""
         pts = np.asarray(pts, dtype=float).reshape(-1, 3)
-        P = self.proj_matrix() @ self.view_matrix()
+        P = self._derived()[7]
         h = np.c_[pts, np.ones(len(pts))] @ P.T
         w = h[:, 3]
         ok = w > 1e-9
