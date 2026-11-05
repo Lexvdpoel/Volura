@@ -1045,6 +1045,7 @@ TRANSLATIONS = {
     '{n} contours to layer {name}': '{n} contouren naar laag {name}',
     '{n} contours united': '{n} contouren samengevoegd',
     '{n} copies placed': '{n} kopieën geplaatst',
+    '{n} duplicate triangles removed from {name}': '{n} dubbele driehoeken verwijderd uit {name}',
     '{n} edge(s) with 1 face: hole': '{n} rand(en) met 1 vlak: gat',
     '{n} edge(s) with more than 2 faces': '{n} rand(en) met meer dan 2 vlakken',
     '{n} edge(s) without a face': '{n} rand(en) zonder vlak',

@@ -14,7 +14,7 @@ import manifold3d as mf
 
 from . import __version__
 from .brep import Entities, Face
-from .geom import Plane, manifold_from_mesh, mesh_arrays
+from .geom import Plane, manifold_from_mesh, merge_mesh, mesh_arrays
 from .i18n import tr
 from .model import ROOT, Document, Group, Guide
 from .ops import id_color, print_parts, union_all
@@ -175,16 +175,51 @@ def read_stl(path):
     return verts, np.arange(len(verts)).reshape(-1, 3)
 
 
-def import_stl(path):
-    """Return a Manifold, raising ValueError when the mesh is not watertight."""
+def _drop_duplicate_triangles(verts, tris):
+    """Drop triangles that repeat an earlier one; return ``(tris, removed)``.
+
+    Two triangles are duplicates when they have the same three merged corners in the same
+    cyclic order: ``(a, b, c)``, ``(b, c, a)`` and ``(c, a, b)`` are the same triangle, while
+    the reversed ``(a, c, b)`` is not and stays. Exactly one of every group of duplicates
+    remains. Fully vectorised with numpy, so it keeps up with the millions of triangles a
+    large STL can hold.
+    """
+    tris = np.asarray(tris, dtype=np.int64).reshape(-1, 3)
+    _, merged = merge_mesh(verts, tris)
+    a, b = merged[:, 0], merged[:, 1]
+    low = merged.min(axis=1, keepdims=True)          # rotate each triangle so its smallest
+    canon = np.where(a[:, None] == low, merged,      # corner comes first: that is the same
+                     np.where(b[:, None] == low,     # tuple for every cyclic rotation and a
+                              merged[:, [1, 2, 0]],  # different one for a reversed triangle
+                              merged[:, [2, 0, 1]]))
+    order = np.lexsort((canon[:, 2], canon[:, 1], canon[:, 0]))
+    s = canon[order]
+    first = np.ones(len(s), dtype=bool)
+    first[1:] = np.any(s[1:] != s[:-1], axis=1)      # the first of every group of equals
+    keep = np.zeros(len(tris), dtype=bool)
+    keep[order[first]] = True
+    return tris[keep], int((~keep).sum())
+
+
+def import_stl_report(path):
+    """Return ``(Manifold, removed)``: the mesh and how many duplicate triangles were dropped.
+
+    Raises ValueError when the mesh is not watertight.
+    """
     v, t = read_stl(path)
     if not len(t):
         raise ValueError(tr("The STL file contains no triangles."))
+    t, removed = _drop_duplicate_triangles(v, t)
     m = manifold_from_mesh(v, t)
     if m.status() != mf.Error.NoError or m.is_empty():
         raise ValueError(tr("The STL file is not watertight ({status}). "
                             "Only closed volumes can be imported.").format(status=m.status()))
-    return m
+    return m, removed
+
+
+def import_stl(path):
+    """Return a Manifold, raising ValueError when the mesh is not watertight."""
+    return import_stl_report(path)[0]
 
 
 def export_stl(path, part_list):

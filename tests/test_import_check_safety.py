@@ -10,10 +10,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import manifold3d as mf  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from volura import fileio, ops  # noqa: E402
+from volura import app as app_module, fileio, ops  # noqa: E402
 from volura.geom import mesh_arrays  # noqa: E402
 from volura.model import Document  # noqa: E402
+
+_app = QApplication.instance() or QApplication(sys.argv[:1])
 
 SHAPES = {
     "cube": lambda: mf.Manifold.cube((20, 20, 20)),
@@ -57,6 +60,28 @@ def kinds(msgs):
     return [k for k, _ in msgs]
 
 
+@pytest.fixture()
+def win(monkeypatch, tmp_path):
+    """A window, so a test can import through the app exactly as the user does."""
+    monkeypatch.setattr(app_module.errors, "log_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(app_module, "autosave_path", lambda: str(tmp_path / "autosave.volura"))
+    w = app_module.MainWindow()
+    w.doc.dirty = False
+    yield w
+    w.doc.dirty = False
+    w.close()
+
+
+def pump_until(predicate, timeout_ms=8000):
+    """Spin the event loop until `predicate()` holds or the time is up; returns its value."""
+    import time
+    deadline = time.monotonic() + timeout_ms / 1000.0
+    while not predicate() and time.monotonic() < deadline:
+        _app.processEvents()
+        time.sleep(0.005)
+    return predicate()
+
+
 @pytest.mark.parametrize("shape", sorted(SHAPES))
 def test_export_then_import_keeps_the_model(shape, tmp_path):
     doc = Document()
@@ -94,13 +119,80 @@ def test_corners_that_differ_by_1e7_are_merged(tmp_path):
     assert m.volume() == pytest.approx(8000.0, rel=1e-6)
 
 
-def test_triangles_listed_twice_become_two_shells(tmp_path):
-    # current behaviour, not necessarily the wanted one: manifold3d accepts the doubled
-    # triangles as two coincident cubes, so the volume counts twice
+def test_triangles_listed_twice_are_imported_once(tmp_path):
+    # an exporter that writes the object twice, or two identical objects on top of each
+    # other: the doubled triangles are dropped, so the cube stays one closed volume
     tris = soup(mf.Manifold.cube((20, 20, 20)))
-    m = fileio.import_stl(write_ascii(tmp_path / "twice.stl", np.concatenate([tris, tris])))
-    assert m.num_vert() == 16 and m.num_tri() == 24
-    assert m.volume() == pytest.approx(16000.0, rel=1e-6)
+    path = write_ascii(tmp_path / "twice.stl", np.concatenate([tris, tris]))
+    m, removed = fileio.import_stl_report(path)
+    assert removed == 12
+    assert m.num_vert() == 8 and m.num_tri() == 12
+    assert m.volume() == pytest.approx(8000.0, rel=1e-6)
+
+
+def test_one_triangle_listed_twice_is_removed_once(tmp_path):
+    tris = soup(mf.Manifold.cube((20, 20, 20)))
+    path = write_ascii(tmp_path / "one.stl", np.concatenate([tris, tris[:1]]))
+    m, removed = fileio.import_stl_report(path)
+    assert removed == 1
+    assert m.num_vert() == 8
+    assert m.volume() == pytest.approx(8000.0, rel=1e-6)
+
+
+def test_doubles_in_a_rotated_corner_order_are_removed(tmp_path):
+    tris = soup(mf.Manifold.cube((20, 20, 20)))
+    rotated = np.roll(tris, -1, axis=1)            # (a, b, c) -> (b, c, a): the same triangle
+    path = write_ascii(tmp_path / "rot.stl", np.concatenate([tris, rotated]))
+    m, removed = fileio.import_stl_report(path)
+    assert removed == 12
+    assert m.num_vert() == 8 and m.num_tri() == 12
+    assert m.volume() == pytest.approx(8000.0, rel=1e-6)
+
+
+def test_a_reversed_copy_is_not_a_duplicate(tmp_path):
+    tris = soup(mf.Manifold.cube((20, 20, 20)))
+    flipped = tris[:, ::-1]                        # (a, c, b): the opposite orientation
+    path = write_ascii(tmp_path / "flip.stl", np.concatenate([tris, flipped]))
+    with pytest.raises(ValueError, match="not watertight"):
+        fileio.import_stl(path)
+
+
+def test_binary_stl_with_every_triangle_twice(tmp_path):
+    tris = soup(mf.Manifold.cube((20, 20, 20)))
+    path = write_binary(tmp_path / "twice_bin.stl", np.concatenate([tris, tris]))
+    m, removed = fileio.import_stl_report(path)
+    assert removed == 12
+    assert m.num_vert() == 8 and m.num_tri() == 12
+    assert m.volume() == pytest.approx(8000.0, rel=1e-6)
+
+
+def test_a_stl_without_duplicates_is_imported_unchanged(tmp_path):
+    tris = soup(mf.Manifold.cube((20, 20, 20)))
+    path = write_ascii(tmp_path / "once.stl", tris)
+    m, removed = fileio.import_stl_report(path)
+    assert removed == 0
+    assert m.num_vert() == 8 and m.num_tri() == 12
+    assert m.volume() == pytest.approx(8000.0, rel=1e-6)
+
+
+def test_import_reports_removed_duplicates_in_the_status_bar(win, tmp_path):
+    tris = soup(mf.Manifold.cube((20, 20, 20)))
+    path = write_ascii(tmp_path / "twice.stl", np.concatenate([tris, tris]))
+    job = win.import_stl(path)
+    assert pump_until(lambda: len(win.doc.groups) == 1), "the group never appeared"
+    job.wait()
+    assert job.error is None, job.error
+    assert "12 duplicate triangles removed from twice.stl" in win.hint.text()
+
+
+def test_import_without_duplicates_shows_no_removal_message(win, tmp_path):
+    tris = soup(mf.Manifold.cube((20, 20, 20)))
+    path = write_ascii(tmp_path / "once.stl", tris)
+    job = win.import_stl(path)
+    assert pump_until(lambda: len(win.doc.groups) == 1), "the group never appeared"
+    job.wait()
+    assert job.error is None, job.error
+    assert "duplicate triangles removed" not in win.hint.text()
 
 
 def test_an_open_stl_is_refused(tmp_path):

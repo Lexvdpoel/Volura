@@ -3721,18 +3721,24 @@ class MainWindow(QMainWindow):
 
     def import_stl(self, path):
         """Import an STL as a new group; the (possibly large) file is read in the background."""
+        base = os.path.basename(path)
+        group_name = os.path.splitext(base)[0]
+
         def read(report):
             report(0.0, tr("Importing…"))
-            return fileio.import_stl(path)          # reads the file, not the document
+            return fileio.import_stl_report(path)   # reads the file, not the document
 
-        def imported(m):
+        def imported(result):
+            m, removed = result
             self.doc.checkpoint()
-            g = ops.group_from_manifold(self.doc, m, self.settings.current_color,
-                                        os.path.splitext(os.path.basename(path))[0])
+            g = ops.group_from_manifold(self.doc, m, self.settings.current_color, group_name)
             self.doc.active = ROOT
             self.doc.set_selection([("g", g.id, g.id)])
             self.doc.notify()
             self.view.zoom_extents()
+            if removed:
+                self.hint.setText(tr("{n} duplicate triangles removed from {name}").format(
+                    n=removed, name=base))
 
         def failed(e):
             QMessageBox.critical(self, tr("Import Failed"), str(e))

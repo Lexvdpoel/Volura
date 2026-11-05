@@ -676,16 +676,23 @@ class MeshData:
         return self.verts[self.tris[self.region_tris[rid]]].reshape(-1, 3).astype(np.float32)
 
 
-def manifold_from_mesh(verts, tris):
-    """Build a Manifold from a triangle soup, merging coincident vertices."""
+def merge_mesh(verts, tris):
+    """Merge coincident vertices of a triangle soup into shared indices.
+
+    Returns ``(verts, tris)`` where ``tris`` holds the merged vertex indices, one row per
+    input triangle (degenerate triangles are kept, so the rows stay aligned with the input).
+    """
     verts = np.asarray(verts, dtype=float).reshape(-1, 3)
     tris = np.asarray(tris, dtype=np.int64).reshape(-1, 3)
     scale = max(1.0, float(np.abs(verts).max())) if len(verts) else 1.0
     q = np.round(verts / (scale * 1e-7)).astype(np.int64)
     _, first, inverse = np.unique(q, axis=0, return_index=True, return_inverse=True)
-    inverse = inverse.ravel()
-    verts = verts[first]
-    tris = inverse[tris]
+    return verts[first], inverse.ravel()[tris]
+
+
+def manifold_from_mesh(verts, tris):
+    """Build a Manifold from a triangle soup, merging coincident vertices."""
+    verts, tris = merge_mesh(verts, tris)
     good = (tris[:, 0] != tris[:, 1]) & (tris[:, 1] != tris[:, 2]) & (tris[:, 0] != tris[:, 2])
     tris = tris[good]
     mesh = mf.Mesh64(vert_properties=np.ascontiguousarray(verts, dtype=np.float64),
