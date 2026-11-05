@@ -26,7 +26,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from . import (__version__, background, boxgen, cam, dxf, errors, fileio, i18n, joints, nesting,
-               ops, sheet3d, svg, spacemouse, theme, threads, updater, vector_export, vector_import)
+               ops, sheet3d, svg, spacemouse, theme, threads, updater, vector_export, vector_import,
+               workers)
 from .brep import Entities
 from .geom import Plane
 from .i18n import tr, tr_noop
@@ -1139,6 +1140,7 @@ def welcome_enabled():
 
 
 UPDATE_DELAY_MS = 4000             # not right at startup: the window comes first
+POOL_PREWARM_MS = 2000             # boot the worker processes shortly after the window shows
 UPDATE_INTERVAL = 24 * 3600        # automatically at most once a day
 UPDATE_LAST_KEY = "update/last_check"
 UPDATE_SKIP_KEY = "update/skip"
@@ -2349,6 +2351,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self.show_welcome_on_startup)
         QTimer.singleShot(0, self.offer_autosave_restore)
         QTimer.singleShot(UPDATE_DELAY_MS, self.check_for_updates_on_startup)
+        QTimer.singleShot(POOL_PREWARM_MS, workers.prewarm)
         self.spacemouse = spacemouse.SpaceMouse(self)
         self.spacemouse.motion.connect(self.on_spacemouse_motion)
         self.spacemouse.command.connect(self.on_spacemouse_command)
@@ -3768,6 +3771,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, tr("Open Failed"), str(e))
             return
+        self.view.engine.cache.warm([g.ents for g in self.doc.groups])
         self.add_recent(path)
         self.doc.notify()
         self.update_title()
@@ -6074,6 +6078,7 @@ class MainWindow(QMainWindow):
             return
         self.autosave_timer.stop()
         self.spacemouse.stop()
+        workers.shutdown()          # stop the worker processes on the way out
         self.settings.save()
         remove_autosave()       # closed properly: there is nothing to restore
         e.accept()

@@ -241,6 +241,130 @@ def canon_shift(plane):
     return canon_plane(plane), (float(w @ plane.u), float(w @ plane.v))
 
 
+# --------------------------------------------------------------- meshes across processes
+#
+# ``to_manifold`` triangulates every face in Python, which is the heavy part of an
+# export and is independent per group. The three functions below split that work
+# so it can run in a worker process (see ``workers.parallel_map``): ``mesh_payload``
+# takes a group out to picklable numpy arrays (no ``Entities``, no Qt),
+# ``triangulate_payload`` does the per-face triangulation on those arrays, and
+# ``manifold_from_tris`` rebuilds the ``Manifold`` in the main process - a
+# ``Manifold`` cannot be pickled, so only the arrays travel between processes.
+
+
+def mesh_payload(ents, fids=None, face_ids=None):
+    """The faces as picklable arrays ``(verts, loops, normals, tags)``.
+
+    ``loops`` holds one entry per face: its loops with the vertices renumbered to
+    rows of ``verts``. It is exactly what ``face_triangles`` reads per face, so a
+    worker can triangulate a group without the ``Entities`` object."""
+    fids = list(ents.F) if fids is None else list(fids)
+    if not fids:
+        return (np.zeros((0, 3)), [], np.zeros((0, 3)),
+                (np.zeros(0, dtype=np.uint64) if face_ids is not None else None))
+    vids = sorted({v for f in fids for loop in ents.F[f].loops for v in loop})
+    idx = {v: i for i, v in enumerate(vids)}
+    verts = np.array([ents.V[v] for v in vids], dtype=np.float64)
+    loops = [tuple(tuple(idx[v] for v in loop) for loop in ents.F[f].loops) for f in fids]
+    normals = np.array([ents.F[f].normal for f in fids], dtype=np.float64)
+    tags = (np.array([face_ids.get(f, 0) for f in fids], dtype=np.uint64)
+            if face_ids is not None else None)
+    return verts, loops, normals, tags
+
+
+def triangulate_payload(payload):
+    """``(tris, tags)`` for a :func:`mesh_payload`: the triangles of every face.
+
+    The same walk as ``to_manifold`` - a plane per face, its loops to local
+    coordinates, ``manifold3d.triangulate``, corners back to rows of ``verts`` -
+    so the result is identical whether it runs here or in a worker."""
+    verts, loops, normals, tags = payload
+    tris = []
+    out = [] if tags is not None else None
+    for i, ls in enumerate(loops):
+        ids = [v for loop in ls for v in loop]
+        if not ids:
+            continue
+        pl = Plane(verts[ls[0][0]], normals[i])
+        polys = [pl.to_local(verts[list(loop)]) for loop in ls]
+        try:
+            t = np.asarray(mf.triangulate(polys), dtype=np.int64).reshape(-1, 3)
+        except Exception:
+            t = np.zeros((0, 3), dtype=np.int64)
+        for a, b, c in t:
+            tris.append((ids[a], ids[b], ids[c]))
+            if out is not None:
+                out.append(int(tags[i]))
+    if not tris:
+        return np.zeros((0, 3), dtype=np.int64), (np.zeros(0, dtype=np.uint64) if out is not None else None)
+    return np.asarray(tris, dtype=np.int64), (np.asarray(out, dtype=np.uint64) if out is not None else None)
+
+
+def manifold_from_tris(verts, tris, tags):
+    """The ``Manifold`` of triangles from :func:`triangulate_payload` (built in the main process)."""
+    if len(tris) == 0:
+        return mf.Manifold()
+    extra = {"face_id": np.ascontiguousarray(tags, dtype=np.uint64)} if tags is not None else {}
+    mesh = mf.Mesh64(vert_properties=np.ascontiguousarray(verts, dtype=np.float64),
+                     tri_verts=np.ascontiguousarray(tris, dtype=np.uint64), **extra)
+    return mf.Manifold(mesh)
+
+
+def triangulate_job(payload):
+    """Worker entry point: the triangles of one group, as picklable arrays."""
+    return triangulate_payload(payload)
+
+
+def render_payload(ents):
+    """``(verts, loops, normals, fids)`` for every face, for the render / pick triangulation.
+
+    Like :func:`mesh_payload` but without color tags: it carries the face id so the
+    triangles come back tagged with the face they belong to (``GeoCache`` needs that
+    for picking and selection)."""
+    fids = list(ents.F)
+    if not fids:
+        return np.zeros((0, 3)), [], np.zeros((0, 3)), np.zeros(0, dtype=np.int64)
+    vids = sorted({v for f in fids for loop in ents.F[f].loops for v in loop})
+    idx = {v: i for i, v in enumerate(vids)}
+    verts = np.array([ents.V[v] for v in vids], dtype=np.float64)
+    loops = [tuple(tuple(idx[v] for v in loop) for loop in ents.F[f].loops) for f in fids]
+    normals = np.array([ents.F[f].normal for f in fids], dtype=np.float64)
+    return verts, loops, normals, np.asarray(fids, dtype=np.int64)
+
+
+def triangulate_render(payload):
+    """``(T, tri_fid, tri_nrm)``: the world triangles of every face, as ``GeoCache`` builds them.
+
+    The same walk as the loop in ``GeoCache._build`` - a plane per face, its loops to
+    local coordinates, ``manifold3d.triangulate``, empty faces skipped - so the
+    render and pick cache is identical whether it is built here or in a worker."""
+    verts, loops, normals, fids = payload
+    T, fid, nrm = [], [], []
+    for i, ls in enumerate(loops):
+        ids = [v for loop in ls for v in loop]
+        if not ids:
+            continue
+        pl = Plane(verts[ls[0][0]], normals[i])
+        polys = [pl.to_local(verts[list(loop)]) for loop in ls]
+        try:
+            t = np.asarray(mf.triangulate(polys), dtype=np.int64).reshape(-1, 3)
+        except Exception:
+            t = np.zeros((0, 3), dtype=np.int64)
+        if not len(t):
+            continue
+        T.append(verts[ids][t])
+        fid.extend([int(fids[i])] * len(t))
+        nrm.append(np.repeat(normals[i][None], len(t), axis=0))
+    return (np.concatenate(T) if T else np.zeros((0, 3, 3)),
+            np.asarray(fid, dtype=np.int64),
+            np.concatenate(nrm) if nrm else np.zeros((0, 3)))
+
+
+def render_triangulate_job(payload):
+    """Worker entry point: the render triangles of one group, as picklable arrays."""
+    return triangulate_render(payload)
+
+
 class Entities:
     """A set of connected SketchUp style geometry (the model or a group)."""
 
@@ -1848,29 +1972,9 @@ class Entities:
     def to_manifold(self, fids=None, face_ids=None):
         """The faces as a Manifold. `face_ids` ({face: int}) tags every triangle of a face;
         Manifold keeps these tags through booleans (the 3MF export uses them for colors)."""
-        fids = list(self.F) if fids is None else list(fids)
-        if not fids:
-            return mf.Manifold()
-        vids = sorted({v for f in fids for loop in self.F[f].loops for v in loop})
-        idx = {v: i for i, v in enumerate(vids)}
-        tris, tags = [], []
-        for f in fids:
-            face = self.F[f]
-            ids = [v for loop in face.loops for v in loop]
-            _, t = self.face_triangles(f)
-            for a, b, c in t:
-                tris.append((idx[ids[a]], idx[ids[b]], idx[ids[c]]))
-                if face_ids is not None:
-                    tags.append(face_ids.get(f, 0))
-        if not tris:
-            return mf.Manifold()
-        verts = np.array([self.V[v] for v in vids], dtype=np.float64)
-        extra = {}
-        if face_ids is not None:
-            extra["face_id"] = np.array(tags, dtype=np.uint64)
-        mesh = mf.Mesh64(vert_properties=np.ascontiguousarray(verts),
-                         tri_verts=np.ascontiguousarray(np.array(tris, dtype=np.uint64)), **extra)
-        return mf.Manifold(mesh)
+        verts, loops, normals, tags = mesh_payload(self, fids, face_ids)
+        tris, tags = triangulate_payload((verts, loops, normals, tags))
+        return manifold_from_tris(verts, tris, tags)
 
     def shells(self):
         """Groups of faces connected through edges."""

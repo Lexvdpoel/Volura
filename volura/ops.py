@@ -7,11 +7,12 @@ from collections import Counter
 import numpy as np
 import manifold3d as mf
 
-from .brep import TOL, Entities
+from .brep import TOL, Entities, manifold_from_tris, mesh_payload, triangulate_job
 from .geom import (Plane, default_u, extrude_cs, manifold_from_mesh, mesh_arrays, normalize,
                    rotation_matrix)
 from .i18n import tr, tr_noop
 from .model import ROOT, Document, Group
+from . import workers
 
 DEFAULT_COLOR = "#f2f2f2"
 
@@ -616,16 +617,14 @@ class Part:
 
 def parts(doc: Document, only_selected=False):
     """Printable parts: every visible group and every closed shell of loose geometry."""
-    out = []
     groups = doc.selected_groups() if only_selected else doc.visible_groups()
-    for g in groups:
-        out.append(_part(g.name, g.color, g.ents, list(g.ents.F)))
+    items = [(g.name, g.color, g.ents, list(g.ents.F)) for g in groups]
     if not only_selected:
         for k, shell in enumerate(doc.root.shells(), 1):
             colors = Counter(doc.root.F[f].color for f in shell if doc.root.F[f].color)
             color = colors.most_common(1)[0][0] if colors else DEFAULT_COLOR
-            out.append(_part(tr("Loose geometry {k}").format(k=k), color, doc.root, shell))
-    return out
+            items.append((tr("Loose geometry {k}").format(k=k), color, doc.root, shell))
+    return build_parts(items)
 
 
 def color_id(color):
@@ -643,17 +642,64 @@ def id_color(value):
     return f"#{(value - 1) & 0xFFFFFF:06x}" if value > 0 else None
 
 
+def _finish_part(name, color, m):
+    """The Part a triangulated, closed shell makes once its Manifold is built."""
+    if m.status() != mf.Error.NoError or m.is_empty():
+        return Part(name, color, problem=tr("not a valid volume ({status})").format(status=m.status().name))
+    if m.volume() < 0:
+        return Part(name, color, problem=tr("faces are inside out"))
+    return Part(name, color, m)
+
+
 def _part(name, color, ents, fids):
     open_e = ents.open_edges(fids)
     if open_e:
         return Part(name, color, problem=tr("not closed: {n} open or doubled edge(s)").format(n=len(open_e)))
     # every triangle carries the color of its face (a painted face, or the part color)
     m = ents.to_manifold(fids, face_ids={f: color_id(ents.F[f].color or color) for f in fids})
-    if m.status() != mf.Error.NoError or m.is_empty():
-        return Part(name, color, problem=tr("not a valid volume ({status})").format(status=m.status().name))
-    if m.volume() < 0:
-        return Part(name, color, problem=tr("faces are inside out"))
-    return Part(name, color, m)
+    return _finish_part(name, color, m)
+
+
+# Triangulating a group in a worker only pays once it is big enough to beat the
+# cost of pickling its loops over and the triangles back. Measured on the
+# benchmark model (24 groups, 16k faces) ops.parts falls from ~2.0 s to ~0.7 s
+# with the pool; a group of a few hundred faces gains nothing, so small models
+# and VOLURA_WORKERS=0 keep the work in the main process.
+PARTS_POOL_MIN_GROUPS = 2
+PARTS_POOL_MIN_FACES = 1200
+
+
+def build_parts(items):
+    """The parts for ``[(name, color, ents, fids)]``, triangulated over the cores when that pays.
+
+    The open-edge check reads the live geometry and stays here; the per-face
+    triangulation - the heavy part of an export - goes to the pool as picklable
+    arrays (see ``brep.mesh_payload``) and every ``Manifold`` is rebuilt here from
+    the triangles that come back. The result is identical to calling ``_part`` on
+    each item, only faster for a model with enough faces to spread."""
+    prepared = []
+    for name, color, ents, fids in items:
+        open_e = ents.open_edges(fids)
+        if open_e:
+            prepared.append((name, color, open_e, None))
+        else:
+            face_ids = {f: color_id(ents.F[f].color or color) for f in fids}
+            prepared.append((name, color, open_e, mesh_payload(ents, fids, face_ids)))
+    jobs = [p for _, _, _, p in prepared if p is not None]
+    faces = sum(len(p[1]) for p in jobs)
+    if len(jobs) >= PARTS_POOL_MIN_GROUPS and faces >= PARTS_POOL_MIN_FACES:
+        results = workers.parallel_map(triangulate_job, jobs, min_items=PARTS_POOL_MIN_GROUPS)
+    else:
+        results = [triangulate_job(p) for p in jobs]
+    out, it = [], iter(results)
+    for name, color, open_e, payload in prepared:
+        if payload is None:
+            out.append(Part(name, color,
+                            problem=tr("not closed: {n} open or doubled edge(s)").format(n=len(open_e))))
+        else:
+            tris, tags = next(it)
+            out.append(_finish_part(name, color, manifold_from_tris(payload[0], tris, tags)))
+    return out
 
 
 def print_parts(part_list):

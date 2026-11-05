@@ -7,6 +7,9 @@ so the tests never leave recent files or changed settings behind for the user.
 import os
 
 os.environ["VOLURA_LANG"] = "en"
+# the tests check results, not the process pool: run every job in the main process
+# (tests/test_workers.py turns the pool on for the few tests that need it)
+os.environ.setdefault("VOLURA_WORKERS", "0")
 
 _saved = None
 

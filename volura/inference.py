@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from . import workers
+from .brep import render_payload, render_triangulate_job
 from .geom import AXES, GROUND, Plane, closest_on_line_to_ray
 from .i18n import tr
 from .model import ROOT
@@ -10,6 +12,14 @@ from .model import ROOT
 PICK_PX = 10.0
 EDGE_PX = 7.0
 AXIS_PX = 9.0          # the drawing axes: a little wider than an edge, as in SketchUp
+
+# Warming the render cache of many groups at once only pays once there are enough
+# faces to beat the trip to the workers. Measured on the benchmark model (24 groups,
+# 16k faces) building every group's cache falls from ~1.8 s to ~0.5 s with the pool;
+# below that the pickling costs as much as it saves, so small models build lazily.
+RENDER_POOL_MIN_GROUPS = 2
+RENDER_POOL_MIN_FACES = 1200
+
 
 _AXES_ON = (tr("On Red Axis"), tr("On Green Axis"), tr("On Blue Axis"))
 LABELS = {
@@ -63,15 +73,51 @@ class GeoCache:
             return c
         c = self._build(ents)
         self._c[key] = c
+        self._trim()
+        return c
+
+    def warm(self, ents_list):
+        """Triangulate many groups over the cores, so the first frame after opening a
+        file does not build every group's cache one by one.
+
+        A no-op when the pool is off or the model is too small to pay for the trip
+        to the workers; the groups that are warmed are stored exactly as ``get``
+        would build them, so a later change still rebuilds them (version check)."""
+        ents_list = [e for e in ents_list if e is not None and len(e.F)]
+        if workers.pool() is None or len(ents_list) < RENDER_POOL_MIN_GROUPS:
+            return
+        if sum(len(e.F) for e in ents_list) < RENDER_POOL_MIN_FACES:
+            return
+        try:
+            results = workers.parallel_map(render_triangulate_job,
+                                           [render_payload(e) for e in ents_list],
+                                           min_items=RENDER_POOL_MIN_GROUPS)
+        except Exception:
+            return
+        for e, (T, tri_fid, tri_nrm) in zip(ents_list, results):
+            self._c[id(e)] = self._assemble(e, (T, tri_fid, tri_nrm, self._face_tris(T, tri_fid)))
+            self._trim()
+
+    def _trim(self):
         if len(self._c) > 64:
             for k in list(self._c)[:-32]:
                 del self._c[k]
-        return c
 
     @staticmethod
-    def _build(ents):
-        tris, tri_fid, tri_nrm = [], [], []
+    def _face_tris(T, tri_fid):
+        """The triangles of each face, split out of the concatenated ``T`` (one run per face)."""
         face_tris = {}
+        if len(T):
+            b = np.flatnonzero(np.r_[True, tri_fid[1:] != tri_fid[:-1], True])
+            for s, e in zip(b[:-1], b[1:]):
+                face_tris[int(tri_fid[s])] = T[s:e]
+        return face_tris
+
+    @staticmethod
+    def _triangulate(ents):
+        """``(T, tri_fid, tri_nrm, face_tris)``: the world triangles of every face, in the
+        order the faces come in - the heavy part of the cache, done here in the main process."""
+        tris, tri_fid, tri_nrm, face_tris = [], [], [], {}
         for f, face in ents.F.items():
             t, _ = ents.face_triangles(f)
             if not len(t):
@@ -80,7 +126,15 @@ class GeoCache:
             tris.append(t)
             tri_fid.extend([f] * len(t))
             tri_nrm.append(np.repeat(face.normal[None], len(t), axis=0))
-        T = np.concatenate(tris) if tris else np.zeros((0, 3, 3))
+        return (np.concatenate(tris) if tris else np.zeros((0, 3, 3)),
+                np.array(tri_fid, dtype=np.int64),
+                np.concatenate(tri_nrm) if tri_nrm else np.zeros((0, 3)),
+                face_tris)
+
+    @staticmethod
+    def _assemble(ents, tri):
+        """The cache entry built around a group's triangulation ``(T, tri_fid, tri_nrm, face_tris)``."""
+        T, tri_fid, tri_nrm, face_tris = tri
         hf, he = ents.hidden_f, ents.hidden_e
         tri_hidden = np.fromiter((f in hf for f in tri_fid), dtype=bool, count=len(tri_fid))
         hard = [e for e in ents.E if e not in ents.soft]
@@ -95,8 +149,8 @@ class GeoCache:
         corners = np.array([ents.V[v] for v in vids]) if vids else np.zeros((0, 3))
         return {
             "ents": ents, "version": ents.version,
-            "T": T, "tri_fid": np.array(tri_fid, dtype=np.int64),
-            "tri_nrm": np.concatenate(tri_nrm) if tri_nrm else np.zeros((0, 3)),
+            "T": T, "tri_fid": tri_fid,
+            "tri_nrm": tri_nrm,
             "tri_hidden": tri_hidden, "nhidden": int(tri_hidden.sum()),
             "face_tris": face_tris,
             "p0": T[:, 0] if len(T) else np.zeros((0, 3)),
@@ -107,6 +161,10 @@ class GeoCache:
             "corners": corners, "mid": (A + B) / 2 if len(A) else np.zeros((0, 3)),
             "bbox": ents.bbox(),
         }
+
+    @staticmethod
+    def _build(ents):
+        return GeoCache._assemble(ents, GeoCache._triangulate(ents))
 
 
 def ray_tris(c, o, d, allow_hidden=False):
