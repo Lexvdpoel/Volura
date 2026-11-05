@@ -25,8 +25,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
                                QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
-from . import (__version__, boxgen, cam, dxf, errors, fileio, i18n, joints, nesting, ops, sheet3d,
-               svg, spacemouse, theme, threads, updater, vector_export, vector_import)
+from . import (__version__, background, boxgen, cam, dxf, errors, fileio, i18n, joints, nesting,
+               ops, sheet3d, svg, spacemouse, theme, threads, updater, vector_export, vector_import)
 from .brep import Entities
 from .geom import Plane
 from .i18n import tr, tr_noop
@@ -2208,6 +2208,7 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(icon("app"))
         self.setAcceptDrops(True)
         self.clipboard = []
+        self._busy = False          # a background job is reading the model: keep it still
         self.tool_actions = {}
         self.sheet_tool_actions = {}
         self.resize(1400, 900)
@@ -3531,12 +3532,14 @@ class MainWindow(QMainWindow):
         return tr("no 3D mouse found")
 
     def on_spacemouse_motion(self, m):
-        if not self.isActiveWindow():
+        if self._busy or not self.isActiveWindow():
             return
         self.active_view().spacemouse_move(m, self.settings.spacemouse_speed)
 
     def on_spacemouse_command(self, name):
         """A button of the 3D mouse: fit to view, or a standard view in 3D."""
+        if self._busy:
+            return
         if name == "fit":
             self.zoom_extents()
         elif self.mode == "3d":
@@ -3717,18 +3720,25 @@ class MainWindow(QMainWindow):
             self.import_stl(path)
 
     def import_stl(self, path):
-        try:
-            m = fileio.import_stl(path)
-        except Exception as e:
+        """Import an STL as a new group; the (possibly large) file is read in the background."""
+        def read(report):
+            report(0.0, tr("Importing…"))
+            return fileio.import_stl(path)          # reads the file, not the document
+
+        def imported(m):
+            self.doc.checkpoint()
+            g = ops.group_from_manifold(self.doc, m, self.settings.current_color,
+                                        os.path.splitext(os.path.basename(path))[0])
+            self.doc.active = ROOT
+            self.doc.set_selection([("g", g.id, g.id)])
+            self.doc.notify()
+            self.view.zoom_extents()
+
+        def failed(e):
             QMessageBox.critical(self, tr("Import Failed"), str(e))
-            return
-        self.doc.checkpoint()
-        g = ops.group_from_manifold(self.doc, m, self.settings.current_color,
-                                    os.path.splitext(os.path.basename(path))[0])
-        self.doc.active = ROOT
-        self.doc.set_selection([("g", g.id, g.id)])
-        self.doc.notify()
-        self.view.zoom_extents()
+
+        return background.run(self, read, text=tr("Importing…"),
+                              on_done=imported, on_error=failed)
 
     # ------------------------------------------------------------ vector import
     def ask_vector_options(self, drawing, name="Vector"):
@@ -4287,7 +4297,10 @@ class MainWindow(QMainWindow):
     def export_objects(self):
         """Printable parts for export; refuses when something is not a closed volume."""
         only = bool(self.doc.selected_groups())
-        part_list = ops.parts(self.doc, only_selected=only)
+        return self._validated_parts(ops.parts(self.doc, only_selected=only))
+
+    def _validated_parts(self, part_list):
+        """The export warnings for an already computed part list; the list, or None to stop."""
         if not part_list:
             QMessageBox.information(self, tr("Export"), tr("There are no volumes to export. "
                                                            "Draw a face and use Push/Pull (P)."))
@@ -4326,59 +4339,87 @@ class MainWindow(QMainWindow):
         return base + ext
 
     def export_stl(self):
-        objs = self.export_objects()
-        if not objs:
-            return
-        path, _ = QFileDialog.getSaveFileName(self, tr("Export as STL"), self.export_name(".stl"),
-                                              "STL (*.stl)")
-        if not path:
-            return
-        try:
-            n = fileio.export_stl(path, objs)
-        except Exception as e:
-            QMessageBox.critical(self, tr("Exporting Failed"), str(e))
-            return
-        self.hint.setText(tr("STL exported ({n} triangles, watertight): {path}").format(n=n, path=path))
+        self._export_parts_async("stl")
 
     def export_3mf(self):
-        objs = self.export_objects()
-        if not objs:
-            return
-        path, _ = QFileDialog.getSaveFileName(self, tr("Export as 3MF"), self.export_name(".3mf"),
-                                              "3MF (*.3mf)")
-        if not path:
-            return
-        try:
-            used = fileio.export_3mf(path, objs, self.doc.materials,
-                                     os.path.splitext(os.path.basename(path))[0])
-        except Exception as e:
-            QMessageBox.critical(self, tr("Exporting Failed"), str(e))
-            return
-        lines = "\n".join(tr("  extruder {e}: {name}").format(e=e, name=n) for n, e in used)
-        QMessageBox.information(self, tr("3MF Exported"),
-                                tr("{path}\n\nColors per filament:\n{lines}\n\n"
-                                   "Open the file in PrusaSlicer, OrcaSlicer or Bambu Studio; "
-                                   "every color is already on the right filament. The slicer shows "
-                                   "its own filament colors: give its filaments these colors to "
-                                   "see the model as in Volura.").format(
-                                    path=path, lines=lines))
+        self._export_parts_async("3mf")
 
     def export_stl_colors(self):
-        objs = self.export_objects()
-        if not objs:
-            return
-        path, _ = QFileDialog.getSaveFileName(self, tr("STL per Color (base name)"),
-                                              self.export_name(".stl"), "STL (*.stl)")
-        if not path:
-            return
-        try:
-            files = fileio.export_stl_per_color(path, objs, self.doc.materials)
-        except Exception as e:
-            QMessageBox.critical(self, tr("Exporting Failed"), str(e))
-            return
-        QMessageBox.information(self, tr("STL per Color"),
-                                tr("Written:\n{files}\n\nLoad them together in your slicer as one "
-                                   "object with several parts.").format(files="\n".join(files)))
+        self._export_parts_async("colors")
+
+    def _export_parts_async(self, kind):
+        """Export the printable parts in the background: prepare, ask, write.
+
+        ``kind`` is "stl", "3mf" or "colors". Turning the model into solids and
+        writing the file run in the background so the window keeps responding; the
+        warnings and the file-name dialog stay on the GUI thread, in the same order
+        as a synchronous export. Only the preparation can be cancelled, and then no
+        file is written; the write itself is atomic and runs to its end.
+        """
+        only = bool(self.doc.selected_groups())
+
+        def prepare(report):
+            report(0.0, tr("Preparing…"))
+            return ops.parts(self.doc, only_selected=only)
+
+        def prepared(part_list):
+            part_list = self._validated_parts(part_list)
+            if part_list is None:
+                return
+            if kind == "stl":
+                path, _ = QFileDialog.getSaveFileName(self, tr("Export as STL"),
+                                                      self.export_name(".stl"), "STL (*.stl)")
+            elif kind == "3mf":
+                path, _ = QFileDialog.getSaveFileName(self, tr("Export as 3MF"),
+                                                      self.export_name(".3mf"), "3MF (*.3mf)")
+            else:
+                path, _ = QFileDialog.getSaveFileName(self, tr("STL per Color (base name)"),
+                                                      self.export_name(".stl"), "STL (*.stl)")
+            if path:
+                self._write_export_async(kind, path, part_list)
+
+        background.run(self, prepare, text=tr("Preparing…"),
+                       on_done=prepared, on_error=self._export_failed)
+
+    def _write_export_async(self, kind, path, part_list):
+        """Write an already validated part list to `path` in the background."""
+        materials = [list(m) for m in self.doc.materials]
+        name = os.path.splitext(os.path.basename(path))[0]
+
+        def write(report):
+            report(0.0, tr("Exporting…"))
+            if kind == "stl":
+                return ("stl", fileio.export_stl(path, part_list))
+            if kind == "3mf":
+                return ("3mf", fileio.export_3mf(path, part_list, materials, name))
+            return ("colors", fileio.export_stl_per_color(path, part_list, materials))
+
+        def written(outcome):
+            what, value = outcome
+            if what == "stl":
+                self.hint.setText(tr("STL exported ({n} triangles, watertight): {path}")
+                                  .format(n=value, path=path))
+            elif what == "3mf":
+                lines = "\n".join(tr("  extruder {e}: {name}").format(e=e, name=n)
+                                  for n, e in value)
+                QMessageBox.information(self, tr("3MF Exported"),
+                                        tr("{path}\n\nColors per filament:\n{lines}\n\n"
+                                           "Open the file in PrusaSlicer, OrcaSlicer or Bambu Studio; "
+                                           "every color is already on the right filament. The slicer "
+                                           "shows its own filament colors: give its filaments these "
+                                           "colors to see the model as in Volura.").format(
+                                            path=path, lines=lines))
+            else:
+                QMessageBox.information(self, tr("STL per Color"),
+                                        tr("Written:\n{files}\n\nLoad them together in your slicer as "
+                                           "one object with several parts.").format(
+                                            files="\n".join(value)))
+
+        background.run(self, write, text=tr("Exporting…"), can_cancel=False,
+                       on_done=written, on_error=self._export_failed)
+
+    def _export_failed(self, exc):
+        QMessageBox.critical(self, tr("Exporting Failed"), str(exc))
 
     # ------------------------------------------------------------ 2D vector export
     def vector_export_options(self):
@@ -4417,6 +4458,10 @@ class MainWindow(QMainWindow):
         Without `options` the dialog asks what should go; without `path` Qt asks for a
         file name. On the 2D worksheet the dialog is about the worksheet itself and only
         the visible layers are written. Returns the written path, or None.
+
+        With a `path` the whole export runs synchronously (and returns the path); the
+        interactive export without one runs in the background, so a big model does not
+        freeze the window, and returns None right away.
         """
         kind = "dxf" if str(kind).lower() == "dxf" else "svg"
         if self.mode == "2d":
@@ -4424,6 +4469,12 @@ class MainWindow(QMainWindow):
         opts = self.vector_export_options() if options is None else dict(options)
         if opts is None:
             return None
+        if path is not None:
+            return self._export_vector_sync(kind, path, opts)
+        return self._export_vector_async(kind, opts)
+
+    def _export_vector_sync(self, kind, path, opts):
+        """Compute, check and write the drawing now; returns the path, or None."""
         try:
             drawing = self.vector_export_drawing(opts)
         except Exception as e:
@@ -4436,14 +4487,6 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, tr("Export 2D Vector"), msg)
             self.hint.setText(tr("Nothing was exported."))
             return None
-        if path is None:
-            path, _ = QFileDialog.getSaveFileName(
-                self, tr("Export 2D Vector"), self.export_name("." + kind),
-                "SVG (*.svg)" if kind == "svg" else "DXF (*.dxf)")
-            if not path:
-                return None
-            if not os.path.splitext(path)[1]:
-                path += "." + kind
         try:
             (dxf.write_dxf if kind == "dxf" else svg.write_svg)(drawing, path)
         except Exception as e:
@@ -4452,6 +4495,49 @@ class MainWindow(QMainWindow):
         self.hint.setText(tr("{n} outlines exported to {where}").format(n=len(drawing.paths),
                                                                        where=path))
         return path
+
+    def _export_vector_async(self, kind, opts):
+        """The interactive export: build the drawing in the background, then ask and write."""
+        def compute(report):
+            report(0.0, tr("Preparing…"))
+            return self.vector_export_drawing(opts)
+
+        def computed(drawing):
+            if not drawing.paths:
+                msg = self.vector_export_empty_message(opts, drawing)
+                if drawing.warnings:
+                    msg += "\n\n" + "\n".join(drawing.warnings)
+                QMessageBox.information(self, tr("Export 2D Vector"), msg)
+                self.hint.setText(tr("Nothing was exported."))
+                return
+            path, _ = QFileDialog.getSaveFileName(
+                self, tr("Export 2D Vector"), self.export_name("." + kind),
+                "SVG (*.svg)" if kind == "svg" else "DXF (*.dxf)")
+            if not path:
+                return
+            if not os.path.splitext(path)[1]:
+                path += "." + kind
+            self._write_vector_async(drawing, path, kind)
+
+        background.run(self, compute, text=tr("Preparing…"), on_done=computed,
+                       on_error=self._vector_export_failed)
+        return None
+
+    def _write_vector_async(self, drawing, path, kind):
+        """Write an already built drawing to `path` in the background."""
+        def write(report):
+            report(0.0, tr("Exporting…"))
+            (dxf.write_dxf if kind == "dxf" else svg.write_svg)(drawing, path)
+            return len(drawing.paths)
+
+        def written(n):
+            self.hint.setText(tr("{n} outlines exported to {where}").format(n=n, where=path))
+
+        background.run(self, write, text=tr("Exporting…"), can_cancel=False, on_done=written,
+                       on_error=self._vector_export_failed)
+
+    def _vector_export_failed(self, exc):
+        QMessageBox.critical(self, tr("Export Failed"), str(exc))
 
     # ------------------------------------------------------------ edit
     def undo(self):
