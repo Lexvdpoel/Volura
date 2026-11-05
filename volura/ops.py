@@ -10,10 +10,37 @@ import manifold3d as mf
 from .brep import TOL, Entities
 from .geom import (Plane, default_u, extrude_cs, manifold_from_mesh, mesh_arrays, normalize,
                    rotation_matrix)
-from .i18n import tr
+from .i18n import tr, tr_noop
 from .model import ROOT, Document, Group
 
 DEFAULT_COLOR = "#f2f2f2"
+
+# The quality steps of Tools > Simplify Model: a fixed tolerance in mm and what it does.
+# Aimed at a 0.4 mm nozzle and a 0.1 mm layer: a deviation far under the layer height is
+# invisible in the print. The dialog and the tests read the same table; the dialog
+# translates the texts when it shows them.
+SIMPLIFY_STEPS = [
+    (0.005, tr_noop("Lossless: no visible change, only removes what adds nothing.")),
+    (0.01, tr_noop("Invisible in print: a tenth of a 0.1 mm layer.")),
+    (0.02, tr_noop("Recommended: far below a layer; curved surfaces print the same.")),
+    (0.05, tr_noop("Half a layer: large curves are fine; very fine details such as small text "
+                   "may soften slightly.")),
+    (0.1, tr_noop("One layer height: facets may show on large smooth curves; "
+                  "fine details soften.")),
+    (0.2, tr_noop("Half the nozzle: clearly coarser; only for drafts or hidden parts.")),
+]
+SIMPLIFY_DEFAULT_TOLERANCE = 0.02
+
+# An import with more triangles than this gets the "simplify it now?" advice. Measured on
+# the test machine (Qt offscreen, CPU only) by timing the per-frame work that scales with
+# the triangle count - viewport._render_data() rebuilding the draw arrays of a sphere built
+# from manifold (one face per triangle, as an imported STL becomes):
+#     triangles   512  2048  4608   8192  18432  32768  73728  131072
+#     frame (ms)  1.2   4.6  10.8   17.2   44.9   93.0  222.7   398.6
+# about 0.003 ms per triangle, so a frame crosses 50 ms near 18000 triangles; 20000 is the
+# first round step that is clearly past it. (Hovering and snapping stay ~1 ms at any size;
+# the first hover after an import also rebuilds the snap cache, ~0.11 ms per triangle.)
+LARGE_IMPORT_TRIANGLES = 20000
 
 
 def union_all(manifolds):
@@ -104,6 +131,37 @@ def split_parts(doc: Document, g: Group):
     for p in parts[1:]:
         out.append(doc.add_group(Entities.from_manifold(p), g.color, g.name))
     return out
+
+
+def tri_count(ents):
+    """The number of triangles a group's geometry prints as (its manifold's triangles)."""
+    m = ents.to_manifold()
+    return 0 if m.is_empty() else len(m.to_mesh().tri_verts)
+
+
+def has_painted_faces(g: Group):
+    """True when a face of the group carries its own color (Tools > Simplify Model warns
+    that simplifying drops those colors, because they do not survive the manifold)."""
+    return any(f.color for f in g.ents.F.values())
+
+
+def simplify_group(doc: Document, g: Group, tolerance):
+    """Tools > Simplify Model: replace the geometry of `g` by a simplified copy.
+
+    Returns (triangles before, triangles after). Name, color, visibility and id of the
+    group stay the same; only its entities change. A locked group is left untouched.
+    A group that is not a closed volume raises a ValueError with its name, as boolean().
+    Face colors do not survive to_manifold()/from_manifold(), so the group keeps its own
+    color (the dialog warns about painted faces beforehand)."""
+    if g.locked:
+        n = tri_count(g.ents)
+        return n, n
+    m = g.ents.to_manifold()
+    if m.status() != mf.Error.NoError or m.is_empty():
+        raise ValueError(tr("{name} is not a closed volume.").format(name=g.name))
+    before = len(m.to_mesh().tri_verts)
+    g.ents = Entities.from_manifold(m.simplify(tolerance))
+    return before, tri_count(g.ents)
 
 
 def outside(m):

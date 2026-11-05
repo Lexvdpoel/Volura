@@ -194,6 +194,7 @@ class Settings:
             self.length_precision = 2
         self.current_color = str(self.q.value("current_color", "#d23b3b"))
         self.check_updates = self._bool("check_updates", True)
+        self.ask_simplify_import = self._bool("ask_simplify_import", True)
         self.theme = str(self.q.value("theme", theme.SYSTEM))
         if self.theme not in dict(theme.CHOICES):
             self.theme = theme.SYSTEM
@@ -218,6 +219,7 @@ class Settings:
         self.q.setValue("show_edges", self.show_edges)
         self.q.setValue("xray", self.xray)
         self.q.setValue("check_updates", self.check_updates)
+        self.q.setValue("ask_simplify_import", self.ask_simplify_import)
         self.q.setValue("theme", self.theme)
         self.q.setValue("spacemouse", self.spacemouse)
         self.q.setValue("spacemouse_speed", self.spacemouse_speed)
@@ -1677,6 +1679,106 @@ class BoxJointDialog(QDialog):
                 "labels": self.labels.isChecked(), "mode": self.mode}
 
 
+class SimplifyDialog(QDialog):
+    """Tools > Simplify Model: a quality slider and a live estimate of the result.
+
+    The slider has the fixed steps of ops.SIMPLIFY_STEPS; under it the maximum deviation
+    in mm and what that step does. The "N triangles -> M triangles" estimate runs in the
+    background (no progress dialog, so the slider never stutters on a big model) and only
+    the last calculation counts: an older one that finishes later is ignored. OK returns
+    the chosen tolerance; the window does the actual simplification."""
+
+    def __init__(self, win, groups):
+        super().__init__(win)
+        self.win = win
+        self.groups = list(groups)
+        self.tolerance = ops.SIMPLIFY_DEFAULT_TOLERANCE
+        self.preview_before = self.preview_after = None
+        self._token = 0
+        self._job = None
+        self.setWindowTitle(tr("Simplify Model"))
+        lay = QVBoxLayout(self)
+
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setRange(0, len(ops.SIMPLIFY_STEPS) - 1)
+        self.slider.setPageStep(1)
+        self.slider.setValue(self._default_index())
+        lay.addWidget(self.slider)
+
+        self.tol_label = QLabel()
+        lay.addWidget(self.tol_label)
+        self.desc_label = QLabel()
+        self.desc_label.setWordWrap(True)
+        lay.addWidget(self.desc_label)
+        self.preview_label = QLabel()
+        self.preview_label.setWordWrap(True)
+        lay.addWidget(self.preview_label)
+        if any(ops.has_painted_faces(g) for g in self.groups):
+            warn = QLabel(tr("Painted face colors are lost; the parts keep the group color."))
+            warn.setWordWrap(True)
+            lay.addWidget(warn)
+
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addWidget(bb)
+
+        self.slider.valueChanged.connect(self._step_changed)
+        self._step_changed(self.slider.value())
+
+    @staticmethod
+    def _default_index():
+        for i, (tol, _d) in enumerate(ops.SIMPLIFY_STEPS):
+            if tol == ops.SIMPLIFY_DEFAULT_TOLERANCE:
+                return i
+        return len(ops.SIMPLIFY_STEPS) // 2
+
+    def _step_changed(self, index):
+        tol, desc = ops.SIMPLIFY_STEPS[index]
+        self.tolerance = tol
+        self.tol_label.setText(tr("Maximum deviation: {tol} mm").format(tol=tol))
+        self.desc_label.setText(tr(desc))
+        self._estimate()
+
+    def _estimate(self):
+        """Estimate the triangle count after simplifying, off the GUI thread."""
+        if self._job is not None and not self._job.done:
+            self._job.cancel()
+        self._token += 1
+        token = self._token
+        self.preview_before = self.preview_after = None
+        self.preview_label.setText(tr("Calculating…"))
+        groups, tol = list(self.groups), self.tolerance
+
+        def task(report):
+            report(0.0)
+            before = after = 0
+            for g in groups:
+                m = g.ents.to_manifold()
+                if m.status() != mf.Error.NoError or m.is_empty():
+                    continue
+                before += len(m.to_mesh().tri_verts)
+                after += ops.tri_count(Entities.from_manifold(m.simplify(tol)))
+            return before, after
+
+        def done(result):
+            if token == self._token:
+                self._show_estimate(*result)
+
+        self._job = background.run(None, task, text=tr("Calculating…"), can_cancel=False,
+                                   show_dialog=False, on_done=done)
+
+    def _show_estimate(self, before, after):
+        self.preview_before, self.preview_after = before, after
+        if before <= 0:
+            self.preview_label.setText(tr("Nothing to simplify."))
+            return
+        pct = round(100 * (before - after) / before)
+        self.preview_label.setText(
+            tr("{before} triangles -> {after} triangles ({pct} % fewer)")
+            .format(before=before, after=after, pct=pct))
+
+
 class PageDialog(QDialog):
     """A dialog with the pages on the left and their content on the right, like SketchUp."""
     SIZE = (640, 440)
@@ -1876,6 +1978,11 @@ class PreferencesDialog(PageDialog):
         self.updates.setToolTip(tr("Once a day Volura checks on GitHub whether there is a newer "
                                    "version."))
         form.addRow(self.updates)
+        self.ask_simplify = QCheckBox(tr("Ask to simplify a large import"))
+        self.ask_simplify.setChecked(self.win.settings.ask_simplify_import)
+        self.ask_simplify.setToolTip(tr("After importing a model with many triangles, ask "
+                                        "whether to simplify it to keep Volura fast."))
+        form.addRow(self.ask_simplify)
         self.language = QComboBox()
         self.language.addItem(tr("System"), i18n.SYSTEM)
         for code, name in i18n.LANGUAGES:       # language names stay in their own language
@@ -1960,6 +2067,7 @@ class PreferencesDialog(PageDialog):
         s = self.win.settings
         s.circle_segments = self.segments.value()
         s.check_updates = self.updates.isChecked()
+        s.ask_simplify_import = self.ask_simplify.isChecked()
         s.spacemouse_speed = self.sm_speed.value() / self.SPEED_STEPS
         sm_changed = s.spacemouse != self.sm_on.isChecked()
         s.spacemouse = self.sm_on.isChecked()
@@ -2601,6 +2709,8 @@ class MainWindow(QMainWindow):
         self.a_follow_me = self.tool_act(tr("&Follow Me"), "followme", None, "followme")
         self.a_shell = A(tr("&Outer Shell"), self.outer_shell, None, "shell",
                          False, tr("Keep only the outside of the selected groups"))
+        self.a_simplify = A(tr("Simplify &Model…"), self.simplify_model, None, None,
+                            False, tr("Fewer triangles on the selected groups, within a chosen deviation"))
         self.a_protractor = self.tool_act(tr("&Protractor"), "protractor")
         self.a_drop = A(tr("Drop to Bed"), self.drop_to_bed, "Ctrl+B", "bed")
         self.a_center = A(tr("Center on Bed"), self.center_on_bed)
@@ -2815,7 +2925,7 @@ class MainWindow(QMainWindow):
                       self.tool_actions["move"], self.tool_actions["rotate"], self.tool_actions["scale"],
                       None,
                       self.tool_actions["pushpull"], self.a_follow_me, self.tool_actions["offset"], None,
-                      self.a_shell, solids, None,
+                      self.a_shell, self.a_simplify, solids, None,
                       self.tool_actions["tape"], self.a_protractor, None,
                       self.tool_actions["text"], None,
                       self.print_tools_menu))
@@ -3739,6 +3849,7 @@ class MainWindow(QMainWindow):
             if removed:
                 self.hint.setText(tr("{n} duplicate triangles removed from {name}").format(
                     n=removed, name=base))
+            self._maybe_suggest_simplify(g)
 
         def failed(e):
             QMessageBox.critical(self, tr("Import Failed"), str(e))
@@ -4952,6 +5063,71 @@ class MainWindow(QMainWindow):
             return
         self.doc.set_selection([("g", res.id, res.id)] if res else [])
         self.doc.notify()
+
+    # ------------------------------------------------------------ simplify model
+
+    def simplify_model(self):
+        """Tools > Simplify Model: fewer triangles on the selected groups."""
+        groups = self.doc.selected_groups()
+        if not groups:
+            self.hint.setText(tr("Select the group(s) to simplify first."))
+            return
+        groups = self.unlocked(groups)
+        if not groups:
+            return
+        self.simplify_groups(groups)
+
+    def simplify_groups(self, groups):
+        """Show the Simplify Model dialog for `groups` and apply the chosen quality."""
+        dlg = SimplifyDialog(self, groups)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        self._run_simplify(groups, dlg.tolerance)
+
+    def _run_simplify(self, groups, tolerance):
+        """Simplify every group with one checkpoint, so a single undo restores them all."""
+        self.doc.checkpoint()
+        before = after = 0
+        for g in groups:
+            try:
+                b, a = ops.simplify_group(self.doc, g, tolerance)
+            except ValueError as e:
+                self._failed(e)
+                return
+            before += b
+            after += a
+        self.doc.notify()
+        self.hint.setText(tr("Simplified: {n} fewer triangles ({before} -> {after}).")
+                          .format(n=before - after, before=before, after=after))
+
+    def _maybe_suggest_simplify(self, g):
+        """After a large import: ask whether to simplify the new group right away."""
+        if g is None or not self.settings.ask_simplify_import:
+            return
+        n = ops.tri_count(g.ents)
+        if n <= ops.LARGE_IMPORT_TRIANGLES:
+            return
+        if self._ask_simplify_import(n):
+            self.simplify_groups([g])
+
+    def _ask_simplify_import(self, n):
+        """The large-import question; True when the user wants to simplify now. The
+        'Don't ask again' box turns the advice off in the settings (Preferences)."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Question)
+        box.setWindowTitle(tr("Large Import"))
+        box.setText(tr("This model has {n} triangles, which can make Volura slow. Simplify "
+                       "it now? Recommended keeps the print quality (deviation under 0.02 "
+                       "mm).").format(n=n))
+        simplify_btn = box.addButton(tr("Simplify…"), QMessageBox.AcceptRole)
+        box.addButton(tr("Not now"), QMessageBox.RejectRole)
+        again = QCheckBox(tr("Don't ask again"))
+        box.setCheckBox(again)
+        box.exec()
+        if again.isChecked():
+            self.settings.ask_simplify_import = False
+            self.settings.save()
+        return box.clickedButton() is simplify_btn
 
     def intersect_faces(self, with_model):
         """Edit > Intersect Faces: the cut lines of the selection go into the model.
