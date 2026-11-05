@@ -21,9 +21,13 @@ from PySide6.QtWidgets import QApplication, QLabel, QProgressBar, QSplashScreen
 
 from . import __version__
 
-WIDTH, HEIGHT = 460, 190           # the splash in logical pixels
+WIDTH, HEIGHT = 460, 210           # the splash in logical pixels
 LOGO, MARGIN = 92, 28              # the logo and the space around everything
 BAR_HEIGHT = 8
+STEP_HEIGHT = 20                   # the line with the current step
+# top to bottom: the logo with the name and version beside it, the step, the bar
+BAR_TOP = HEIGHT - MARGIN - BAR_HEIGHT
+STEP_TOP = BAR_TOP - 8 - STEP_HEIGHT
 
 
 def offscreen() -> bool:
@@ -86,7 +90,7 @@ def _background() -> QPixmap:
             logo = logo.scaled(round(LOGO * ratio), round(LOGO * ratio),
                                Qt.KeepAspectRatio, Qt.SmoothTransformation)
             logo.setDevicePixelRatio(ratio)
-            p.drawPixmap(MARGIN, round((HEIGHT - LOGO) / 2), logo)
+            p.drawPixmap(MARGIN, MARGIN, logo)
     p.end()
     return pm
 
@@ -107,16 +111,15 @@ class Splash(QSplashScreen):
         title_font.setBold(True)
         self.title.setFont(title_font)
         self.title.setStyleSheet(f"color: {text.name()}; background: transparent;")
-        self.title.setGeometry(left, MARGIN, WIDTH - left - MARGIN, 40)
+        self.title.setGeometry(left, MARGIN + LOGO // 2 - 36, WIDTH - left - MARGIN, 40)
 
         self.version_label = QLabel(__version__, self)
         self.version_label.setStyleSheet(f"color: {muted.name()}; background: transparent;")
-        self.version_label.setGeometry(left, MARGIN + 44, WIDTH - left - MARGIN, 22)
+        self.version_label.setGeometry(left, MARGIN + LOGO // 2 + 6, WIDTH - left - MARGIN, 22)
 
         self.step_label = QLabel(self)
         self.step_label.setStyleSheet(f"color: {text.name()}; background: transparent;")
-        self.step_label.setGeometry(MARGIN, HEIGHT - 2 * MARGIN - BAR_HEIGHT - 24,
-                                    WIDTH - 2 * MARGIN, 20)
+        self.step_label.setGeometry(MARGIN, STEP_TOP, WIDTH - 2 * MARGIN, STEP_HEIGHT)
 
         self.progress = QProgressBar(self)
         self.progress.setRange(0, 100)
@@ -130,8 +133,7 @@ class Splash(QSplashScreen):
             f"{BAR_HEIGHT // 2}px;}}"
             f"QProgressBar::chunk {{background: {palette.color(QPalette.Highlight).name()};"
             f" border-radius: {BAR_HEIGHT // 2}px;}}")
-        self.progress.setGeometry(MARGIN, HEIGHT - MARGIN - BAR_HEIGHT,
-                                  WIDTH - 2 * MARGIN, BAR_HEIGHT)
+        self.progress.setGeometry(MARGIN, BAR_TOP, WIDTH - 2 * MARGIN, BAR_HEIGHT)
 
     @property
     def percent(self) -> int:
