@@ -17,7 +17,49 @@ AXES = np.eye(3)
 SPLIT_WIDTH = 1e-3  # half width of the cut strip used when a line splits a face
 
 
+def _vec3(v):
+    """The three numbers of `v` as Python floats, or None when `v` is not a 3 vector.
+
+    The fast paths below do plain float arithmetic; they only take the three
+    ordinary shapes these helpers get (a float64 array, a tuple or a list of
+    numbers). Anything else - another dtype, another shape, an object array - goes
+    through the numpy code, so the result is always what numpy would have made.
+    ``np.sqrt(x*x + y*y + z*z)``, the hand written cross product and the sum of
+    products are bit for bit what ``np.linalg.norm``, ``np.cross`` and ``np.dot``
+    return for a 3 vector, so both paths agree exactly."""
+    if isinstance(v, np.ndarray):
+        if v.shape == (3,) and v.dtype == np.float64:
+            return float(v[0]), float(v[1]), float(v[2])
+        return None
+    if (type(v) is tuple or type(v) is list) and len(v) == 3:
+        x, y, z = v
+        if isinstance(x, (int, float)) and isinstance(y, (int, float)) and isinstance(z, (int, float)):
+            return float(x), float(y), float(z)
+    return None
+
+
+def _unit3(x, y, z):
+    """(x, y, z) scaled to length 1, or unchanged when it is too short to point."""
+    n = math.sqrt(x * x + y * y + z * z)
+    if n > 1e-12:
+        return x / n, y / n, z / n
+    return x, y, z
+
+
+def _default_u3(nx, ny, nz):
+    """``default_u`` of a unit normal, as three floats."""
+    if abs(nz) > 0.999:
+        return 1.0, 0.0, 0.0
+    return _unit3(-ny, nx, 0.0)  # np.cross([0, 0, 1], n) is (-ny, nx, 0)
+
+
 def normalize(v):
+    w = _vec3(v)
+    if w is not None:
+        x, y, z = w
+        n = math.sqrt(x * x + y * y + z * z)
+        if n > 1e-12:
+            return np.array((x / n, y / n, z / n))
     v = np.asarray(v, dtype=float)
     n = np.linalg.norm(v)
     return v / n if n > 1e-12 else v
@@ -25,6 +67,11 @@ def normalize(v):
 
 def default_u(n):
     """A stable in-plane x-axis: world X for horizontal planes, horizontal otherwise."""
+    w = _vec3(n)
+    if w is not None:
+        if abs(w[2]) > 0.999:
+            return np.array([1.0, 0.0, 0.0])
+        return normalize((-w[1], w[0], 0.0))
     if abs(n[2]) > 0.999:
         return np.array([1.0, 0.0, 0.0])
     return normalize(np.cross([0.0, 0.0, 1.0], n))
@@ -36,6 +83,31 @@ class Plane:
     __slots__ = ("origin", "n", "u", "v")
 
     def __init__(self, origin, normal, u=None):
+        # A plane is built once per face for every triangulation, render cache and
+        # plane query, so the frame is computed with floats: np.cross and
+        # np.linalg.norm on three numbers are nothing but call overhead. See _vec3.
+        nw, ow = _vec3(normal), _vec3(origin)
+        if nw is None or ow is None or (u is not None and _vec3(u) is None):
+            self._init_numpy(origin, normal, u)
+            return
+        ox, oy, oz = ow
+        nx, ny, nz = _unit3(*nw)
+        # world X (the default for nearly horizontal planes) is not perpendicular to a
+        # slightly tilted normal either, so u is always projected onto the plane
+        ux, uy, uz = _default_u3(nx, ny, nz) if u is None else _vec3(u)
+        d = ux * nx + uy * ny + uz * nz
+        ux, uy, uz = ux - nx * d, uy - ny * d, uz - nz * d
+        if math.sqrt(ux * ux + uy * uy + uz * uz) < 1e-9:
+            ux, uy, uz = _default_u3(nx, ny, nz)
+        else:
+            ux, uy, uz = _unit3(ux, uy, uz)
+        self.origin = np.array((ox, oy, oz))
+        self.n = np.array((nx, ny, nz))
+        self.u = np.array((ux, uy, uz))
+        self.v = np.array((ny * uz - nz * uy, nz * ux - nx * uz, nx * uy - ny * ux))
+
+    def _init_numpy(self, origin, normal, u=None):
+        """The general constructor: any array-like that normalize understands."""
         self.origin = np.asarray(origin, dtype=float).copy()
         self.n = normalize(normal)
         if u is None:
@@ -48,8 +120,14 @@ class Plane:
         self.v = np.cross(self.n, self.u)
 
     def to_local(self, p):
-        d = np.asarray(p, dtype=float) - self.origin
-        return np.stack([d @ self.u, d @ self.v], axis=-1)
+        d = (p - self.origin if type(p) is np.ndarray
+             else np.asarray(p, dtype=float) - self.origin)
+        if d.ndim == 1:
+            return np.array((d @ self.u, d @ self.v))
+        out = np.empty(d.shape[:-1] + (2,))
+        out[..., 0] = d @ self.u
+        out[..., 1] = d @ self.v
+        return out
 
     def to_world(self, xy):
         xy = np.asarray(xy, dtype=float)
@@ -328,6 +406,36 @@ def rotated_rect(p0, p1, width, plane):
 # Mesh analysis
 # --------------------------------------------------------------------------
 
+def _chain_loops(xs, ys):
+    """Chain the directed boundary edges (xs[i] -> ys[i]) of one region into loops.
+
+    Walks the edges in the order they are given and takes the first unused edge out
+    of a vertex, so the loops (and where they start) are the ones the boundary walk
+    has always produced. Loops shorter than three vertices are dropped."""
+    nxt = defaultdict(list)
+    for x, y in zip(xs, ys):
+        nxt[x].append(y)
+    used, loops = set(), []
+    n = len(xs)
+    for x, y in zip(xs, ys):
+        if (x, y) in used:
+            continue
+        used.add((x, y))
+        loop, cur = [x], y
+        guard = 0
+        while cur != x and guard < n + 2:
+            guard += 1
+            cands = [c for c in nxt[cur] if (cur, c) not in used]
+            if not cands:
+                break
+            used.add((cur, cands[0]))
+            loop.append(cur)
+            cur = cands[0]
+        if len(loop) >= 3:
+            loops.append(loop)
+    return loops
+
+
 class MeshData:
     """Derived data of a manifold used for display, picking and inference."""
 
@@ -390,19 +498,53 @@ class MeshData:
         # --- visible (hard) edges between regions
         diff = region[ta] != region[tb]
         hard = diff & (cosang < math.cos(math.radians(self.SOFT_ANGLE)))
-        self.edges = self._merge_collinear(elo[hard], ehi[hard])
-        if len(self.edges):
-            self.corners = np.unique(self.edges.reshape(-1, 3), axis=0)
-            self.midpoints = self.edges.mean(axis=1)
-        else:
-            self.corners = np.zeros((0, 3))
-            self.midpoints = np.zeros((0, 3))
+        self._hard = (elo[hard], ehi[hard])
 
-        # --- render buffers
-        self.tri_positions = V[T].reshape(-1, 3).astype(np.float32)
-        self.tri_normals = np.repeat(N, 3, axis=0).astype(np.float32)
-        self.edge_positions = self.edges.reshape(-1, 3).astype(np.float32)
+        # --- display data (edges, corners and render buffers) is computed on demand:
+        # building a mesh only to read its regions should not pay for the drawing
+        self._edges = self._corners = self._midpoints = None
+        self._tri_positions = self._tri_normals = self._edge_positions = None
         self._loops = {}
+
+    @property
+    def edges(self):
+        """Hard (visible) edges, collinear runs merged into one segment."""
+        if self._edges is None:
+            a, b = self._hard
+            self._edges = self._merge_collinear(a, b)
+        return self._edges
+
+    @property
+    def corners(self):
+        if self._corners is None:
+            e = self.edges
+            self._corners = np.unique(e.reshape(-1, 3), axis=0) if len(e) else np.zeros((0, 3))
+        return self._corners
+
+    @property
+    def midpoints(self):
+        if self._midpoints is None:
+            e = self.edges
+            self._midpoints = e.mean(axis=1) if len(e) else np.zeros((0, 3))
+        return self._midpoints
+
+    @property
+    def tri_positions(self):
+        if self._tri_positions is None:
+            self._tri_positions = self.verts[self.tris].reshape(-1, 3).astype(np.float32)
+        return self._tri_positions
+
+    @property
+    def tri_normals(self):
+        if self._tri_normals is None:
+            self._tri_normals = np.repeat(self.normals, 3, axis=0).astype(np.float32)
+        return self._tri_normals
+
+    @property
+    def edge_positions(self):
+        if self._edge_positions is None:
+            self._edge_positions = self.edges.reshape(-1, 3).astype(np.float32)
+        return self._edge_positions
 
     def _merge_collinear(self, a, b):
         """Join hard edge segments that continue in a straight line."""
@@ -475,31 +617,57 @@ class MeshData:
         a = T.ravel().tolist()
         b = T[:, [1, 2, 0]].ravel().tolist()
         directed = set(zip(a, b))
-        nxt = defaultdict(list)
-        boundary = []
-        for x, y in zip(a, b):
-            if (y, x) not in directed:
-                nxt[x].append(y)
-                boundary.append((x, y))
-        used, loops = set(), []
-        for x, y in boundary:
-            if (x, y) in used:
-                continue
-            used.add((x, y))
-            loop, cur = [x], y
-            guard = 0
-            while cur != x and guard < len(boundary) + 2:
-                guard += 1
-                cands = [c for c in nxt[cur] if (cur, c) not in used]
-                if not cands:
-                    break
-                used.add((cur, cands[0]))
-                loop.append(cur)
-                cur = cands[0]
-            if len(loop) >= 3:
-                loops.append(self.verts[loop])
-        self._loops[rid] = loops
-        return loops
+        boundary = [(x, y) for x, y in zip(a, b) if (y, x) not in directed]
+        loops = _chain_loops([x for x, _ in boundary], [y for _, y in boundary])
+        out = [self.verts[l] for l in loops]
+        self._loops[rid] = out
+        return out
+
+    def region_index_loops(self):
+        """The boundary loops of every region, as mesh vertex indices, in one pass.
+
+        The same loops as calling ``region_loops`` for every region in order: a
+        directed edge of a region is on the boundary when the region has no triangle
+        that runs it back. That test is made for all triangles at once (a packed
+        (region, from, to) key looked up against its own reverse), so the only work
+        left in Python is chaining the boundary edges of a region into loops. The
+        edges of a region come back in the order the per region code walked them:
+        region number, then triangle index, then the three edges of a triangle."""
+        nt = len(self.tris)
+        if not nt:
+            return [[] for _ in range(self.region_count)]
+        a = self.tris.ravel()
+        b = self.tris[:, [1, 2, 0]].ravel()
+        r = np.repeat(self.region_of_tri, 3)
+        nv = len(self.verts) + 1
+        if nv * nv * (self.region_count + 1) > np.iinfo(np.int64).max:
+            return [self._index_loops_of(rid) for rid in range(self.region_count)]
+        key = (r * nv + a) * nv + b
+        rev = (r * nv + b) * nv + a
+        ks = np.sort(key)
+        pos = np.searchsorted(ks, rev)
+        has = ks[np.minimum(pos, len(ks) - 1)] == rev
+        idx = np.flatnonzero(~has)
+        rb = r[idx]
+        o = np.argsort(rb, kind="stable")       # region order, triangles in index order
+        idx = idx[o]
+        xs = a[idx].tolist()
+        ys = b[idx].tolist()
+        rb = rb[o]
+        cut = (np.flatnonzero(rb[1:] != rb[:-1]) + 1).tolist()
+        out = []
+        for s, e in zip([0] + cut, cut + [len(xs)]):
+            out.append(_chain_loops(xs[s:e], ys[s:e]))
+        return out
+
+    def _index_loops_of(self, rid):
+        """The index loops of one region, for the fallback of ``region_index_loops``."""
+        T = self.tris[self.region_tris[rid]]
+        a = T.ravel().tolist()
+        b = T[:, [1, 2, 0]].ravel().tolist()
+        directed = set(zip(a, b))
+        boundary = [(x, y) for x, y in zip(a, b) if (y, x) not in directed]
+        return _chain_loops([x for x, _ in boundary], [y for _, y in boundary])
 
     def region_cs(self, rid, plane):
         return cs_from_loops([plane.to_local(L) for L in self.region_loops(rid)])

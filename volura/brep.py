@@ -66,6 +66,133 @@ def _ekey(a, b):
     return (a, b) if a < b else (b, a)
 
 
+def _point_cells(P, size):
+    """The cell of the `size` grid that holds every point of P, as (n, 3) integers."""
+    return np.floor(P / size).astype(np.int64)
+
+
+def _cell_groups(C, payload):
+    """(cell, rows) for the cells of C: every row of `payload` under its own cell.
+
+    The rows of a cell keep the order they came in, which is the order the
+    incremental inserts of ``vertex`` and ``_einsert`` would have made."""
+    if not len(C):
+        return
+    o = np.lexsort((C[:, 2], C[:, 1], C[:, 0]))
+    Cs = C[o]
+    cut = (np.flatnonzero((Cs[1:, 0] != Cs[:-1, 0]) | (Cs[1:, 1] != Cs[:-1, 1]) |
+                          (Cs[1:, 2] != Cs[:-1, 2])) + 1).tolist()
+    rows = o.tolist()
+    for s, e in zip([0] + cut, cut + [len(rows)]):
+        yield (int(Cs[s, 0]), int(Cs[s, 1]), int(Cs[s, 2])), [payload[i] for i in rows[s:e]]
+
+
+def _edge_cells(lo, hi, size, cap):
+    """The cells of the `size` grid that cover the bounding boxes of the edges.
+
+    Returns (cells, rows, big): `cells` holds one cell per row of `rows`, which is
+    the edge that cell came from. Edges that span more than `cap` cells are not in
+    the grid at all; `big` marks them so the caller can keep them in the linear list
+    next to the grid."""
+    c0 = np.floor(lo / size).astype(np.int64)
+    c1 = np.floor(hi / size).astype(np.int64)
+    ni = c1[:, 0] - c0[:, 0] + 1
+    nj = c1[:, 1] - c0[:, 1] + 1
+    nk = c1[:, 2] - c0[:, 2] + 1
+    n = ni * nj * nk
+    big = n > cap
+    keep = ~big
+    if not keep.any():
+        return np.zeros((0, 3), np.int64), np.zeros(0, np.int64), big
+    rows = np.flatnonzero(keep)
+    n = n[keep]
+    # the cell of an edge runs (i, j, k) with i slowest: count up from its first cell
+    r = np.arange(int(n.sum())) - np.repeat(np.cumsum(n) - n, n)
+    nkr = np.repeat(nk[keep], n)
+    njr = np.repeat(nj[keep], n)
+    C = np.empty((len(r), 3), np.int64)
+    C[:, 0] = r // (nkr * njr) + np.repeat(c0[keep, 0], n)
+    C[:, 1] = (r // nkr) % njr + np.repeat(c0[keep, 1], n)
+    C[:, 2] = r % nkr + np.repeat(c0[keep, 2], n)
+    return C, np.repeat(rows, n), big
+
+
+def _merge_within_tol(pts):
+    """(rep, kept): the point every point joins, and which points are vertices.
+
+    The same walk as calling ``find_vertex`` on every point in order: a point takes
+    the closest point before it that is still a vertex and within TOL (`rep` points
+    at it, `kept` is False there), and otherwise becomes a vertex itself. Only
+    points in the same or a neighbouring cell of a grid with cells of at least TOL
+    can qualify, so the candidate pairs come from 27 lookups in the points sorted by
+    cell. (Sorting on x alone made every pair on a plane of constant x a candidate:
+    quadratic for a cylinder along X.) For a manifold, whose vertices are already
+    merged, a point finds next to nothing but itself."""
+    n = len(pts)
+    kept = np.ones(n, dtype=bool)
+    rep = np.arange(n)
+    if n < 2:
+        return rep, kept
+    lo = pts.min(axis=0)
+    # cells of TOL, or larger for a big model so the cell key fits in an int64
+    size = max(TOL, float((pts.max(axis=0) - lo).max()) / 2e6)
+    C = np.floor((pts - lo) / size).astype(np.int64) + 1
+    ny, nz = int(C[:, 1].max()) + 2, int(C[:, 2].max()) + 2
+    key = (C[:, 0] * ny + C[:, 1]) * nz + C[:, 2]
+    o = np.argsort(key, kind="stable")
+    ks = key[o]
+    I, J = [], []
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            for dz in (-1, 0, 1):
+                nk = key + (dx * ny + dy) * nz + dz
+                a = np.searchsorted(ks, nk, "left")
+                cnt = np.searchsorted(ks, nk, "right") - a
+                if not cnt.any():
+                    continue
+                r = np.arange(int(cnt.sum())) - np.repeat(np.cumsum(cnt) - cnt, cnt)
+                I.append(np.repeat(np.arange(n), cnt))
+                J.append(o[np.repeat(a, cnt) + r])
+    i, j = np.concatenate(I), np.concatenate(J)
+    not_self = i != j
+    i, j = i[not_self], j[not_self]
+    d = np.sqrt(((pts[i] - pts[j]) ** 2).sum(axis=1))
+    near = d < TOL
+    i, j, d = i[near], j[near], d[near]
+    order = np.lexsort((j, i))               # points in order, closest candidate first
+    cur, best, bd = -1, -1, TOL
+    for c, q, dd in zip(i[order].tolist(), j[order].tolist(), d[order].tolist()):
+        if c != cur:
+            if best >= 0:
+                kept[cur] = False
+                rep[cur] = best
+            cur, best, bd = c, -1, TOL
+        if q < c and kept[q] and dd < bd:
+            best, bd = q, dd
+    if best >= 0:
+        kept[cur] = False
+        rep[cur] = best
+    return rep, kept
+
+
+def _fold_edges(edge_of_pair, face_of_pair, nf, normals):
+    """The edges whose two faces make a fold smaller than SOFT_ANGLE.
+
+    The smoothing pass of ``from_manifold`` read the faces of an edge from ``e2f``;
+    the (edge, face) pairs of the loops say the same thing, so the edges can be
+    tested in one go."""
+    both = np.unique(edge_of_pair * nf + face_of_pair)      # one entry per edge, face
+    e = both // nf
+    f = both % nf
+    if len(e) < 2:
+        return set()
+    how = np.bincount(e, minlength=int(e.max()) + 1)
+    pair = (e[:-1] == e[1:]) & (how[e[:-1]] == 2)
+    dots = np.einsum("ij,ij->i", normals[f[:-1][pair]], normals[f[1:][pair]])
+    cos_soft = math.cos(math.radians(SOFT_ANGLE))
+    return {int(x) for x in e[:-1][pair][dots > cos_soft].tolist()}
+
+
 def plane_key(plane):
     n = plane.n.copy()
     for c in n:
@@ -129,30 +256,95 @@ class Entities:
 
     # ------------------------------------------------------------ bookkeeping
     def _index(self):
+        """Rebuild every lookup table from V, E and F.
+
+        The cells of the three spatial grids are computed for all vertices and all
+        edges at once with numpy (``_point_cells`` and ``_edge_cells``); Python only
+        fills the dictionaries, which is what ``vertex`` and ``_einsert`` do one
+        item at a time while the model is drawn. The rows of a cell keep the order
+        of ``V`` and ``E``, so the grids hold what inserting the same geometry edge
+        by edge would have put in them."""
+        vids = list(self.V)
         self.grid = defaultdict(list)
+        self.vgrid = defaultdict(list)
+        self.egrid = defaultdict(list)
+        self.ebig = set()
         self.ekey = {}
         self.v2e = defaultdict(set)
         self.e2f = defaultdict(set)
-        for v, p in self.V.items():
-            self.grid[self._cell(p)].append(v)
-        for e, (a, b) in self.E.items():
-            self.ekey[_ekey(a, b)] = e
-            self.v2e[a].add(e)
-            self.v2e[b].add(e)
-        for f, face in self.F.items():
-            for e in self.face_edges(face):
-                self.e2f[e].add(f)
         self._pos_cache = None
-        self._dead_v = {v for v in self.V if not self.v2e.get(v)}
-        self.egrid = defaultdict(set)
-        self.ebig = set()
-        self.vgrid = defaultdict(set)
-        for v, p in self.V.items():
-            self.vgrid[self._ecell(p)].add(v)
-        for e in list(self.E):
-            self._einsert(e)
+        self._dead_v = set(vids)
+        P = None
+        if vids:
+            P = np.array([self.V[v] for v in vids], dtype=float)
+            for cell, rows in _cell_groups(_point_cells(P, CELL), vids):
+                self.grid[cell] = rows
+            for cell, rows in _cell_groups(_point_cells(P, ECELL), vids):
+                self.vgrid[cell] = rows
+        eids = list(self.E)
+        if eids and P is not None:
+            ab = np.array([self.E[e] for e in eids], dtype=np.int64)
+            row = {v: i for i, v in enumerate(vids)}
+            ia = np.fromiter((row[v] for v in ab[:, 0].tolist()), np.int64, len(ab))
+            ib = np.fromiter((row[v] for v in ab[:, 1].tolist()), np.int64, len(ab))
+            PA, PB = P[ia], P[ib]
+            C, rows, big = _edge_cells(np.minimum(PA, PB), np.maximum(PA, PB), ECELL, EGRID_CAP)
+            el = np.asarray(eids, dtype=np.int64)
+            for cell, grp in _cell_groups(C, el[rows].tolist()):
+                self.egrid[cell] = grp
+            self.ebig = {eids[i] for i in np.flatnonzero(big)}
+            for e, a, b in zip(eids, ab[:, 0].tolist(), ab[:, 1].tolist()):
+                self.ekey[(a, b) if a < b else (b, a)] = e
+                self.v2e[a].add(e)
+                self.v2e[b].add(e)
+            self._dead_v -= set(ab.ravel().tolist())
+            self._index_faces(ab, el)
         self._clear_caches()
         self.version = getattr(self, "version", 0) + 1
+
+    def _index_faces(self, ab, eids):
+        """e2f: the faces that use every edge, matched on their vertex pair in bulk.
+
+        A loop pair with no edge between its vertices is skipped, exactly as
+        ``face_edges`` skips the ``None`` of ``ekey.get``."""
+        seq, starts, lens, fids = [], [], [], []
+        for f, face in self.F.items():
+            for loop in face.loops:
+                if not len(loop):
+                    continue
+                starts.append(len(seq))
+                lens.append(len(loop))
+                fids.append(f)
+                seq.extend(loop)
+        if not seq or not len(ab):
+            return
+        L = np.asarray(seq, dtype=np.int64)
+        nxt = np.roll(L, -1)
+        first = np.asarray(starts, dtype=np.int64)
+        last = first + np.asarray(lens, dtype=np.int64) - 1
+        nxt[last] = L[first]                      # close every loop
+        FID = np.repeat(np.asarray(fids, dtype=np.int64), np.asarray(lens, dtype=np.int64))
+        pos = {f: i for i, f in enumerate(self.F)}
+        FPOS = np.fromiter((pos[f] for f in FID.tolist()), np.int64, len(FID))
+        nv = max(int(L.max()), int(ab.max())) + 1
+        lo = np.minimum(L, nxt)
+        hi = np.maximum(L, nxt)
+        key = lo * nv + hi
+        elo = np.minimum(ab[:, 0], ab[:, 1])
+        ehi = np.maximum(ab[:, 0], ab[:, 1])
+        o = np.argsort(elo * nv + ehi, kind="stable")
+        ks = (elo * nv + ehi)[o]
+        at = np.searchsorted(ks, key)
+        at = np.minimum(at, len(ks) - 1)
+        hit = ks[at] == key
+        pair = o[at[hit]]
+        nf = len(self.F)
+        both = np.unique(eids[pair] * nf + FPOS[hit])       # one entry per (edge, face)
+        e2 = both // nf
+        cut = (np.flatnonzero(e2[1:] != e2[:-1]) + 1).tolist()
+        fs = np.asarray(list(self.F), dtype=np.int64)[(both % nf).tolist()]
+        for s, e in zip([0] + cut, cut + [len(e2)]):
+            self.e2f[int(e2[s])] = set(fs[s:e].tolist())
 
     def _clear_caches(self):
         """Drop everything that is derived from the geometry.
@@ -216,16 +408,21 @@ class Entities:
 
     @staticmethod
     def _cell(p):
-        return (int(math.floor(p[0] / CELL)), int(math.floor(p[1] / CELL)), int(math.floor(p[2] / CELL)))
+        return (math.floor(p[0] / CELL), math.floor(p[1] / CELL), math.floor(p[2] / CELL))
 
     def find_vertex(self, p):
         cx, cy, cz = self._cell(p)
+        px, py, pz = float(p[0]), float(p[1]), float(p[2])
         best, bd = None, TOL
+        get = self.grid.get
+        V = self.V
         for dx in (-1, 0, 1):
             for dy in (-1, 0, 1):
                 for dz in (-1, 0, 1):
-                    for v in self.grid.get((cx + dx, cy + dy, cz + dz), ()):
-                        d = float(np.linalg.norm(self.V[v] - p))
+                    for v in get((cx + dx, cy + dy, cz + dz), ()):
+                        q = V[v]
+                        qx, qy, qz = float(q[0]) - px, float(q[1]) - py, float(q[2]) - pz
+                        d = math.sqrt(qx * qx + qy * qy + qz * qz)
                         if d < bd:
                             best, bd = v, d
         return best
@@ -239,24 +436,21 @@ class Entities:
     # to scanning everything; edges too long for the grid go to a linear list.
     @staticmethod
     def _ecell(p):
-        return (int(math.floor(p[0] / ECELL)), int(math.floor(p[1] / ECELL)),
-                int(math.floor(p[2] / ECELL)))
+        return (math.floor(p[0] / ECELL), math.floor(p[1] / ECELL),
+                math.floor(p[2] / ECELL))
 
     def _ecells(self, lo, hi):
-        c0 = [int(math.floor(lo[i] / ECELL)) - 1 for i in range(3)]
-        c1 = [int(math.floor(hi[i] / ECELL)) + 1 for i in range(3)]
+        c0 = [math.floor(lo[i] / ECELL) - 1 for i in range(3)]
+        c1 = [math.floor(hi[i] / ECELL) + 1 for i in range(3)]
         for i in range(c0[0], c1[0] + 1):
             for j in range(c0[1], c1[1] + 1):
                 for k in range(c0[2], c1[2] + 1):
                     yield (i, j, k)
 
     def _einsert(self, e):
-        a, b = self.E[e]
-        pa, pb = self.V[a], self.V[b]
-        lo = np.minimum(pa, pb)
-        hi = np.maximum(pa, pb)
-        c0 = [int(math.floor(lo[i] / ECELL)) for i in range(3)]
-        c1 = [int(math.floor(hi[i] / ECELL)) for i in range(3)]
+        pa, pb = self.V[self.E[e][0]], self.V[self.E[e][1]]
+        c0 = [math.floor(min(pa[i], pb[i]) / ECELL) for i in range(3)]
+        c1 = [math.floor(max(pa[i], pb[i]) / ECELL) for i in range(3)]
         n = (c1[0] - c0[0] + 1) * (c1[1] - c0[1] + 1) * (c1[2] - c0[2] + 1)
         if n > EGRID_CAP:
             self.ebig.add(e)
@@ -264,14 +458,12 @@ class Entities:
             for i in range(c0[0], c1[0] + 1):
                 for j in range(c0[1], c1[1] + 1):
                     for k in range(c0[2], c1[2] + 1):
-                        self.egrid[(i, j, k)].add(e)
+                        self.egrid[(i, j, k)].append(e)
 
     def _eremove(self, e, a, b):
         pa, pb = self.V[a], self.V[b]
-        lo = np.minimum(pa, pb)
-        hi = np.maximum(pa, pb)
-        c0 = [int(math.floor(lo[i] / ECELL)) for i in range(3)]
-        c1 = [int(math.floor(hi[i] / ECELL)) for i in range(3)]
+        c0 = [math.floor(min(pa[i], pb[i]) / ECELL) for i in range(3)]
+        c1 = [math.floor(max(pa[i], pb[i]) / ECELL) for i in range(3)]
         n = (c1[0] - c0[0] + 1) * (c1[1] - c0[1] + 1) * (c1[2] - c0[2] + 1)
         if n > EGRID_CAP:
             self.ebig.discard(e)
@@ -280,23 +472,25 @@ class Entities:
                 for j in range(c0[1], c1[1] + 1):
                     for k in range(c0[2], c1[2] + 1):
                         s = self.egrid.get((i, j, k))
-                        if s:
-                            s.discard(e)
+                        if s and e in s:
+                            s.remove(e)
 
     def _edges_near(self, lo, hi):
         out = set(self.ebig)
+        upd = out.update
         for c in self._ecells(lo, hi):
             s = self.egrid.get(c)
             if s:
-                out |= s
+                upd(s)
         return out
 
     def _vertices_near(self, lo, hi):
         out = set()
+        upd = out.update
         for c in self._ecells(lo, hi):
             s = self.vgrid.get(c)
             if s:
-                out |= s
+                upd(s)
         return out
 
     def vertex(self, p):
@@ -307,7 +501,7 @@ class Entities:
         v = self._new_id()
         self.V[v] = p.copy()
         self.grid[self._cell(p)].append(v)
-        self.vgrid[self._ecell(p)].add(v)
+        self.vgrid[self._ecell(p)].append(v)
         self._dead_v.add(v)
         pos = self._pos_cache
         if pos is not None:
@@ -331,8 +525,8 @@ class Entities:
             if cell and v in cell:
                 cell.remove(v)
             cell = self.vgrid.get(self._ecell(p))
-            if cell:
-                cell.discard(v)
+            if cell and v in cell:
+                cell.remove(v)
         self.v2e.pop(v, None)
         self._changed()
 
@@ -1709,23 +1903,115 @@ class Entities:
 
     @classmethod
     def from_manifold(cls, man, color=None):
+        """A Manifold as SketchUp geometry: one face per coplanar region.
+
+        The vertices of a manifold are already merged, so they are created in bulk
+        instead of one ``find_vertex`` per loop point; points that still lie within
+        TOL of each other share a vertex under the same rule as ``vertex`` (see
+        ``_merge_within_tol``). The ids come out as they did when the regions were
+        walked one by one: a region first takes the ids of the vertices it is the
+        first to touch, then those of the edges its loops add, then the id of its
+        face, and a fold smaller than SOFT_ANGLE is smoothed at the end.
+
+        The loops are built in "slot" numbers first - one per vertex, in the order
+        the loops walk them - because which edges a region adds decides how many ids
+        the regions before it took, and so the number of the vertices that follow."""
         ents = cls()
         if man.is_empty():
             return ents
         md = MeshData(man)
-        for rid in range(md.region_count):
-            loops = md.region_loops(rid)
-            n = md.normals[md.region_tris[rid][0]]
-            vl = [[ents.vertex(p) for p in L] for L in loops]
-            vl = [[v for i, v in enumerate(l) if v != l[i - 1]] for l in vl]
-            vl = [l for l in vl if len(l) >= 3]
+        index_loops = md.region_index_loops()
+        nr = len(index_loops)
+        seq, vreg = [], []
+        for rid, loops in enumerate(index_loops):
+            for loop in loops:
+                seq.extend(loop)
+                vreg.extend([rid] * len(loop))
+        if not seq:
+            return ents
+        # the mesh vertices in the order the loops walk them: the order in which
+        # vertex() would have created them
+        L = np.asarray(seq, dtype=np.int64)
+        VREG = np.asarray(vreg, dtype=np.int64)
+        uniq, at_v = np.unique(L, return_index=True)
+        first = np.argsort(at_v, kind="stable")
+        order = uniq[first]
+        freg_v = VREG[at_v][first]
+        rep, kept = _merge_within_tol(md.verts[order])
+        vrows = np.flatnonzero(kept)
+        slot = np.cumsum(kept)[rep]                  # the slot of every mesh vertex
+        mesh_slot = np.zeros(len(md.verts), dtype=np.int64)
+        mesh_slot[order] = slot
+
+        face_loops, face_normal, face_region = [], [], []
+        seq2, starts, lens, ford, rord = [], [], [], [], []
+        for rid, loops in enumerate(index_loops):
+            vl = []
+            for loop in loops:
+                w = mesh_slot[loop].tolist()
+                w = [v for i, v in enumerate(w) if v != w[i - 1]]
+                if len(w) >= 3:
+                    vl.append(w)
             if vl:
-                ents._add_face_raw(vl, n, color)
-        cos_soft = math.cos(math.radians(SOFT_ANGLE))
-        for e, fs in ents.e2f.items():
-            if len(fs) == 2:
-                f1, f2 = (ents.F[x] for x in fs)
-                if np.dot(f1.normal, f2.normal) > cos_soft:
-                    ents.soft.add(e)
+                face_loops.append(vl)
+                face_normal.append(md.normals[md.region_tris[rid][0]])
+                face_region.append(rid)
+                for l in vl:
+                    starts.append(len(seq2))
+                    lens.append(len(l))
+                    ford.append(len(face_loops) - 1)
+                    rord.append(rid)
+                    seq2.extend(l)
+        nf = len(face_loops)
+        rof = np.asarray(face_region, dtype=np.int64)
+        cf = np.zeros(nr, dtype=np.int64)
+        if nf:
+            cf[rof] = 1
+        Lv = FR = RR = A = B = None
+        at = inverse = None
+        if nf:
+            Lv = np.asarray(seq2, dtype=np.int64)
+            nxt = np.roll(Lv, -1)
+            firsts = np.asarray(starts, dtype=np.int64)
+            nxt[firsts + np.asarray(lens, dtype=np.int64) - 1] = Lv[firsts]
+            FR = np.repeat(np.asarray(ford, dtype=np.int64), np.asarray(lens, dtype=np.int64))
+            RR = np.repeat(np.asarray(rord, dtype=np.int64), np.asarray(lens, dtype=np.int64))
+            ok = Lv != nxt                           # _add_edge_raw makes nothing of a == b
+            A, B, FR, RR = Lv[ok], nxt[ok], FR[ok], RR[ok]
+            key = np.minimum(A, B) * (int(Lv.max()) + 1) + np.maximum(A, B)
+            _, at, inverse = np.unique(key, return_index=True, return_inverse=True)
+            ce = np.bincount(RR[at], minlength=nr)
+        else:
+            ce = np.zeros(nr, dtype=np.int64)
+
+        # the ids of a region follow those of the regions before it
+        cv = np.bincount(freg_v[kept], minlength=nr)
+        before = np.cumsum(cv + ce + cf) - (cv + ce + cf)
+        cumv = np.cumsum(cv)
+        vid = np.empty(len(vrows) + 1, dtype=np.int64)
+        vid[1:] = 1 + before[freg_v[vrows]] + np.arange(len(vrows)) -             (cumv[freg_v[vrows]] - cv[freg_v[vrows]])
+        block = md.verts[order[vrows]].copy()
+        ents.V = {int(vid[s]): block[i] for i, s in enumerate(slot[vrows])}
+
+        if nf:
+            rank = np.argsort(at, kind="stable")     # the order in which the edges appear
+            freg_e = RR[at]
+            cume = np.cumsum(ce)
+            erows = at[rank]
+            eids = 1 + before[freg_e[rank]] + cv[freg_e[rank]] +                 np.arange(len(rank)) - (cume[freg_e[rank]] - ce[freg_e[rank]])
+            eid = np.empty(len(rank), dtype=np.int64)
+            eid[rank] = eids
+            ents.E = {int(eids[j]): (int(vid[A[erows[j]]]), int(vid[B[erows[j]]]))
+                      for j in range(len(erows))}
+            face_id = 1 + before[rof] + cv[rof] + ce[rof]
+            for k in range(nf):
+                loops = [tuple(vid[l].tolist()) if isinstance(l, np.ndarray)
+                         else tuple(int(vid[v]) for v in l) for l in face_loops[k]]
+                ents.F[int(face_id[k])] = Face(loops, face_normal[k], color)
+            ents.next_id = int(1 + len(vrows) + len(erows) + nf)
+            ents.soft = _fold_edges(eid[inverse], FR, nf, np.array(face_normal))
+        else:
+            ents.next_id = int(1 + len(vrows))
+        ents._index()
         ents.touch()
         return ents
