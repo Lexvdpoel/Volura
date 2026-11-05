@@ -231,6 +231,7 @@ class Settings:
         self.q.setValue("length_precision", self.length_precision)
         self.q.setValue("current_color", self.current_color)
         self.q.setValue("recent", self.recent[:8])
+        self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
 
 def swatch(color, size=16):
@@ -1964,10 +1965,11 @@ class PreferencesDialog(PageDialog):
         s.spacemouse = self.sm_on.isChecked()
         theme_changed = s.theme != self.theme.currentData()
         s.theme = self.theme.currentData()
-        s.save()
         # the language is read once at startup (i18n.saved_choice), so it applies after a restart
         s.q.setValue(i18n.SETTINGS_KEY, str(self.language.currentData() or i18n.SYSTEM))
-        if theme_changed:
+        s.save()
+        # also when the choice did not change: the windows can still show another theme
+        if theme_changed or theme.wants_dark(s.theme) != theme.is_dark():
             self.win.apply_theme()
         if sm_changed:
             self.win.start_spacemouse()
