@@ -3984,6 +3984,7 @@ class MainWindow(QMainWindow):
             said += notes
             if said:
                 self.hint.setText("; ".join(said))
+            self._maybe_suggest_scale_up(groups)
             self._maybe_suggest_simplify(groups, n)
 
         def failed(e):
@@ -5287,6 +5288,42 @@ class MainWindow(QMainWindow):
             return None
         return background.run(self, work, text=tr("Simplifying…"),
                               on_done=done, on_error=self._failed)
+
+    def _maybe_suggest_scale_up(self, groups):
+        """After an import that came in tiny: ask whether the file was in other units and
+        scale the new groups up around the origin, as one undo step of its own."""
+        bb = ops.selection_bbox(self.doc, [("g", g.id, g.id) for g in groups])
+        if bb is None:
+            return
+        size = float((bb[1] - bb[0]).max())
+        if size >= ops.SMALL_IMPORT_MM:
+            return
+        factor = self._ask_scale_up(size)
+        if not factor:
+            return
+        self.doc.checkpoint()
+        ops.transform_selection(self.doc, np.eye(3) * factor, np.zeros(3),
+                                items=[("g", g.id, g.id) for g in groups])
+        self.doc.notify()
+        self.view.zoom_extents()
+        self.hint.setText(tr("Scaled up {factor}×: now {size} mm across").format(
+            factor=f"{factor:g}", size=f"{size * factor:.1f}"))
+
+    def _ask_scale_up(self, size):
+        """The small-import question; the scale factor the user picked, or None."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Question)
+        box.setWindowTitle(tr("Very Small Import"))
+        box.setText(tr("This model is only {size} mm across, so its scale is probably wrong: "
+                       "the file was likely made in other units than millimetres. Scale it "
+                       "up?").format(size=f"{size:.2g}"))
+        buttons = {}
+        for unit, factor in ops.IMPORT_UNITS:
+            label = tr("From {unit} (×{factor})").format(unit=tr(unit), factor=f"{factor:g}")
+            buttons[box.addButton(label, QMessageBox.AcceptRole)] = factor
+        box.addButton(tr("Keep size"), QMessageBox.RejectRole)
+        box.exec()
+        return buttons.get(box.clickedButton())
 
     def _maybe_suggest_simplify(self, g, n=None):
         """After a large import: ask whether to simplify the new group (or list of groups)

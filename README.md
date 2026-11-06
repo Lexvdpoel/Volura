@@ -62,7 +62,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
   bar. Every closed part becomes a group in its own color; slicer projects (PrusaSlicer,
   Bambu Studio, OrcaSlicer) keep their parts and filament colors. A model that is not closed
   is repaired on import where possible: faces on both sides or the wrong way round, holes,
-  parts touching along an edge, small knots and the inner walls of SketchUp models
+  parts touching along an edge, small knots and the inner walls of SketchUp models. A model
+  that comes in tiny (made in inches, centimetres or metres) can be scaled up right away
 
 ### Laser and mill
 

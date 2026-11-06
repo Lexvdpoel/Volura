@@ -22,7 +22,7 @@ import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from volura import app as app_module, background, fileio, mesh_formats, vector_import  # noqa: E402
+from volura import app as app_module, background, fileio, mesh_formats, ops, vector_import  # noqa: E402
 from volura.geom import Plane  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -631,3 +631,57 @@ def test_a_vector_file_that_fails_to_read_shows_the_error(win, tmp_path):
     path.write_text("<svg")
     assert win.import_vector(str(path), {"anchor": "center"}) is None
     assert win.box.asked
+
+
+def test_a_tiny_import_asks_to_scale_up_in_its_own_undo_step(win, tmp_path, monkeypatch):
+    asked = []
+    monkeypatch.setattr(app_module.MainWindow, "_ask_scale_up",
+                        lambda self, size: asked.append(size) or 25.4)
+    path = tmp_path / "inch.stl"                    # a 10 mm cube, written in inches
+    fileio.write_stl(str(path), mf.Manifold.cube((10 / 25.4,) * 3))
+    win.import_file(str(path)).wait()
+    (g,) = win.doc.groups
+    assert asked == [pytest.approx(10 / 25.4)]
+    assert abs(g.ents.to_manifold().volume() - 1000) < 1e-3 and "25.4" in win.hint.text()
+    win.doc.undo()                                  # the scaling first, then the import
+    assert abs(win.doc.groups[0].ents.to_manifold().volume() - (10 / 25.4) ** 3) < 1e-6
+    win.doc.undo()
+    assert win.doc.groups == []
+
+
+def test_keeping_the_size_or_a_normal_size_leaves_the_import_alone(win, tmp_path, monkeypatch):
+    asked = []
+    monkeypatch.setattr(app_module.MainWindow, "_ask_scale_up",
+                        lambda self, size: asked.append(size) or None)
+    path = tmp_path / "small.stl"
+    fileio.write_stl(str(path), mf.Manifold.cube((1.0, 2.0, 3.0)))
+    win.import_file(str(path)).wait()
+    assert len(asked) == 1 and abs(win.doc.groups[0].ents.to_manifold().volume() - 6) < 1e-9
+    fileio.write_stl(str(path), mf.Manifold.cube((ops.SMALL_IMPORT_MM, 1.0, 1.0)))
+    win.import_file(str(path)).wait()
+    assert len(asked) == 1
+
+
+def test_the_scale_question_offers_inches_centimetres_and_metres(win, monkeypatch):
+    class Box:
+        Question = AcceptRole = RejectRole = 0
+
+        def __init__(self, parent=None):
+            self.labels = []
+        def setIcon(self, *a): pass
+        def setWindowTitle(self, *a): pass
+        def setText(self, text):
+            assert "0.39 mm" in text
+        def addButton(self, label, role):
+            self.labels.append(label)
+            return label
+        def exec(self):
+            return 0
+        def clickedButton(self):
+            return self.labels[pick]
+
+    monkeypatch.setattr(app_module, "QMessageBox", Box)
+    answers = []
+    for pick in range(4):
+        answers.append(win._ask_scale_up(10 / 25.4))
+    assert answers == [25.4, 10.0, 1000.0, None]

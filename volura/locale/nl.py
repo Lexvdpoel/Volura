@@ -1131,4 +1131,12 @@ TRANSLATIONS = {
     '{n} triangles of inner walls removed': '{n} driehoeken van binnenwanden verwijderd',
     '{n} triangles around knots rebuilt': '{n} driehoeken rond knopen opnieuw opgebouwd',
     '{n} crossing edges untangled': '{n} kruisende randen ontward',
+    'Very Small Import': 'Zeer kleine import',
+    'This model is only {size} mm across, so its scale is probably wrong: the file was likely made in other units than millimetres. Scale it up?': 'Dit model is maar {size} mm groot, dus de schaal klopt waarschijnlijk niet: het bestand is vermoedelijk in een andere eenheid dan millimeters gemaakt. Wil je het opschalen?',
+    'From {unit} (×{factor})': 'Vanuit {unit} (×{factor})',
+    'inches': 'inches',
+    'centimetres': 'centimeters',
+    'metres': 'meters',
+    'Keep size': 'Grootte houden',
+    'Scaled up {factor}×: now {size} mm across': '{factor}× opgeschaald: nu {size} mm groot',
 }

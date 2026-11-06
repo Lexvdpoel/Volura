@@ -43,6 +43,13 @@ SIMPLIFY_DEFAULT_TOLERANCE = 0.02
 # the first hover after an import also rebuilds the snap cache, ~0.11 ms per triangle.)
 LARGE_IMPORT_TRIANGLES = 20000
 
+# An import whose largest size stays under this was almost certainly drawn in other units
+# than millimetres (STL has no unit; converters often write inches): Volura asks whether
+# to scale it up.
+SMALL_IMPORT_MM = 5.0
+# the units a too small model was probably drawn in, as (name, millimetres per unit)
+IMPORT_UNITS = (("inches", 25.4), ("centimetres", 10.0), ("metres", 1000.0))
+
 
 def union_all(manifolds):
     manifolds = [m for m in manifolds if not m.is_empty()]
