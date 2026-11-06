@@ -272,6 +272,31 @@ def test_write_header_and_format():
     assert "\nLINE\n" in text
 
 
+def test_an_empty_value_keeps_the_pairs_in_step():
+    """An empty text value (a custom property without a value in the header, as some CAD
+    programs write) is a line of its own: it must not shift every later pair."""
+    header = "\n".join(["9", "$CUSTOMPROPERTYTAG", "1", "Manager",
+                        "9", "$CUSTOMPROPERTY", "1", "",
+                        "9", "$INSUNITS", "70", "4"])
+    text = dxf_doc(ent("LINE", **{"8": "0", "10": 0, "20": 0, "11": 40, "21": 0}) + "\n"
+                   + ent("LINE", **{"8": "0", "10": 40, "20": 0, "11": 40, "21": 25}), header="")
+    text = text.replace("HEADER\n", "HEADER\n" + header + "\n", 1)
+    pairs = dxf._pairs(text)
+    assert (1, "") in pairs
+    assert (70, "4") in pairs
+    d = dxf.read_dxf(text)
+    assert len(d.paths) == 1                       # the two lines chained into one path
+    assert np.allclose(d.paths[0].pts, [[0, 0], [40, 0], [40, 25]])
+
+
+def test_a_stray_blank_line_where_a_code_belongs_is_skipped():
+    text = dxf_doc(ent("LINE", **{"8": "0", "10": 0, "20": 0, "11": 10, "21": 0}))
+    text = text.replace("ENTITIES\n", "ENTITIES\n\n", 1)
+    d = dxf.read_dxf(text)
+    assert len(d.paths) == 1
+    assert np.allclose(d.paths[0].pts, [[0, 0], [10, 0]])
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

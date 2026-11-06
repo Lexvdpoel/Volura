@@ -108,18 +108,23 @@ def _decode(data: bytes) -> str:
 def _pairs(text: str):
     """The group code/value pairs as a list of (code, value).
 
-    Reads robustly: spaces around code and value, \\r\\n and blank lines in
-    between are ignored. A value may itself contain spaces.
+    Every pair is two lines, and a value may be empty: an empty text, such as a custom
+    property without a value in the header, is still a line of its own. Spaces around
+    code and value and \\r\\n are ignored, and a value may itself contain spaces. Where a
+    code is expected, a blank line or a line that is not a number is skipped, so the
+    reading gets back in step instead of pairing every later code with the wrong value.
     """
     lines = [ln.strip() for ln in text.splitlines()]
-    lines = [ln for ln in lines if ln != ""]
     out = []
-    for i in range(0, len(lines) - 1, 2):
+    i, n = 0, len(lines)
+    while i < n - 1:
         try:
             code = int(lines[i])
         except ValueError:
+            i += 1
             continue
         out.append((code, lines[i + 1]))
+        i += 2
     return out
 
 
