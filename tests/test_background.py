@@ -337,5 +337,23 @@ def test_a_finished_job_is_not_kept_by_the_window(win):
     assert job not in win.findChildren(background.BackgroundJob)
 
 
+def test_the_gil_switches_quickly_only_while_a_job_runs(win):
+    normal = sys.getswitchinterval()
+    first_release, second_release = threading.Event(), threading.Event()
+    first_started, second_started = threading.Event(), threading.Event()
+    first = background.run(win, held_task(first_started, first_release), text="Working…",
+                           show_dialog=False)
+    second = background.run(win, held_task(second_started, second_release), text="Working…",
+                            show_dialog=False)
+    assert pump_until(lambda: first_started.is_set() and second_started.is_set())
+    assert sys.getswitchinterval() == pytest.approx(background.JOB_SWITCH_INTERVAL)
+    first_release.set()
+    assert first.wait()
+    assert sys.getswitchinterval() == pytest.approx(background.JOB_SWITCH_INTERVAL)   # one still runs
+    second_release.set()
+    assert second.wait()
+    assert sys.getswitchinterval() == pytest.approx(normal)
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

@@ -305,6 +305,19 @@ def mesh_payload(ents, fids=None, face_ids=None):
     return verts, loops, normals, tags
 
 
+def _loop_triangles(verts, ls, normal):
+    """The triangulation of one face given as loops of rows of ``verts``: what
+    ``Entities.face_triangles`` gives, including its shortcut for a triangular face."""
+    if len(ls) == 1 and len(ls[0]) == 3 and _triangle(verts, ls[0], normal) is not None:
+        return TRI_TRIS
+    pl = Plane(verts[ls[0][0]], normal)
+    polys = [pl.to_local(verts[list(loop)]) for loop in ls]
+    try:
+        return np.asarray(mf.triangulate(polys), dtype=np.int64).reshape(-1, 3)
+    except Exception:
+        return np.zeros((0, 3), dtype=np.int64)
+
+
 def triangulate_payload(payload):
     """``(tris, tags)`` for a :func:`mesh_payload`: the triangles of every face.
 
@@ -318,12 +331,7 @@ def triangulate_payload(payload):
         ids = [v for loop in ls for v in loop]
         if not ids:
             continue
-        pl = Plane(verts[ls[0][0]], normals[i])
-        polys = [pl.to_local(verts[list(loop)]) for loop in ls]
-        try:
-            t = np.asarray(mf.triangulate(polys), dtype=np.int64).reshape(-1, 3)
-        except Exception:
-            t = np.zeros((0, 3), dtype=np.int64)
+        t = _loop_triangles(verts, ls, normals[i])
         for a, b, c in t:
             tris.append((ids[a], ids[b], ids[c]))
             if out is not None:
@@ -377,12 +385,7 @@ def triangulate_render(payload):
         ids = [v for loop in ls for v in loop]
         if not ids:
             continue
-        pl = Plane(verts[ls[0][0]], normals[i])
-        polys = [pl.to_local(verts[list(loop)]) for loop in ls]
-        try:
-            t = np.asarray(mf.triangulate(polys), dtype=np.int64).reshape(-1, 3)
-        except Exception:
-            t = np.zeros((0, 3), dtype=np.int64)
+        t = _loop_triangles(verts, ls, normals[i])
         if not len(t):
             continue
         T.append(verts[ids][t])

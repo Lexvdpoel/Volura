@@ -25,6 +25,7 @@ its end because it had no ``report`` left to stop at.
 """
 from __future__ import annotations
 
+import sys
 import threading
 
 from PySide6.QtCore import (QEvent, QEventLoop, QObject, QRunnable, Qt, QTimer,
@@ -44,6 +45,29 @@ _INPUT = {QEvent.MouseButtonPress, QEvent.MouseButtonRelease, QEvent.MouseButton
           QEvent.MouseMove, QEvent.Wheel, QEvent.KeyPress, QEvent.KeyRelease,
           QEvent.ShortcutOverride, QEvent.Shortcut, QEvent.DragEnter, QEvent.DragMove,
           QEvent.Drop, QEvent.TabletPress, QEvent.TouchBegin, QEvent.ContextMenu}
+
+
+#: how often Python hands the GIL to another thread while a job runs (seconds)
+JOB_SWITCH_INTERVAL = 0.001
+_normal_switch_interval = None
+
+
+def _quick_gil_switch():
+    """A short GIL switch interval while any job runs, the normal one when none does.
+
+    A task holds the GIL while it computes, and every event the GUI thread handles in
+    Python (the input filter below sees all of them) waits for it: up to the switch
+    interval, 5 ms by default. Showing the progress dialog is hundreds of events, which
+    froze the window for 1.5 s while a big model was simplified; at 1 ms that is 0.3 s,
+    and the task itself is not measurably slower."""
+    global _normal_switch_interval
+    if _ACTIVE:
+        if _normal_switch_interval is None:
+            _normal_switch_interval = sys.getswitchinterval()
+            sys.setswitchinterval(JOB_SWITCH_INTERVAL)
+    elif _normal_switch_interval is not None:
+        sys.setswitchinterval(_normal_switch_interval)
+        _normal_switch_interval = None
 
 
 class _InputBlocker(QObject):
@@ -165,6 +189,7 @@ class BackgroundJob(QObject):
     # ---------------------------------------------------------------- running
     def start(self):
         _ACTIVE.add(self)
+        _quick_gil_switch()
         _block_input()
         self._set_busy()
         if self._show_dialog:
@@ -248,6 +273,7 @@ class BackgroundJob(QObject):
             self._dialog.deleteLater()
             self._dialog = None
         _ACTIVE.discard(self)
+        _quick_gil_switch()
         self._set_busy()
         # the window no longer keeps the job (and its result) alive: only whoever holds it
         self.setParent(None)

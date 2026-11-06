@@ -157,12 +157,27 @@ def simplify_group(doc: Document, g: Group, tolerance):
     if g.locked:
         n = tri_count(g.ents)
         return n, n
+    before, after, g.ents = simplified(g, tolerance)
+    return before, after
+
+
+def closed_manifold(g: Group):
+    """The Manifold of `g`; a ValueError with its name when it is not a closed volume."""
     m = g.ents.to_manifold()
     if m.status() != mf.Error.NoError or m.is_empty():
         raise ValueError(tr("{name} is not a closed volume.").format(name=g.name))
-    before = len(m.to_mesh().tri_verts)
-    g.ents = Entities.from_manifold(m.simplify(tolerance))
-    return before, tri_count(g.ents)
+    return m
+
+
+def simplified(g: Group, tolerance, m=None):
+    """(triangles before, triangles after, new Entities) of simplifying `g`.
+
+    Reads the group and changes nothing, so it can run in a background task; `m` is the
+    group's `closed_manifold` when the caller already has it. The counts are those of
+    the manifold before and after `simplify`, so an estimate needs no new Entities."""
+    m = closed_manifold(g) if m is None else m
+    s = m.simplify(tolerance)
+    return m.num_tri(), s.num_tri(), Entities.from_manifold(s)
 
 
 def outside(m):
@@ -658,6 +673,43 @@ def _part(name, color, ents, fids):
     # every triangle carries the color of its face (a painted face, or the part color)
     m = ents.to_manifold(fids, face_ids={f: color_id(ents.F[f].color or color) for f in fids})
     return _finish_part(name, color, m)
+
+
+def part_check_job(payload):
+    """Worker entry point: ``(volume, surface, problem)`` of a closed shell's ``mesh_payload``.
+
+    `problem` is None, ``("invalid", status name)`` or ``("inside_out", None)``; the main
+    process turns it into text, because a worker does not load the translations."""
+    tris, tags = triangulate_job(payload)
+    m = manifold_from_tris(payload[0], tris, tags)
+    if m.status() != mf.Error.NoError or m.is_empty():
+        return 0.0, 0.0, ("invalid", m.status().name)
+    if m.volume() < 0:
+        return 0.0, 0.0, ("inside_out", None)
+    return m.volume(), m.surface_area(), None
+
+
+def part_summary(name, color, ents, pool=False):
+    """``(volume, surface, problem)`` of a group as Entity Info shows it: what ``_part``
+    finds, with `problem` the text of what is wrong, or None when it prints.
+
+    With `pool` the triangulation, the heavy part, runs in a worker process (when the
+    pool is on), so a background thread that waits for it does not hold the GIL and
+    the window stays smooth while a big group is checked."""
+    fids = list(ents.F)
+    open_e = ents.open_edges(fids)
+    if open_e:
+        return 0.0, 0.0, tr("not closed: {n} open or doubled edge(s)").format(n=len(open_e))
+    payload = mesh_payload(ents, fids)
+    if pool:
+        vol, area, problem = workers.parallel_map(part_check_job, [payload])[0]
+    else:
+        vol, area, problem = part_check_job(payload)
+    if problem is None:
+        return vol, area, None
+    if problem[0] == "invalid":
+        return 0.0, 0.0, tr("not a valid volume ({status})").format(status=problem[1])
+    return 0.0, 0.0, tr("faces are inside out")
 
 
 # Triangulating a group in a worker only pays once it is big enough to beat the

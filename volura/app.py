@@ -29,6 +29,7 @@ from . import (__version__, background, boxgen, cam, dxf, errors, fileio, i18n, 
                ops, sheet3d, svg, spacemouse, theme, threads, updater, vector_export, vector_import,
                workers)
 from .brep import Entities
+from .inference import GeoCache
 from .geom import Plane
 from .i18n import tr, tr_noop
 from .icons import icon
@@ -352,6 +353,11 @@ class MaterialsPanel(QWidget):
         doc.notify()
 
 
+# Entity Info checks a group with fewer faces than this right away; a bigger one (an
+# imported scan) in the background, so selecting it does not freeze the window.
+PART_INFO_BACKGROUND_FACES = 5000
+
+
 class EntityInfoPanel(QWidget):
     def __init__(self, win):
         super().__init__()
@@ -360,6 +366,8 @@ class EntityInfoPanel(QWidget):
         self.lay.setContentsMargins(6, 6, 6, 6)
         self.lay.addStretch(1)
         self.body = None
+        self._part_cache = {}           # id(ents) -> (ents, version, (name, color), summary)
+        self._part_pending = set()      # (id(ents), version, (name, color)) being checked
 
     def refresh(self):
         if self.body is not None:
@@ -518,15 +526,62 @@ class EntityInfoPanel(QWidget):
         for i, sp in enumerate(spins):
             sp.editingFinished.connect(lambda i=i: resize(i))
         form.addRow(tr("Position"), QLabel(", ".join(f"{round(v, 2) + 0.0:.2f}" for v in lo) + " mm"))
-        part = ops._part(g.name, g.color, g.ents, list(g.ents.F))
-        if part.manifold is not None:
-            m = part.manifold
-            form.addRow(tr("Volume"), QLabel(f"{m.volume() / 1000:.3f} cm³"))
-            form.addRow(tr("Surface"), QLabel(f"{m.surface_area() / 100:.2f} cm²"))
+        ents, version, key = g.ents, g.ents.version, (g.name, g.color)
+        cached = self._part_cache.get(id(ents))
+        if cached is not None and cached[0] is ents and cached[1:3] == (version, key):
+            self._part_rows(form, cached[3])
+            return
+        if len(ents.F) < PART_INFO_BACKGROUND_FACES:
+            summary = ops.part_summary(g.name, g.color, ents)
+            self._remember_part(ents, version, key, summary)
+            self._part_rows(form, summary)
+            return
+        # a big group: the check triangulates every face, seconds on an imported scan, so
+        # it runs in a worker process and the panel is refreshed when it is done
+        form.addRow(tr("Printable"), QLabel(tr("Calculating…")))
+        if (id(ents), version, key) in self._part_pending:
+            return                       # already on its way
+        self._part_pending.add((id(ents), version, key))
+        body, name, color = self.body, g.name, g.color
+
+        def task(report):
+            return ops.part_summary(name, color, ents, pool=True)
+
+        def finish():
+            self._part_pending.discard((id(ents), version, key))
+
+        def done(summary):
+            finish()
+            if ents.version != version:
+                return                   # edited meanwhile: a newer refresh follows
+            self._remember_part(ents, version, key, summary)
+            if self.body is not None and not self.body.isHidden():
+                self.refresh()           # shows it now, if this group is still selected
+
+        background.run(None, task, text=tr("Calculating…"), can_cancel=False,
+                       show_dialog=False, on_done=done, on_error=lambda e: finish())
+
+    def remember_part(self, g, summary):
+        """The Entity Info check of `g` as a background task already made it (an import,
+        a simplify), so selecting the group needs no second check."""
+        self._remember_part(g.ents, g.ents.version, (g.name, g.color), summary)
+
+    def _remember_part(self, ents, version, key, summary):
+        self._part_cache[id(ents)] = (ents, version, key, summary)
+        while len(self._part_cache) > 16:          # it holds the geometry: only a few
+            del self._part_cache[next(iter(self._part_cache))]
+
+    @staticmethod
+    def _part_rows(form, summary):
+        """Volume, surface and whether the group prints, as `summary` gives them."""
+        vol, area, problem = summary
+        if problem is None:
+            form.addRow(tr("Volume"), QLabel(f"{vol / 1000:.3f} cm³"))
+            form.addRow(tr("Surface"), QLabel(f"{area / 100:.2f} cm²"))
             ok = QLabel(tr("✔ closed volume (solid)"))
             ok.setStyleSheet(f"color: {theme.color('ok')}; font-weight: bold;")
         else:
-            ok = QLabel(f"✖ {part.problem}")
+            ok = QLabel(f"✖ {problem}")
             ok.setStyleSheet(f"color: {theme.color('error')}; font-weight: bold;")
             ok.setWordWrap(True)
         form.addRow(tr("Printable"), ok)
@@ -1696,6 +1751,8 @@ class SimplifyDialog(QDialog):
         self.groups = list(groups)
         self.tolerance = ops.SIMPLIFY_DEFAULT_TOLERANCE
         self.preview_before = self.preview_after = None
+        self.manifolds = {}             # group id -> its closed manifold (None: not closed)
+        self._manifold_lock = threading.Lock()
         self._token = 0
         self._job = None
         self.setWindowTitle(tr("Simplify Model"))
@@ -1751,16 +1808,25 @@ class SimplifyDialog(QDialog):
         self.preview_before = self.preview_after = None
         self.preview_label.setText(tr("Calculating…"))
         groups, tol = list(self.groups), self.tolerance
+        manifolds, lock = self.manifolds, self._manifold_lock
 
         def task(report):
             report(0.0)
             before = after = 0
             for g in groups:
-                m = g.ents.to_manifold()
-                if m.status() != mf.Error.NoError or m.is_empty():
+                # the manifold of a group is made once (seconds on a big model); every
+                # step of the slider after that is only manifold's own simplify
+                with lock:              # a quick second step waits instead of doing it again
+                    if g.id not in manifolds:
+                        try:
+                            manifolds[g.id] = ops.closed_manifold(g)
+                        except ValueError:
+                            manifolds[g.id] = None
+                m = manifolds[g.id]
+                if m is None:
                     continue
-                before += len(m.to_mesh().tri_verts)
-                after += ops.tri_count(Entities.from_manifold(m.simplify(tol)))
+                before += m.num_tri()
+                after += m.simplify(tol).num_tri()
             return before, after
 
         def done(result):
@@ -3837,15 +3903,27 @@ class MainWindow(QMainWindow):
         """Import an STL as a new group; the (possibly large) file is read in the background."""
         base = os.path.basename(path)
         group_name = os.path.splitext(base)[0]
+        color = self.settings.current_color
 
         def read(report):
+            # everything heavy happens here, on geometry that is not in the document yet:
+            # reading, building the faces and the render and snap cache of a model with
+            # tens of thousands of triangles takes seconds
             report(0.0, tr("Importing…"))
-            return fileio.import_stl_report(path)   # reads the file, not the document
+            m, removed = fileio.import_stl_report(path)
+            report(0.3, tr("Building the model…"))
+            ents = Entities.from_manifold(m)
+            report(0.7, tr("Preparing the view…"))
+            cache = GeoCache.build(ents)
+            summary = ops.part_summary(group_name, color, ents, pool=True)
+            return m.num_tri(), removed, ents, cache, summary
 
         def imported(result):
-            m, removed = result
+            n, removed, ents, cache, summary = result
             self.doc.checkpoint()
-            g = ops.group_from_manifold(self.doc, m, self.settings.current_color, group_name)
+            g = self.doc.add_group(ents, color, group_name)
+            self.view.engine.cache.put(cache)
+            self.info.remember_part(g, summary)
             self.doc.active = ROOT
             self.doc.set_selection([("g", g.id, g.id)])
             self.doc.notify()
@@ -3853,7 +3931,7 @@ class MainWindow(QMainWindow):
             if removed:
                 self.hint.setText(tr("{n} duplicate triangles removed from {name}").format(
                     n=removed, name=base))
-            self._maybe_suggest_simplify(g)
+            self._maybe_suggest_simplify(g, n)
 
         def failed(e):
             QMessageBox.critical(self, tr("Import Failed"), str(e))
@@ -5085,30 +5163,50 @@ class MainWindow(QMainWindow):
         """Show the Simplify Model dialog for `groups` and apply the chosen quality."""
         dlg = SimplifyDialog(self, groups)
         if dlg.exec() != QDialog.Accepted:
-            return
-        self._run_simplify(groups, dlg.tolerance)
+            return None
+        return self._run_simplify(groups, dlg.tolerance, dlg.manifolds)
 
-    def _run_simplify(self, groups, tolerance):
-        """Simplify every group with one checkpoint, so a single undo restores them all."""
-        self.doc.checkpoint()
-        before = after = 0
-        for g in groups:
-            try:
-                b, a = ops.simplify_group(self.doc, g, tolerance)
-            except ValueError as e:
-                self._failed(e)
-                return
-            before += b
-            after += a
-        self.doc.notify()
-        self.hint.setText(tr("Simplified: {n} fewer triangles ({before} -> {after}).")
-                          .format(n=before - after, before=before, after=after))
+    def _run_simplify(self, groups, tolerance, manifolds=None):
+        """Simplify every group in the background, then swap the new geometry in with one
+        checkpoint, so a single undo restores them all. `manifolds` ({group id: Manifold})
+        are those the dialog already made for its estimate."""
+        groups = [g for g in groups if not g.locked]
+        manifolds = dict(manifolds or {})
 
-    def _maybe_suggest_simplify(self, g):
-        """After a large import: ask whether to simplify the new group right away."""
+        def work(report):
+            # building the new faces and their render cache is the slow part: seconds
+            # for a big model, so it happens here and the window keeps responding
+            out = []
+            for i, g in enumerate(groups):
+                report(i / len(groups), tr("Simplifying {name}…").format(name=g.name))
+                before, after, ents = ops.simplified(g, tolerance, manifolds.get(g.id))
+                out.append((g, before, after, ents, GeoCache.build(ents),
+                            ops.part_summary(g.name, g.color, ents, pool=True)))
+            return out
+
+        def done(out):
+            self.doc.checkpoint()
+            for g, _b, _a, ents, cache, summary in out:
+                g.ents = ents
+                self.view.engine.cache.put(cache)
+                self.info.remember_part(g, summary)
+            self.doc.notify()
+            before = sum(o[1] for o in out)
+            after = sum(o[2] for o in out)
+            self.hint.setText(tr("Simplified: {n} fewer triangles ({before} -> {after}).")
+                              .format(n=before - after, before=before, after=after))
+
+        if not groups:
+            return None
+        return background.run(self, work, text=tr("Simplifying…"),
+                              on_done=done, on_error=self._failed)
+
+    def _maybe_suggest_simplify(self, g, n=None):
+        """After a large import: ask whether to simplify the new group right away. `n` is
+        the triangle count when the caller already knows it (the import does)."""
         if g is None or not self.settings.ask_simplify_import:
             return
-        n = ops.tri_count(g.ents)
+        n = ops.tri_count(g.ents) if n is None else n
         if n <= ops.LARGE_IMPORT_TRIANGLES:
             return
         if self._ask_simplify_import(n):

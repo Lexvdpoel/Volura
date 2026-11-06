@@ -292,5 +292,76 @@ def test_dont_ask_again_box_turns_the_advice_off(win, monkeypatch):
     assert win.settings.ask_simplify_import is False
 
 
+# ---------------------------------------------------------------- off the GUI thread
+# A model of tens of thousands of triangles takes seconds to build into faces: that work
+# must not run on the GUI thread, or the window freezes while it happens.
+
+def record_threads(monkeypatch):
+    """The threads Entities.from_manifold runs on, from now on."""
+    import threading
+    seen = []
+    real = Entities.from_manifold
+
+    def spy(*a, **k):
+        seen.append(threading.current_thread() is threading.main_thread())
+        return real(*a, **k)
+
+    monkeypatch.setattr(Entities, "from_manifold", staticmethod(spy))
+    return seen
+
+
+def test_import_builds_the_model_off_the_gui_thread(win, monkeypatch, tmp_path):
+    monkeypatch.setattr(app_module.MainWindow, "_ask_simplify_import", lambda self, n: False)
+    seen = record_threads(monkeypatch)
+    g = _import(win, _write_sphere_stl(tmp_path, SMALL_SEGMENTS))
+    assert seen == [False]                         # built once, in the background
+    assert tris(g.ents) == 8192
+    # and the render and snap cache of the new group is ready before the first frame
+    c = win.view.engine.cache._c.get(id(g.ents))
+    assert c is not None and c["ents"] is g.ents and c["version"] == g.ents.version
+    assert len(c["T"]) == 8192
+
+
+def test_simplify_runs_off_the_gui_thread_and_undoes_in_one_step(win, monkeypatch):
+    a = add_sphere(win, segments=128, name="a")
+    b = add_sphere(win, segments=96, name="b")
+    old = (tris(a.ents), tris(b.ents))
+    seen = record_threads(monkeypatch)
+    job = win._run_simplify([a, b], 0.1)
+    job.wait()
+    assert pump_until(lambda: tris(a.ents) < old[0]), "the result never arrived"
+    assert seen == [False, False]
+    assert tris(b.ents) < old[1]
+    assert "fewer triangles" in win.hint.text()
+    assert win.doc.undo() is True                  # one checkpoint for both groups
+    assert (tris(a.ents), tris(b.ents)) == old
+
+
+def test_cancelled_simplify_changes_nothing(win):
+    g = add_sphere(win, segments=128)
+    old, ents = tris(g.ents), g.ents
+    undo = len(win.doc.undo_stack)
+    job = win._run_simplify([g], 0.1)
+    job.cancel()
+    job.wait()
+    for _ in range(20):
+        _app.processEvents()
+    assert g.ents is ents and tris(g.ents) == old
+    assert len(win.doc.undo_stack) == undo
+
+
+def test_dialog_makes_the_manifold_of_a_group_only_once(win, monkeypatch):
+    g = add_sphere(win, segments=128)
+    calls = []
+    real = ops.closed_manifold
+    monkeypatch.setattr(ops, "closed_manifold", lambda grp: calls.append(grp.id) or real(grp))
+    dlg = app_module.SimplifyDialog(win, [g])
+    for index in range(len(ops.SIMPLIFY_STEPS)):
+        dlg.slider.setValue(index)
+        assert pump_until(lambda: dlg.preview_after is not None), "no estimate arrived"
+    assert calls == [g.id]
+    assert dlg.preview_before == 8192
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

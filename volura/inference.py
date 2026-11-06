@@ -76,6 +76,17 @@ class GeoCache:
         self._trim()
         return c
 
+    @staticmethod
+    def build(ents):
+        """The cache entry of `ents` without storing it: a background task can build it for
+        geometry that is not in the document yet, and `put` stores it on the GUI thread."""
+        return GeoCache._build(ents)
+
+    def put(self, c):
+        """Store an entry made by `build`; `get` still rebuilds it once the geometry changes."""
+        self._c[id(c["ents"])] = c
+        self._trim()
+
     def warm(self, ents_list):
         """Triangulate many groups over the cores, so the first frame after opening a
         file does not build every group's cache one by one.
