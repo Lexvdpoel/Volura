@@ -3,6 +3,17 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.9 — 2026-11-07
+
+### New
+- **Export as OBJ with colors** (File > Export): every printable part becomes its own object
+  in its own color, with a .mtl file next to it, for other 3D programs and renderers.
+- **Lay Flat on This Face**: right-click a face of a part and it turns, the shortest way
+  round, until that face lies on the print bed, like "place on face" in a slicer.
+- **Totals in Entity Info**: with several groups selected, Entity Info shows the total volume,
+  weight, filament length and cost, and how many parts are left out because they are not
+  closed.
+
 ## 0.2.8 — 2026-11-07
 
 ### New
