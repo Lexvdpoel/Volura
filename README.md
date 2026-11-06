@@ -69,6 +69,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
     color are exported as painted triangles, which these slicers show and print as their own color
     painting
   - **STL per color**
+  - **3D model with colors (OBJ)**: one object per part, each in its own color from the `.mtl`
+    that is written next to it
   - Where parts with different colors overlap, the part made later wins
 - Native file format `.volura` (files from version 0.1 are converted), unlimited undo
 - **3D import**: STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB and COLLADA (DAE), with a progress
@@ -234,7 +236,7 @@ volura/
   geom.py       planes, 2D cross sections, mesh analysis
   model.py      document: loose geometry, groups, filaments, selection, undo/redo
   ops.py        push/pull, booleans, transformations, print preparation
-  fileio.py     .volura, STL, 3MF; closed volumes from imported meshes
+  fileio.py     .volura, STL, OBJ, 3MF; closed volumes from imported meshes
   mesh_formats.py  reading STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB, DAE
   repair.py     repairing meshes that are not closed
   camera.py     orbit camera (Z up)

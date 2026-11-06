@@ -2775,6 +2775,7 @@ class MainWindow(QMainWindow):
         self.a_exp_stl = A(tr("&3D Model (STL)…"), self.export_stl, None, "stl")
         self.a_exp_3mf = A(tr("&Multicolor 3MF…"), self.export_3mf, None, "3mf")
         self.a_exp_colors = A(tr("STL per &Color…"), self.export_stl_colors)
+        self.a_exp_obj = A(tr("3D Model with &Colors (OBJ)…"), self.export_obj)
         self.a_exp_svg2d = A(tr("2D Vector (&SVG)…"), lambda checked=False: self.export_vector("svg"))
         self.a_exp_dxf2d = A(tr("2D Vector (&DXF)…"), lambda checked=False: self.export_vector("dxf"))
         self.a_print_setup = A(tr("Printer Set&up…"), lambda checked=False: self.print_setup())
@@ -3034,7 +3035,7 @@ class MainWindow(QMainWindow):
 
         m = mb.addMenu(tr("&File"))
         export = QMenu(tr("&Export"), m)
-        for a in (self.a_exp_stl, self.a_exp_3mf, self.a_exp_colors, None,
+        for a in (self.a_exp_stl, self.a_exp_3mf, self.a_exp_colors, self.a_exp_obj, None,
                   self.a_exp_svg2d, self.a_exp_dxf2d):
             if a is None:
                 export.addSeparator()
@@ -4741,10 +4742,13 @@ class MainWindow(QMainWindow):
     def export_stl_colors(self):
         self._export_parts_async("colors")
 
+    def export_obj(self):
+        self._export_parts_async("obj")
+
     def _export_parts_async(self, kind):
         """Export the printable parts in the background: prepare, ask, write.
 
-        ``kind`` is "stl", "3mf" or "colors". Turning the model into solids and
+        ``kind`` is "stl", "3mf", "obj" or "colors". Turning the model into solids and
         writing the file run in the background so the window keeps responding; the
         warnings and the file-name dialog stay on the GUI thread, in the same order
         as a synchronous export. Only the preparation can be cancelled, and then no
@@ -4766,6 +4770,9 @@ class MainWindow(QMainWindow):
             elif kind == "3mf":
                 path, _ = QFileDialog.getSaveFileName(self, tr("Export as 3MF"),
                                                       self.export_name(".3mf"), "3MF (*.3mf)")
+            elif kind == "obj":
+                path, _ = QFileDialog.getSaveFileName(self, tr("Export as OBJ"),
+                                                      self.export_name(".obj"), "OBJ (*.obj)")
             else:
                 path, _ = QFileDialog.getSaveFileName(self, tr("STL per Color (base name)"),
                                                       self.export_name(".stl"), "STL (*.stl)")
@@ -4786,6 +4793,11 @@ class MainWindow(QMainWindow):
                 return ("stl", fileio.export_stl(path, part_list))
             if kind == "3mf":
                 return ("3mf", fileio.export_3mf(path, part_list, materials, name))
+            if kind == "obj":
+                # the .mtl holds one material per color of the parts that are written
+                colors = len({fileio.obj_material(p.color)[0]
+                              for p in part_list if p.manifold is not None})
+                return ("obj", (fileio.export_obj(path, part_list), colors))
             return ("colors", fileio.export_stl_per_color(path, part_list, materials))
 
         def written(outcome):
@@ -4793,6 +4805,10 @@ class MainWindow(QMainWindow):
             if what == "stl":
                 self.hint.setText(tr("STL exported ({n} triangles, watertight): {path}")
                                   .format(n=value, path=path))
+            elif what == "obj":
+                n, colors = value
+                self.hint.setText(tr("OBJ exported ({n} triangles, {colors} colors): {path}")
+                                  .format(n=n, colors=colors, path=path))
             elif what == "3mf":
                 lines = "\n".join(tr("  extruder {e}: {name}").format(e=e, name=n)
                                   for n, e in value)

@@ -1,4 +1,4 @@
-"""Reading and writing Volura documents, importing meshes, writing STL and 3MF."""
+"""Reading and writing Volura documents, importing meshes, writing STL, OBJ and 3MF."""
 from __future__ import annotations
 
 import json
@@ -385,6 +385,68 @@ def export_stl_per_color(path, part_list, materials):
         write_stl(fn, m, cname)
         files.append(fn)
     return files
+
+
+# ------------------------------------------------------------------ OBJ
+
+def obj_object_name(name):
+    """A part name as an OBJ object name: one word, whitespace becomes underscores."""
+    return "_".join(str(name or "").split()) or "Volura"
+
+
+def obj_material(color):
+    """'#rrggbb' as its OBJ material: ``("color_d23b3b", (0.824, 0.231, 0.231))``.
+
+    The name holds no spaces, so every reader finds it back in the .mtl; a part without
+    a color gets the grey of the viewport.
+    """
+    t = re.sub(r"[^0-9a-f]", "", str(color or "").lower())
+    t = t[:6] if len(t) >= 6 else "c8c8c8"
+    return f"color_{t}", tuple(int(t[k:k + 2], 16) / 255.0 for k in (0, 2, 4))
+
+
+def export_obj(path, part_list):
+    """Wavefront OBJ with a .mtl next to it: one object per part, each in its own color.
+
+    The vertex indices run over the whole file (1-based, as OBJ wants it), so every
+    object refers to its own corners; the .mtl has one material per color in use.
+    Millimetres, like every Volura export. Returns the number of triangles.
+    """
+    parts = [p for p in part_list if p.manifold is not None]
+    if not parts:
+        raise ValueError(tr("There is nothing to export."))
+    # mtllib takes the rest of the line as one name in some readers and only the first word
+    # in others: a name without spaces works in both
+    mtl_name = obj_object_name(os.path.splitext(os.path.basename(path))[0]) + ".mtl"
+    colors = {}                                   # material name -> (r, g, b)
+    lines = [f"# {os.path.basename(path)} - exported by Volura {__version__}",
+             f"mtllib {mtl_name}"]
+    first = 1                                     # the first vertex index of this object
+    tris = 0
+    for p in parts:
+        v, t = mesh_arrays(p.manifold)
+        name, rgb = obj_material(p.color)
+        colors.setdefault(name, rgb)
+        lines.append(f"o {obj_object_name(p.name)}")
+        lines.append(f"usemtl {name}")
+        lines += [f"v {x:.6f} {y:.6f} {z:.6f}" for x, y, z in v]
+        lines += [f"f {a + first} {b + first} {c + first}" for a, b, c in t]
+        first += len(v)
+        tris += len(t)
+    mtl = "".join(f"newmtl {name}\nKd {r:.6f} {g:.6f} {b:.6f}\nKa 0 0 0\nd 1\nillum 1\n"
+                  for name, (r, g, b) in colors.items())
+
+    def write_obj(tmp):
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+
+    def write_mtl(tmp):
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(mtl)
+
+    atomic_write(path, write_obj)
+    atomic_write(os.path.join(os.path.dirname(path), mtl_name), write_mtl)
+    return tris
 
 
 # ------------------------------------------------------------------ 3MF
