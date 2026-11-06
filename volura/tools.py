@@ -55,6 +55,19 @@ def parse_number(text):
         raise ValueError(text)
 
 
+def parse_array(text):
+    """Parse an array count in the Measurements box: "5x", "x5" or "5*" makes 5 copies,
+    "/5" divides the step into 5. Returns (n, divide), or None when it is not an array."""
+    t = text.strip().lower()
+    m = re.fullmatch(r"(\d+)\s*[x*]", t) or re.fullmatch(r"[x*]\s*(\d+)", t)
+    if m:
+        return int(m.group(1)), False
+    dv = re.fullmatch(r"/\s*(\d+)", t)
+    if dv:
+        return int(dv.group(1)), True
+    return None
+
+
 MEASURE_LABEL = tr("Measurements")     # the Measurements box label of a tool without one of its own
 
 LENGTH_PRECISION = 2      # decimals shown in length labels (Model Info > Units)
@@ -2366,13 +2379,12 @@ class MoveTool(TransformTool):
         t = text.strip().lower()
         if self.base is None and self.last_copy is not None:
             items, off = self.last_copy
-            m = re.fullmatch(r"(\d+)\s*[x*]", t) or re.fullmatch(r"[x*]\s*(\d+)", t)
-            dv = re.fullmatch(r"/\s*(\d+)", t)
-            if m or dv:
-                n = int((m or dv).group(1))
+            arr = parse_array(t)
+            if arr is not None:
+                n, divide = arr
                 if n < 1:
                     raise ValueError(t)
-                step = off if m else off / n
+                step = off / n if divide else off
                 self.doc.undo()
                 self.doc.redo_stack.clear()
 
@@ -2440,6 +2452,8 @@ class RotateTool(TransformTool):
             self.forced_axis = None
         self.copy = False
         self.hover_plane = None
+        if not hasattr(self, "last_copy"):
+            self.last_copy = None
 
     def busy(self):
         return self.center is not None
@@ -2479,10 +2493,14 @@ class RotateTool(TransformTool):
         self.set_vcb(fmt_angle(deg))
 
     def matrix(self, deg):
-        R = rotation_matrix(self.plane.n, math.radians(deg))
+        return self._matrix(deg, self.center, self.plane.n)
+
+    @staticmethod
+    def _matrix(deg, center, n):
+        R = rotation_matrix(n, math.radians(deg))
         M = np.eye(4)
         M[:3, :3] = R
-        M[:3, 3] = self.center - R @ self.center
+        M[:3, 3] = center - R @ center
         return M
 
     def mouse_press(self, e, x, y):
@@ -2497,6 +2515,7 @@ class RotateTool(TransformTool):
             self.plane = Plane(self.center, plane.n)
             self.copy = bool(e.modifiers() & Qt.ControlModifier)
             self.view.hover = None
+            self.last_copy = None
             return
         if self.ref is None:
             v = self.inf.point - self.center if self.inf is not None else None
@@ -2507,6 +2526,25 @@ class RotateTool(TransformTool):
         self.apply(self.angle)
 
     def vcb_enter(self, text):
+        if self.center is None and self.last_copy is not None:
+            arr = parse_array(text)
+            if arr is not None:
+                n, divide = arr
+                if n < 1:
+                    raise ValueError(text.strip())
+                items, deg, center, axis = self.last_copy
+                step = deg / n if divide else deg
+                self.doc.undo()
+                self.doc.redo_stack.clear()
+
+                def run():
+                    made = []
+                    for k in range(1, n + 1):
+                        M = self._matrix(step * k, center, axis)
+                        made += ops.transform_selection(self.doc, M[:3, :3], M[:3, 3], copy=True, items=items)
+                    self.doc.set_selection(made)
+                self.commit(run)
+                return
         if self.center is None:
             raise ValueError(tr("click the pivot point first"))
         if self.ref is None:
@@ -2521,7 +2559,10 @@ class RotateTool(TransformTool):
             new = ops.transform_selection(self.doc, M[:3, :3], M[:3, 3], copy=copy, items=items)
             self.doc.set_selection(new)
         self.commit(run)
+        center, axis = np.array(self.center), np.array(self.plane.n)
         self.reset()
+        if copy:
+            self.last_copy = (items, deg, center, axis)
 
     def draw(self, view):
         c = self.center if self.center is not None else (self.inf.point if self.inf else None)

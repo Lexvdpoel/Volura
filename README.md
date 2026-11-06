@@ -26,6 +26,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - Length snapping to 1 mm (adjustable), angles snap to 15°
 - Measurements box at the bottom right (just type): `25`, `2,5cm`, `40;20`, `64s`, `10;0;5`, `5x`, `/5`.
   The direction follows your mouse, like in SketchUp
+- **Arrays**: after a Ctrl-copy, type `5x` (or `x5`, `5*`) to repeat it into 5 copies and `/5` to
+  divide the step into 5. With Move this makes a row, with Rotate a circle (rotate-copy a spoke
+  60°, type `5x` for 6 spokes); one undo removes the whole array
 - Selecting: click, double-click (face + edges), triple-click (everything connected), selection box
 - **Groups** (G): every group is a separate printable part with its own filament color. Double-click
   to edit a group
