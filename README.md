@@ -59,7 +59,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
   Measurements box), Statistics (groups, loose edges and faces, total volume) and Print Bed
 - **Filament** (File > Printer Setup > Print Bed): the material (PLA, PETG, ABS, ASA, TPU, Nylon
   or a custom density), the diameter (1.75 or 2.85 mm) and the price per kg; **Entity Info** then
-  shows the weight, length and cost of a selected part as a solid print (with infill it is less)
+  shows the weight, length and cost of a selected part as a solid print (with infill it is less).
+  Select several groups and Entity Info also shows the totals of the whole job: the volume,
+  weight, filament length and cost of all the closed parts together
 - **Preferences** (Window) with circle segments and a Shortcuts page like in SketchUp: search,
   commands per menu, add or remove a shortcut and reset everything
 - A welcome screen at startup (Help > Welcome to Volura), which can be turned off

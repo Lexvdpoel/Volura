@@ -483,6 +483,8 @@ class EntityInfoPanel(QWidget):
             if bb is not None:
                 d = bb[1] - bb[0]
                 form.addRow(tr("Dimensions"), QLabel(f"{d[0]:.2f} × {d[1]:.2f} × {d[2]:.2f} mm"))
+            if len(groups) > 1:
+                self._totals_form(form, groups)
         self.lay.insertWidget(0, self.body)
 
     def _sheet_form(self, form):
@@ -577,21 +579,29 @@ class EntityInfoPanel(QWidget):
         for i, sp in enumerate(spins):
             sp.editingFinished.connect(lambda i=i: resize(i))
         form.addRow(tr("Position"), QLabel(", ".join(f"{round(v, 2) + 0.0:.2f}" for v in lo) + " mm"))
+        summary = self._summary(g)
+        if summary is None:
+            form.addRow(tr("Printable"), QLabel(tr("Calculating…")))
+            return
+        self._part_rows(form, summary)
+
+    def _summary(self, g):
+        """``(volume, surface, problem)`` of the group `g`, from the cache or checked now.
+
+        None means the group is too big to check on the GUI thread: the check runs in the
+        background and refreshes the panel when it is done."""
         ents, version, key = g.ents, g.ents.version, (g.name, g.color)
         cached = self._part_cache.get(id(ents))
         if cached is not None and cached[0] is ents and cached[1:3] == (version, key):
-            self._part_rows(form, cached[3])
-            return
+            return cached[3]
         if len(ents.F) < PART_INFO_BACKGROUND_FACES:
             summary = ops.part_summary(g.name, g.color, ents)
             self._remember_part(ents, version, key, summary)
-            self._part_rows(form, summary)
-            return
+            return summary
         # a big group: the check triangulates every face, seconds on an imported scan, so
         # it runs in a worker process and the panel is refreshed when it is done
-        form.addRow(tr("Printable"), QLabel(tr("Calculating…")))
         if (id(ents), version, key) in self._part_pending:
-            return                       # already on its way
+            return None                    # already on its way
         self._part_pending.add((id(ents), version, key))
         body, name, color = self.body, g.name, g.color
 
@@ -611,6 +621,7 @@ class EntityInfoPanel(QWidget):
 
         background.run(None, task, text=tr("Calculating…"), can_cancel=False,
                        show_dialog=False, on_done=done, on_error=lambda e: finish())
+        return None
 
     def remember_part(self, g, summary):
         """The Entity Info check of `g` as a background task already made it (an import,
@@ -628,12 +639,7 @@ class EntityInfoPanel(QWidget):
         if problem is None:
             form.addRow(tr("Volume"), QLabel(f"{vol / 1000:.3f} cm³"))
             form.addRow(tr("Surface"), QLabel(f"{area / 100:.2f} cm²"))
-            s = self.win.settings
-            grams, metres, cost = ops.filament_use(vol, s.filament_density,
-                                                   s.filament_diameter, s.filament_price)
-            form.addRow(tr("Weight"),
-                        QLabel(f"≈ {grams:.1f} g ({tr(s.filament_material)}, {tr('solid')})"))
-            form.addRow(tr("Filament"), QLabel(f"≈ {metres:.2f} m · {cost:.2f}"))
+            self._filament_rows(form, vol)
             ok = QLabel(tr("✔ closed volume (solid)"))
             ok.setStyleSheet(f"color: {theme.color('ok')}; font-weight: bold;")
         else:
@@ -641,6 +647,33 @@ class EntityInfoPanel(QWidget):
             ok.setStyleSheet(f"color: {theme.color('error')}; font-weight: bold;")
             ok.setWordWrap(True)
         form.addRow(tr("Printable"), ok)
+
+    def _filament_rows(self, form, vol):
+        """The weight and the filament a solid print of `vol` mm³ takes with these settings."""
+        s = self.win.settings
+        grams, metres, cost = ops.filament_use(vol, s.filament_density,
+                                               s.filament_diameter, s.filament_price)
+        form.addRow(tr("Weight"),
+                    QLabel(f"≈ {grams:.1f} g ({tr(s.filament_material)}, {tr('solid')})"))
+        form.addRow(tr("Filament"), QLabel(f"≈ {metres:.2f} m · {cost:.2f}"))
+
+    def _totals_form(self, form, groups):
+        """What a whole print job takes: the volume, weight, filament and cost of all the
+        closed groups of the selection together."""
+        summaries = [self._summary(g) for g in groups]
+        if any(s is None for s in summaries):
+            form.addRow(tr("Total volume"), QLabel(tr("Calculating…")))
+            return
+        closed = [s for s in summaries if s[2] is None]
+        skipped = len(summaries) - len(closed)
+        vol = sum(s[0] for s in closed)
+        form.addRow(tr("Total volume"), QLabel(f"{vol / 1000:.3f} cm³"))
+        if closed:
+            self._filament_rows(form, vol)
+        if skipped:
+            text = (tr("{n} part is not closed") if skipped == 1
+                    else tr("{n} parts are not closed"))
+            form.addRow(tr("Not counted"), QLabel(text.format(n=skipped)))
 
     def _apply(self, fn):
         doc = self.win.doc

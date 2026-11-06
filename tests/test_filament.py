@@ -174,5 +174,37 @@ def test_an_open_group_gets_no_weight(win):
     assert "Weight" not in text and "Volume" not in text
 
 
+def test_several_groups_selected_give_the_totals_of_the_job(win):
+    win.settings.filament_material = "PLA"
+    win.settings.filament_density = 1.24
+    win.settings.filament_diameter = 1.75
+    win.settings.filament_price = 20.0
+    a = ops.group_from_manifold(win.doc, ops.primitive("box", 10, 10, 10), "#cccccc", "a")
+    b = ops.group_from_manifold(win.doc, ops.primitive("box", 10, 10, 10), "#cccccc", "b")
+    win.doc.set_selection([("g", a.id, a.id), ("g", b.id, b.id)])
+    grams, metres, cost = ops.filament_use(2000.0, 1.24, 1.75, 20.0)
+    text = entity_info_text(win)
+    assert "Total volume" in text and "2.000 cm³" in text
+    assert f"≈ {grams:.1f} g (PLA, solid)" in text
+    assert f"≈ {metres:.2f} m · {cost:.2f}" in text
+    assert "Not counted" not in text
+
+
+def test_groups_that_are_not_closed_are_left_out_of_the_totals(win):
+    win.settings.filament_material = "PLA"
+    win.settings.filament_density = 1.24
+    win.settings.filament_diameter = 1.75
+    win.settings.filament_price = 20.0
+    cube = ops.group_from_manifold(win.doc, ops.primitive("box", 10, 10, 10), "#cccccc", "cube")
+    lid = ops.group_from_manifold(win.doc, ops.primitive("box", 10, 10, 10), "#cccccc", "lid")
+    lid.ents.erase_faces([sorted(lid.ents.F)[-1]])
+    win.doc.set_selection([("g", cube.id, cube.id), ("g", lid.id, lid.id)])
+    grams = ops.filament_use(1000.0, 1.24, 1.75, 20.0)[0]
+    text = entity_info_text(win)
+    assert "Total volume" in text and "1.000 cm³" in text
+    assert f"≈ {grams:.1f} g (PLA, solid)" in text
+    assert "Not counted" in text and "1 part is not closed" in text
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
