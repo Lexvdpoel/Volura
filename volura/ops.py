@@ -13,7 +13,7 @@ from .geom import (Plane, default_u, extrude_cs, manifold_from_mesh, mesh_arrays
 from .i18n import tr, tr_noop
 from .model import ROOT, Document, Group
 from .vector2d import VPath, polygon_area
-from . import nesting, workers
+from . import joints, nesting, workers
 
 DEFAULT_COLOR = "#f2f2f2"
 
@@ -445,6 +445,28 @@ def center_on_bed(doc: Document, items, bed):
         c = bb.mean(axis=0)
         transform_selection(doc, np.eye(3), np.array([bed[0] / 2 - c[0], bed[1] / 2 - c[1], -bb[0][2]]),
                             items=items)
+
+
+def lay_flat(doc: Document, gid, fid):
+    """Lay Flat on This Face: turn a group so that one of its faces lies on the bed.
+
+    The group turns about the centre of its own bounding box until the normal of face
+    `fid` points straight down, the shortest way round (a face that already points down
+    leaves the group where it is, one that points up turns it over), and afterwards the
+    group is dropped on the bed, like "place on face" of a slicer. A locked group is not
+    touched; the caller takes the checkpoint, so one undo brings the old place back."""
+    g = doc.group(gid)
+    if g is None or g.locked or fid not in g.ents.F:
+        return
+    bb = g.bbox()
+    if bb is None:
+        return
+    c = 0.5 * (np.asarray(bb[0], dtype=float) + np.asarray(bb[1], dtype=float))
+    n = np.asarray(g.ents.F[fid].normal, dtype=float)
+    R = joints.align_rotation(n, np.array([0.0, 0.0, -1.0]))
+    item = [("g", g.id, g.id)]
+    transform_selection(doc, R, c - R @ c, items=item)
+    drop_to_bed(doc, item)
 
 
 # What Arrange on Bed leaves free: the same 5 mm a slicer usually keeps from the edge

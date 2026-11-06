@@ -6239,6 +6239,12 @@ class MainWindow(QMainWindow):
         faces = self._selected_faces()
         return faces[0] if faces else None
 
+    def _lay_flat_face(self):
+        """(group, fid) of the right-clicked face, when that face lies in a group."""
+        face = getattr(self, "_context_face", None) or self._clicked_face()
+        g = self.doc.group(face[0]) if face is not None else None
+        return None if g is None else (g, face[1])
+
     def face_area(self, ents, fid):
         tri, _ = ents.face_triangles(fid)
         if not len(tri):
@@ -6324,6 +6330,19 @@ class MainWindow(QMainWindow):
         self.view.commit_camera()
         self.view.update()
 
+    def lay_flat_on_face(self):
+        """Right click on a face: turn its group until that face lies on the print bed."""
+        face = self._lay_flat_face()
+        if face is None:
+            return
+        g, fid = face
+        if g.locked:
+            self.warn_locked()
+            return
+        self.doc.checkpoint()
+        ops.lay_flat(self.doc, g.id, fid)
+        self.doc.notify()
+
     def reverse_selected_faces(self):
         by_ctx = {}
         for c, i in self._selected_faces():
@@ -6406,6 +6425,8 @@ class MainWindow(QMainWindow):
             mm = m.addMenu(tr("Flip Along"))
             for i, naam in enumerate((tr("Red Axis"), tr("Green Axis"), tr("Blue Axis"))):
                 mm.addAction(naam, lambda checked=False, ax=i: self.mirror(ax))
+            if self._lay_flat_face() is not None:
+                m.addAction(tr("Lay Flat on This Face"), self.lay_flat_on_face)
             m.addAction(self.a_drop)
             m.addAction(self.a_center)
             m.addAction(self.a_arrange)

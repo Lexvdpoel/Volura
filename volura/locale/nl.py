@@ -514,6 +514,7 @@ TRANSLATIONS = {
     'Large Tool Set': 'Grote gereedschapsset',
     'Laser / Mill': 'Laseren / frezen',
     'Later': 'Later',
+    'Lay Flat on This Face': 'Plat leggen op dit vlak',
     'Lay the groups side by side on the print bed, without overlapping': 'Zet de groepen naast elkaar op het printbed, zonder dat ze elkaar raken',
     'Lay the parts flat on the bed': 'Delen plat op het bed leggen',
     'Layer': 'Laag',
