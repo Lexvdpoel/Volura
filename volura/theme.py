@@ -60,6 +60,7 @@ COLORS = {
     "sky_horizon": ("#f7f7f5", "#7a7d82"),
     "ground": ("#cccbc6", "#686864"),
     "view_text": ("#5a5a5a", "#e3e6ea"),
+    "overhang": ("#e0491f", "#ff7043"),        # a face that needs support (View > Overhangs)
 }
 
 # Dark colors in the SVG icons and their light counterpart in the dark theme.

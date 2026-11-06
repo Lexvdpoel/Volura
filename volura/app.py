@@ -192,6 +192,12 @@ class Settings:
         self.show_axes = self._bool("show_axes", True)
         self.show_edges = self._bool("show_edges", True)
         self.xray = self._bool("xray", False)
+        self.show_overhangs = self._bool("show_overhangs", False)
+        try:
+            self.overhang_limit = int(self.q.value("overhang_limit", 45))
+        except (TypeError, ValueError):
+            self.overhang_limit = 45
+        self.overhang_limit = max(0, min(89, self.overhang_limit))
         self.face_style = str(self.q.value("face_style", SHADED))
         if self.face_style not in FACE_STYLES:
             self.face_style = SHADED
@@ -249,6 +255,8 @@ class Settings:
         self.q.setValue("show_axes", self.show_axes)
         self.q.setValue("show_edges", self.show_edges)
         self.q.setValue("xray", self.xray)
+        self.q.setValue("show_overhangs", self.show_overhangs)
+        self.q.setValue("overhang_limit", self.overhang_limit)
         self.q.setValue("check_updates", self.check_updates)
         self.q.setValue("ask_simplify_import", self.ask_simplify_import)
         self.q.setValue("theme", self.theme)
@@ -2224,6 +2232,14 @@ class PreferencesDialog(PageDialog):
                                        "and a line across a face splits that face."))
         form.addRow(self.split_lines)
         form.addRow(note(tr("Volura always does this, like SketchUp; it is only shown here.")))
+        self.overhang_limit = QSpinBox()
+        self.overhang_limit.setRange(0, 89)
+        self.overhang_limit.setSuffix("°")
+        self.overhang_limit.setValue(self.win.settings.overhang_limit)
+        self.overhang_limit.setToolTip(tr("Faces that hang over more steeply than this from the "
+                                          "vertical need support; View > Face Style > Overhangs "
+                                          "marks them."))
+        form.addRow(tr("Overhang limit"), self.overhang_limit)
         self.add_page(page)
 
     def apply(self):
@@ -2231,6 +2247,7 @@ class PreferencesDialog(PageDialog):
         s.circle_segments = self.segments.value()
         s.check_updates = self.updates.isChecked()
         s.ask_simplify_import = self.ask_simplify.isChecked()
+        s.overhang_limit = self.overhang_limit.value()
         s.spacemouse_speed = self.sm_speed.value() / self.SPEED_STEPS
         sm_changed = s.spacemouse != self.sm_on.isChecked()
         s.spacemouse = self.sm_on.isChecked()
@@ -2245,6 +2262,8 @@ class PreferencesDialog(PageDialog):
         if sm_changed:
             self.win.start_spacemouse()
         self.win.view.tools["circle"].segments = s.circle_segments
+        self.win.view.update()
+        self.win.view.update_overhang_status()
 
 
 class ShortcutsPanel(QWidget):
@@ -2851,6 +2870,9 @@ class MainWindow(QMainWindow):
         self.a_back_edges.setChecked(self.settings.back_edges)
         self.a_xray = A(tr("&X-ray"), self.toggle_xray, "Alt+X", "xray", checkable=True)
         self.a_xray.setChecked(self.settings.xray)
+        self.a_overhangs = A(tr("Overhangs"), self.toggle_overhangs, None, None, checkable=True,
+                             tip=tr("Mark the faces that hang over too far to print without support"))
+        self.a_overhangs.setChecked(self.settings.show_overhangs)
         self.face_style_group = QActionGroup(self)
         self.face_style_group.setExclusive(True)
         self.face_style_actions = {}
@@ -3045,8 +3067,8 @@ class MainWindow(QMainWindow):
         edge_style = QMenu(tr("&Edge Style"), m)
         self.fill(edge_style, (self.a_edges, self.a_back_edges))
         face_style = QMenu(tr("Face St&yle"), m)
-        self.fill(face_style, (self.a_xray, None, self.a_wireframe, self.a_hidden_lines,
-                               self.a_shaded, self.a_monochrome))
+        self.fill(face_style, (self.a_xray, self.a_overhangs, None, self.a_wireframe,
+                               self.a_hidden_lines, self.a_shaded, self.a_monochrome))
         comp_edit = QMenu(tr("Co&mponent Edit"), m)
         self.fill(comp_edit, (self.a_hide_rest,))
         self.fill(m, (self.a_toolbars, self.a_sheet, None,
@@ -5217,6 +5239,13 @@ class MainWindow(QMainWindow):
         self.settings.xray = bool(on)
         self.settings.save()
         self.view.update()
+
+    def toggle_overhangs(self, on):
+        """View > Face Style > Overhangs: mark the faces that need support when printed."""
+        self.settings.show_overhangs = bool(on)
+        self.settings.save()
+        self.view.update()
+        self.view.update_overhang_status()
 
     def toggle_back_edges(self, on):
         self.settings.back_edges = bool(on)

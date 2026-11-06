@@ -827,6 +827,36 @@ def check_parts(part_list, bed=None):
     return msgs
 
 
+# ------------------------------------------------------------- overhangs
+#
+# An FDM printer cannot print a face that hangs over too far without support; slicers
+# use 45° from vertical as the usual limit. The overhang view (View > Face Style >
+# Overhangs) marks those faces; this is the pure classification it and the tests use.
+
+def overhang_mask(normals, centroids_z, bed_z, limit_deg):
+    """Which faces hang over too far to print without support, as a bool array.
+
+    The overhang angle of a face is measured from the vertical: ``a = degrees(asin(max(0,
+    -n.z)))`` for the unit outward normal ``n``, so a vertical wall is 0° and a face pointing
+    straight down is 90°. A face is marked when ``a`` is greater than `limit_deg`: the
+    underside of a ledge sloping 30° from horizontal has a = 60° and is marked, one sloping
+    60° from horizontal has a = 30° and is not. The exception is the bottom of the model: a
+    face that lies on the print bed (its centroid within 0.01 mm of `bed_z`, the lowest z of
+    the geometry) prints fine even pointing straight down, so it is never marked.
+
+    `normals` is ``(n, 3)`` and `centroids_z` ``(n,)``; the answer is ``(n,)``.
+    """
+    n = np.asarray(normals, dtype=float)
+    if not len(n):
+        return np.zeros(0, dtype=bool)
+    length = np.linalg.norm(n, axis=1)
+    length[length == 0.0] = 1.0
+    angle = np.degrees(np.arcsin(np.clip(-n[:, 2] / length, 0.0, 1.0)))
+    on_bed = np.abs(np.asarray(centroids_z, dtype=float) - bed_z) <= 0.01
+    # a face right at the limit is allowed; the margin keeps rounding from marking it
+    return (angle > limit_deg + 1e-6) & ~on_bed
+
+
 # ------------------------------------------------------------- print inspection
 #
 # What the SketchUp extension "Solid Inspector" shows: why a part is not a solid.

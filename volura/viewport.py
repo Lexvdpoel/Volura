@@ -8,7 +8,7 @@ from PySide6.QtCore import QEvent, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QSurfaceFormat
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
-from . import errors, icons, theme
+from . import errors, icons, ops, theme
 from .camera import Camera, horizon_line
 from .i18n import tr
 from .inference import InferenceEngine
@@ -305,6 +305,9 @@ class Viewport(QOpenGLWidget):
         self._vbo = False             # set in initializeGL: can this driver take buffer objects?
         self._gl_ctx = None           # the GL context the buffers in _rcache belong to
         self._fstate = _FaceState()   # which GL states the model pass already set
+        self._overhang_cache = None   # (key, (bed_z, faces)) of the overhang view
+        self._overhang_ctx = None     # (bed_z, limit) the current frame tints faces with
+        self._overhang_hint = ""      # the overhang count the status bar shows, "" when none
         self._drag = None
         self._last = None
         self.setMouseTracking(True)
@@ -312,6 +315,7 @@ class Viewport(QOpenGLWidget):
         self.setMinimumSize(320, 240)
         doc.changed.connect(self.update)
         doc.selection_changed.connect(self.update)
+        doc.changed.connect(self.update_overhang_status)
 
     # ------------------------------------------------------------- tools
     def set_tool(self, name):
@@ -564,7 +568,8 @@ class Viewport(QOpenGLWidget):
 
     # ------------------------------------------------------------- model
     def _render_data(self, ents, gcolor):
-        key = (id(ents), ents.version, gcolor)
+        octx = self._overhang_ctx       # (bed_z, limit) while the overhang view is on, else None
+        key = (id(ents), ents.version, gcolor, octx)
         rc = self._rcache.get(id(ents))
         if rc is not None and rc["key"] == key and rc["ents"] is ents:
             return rc
@@ -574,6 +579,7 @@ class Viewport(QOpenGLWidget):
         base = hex_rgb(gcolor) if gcolor else FRONT
         colors = {f: face.color for f, face in ents.F.items()}
         T, fids = c["T"], c["tri_fid"]
+        warn = theme.rgb("overhang") if octx else None
 
         def faces(keep):
             """Vertex, normal and colour arrays of the faces selected by `keep`."""
@@ -587,6 +593,13 @@ class Viewport(QOpenGLWidget):
                               dtype=np.float32)
                 front[:, :3] = np.repeat(fc, 3, axis=0)
                 back[:, :3] = np.repeat(bc, 3, axis=0)
+                if warn is not None:
+                    bed_z, limit = octx
+                    over = ops.overhang_mask(c["tri_nrm"][keep], T[keep].mean(axis=1)[:, 2],
+                                             bed_z, limit)
+                    vmask = np.repeat(over, 3)
+                    front[vmask, :3] = warn
+                    back[vmask, :3] = warn
             return {"pos": T[keep].reshape(-1, 3).astype(np.float32),
                     "nrm": np.repeat(c["tri_nrm"][keep], 3, axis=0).astype(np.float32),
                     "front": front, "back": back}
@@ -639,6 +652,7 @@ class Viewport(QOpenGLWidget):
         show_hidden = getattr(self.settings, "show_hidden", False)
         show_back = getattr(self.settings, "back_edges", False) and not xray and style != WIREFRAME
         show_edges = self.settings.show_edges
+        self._overhang_ctx = self._overhang_context()
         for ctx, ents, g, rc, mats in self._draw_contexts(hiding_rest):
             faded = editing and ctx != doc.active
             selected = g is not None and g.id in sel_groups
@@ -698,6 +712,64 @@ class Viewport(QOpenGLWidget):
         live = {id(e) for e in doc.all_ents()}
         for key in [k for k in self._rcache if k not in live]:
             _free_render_data(self._rcache.pop(key))
+
+    # ------------------------------------------------------------- overhangs
+    def _overhang_faces(self):
+        """``(bed_z, faces that need support)`` of the model, cached until it or the limit changes.
+
+        The bed is the lowest z of all visible geometry; a face is counted when its outward
+        normal hangs over further than the limit (see :func:`ops.overhang_mask`). The count is
+        per face, read off the triangle normals the render cache already holds, so nothing is
+        triangulated twice and no frame pays for it twice."""
+        if not getattr(self.settings, "show_overhangs", False):
+            return None
+        limit = getattr(self.settings, "overhang_limit", 45)
+        ents_list = [e for _, e, _ in self.doc.contexts()]
+        key = tuple((id(e), e.version) for e in ents_list) + (limit,)
+        if self._overhang_cache is not None and self._overhang_cache[0] == key:
+            return self._overhang_cache[1]
+        box = self.doc.model_bbox()
+        if box is None:
+            self._overhang_cache = (key, (0.0, 0))
+            return self._overhang_cache[1]
+        bed_z = float(box[0][2])
+        total = 0
+        for e in ents_list:
+            c = self.engine.cache.get(e)
+            if not len(c["T"]):
+                continue
+            over = ops.overhang_mask(c["tri_nrm"], c["T"].mean(axis=1)[:, 2], bed_z, limit)
+            total += int(len(np.unique(c["tri_fid"][over])))
+        self._overhang_cache = (key, (bed_z, total))
+        return self._overhang_cache[1]
+
+    def _overhang_context(self):
+        """``(bed_z, limit)`` the faces of this frame are tinted with, or None when off."""
+        if not getattr(self.settings, "show_overhangs", False):
+            return None
+        info = self._overhang_faces()
+        return None if info is None else (info[0], getattr(self.settings, "overhang_limit", 45))
+
+    def update_overhang_status(self):
+        """The status bar hint of the overhang view: how many faces need support.
+
+        Off, or nothing overhanging: the hint goes away and the instruction of the current
+        tool comes back, so the bar never keeps a count that is no longer true."""
+        info = self._overhang_faces()
+        if info and info[1]:
+            text = tr("Overhangs: {n} faces need support (over {limit}°)").format(
+                n=info[1], limit=int(self.settings.overhang_limit))
+        else:
+            text = ""
+        if text == self._overhang_hint:
+            return
+        was, self._overhang_hint = self._overhang_hint, text
+        if text:
+            self.set_status(text)
+        else:
+            if self._status_note == was:
+                self._status_note = None
+            self.refresh_status()
 
     def release_gl(self):
         """Everything this viewport gave the driver, back before the window closes."""

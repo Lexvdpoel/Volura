@@ -43,6 +43,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   older 3DxSoftware (siappdll), without a driver through Windows Raw Input, and on Linux through
   spacenavd
 - Print bed of your printer (Bambu, Prusa, Creality, Voron or a custom size) and a print check
+- **Overhang view** (View > Face Style > Overhangs): marks every face that hangs over more steeply
+  than the limit (45° from the vertical by default, under *Window > Preferences > Drawing*) in a
+  warning colour, so you see at a glance what needs support; faces that lie on the print bed are
+  left alone and the status bar counts the faces that need it
 - **Model Info** (Window) with the pages Units (length rounding and the number of decimals of the
   Measurements box), Statistics (groups, loose edges and faces, total volume) and Print Bed
 - **Filament** (File > Printer Setup > Print Bed): the material (PLA, PETG, ABS, ASA, TPU, Nylon
