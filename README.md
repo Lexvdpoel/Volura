@@ -60,7 +60,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - Native file format `.volura` (files from version 0.1 are converted), unlimited undo
 - **3D import**: STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB and COLLADA (DAE), with a progress
   bar. Every closed part becomes a group in its own color; slicer projects (PrusaSlicer,
-  Bambu Studio, OrcaSlicer) keep their parts and filament colors
+  Bambu Studio, OrcaSlicer) keep their parts and filament colors. A model that is not closed
+  is repaired on import where possible: faces on both sides or the wrong way round, holes,
+  parts touching along an edge, small knots and the inner walls of SketchUp models
 
 ### Laser and mill
 
@@ -220,6 +222,7 @@ volura/
   ops.py        push/pull, booleans, transformations, print preparation
   fileio.py     .volura, STL, 3MF; closed volumes from imported meshes
   mesh_formats.py  reading STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB, DAE
+  repair.py     repairing meshes that are not closed
   camera.py     orbit camera (Z up)
   inference.py  SketchUp inference
   viewport.py   OpenGL view and input

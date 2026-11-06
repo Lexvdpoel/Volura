@@ -31,6 +31,7 @@ from . import (__version__, background, boxgen, cam, dxf, errors, fileio, i18n, 
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
+from . import repair
 from .geom import Plane
 from .i18n import tr, tr_noop
 from .icons import icon
@@ -3951,6 +3952,11 @@ class MainWindow(QMainWindow):
             report(1.0, tr("Preparing the view…"))
             removed = sum(v.duplicates for v in volumes)
             loose = sum(v.loose for v in volumes)
+            for v in volumes:
+                if v.repair is not None and v.repair.changed:
+                    name = file_name if len(volumes) == 1 else v.name
+                    notes.insert(0, tr("{name} was repaired: {what}").format(
+                        name=name, what=", ".join(repair.describe(v.repair))))
             return n, removed, loose, notes, parts
 
         def imported(result):

@@ -1123,4 +1123,12 @@ TRANSLATIONS = {
     '{n} parts imported from {name}': '{n} onderdelen geïmporteerd uit {name}',
     '{n} loose triangles removed from {name}': '{n} losse driehoeken verwijderd uit {name}',
     'Placing the drawing…': 'Tekening plaatsen…',
+    '{name} was repaired: {what}': '{name} is gerepareerd: {what}',
+    '{n} holes filled': '{n} gaten gedicht',
+    '{n} triangles turned round': '{n} driehoeken omgedraaid',
+    '{n} duplicate triangles removed': '{n} dubbele driehoeken verwijderd',
+    '{n} loose triangles removed': '{n} losse driehoeken verwijderd',
+    '{n} triangles of inner walls removed': '{n} driehoeken van binnenwanden verwijderd',
+    '{n} triangles around knots rebuilt': '{n} driehoeken rond knopen opnieuw opgebouwd',
+    '{n} crossing edges untangled': '{n} kruisende randen ontward',
 }

@@ -394,12 +394,18 @@ def test_a_loose_fin_is_dropped_so_the_rest_is_closed():
     assert fileio.closed_volume(cube(), np.array(TRIS)).loose == 0
 
 
-def test_an_open_mesh_is_refused_with_the_reason(tmp_path):
+def test_an_open_mesh_is_repaired_or_else_refused_with_the_reason(tmp_path):
     path = tmp_path / "open.off"
     path.write_text("OFF\n8 5 0\n" + "".join(f"{x} {y} {z}\n" for x, y, z in cube())
                     + "".join(f"4 {' '.join(map(str, q))}\n" for q in QUADS[1:]))
+    (vol,), _ = volumes(path)                       # the missing bottom gets a lid
+    assert vol.repair.holes == 1 and abs(vol.manifold.volume() - 1000) < 1e-6
     with pytest.raises(ValueError, match="not watertight"):
-        volumes(path)
+        fileio.import_mesh_report(str(path), repair=False)
+    flat = tmp_path / "flat.off"                    # a sheet holds no volume: no repair
+    flat.write_text("OFF\n4 1 0\n0 0 0\n1 0 0\n1 1 0\n0 1 0\n4 0 1 2 3\n")
+    with pytest.raises(ValueError, match="not watertight"):
+        volumes(flat)
 
 
 def test_open_parts_are_tried_together(tmp_path):
@@ -420,10 +426,22 @@ def test_an_open_part_next_to_a_closed_one_is_left_out_with_a_note(tmp_path):
     lines = [f"v {x} {y} {z}" for x, y, z in cube()]
     lines += [f"v {x} {y} {z}" for x, y, z in cube(at=(20, 0, 0))]
     lines += ["o Good"] + ["f " + " ".join(str(k + 1) for k in q) for q in QUADS]
-    lines += ["o Leaky"] + ["f " + " ".join(str(k + 9) for k in q) for q in QUADS[1:]]
+    lines += ["o Sheet", "f 9 10 12 11"]           # a flat square: no volume to repair
     path.write_text("\n".join(lines) + "\n")
     (vol,), notes = volumes(path)
-    assert vol.name == "Good" and any("Leaky" in n for n in notes)
+    assert vol.name == "Good" and any("Sheet" in n for n in notes)
+
+
+def test_a_leaky_part_next_to_a_closed_one_is_repaired(tmp_path):
+    path = tmp_path / "mixed.obj"
+    lines = [f"v {x} {y} {z}" for x, y, z in cube()]
+    lines += [f"v {x} {y} {z}" for x, y, z in cube(at=(20, 0, 0))]
+    lines += ["o Good"] + ["f " + " ".join(str(k + 1) for k in q) for q in QUADS]
+    lines += ["o Leaky"] + ["f " + " ".join(str(k + 9) for k in q) for q in QUADS[1:]]
+    path.write_text("\n".join(lines) + "\n")
+    vols, notes = volumes(path)
+    assert [v.name for v in vols] == ["Good", "Leaky"] and not notes
+    assert vols[1].repair.holes == 1
 
 
 def test_progress_only_goes_forward_and_ends_at_one(tmp_path):

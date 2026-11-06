@@ -217,6 +217,7 @@ class Volume:
     duplicates: int = 0          # duplicate triangles dropped
     loose: int = 0               # loose triangles dropped (see _drop_fins)
     status: object = None
+    repair: object = None        # a RepairReport when the part had to be repaired
 
 
 def _edge_use(tris):
@@ -266,14 +267,23 @@ def closed_volume(verts, tris, name=""):
     return Volume(name, m, duplicates=duplicates, loose=loose, status=m.status())
 
 
-def import_mesh_report(path, progress=None):
+def repaired_volume(verts, tris, name="", progress=None):
+    """The triangle soup as a :class:`Volume` after `repair.repair_mesh`; its manifold is
+    None when even the repair could not close it."""
+    from .repair import repair_mesh
+    m, report = repair_mesh(verts, tris, progress)
+    return Volume(name, m, status=report.status, repair=report)
+
+
+def import_mesh_report(path, progress=None, repair=True):
     """Every closed volume in a mesh file (STL, OBJ, 3MF, ...): ``(volumes, notes)``.
 
     ``volumes`` is a list of :class:`Volume` (color None where the file gives none);
     ``notes`` are translated remarks on what was left out. A part that is not closed on its
     own is tried together with the other open parts (an object can be split over several
-    meshes, e.g. one per material); what then still is not closed is left out. Raises
-    ValueError when nothing closed is left.
+    meshes, e.g. one per material). With `repair` what still is not closed is repaired
+    (see `volura.repair`): all open parts together, else one by one. What then still is
+    not closed is left out. Raises ValueError when nothing closed is left.
     """
     report = progress or (lambda fraction: None)
     meshes = read_mesh(path, lambda f: report(0.7 * f))
@@ -307,6 +317,25 @@ def import_mesh_report(path, progress=None):
             vol.color = colors.pop() if len(colors) == 1 else None
             volumes.append(vol)
             open_parts = []
+    if open_parts and repair:
+        report(0.85)
+        whole = os.path.splitext(os.path.basename(path))[0]
+        groups = [open_parts] + ([[p] for p in open_parts] if len(open_parts) > 1 else [])
+        for k, group in enumerate(groups):
+            if not any(p in open_parts for p in group):
+                continue
+            verts = np.concatenate([p.verts for p in group])
+            offsets = np.cumsum([0] + [len(p.verts) for p in group[:-1]])
+            tris = np.concatenate([p.tris + o for p, o in zip(group, offsets)])
+            vol = repaired_volume(verts, tris, whole if len(group) > 1 else group[0].name,
+                                  lambda f, k=k: report(0.85 + 0.15 * (k + f) / len(groups)))
+            if vol.manifold is None:
+                status = vol.status
+                continue
+            colors = {p.color for p in group}
+            vol.color = colors.pop() if len(colors) == 1 else None
+            volumes.append(vol)
+            open_parts = [p for p in open_parts if p not in group]
     # a color modifier of a slicer becomes the part of its object it covers, in its color,
     # cut out of the parts below it; as in the slicer a later modifier wins where they overlap
     claimed = {}
