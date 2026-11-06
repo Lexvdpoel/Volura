@@ -1,9 +1,9 @@
 """The 3D viewport: OpenGL rendering, navigation and event routing to tools."""
 from __future__ import annotations
 
+import ctypes
+
 import numpy as np
-from OpenGL import GL as gl
-from OpenGL.GL import GLubyte
 from PySide6.QtCore import QEvent, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QSurfaceFormat
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
@@ -13,6 +13,11 @@ from .camera import Camera, horizon_line
 from .i18n import tr
 from .inference import InferenceEngine
 from .tools import MEASURE_LABEL
+
+errors.configure_pyopengl()          # before OpenGL loads, so it stops checking every call
+
+from OpenGL import GL as gl          # noqa: E402
+from OpenGL.GL import GLubyte        # noqa: E402
 
 VCB_CHARS = set("0123456789.,;-+/*xXsS\"'mcin<>[]=")
 SELECT_COLOR = (0.13, 0.35, 1.0)
@@ -79,6 +84,142 @@ def stipple_pattern():
         on = [1 if (x % 4 == 0 and y % 4 == 0) else 0 for y in range(32) for x in range(32)]
         _STIPPLE = (GLubyte * len(on))(*on)
     return _STIPPLE
+
+
+# Vertex buffer objects: a render cache goes to the GPU once instead of every frame.
+GEOM_STRIDE = 6 * 4          # bytes per vertex of the buffer with position + normal
+COLOUR_STRIDE = 8 * 4        # bytes per vertex of the buffer with front + back colour
+_TINT_MIX = np.array(SELECT_COLOR, np.float32) * 0.2
+
+# the state the model pass switches through _FaceState: caps, and the arrays of the client state
+_CAPS = (gl.GL_LIGHTING, gl.GL_COLOR_MATERIAL, gl.GL_CULL_FACE, gl.GL_POLYGON_OFFSET_FILL)
+_ARRAYS = (gl.GL_VERTEX_ARRAY, gl.GL_NORMAL_ARRAY, gl.GL_COLOR_ARRAY)
+
+
+def _at(offset):
+    """A byte offset in a buffer object: PyOpenGL wants a pointer, a plain int draws nothing."""
+    return ctypes.c_void_p(offset)
+
+
+def _new_buffer(data):
+    """A buffer object with `data` (float32, contiguous) in it; 0 when this driver refuses."""
+    name = int(gl.glGenBuffers(1))
+    if name <= 0:
+        return 0            # no name, so nothing to fill: buffer 0 is "no buffer", not ours
+    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, name)
+    gl.glBufferData(gl.GL_ARRAY_BUFFER, data.nbytes, data, gl.GL_STATIC_DRAW)
+    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
+    if gl.glGetError() != gl.GL_NO_ERROR:
+        _delete_buffers([name])
+        return 0
+    return name
+
+
+def _delete_buffers(names):
+    """Give the buffer objects back to the driver; a context that is gone simply raises."""
+    names = [int(n) for n in names if n]
+    if not names:
+        return
+    try:
+        gl.glDeleteBuffers(len(names), np.array(names, dtype=np.uint32))
+    except Exception:
+        pass
+
+
+def _colour_variant(cols, tint, alpha):
+    """A colour array with the selection tint and the face alpha mixed in; `cols` itself if plain.
+
+    The same mix the old per frame copy made, but now made once per render cache."""
+    if not tint and alpha >= 1:
+        return cols
+    out = cols.copy()
+    if tint:
+        out[:, :3] = out[:, :3] * 0.8 + _TINT_MIX
+    out[:, 3] = alpha
+    return out
+
+
+def _colour_data(front, back):
+    """The two colour arrays of one set of faces in one array: 8 floats per vertex."""
+    cols = np.empty((len(front), 8), dtype=np.float32)
+    cols[:, :4] = front
+    cols[:, 4:] = back
+    return cols
+
+
+class _FaceBuffers:
+    """The GPU copy of one set of faces of a render cache (see `Viewport._face_buffers`)."""
+
+    __slots__ = ("geom", "colours", "count")
+
+    def __init__(self):
+        self.geom = 0                 # position + normal, GEOM_STRIDE per vertex
+        self.colours = {}             # (tint, alpha) -> buffer with COLOUR_STRIDE per vertex
+        self.count = 0
+
+    def free(self):
+        """Back to the driver: this render cache is replaced or its group is gone."""
+        _delete_buffers([self.geom] + list(self.colours.values()))
+        self.geom = 0
+        self.colours = {}
+        self.count = 0
+
+
+def _free_render_data(rc):
+    """The buffers of one render cache: its faces and the edges between them."""
+    for fs in (rc, rc.get("hidden")):
+        if fs is None:
+            continue
+        b = fs.get("gpu")
+        if b is not None:
+            b.free()
+        _delete_buffers(list(fs.get("lbuf", {}).values()))
+        fs.pop("lbuf", None)
+
+
+class _FaceState:
+    """What the 3D view already switched on: one GL call per change instead of per group.
+
+    A frame goes back and forth between faces (lighting, culling, polygon offset, colour
+    array) and edges (none of that), for every group of the model, and every step of that
+    used to be an explicit glEnable/glDisable pair. This remembers the state, so only the
+    calls that really change something are made.
+
+    `set` is for the caps of glEnable/glDisable, `array` for the arrays of
+    glEnableClientState/glDisableClientState; the two are different kinds of state and
+    only the right call changes the right one. `_reset_state` starts a frame from what the
+    driver really has switched on (`capture`), so a tool or a Qt paint engine that
+    changed one of these behind its back is followed correctly by the next frame."""
+
+    __slots__ = ("on",)
+
+    def __init__(self, on=None):
+        self.on = dict(on or {})
+
+    @classmethod
+    def capture(cls):
+        """A tracker that starts from the state the driver is really in right now."""
+        on = {}
+        for cap in _CAPS + _ARRAYS:
+            try:
+                on[cap] = bool(gl.glIsEnabled(cap))
+            except Exception:
+                on[cap] = False
+        return cls(on)
+
+    def _change(self, cap, want, on, off):
+        if self.on.get(cap, False) == want:
+            return
+        self.on[cap] = want
+        (on if want else off)(cap)
+
+    def set(self, cap, want):
+        """glEnable or glDisable `cap`, but only when it is not already in that state."""
+        self._change(cap, want, gl.glEnable, gl.glDisable)
+
+    def array(self, cap, want):
+        """glEnableClientState or glDisableClientState `cap`, only on a real change."""
+        self._change(cap, want, gl.glEnableClientState, gl.glDisableClientState)
 
 
 def _clip_below(poly, a, b):
@@ -161,6 +302,9 @@ class Viewport(QOpenGLWidget):
         self.labels = []                # (screen QPointF, text)
         self.markers = []               # (screen QPointF, inference kind)
         self._rcache = {}
+        self._vbo = False             # set in initializeGL: can this driver take buffer objects?
+        self._gl_ctx = None           # the GL context the buffers in _rcache belong to
+        self._fstate = _FaceState()   # which GL states the model pass already set
         self._drag = None
         self._last = None
         self.setMouseTracking(True)
@@ -239,7 +383,28 @@ class Viewport(QOpenGLWidget):
     def initializeGL(self):
         # clear pending errors: otherwise PyOpenGL returns GLError 1282 on glClearColor
         errors.clear_gl_errors()
+        ctx = self.context()
+        if ctx is self._gl_ctx:
+            self.release_gl()        # this context again: the old names are still buffers, give them back
+        else:
+            self._rcache = {}        # another context: its buffers are gone with the old one
+        self._gl_ctx = ctx
+        self._vbo = self._probe_buffers()
         gl.glClearColor(*theme.rgb("sky_horizon"), 1)
+
+    def _probe_buffers(self):
+        """Whether this driver accepts vertex buffer objects (an old driver or offscreen: not).
+
+        Everything is tried once here, so `_face_buffers` can simply fall back to the
+        arrays in memory when the answer is no."""
+        try:
+            name = _new_buffer(np.zeros(4, dtype=np.float32))
+        except Exception:
+            return False
+        if not name:
+            return False
+        _delete_buffers([name])
+        return True
 
     def resizeGL(self, w, h):
         self.cam.width, self.cam.height = max(1, w), max(1, h)
@@ -291,6 +456,8 @@ class Viewport(QOpenGLWidget):
         gl.glDisable(gl.GL_STENCIL_TEST)
         gl.glDisable(gl.GL_SCISSOR_TEST)
         gl.glDisable(gl.GL_LIGHTING)
+        gl.glDisable(gl.GL_COLOR_MATERIAL)
+        gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
         gl.glDepthMask(gl.GL_TRUE)
         gl.glDepthFunc(gl.GL_LEQUAL)
         gl.glEnable(gl.GL_BLEND)
@@ -313,6 +480,10 @@ class Viewport(QOpenGLWidget):
         gl.glDisableClientState(gl.GL_TEXTURE_COORD_ARRAY)
         gl.glDisableClientState(gl.GL_NORMAL_ARRAY)
         gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
+        gl.glFrontFace(gl.GL_CCW)        # counter clockwise faces, the whole frame through
+        # what the driver really has switched on now, so the tracker of the model pass
+        # never assumes a state that some earlier drawing left behind
+        self._fstate = _FaceState.capture()
 
     def _draw_background(self):
         """The SketchUp background: sky above the horizon, grey ground below it."""
@@ -395,8 +566,10 @@ class Viewport(QOpenGLWidget):
     def _render_data(self, ents, gcolor):
         key = (id(ents), ents.version, gcolor)
         rc = self._rcache.get(id(ents))
-        if rc is not None and rc["key"] == key:
+        if rc is not None and rc["key"] == key and rc["ents"] is ents:
             return rc
+        if rc is not None:
+            _free_render_data(rc)         # another version: the old buffers are no longer drawn
         c = self.engine.cache.get(ents)
         base = hex_rgb(gcolor) if gcolor else FRONT
         colors = {f: face.color for f, face in ents.F.items()}
@@ -437,7 +610,8 @@ class Viewport(QOpenGLWidget):
                               dtype=np.float32).reshape(-1, 3)
         else:
             hedges = np.zeros((0, 3), np.float32)
-        rc = {"key": key, "pos": vis["pos"], "nrm": vis["nrm"], "front": vis["front"], "back": vis["back"],
+        rc = {"key": key, "ents": ents, "pos": vis["pos"], "nrm": vis["nrm"],
+              "front": vis["front"], "back": vis["back"],
               "edges": edges, "soft": soft, "hidden": hidd, "hedges": hedges}
         self._rcache[id(ents)] = rc
         return rc
@@ -464,30 +638,36 @@ class Viewport(QOpenGLWidget):
         hiding_rest = editing and getattr(self.settings, "hide_rest", False)
         show_hidden = getattr(self.settings, "show_hidden", False)
         show_back = getattr(self.settings, "back_edges", False) and not xray and style != WIREFRAME
+        show_edges = self.settings.show_edges
         for ctx, ents, g, rc, mats in self._draw_contexts(hiding_rest):
             faded = editing and ctx != doc.active
             selected = g is not None and g.id in sel_groups
             sel_col = LOCK_COLOR if selected and g.locked else SELECT_COLOR
+            # the edges of this group go to the GPU once, whatever how often the group is
+            # drawn below (a move preview draws the same group twice)
+            edges = self._line_buffer(rc, "edges") if show_edges and len(rc["edges"]) else 0
+            hedges = self._line_buffer(rc, "hedges") if show_hidden and len(rc["hedges"]) else 0
+            soft = self._line_buffer(rc, "soft") if show_edges and show_hidden and len(rc["soft"]) else 0
             for M in mats:
                 self._push(M)
                 if show_hidden:
                     # Edit > Hide geometry: translucent faces and dashed edges
                     self._draw_faces(rc["hidden"], alpha=0.35, tint=selected, style=style)
                     if len(rc["hedges"]):
-                        self.draw_lines(rc["hedges"], HIDDEN_EDGE_COLOR, 1.2, stipple=True)
+                        self.draw_lines(rc["hedges"], HIDDEN_EDGE_COLOR, 1.2, stipple=True, buf=hedges)
                 self._draw_faces(rc, alpha=0.3 if faded else (0.5 if xray else 1.0), tint=selected,
                                  style=style)
-                if self.settings.show_edges and len(rc["edges"]):
+                if show_edges and len(rc["edges"]):
                     if faded:
                         col = (0.6, 0.6, 0.6, 1)
                     elif selected:
                         col = (*sel_col, 1)
                     else:
                         col = (0.05, 0.05, 0.05, 1)
-                    self.draw_lines(rc["edges"], col, 1.4)
+                    self.draw_lines(rc["edges"], col, 1.4, buf=edges)
                     if show_hidden and len(rc["soft"]):
                         self.draw_lines(rc["soft"], (0.7, 0.7, 0.7, 1) if faded else SOFT_EDGE_COLOR,
-                                        1.0, stipple=True)
+                                        1.0, stipple=True, buf=soft)
                 self._pop(M)
             if selected:
                 self._draw_bbox(g.bbox(), (*sel_col, 1))
@@ -498,11 +678,33 @@ class Viewport(QOpenGLWidget):
             for ctx, ents, g, rc, mats in self._draw_contexts(hiding_rest):
                 if not len(rc["edges"]):
                     continue
+                buf = self._line_buffer(rc, "edges")
                 for M in mats:
                     self._push(M)
-                    self._draw_back_edges(rc["edges"])
+                    self._draw_back_edges(rc["edges"], buf)
                     self._pop(M)
+        self._end_model_pass()
         self._draw_selection()
+        self._prune_rcache()
+
+    def _prune_rcache(self):
+        """The buffers of geometry that left the document: a deleted group, another file.
+
+        Called from the model pass, so the context is current and the names still mean
+        something; a render cache of a group that is drawn again simply stays."""
+        doc = getattr(self, "doc", None)
+        if doc is None:
+            return
+        live = {id(e) for e in doc.all_ents()}
+        for key in [k for k in self._rcache if k not in live]:
+            _free_render_data(self._rcache.pop(key))
+
+    def release_gl(self):
+        """Everything this viewport gave the driver, back before the window closes."""
+        for rc in list(self._rcache.values()):
+            _free_render_data(rc)
+        self._rcache.clear()
+        self._vbo = False
 
     def _draw_guides(self):
         """View > Guides: infinite dashed lines, and guide points as small crosses."""
@@ -527,13 +729,76 @@ class Viewport(QOpenGLWidget):
                 p = g.point
                 self.draw_lines([p - r * s, p + r * s, p - u * s, p + u * s], col, 1.5)
 
-    def _draw_back_edges(self, pts):
+    def _draw_back_edges(self, pts, buf=0):
         """The edges behind the faces: only the fragments that fail the depth test are drawn."""
         gl.glDepthMask(gl.GL_FALSE)
         gl.glDepthFunc(gl.GL_GREATER)
-        self.draw_lines(pts, BACK_EDGE_COLOR, 1.0, stipple=True)
+        self.draw_lines(pts, BACK_EDGE_COLOR, 1.0, stipple=True, buf=buf)
         gl.glDepthFunc(gl.GL_LEQUAL)
         gl.glDepthMask(gl.GL_TRUE)
+
+    def _face_colours(self, rc, tint, alpha):
+        """The front and back colours of one variant of `rc`: mixed once, never per frame."""
+        v = rc.setdefault("cols", {})
+        key = (bool(tint), alpha)
+        out = v.get(key)
+        if out is None:
+            out = v[key] = (_colour_variant(rc["front"], tint, alpha),
+                            _colour_variant(rc["back"], tint, alpha))
+        return out
+
+    def _face_buffers(self, rc, tint, alpha, colours=True):
+        """(geometry, colour) buffer names of one set of faces; 0 means draw from memory.
+
+        The geometry of a render cache - position and normal of every triangle - goes to
+        the GPU the first time it is drawn and stays there until another version of the
+        same geometry takes its place. The colours are a second buffer, so the tint of a
+        selection or the alpha of x-ray is one extra colour buffer and never a new copy
+        of the positions. Without buffer objects everything stays as it was: the arrays
+        of `_render_data` are drawn straight from memory."""
+        if not self._vbo:
+            return 0, 0
+        b = rc.get("gpu")
+        if b is None:
+            b = rc["gpu"] = _FaceBuffers()
+        if not b.count:
+            try:
+                geom = np.empty((len(rc["pos"]), 6), dtype=np.float32)
+                geom[:, :3] = rc["pos"]
+                geom[:, 3:] = rc["nrm"]
+                b.geom = _new_buffer(geom)
+            except Exception:
+                b.geom = 0
+            if not b.geom:
+                self._vbo = False         # this driver will not have buffers: draw from memory
+                return 0, 0
+            b.count = len(rc["pos"])
+        if not colours:
+            return b.geom, 0
+        key = (bool(tint), alpha)
+        cbuf = b.colours.get(key)
+        if cbuf is None:
+            try:
+                front, back = self._face_colours(rc, tint, alpha)
+                cbuf = _new_buffer(_colour_data(front, back))
+            except Exception:
+                cbuf = 0
+            b.colours[key] = cbuf
+        return b.geom, cbuf
+
+    def _line_buffer(self, rc, key):
+        """The buffer with the edge positions of `rc[key]`: uploaded once, like the faces."""
+        if not self._vbo or not len(rc[key]):
+            return 0
+        b = rc.setdefault("lbuf", {})
+        name = b.get(key)
+        if name is None:
+            try:
+                name = _new_buffer(np.ascontiguousarray(rc[key], dtype=np.float32))
+            except Exception:
+                name = 0
+            b[key] = name
+        return name
 
     def _draw_faces(self, rc, alpha=1.0, tint=False, style=None):
         style = style or getattr(self.settings, "face_style", SHADED)
@@ -541,45 +806,63 @@ class Viewport(QOpenGLWidget):
             return
         lit = style != HIDDENLINE
         solid = {HIDDENLINE: (HIDDEN_FACE, HIDDEN_FACE), MONOCHROME: (FRONT, BACK)}.get(style)
-        gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
+        gbuf, cbuf = self._face_buffers(rc, tint, alpha, solid is None)
+        st = self._fstate
+        st.set(gl.GL_POLYGON_OFFSET_FILL, True)
         gl.glPolygonOffset(1.5, 1.5)
-        gl.glEnable(gl.GL_CULL_FACE)
-        gl.glFrontFace(gl.GL_CCW)
+        st.set(gl.GL_CULL_FACE, True)
         if alpha < 1:
             gl.glDepthMask(gl.GL_FALSE)
+        st.set(gl.GL_LIGHTING, lit)
+        st.set(gl.GL_COLOR_MATERIAL, lit)
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, gbuf)      # 0: draw from the arrays in memory
+        st.array(gl.GL_VERTEX_ARRAY, True)
+        gl.glVertexPointer(3, gl.GL_FLOAT, GEOM_STRIDE if gbuf else 0,
+                           _at(0) if gbuf else rc["pos"])
+        st.array(gl.GL_NORMAL_ARRAY, lit)
         if lit:
-            gl.glEnable(gl.GL_LIGHTING)
-            gl.glEnable(gl.GL_COLOR_MATERIAL)
-            gl.glEnableClientState(gl.GL_NORMAL_ARRAY)
-            gl.glNormalPointer(gl.GL_FLOAT, 0, rc["nrm"])
-        else:
-            gl.glDisable(gl.GL_LIGHTING)
-        gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
-        gl.glVertexPointer(3, gl.GL_FLOAT, 0, rc["pos"])
+            gl.glNormalPointer(gl.GL_FLOAT, GEOM_STRIDE if gbuf else 0,
+                               _at(3 * 4) if gbuf else rc["nrm"])
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
         passes = ((gl.GL_BACK, rc["front"]), (gl.GL_FRONT, rc["back"])) if solid is None else \
             ((gl.GL_BACK, solid[0]), (gl.GL_FRONT, solid[1]))
-        for cull, cols in passes:
+        cols = self._face_colours(rc, tint, alpha) if solid is None else None
+        for cull, want in passes:
             gl.glCullFace(cull)
-            if isinstance(cols, np.ndarray):
-                if alpha < 1 or tint:
-                    cols = cols.copy()
-                    if tint:
-                        cols[:, :3] = cols[:, :3] * 0.8 + np.array(SELECT_COLOR, np.float32) * 0.2
-                    cols[:, 3] = alpha
-                gl.glEnableClientState(gl.GL_COLOR_ARRAY)
-                gl.glColorPointer(4, gl.GL_FLOAT, 0, cols)
+            if isinstance(want, np.ndarray):
+                st.array(gl.GL_COLOR_ARRAY, True)
+                gl.glBindBuffer(gl.GL_ARRAY_BUFFER, cbuf)   # 0: the colours in memory
+                if cbuf:
+                    gl.glColorPointer(4, gl.GL_FLOAT, COLOUR_STRIDE,
+                                      _at(0 if want is rc["front"] else 4 * 4))
+                else:
+                    gl.glColorPointer(4, gl.GL_FLOAT, 0, cols[0] if want is rc["front"] else cols[1])
+                gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
             else:
-                gl.glDisableClientState(gl.GL_COLOR_ARRAY)
-                gl.glColor4f(*_tint(cols, tint), alpha)
+                st.array(gl.GL_COLOR_ARRAY, False)
+                gl.glColor4f(*_tint(want, tint), alpha)
             gl.glDrawArrays(gl.GL_TRIANGLES, 0, len(rc["pos"]))
-        gl.glDisableClientState(gl.GL_COLOR_ARRAY)
-        gl.glDisableClientState(gl.GL_NORMAL_ARRAY)
-        gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
-        gl.glDisable(gl.GL_CULL_FACE)
-        gl.glDisable(gl.GL_LIGHTING)
-        gl.glDisable(gl.GL_COLOR_MATERIAL)
-        gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
+        # lighting and the colour and normal arrays off, because the edges between the
+        # groups are drawn with a plain colour: an array left on would be read for every
+        # line vertex too, past its end when a group has more line than face vertices.
+        # Culling, the polygon offset and the position array may stay on: lines ignore
+        # the first two and set their own position pointer. `_end_model_pass` returns to
+        # the state of `_reset_state`.
+        st.array(gl.GL_COLOR_ARRAY, False)
+        st.array(gl.GL_NORMAL_ARRAY, False)
+        st.set(gl.GL_LIGHTING, False)
+        st.set(gl.GL_COLOR_MATERIAL, False)
         gl.glDepthMask(gl.GL_TRUE)
+
+    def _end_model_pass(self):
+        """The state a frame starts with, so the overlays draw exactly as they always did."""
+        st = self._fstate
+        for cap in _ARRAYS:
+            st.array(cap, False)
+        st.set(gl.GL_CULL_FACE, False)
+        st.set(gl.GL_POLYGON_OFFSET_FILL, False)
+        st.set(gl.GL_LIGHTING, False)
+        st.set(gl.GL_COLOR_MATERIAL, False)
 
     def _draw_bbox(self, bb, color, stipple=False):
         if bb is None:
@@ -688,11 +971,11 @@ class Viewport(QOpenGLWidget):
         gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
 
     # ------------------------------------------------------------- helpers
-    def draw_lines(self, pts, color, width=1.0, stipple=False, on_top=False):
+    def draw_lines(self, pts, color, width=1.0, stipple=False, on_top=False, buf=0):
         pts = np.asarray(pts, dtype=np.float32).reshape(-1, 3)
         if not len(pts):
             return
-        self._prim(gl.GL_LINES, pts, color, width, stipple, on_top)
+        self._prim(gl.GL_LINES, pts, color, width, stipple, on_top, buf)
 
     def draw_strip(self, pts, color, width=1.0, stipple=False, on_top=False):
         pts = np.asarray(pts, dtype=np.float32).reshape(-1, 3)
@@ -720,7 +1003,8 @@ class Viewport(QOpenGLWidget):
         self._prim(gl.GL_TRIANGLES, pts, color, 1, False, on_top)
         gl.glDepthMask(gl.GL_TRUE)
 
-    def _prim(self, mode, pts, color, width, stipple, on_top):
+    def _prim(self, mode, pts, color, width, stipple, on_top, buf=0):
+        st = self._fstate
         if on_top:
             gl.glDisable(gl.GL_DEPTH_TEST)
         if stipple:
@@ -728,29 +1012,35 @@ class Viewport(QOpenGLWidget):
             gl.glLineStipple(2, 0x3333)
         gl.glLineWidth(width)
         gl.glColor4f(*color) if len(color) == 4 else gl.glColor3f(*color)
-        gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
-        gl.glVertexPointer(3, gl.GL_FLOAT, 0, np.ascontiguousarray(pts))
+        st.array(gl.GL_VERTEX_ARRAY, True)
+        if buf:
+            gl.glBindBuffer(gl.GL_ARRAY_BUFFER, buf)
+            gl.glVertexPointer(3, gl.GL_FLOAT, 0, _at(0))
+            gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0)
+        else:
+            gl.glVertexPointer(3, gl.GL_FLOAT, 0, np.ascontiguousarray(pts))
         gl.glDrawArrays(mode, 0, len(pts))
-        gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
+        st.array(gl.GL_VERTEX_ARRAY, False)
         if stipple:
             gl.glDisable(gl.GL_LINE_STIPPLE)
         if on_top:
             gl.glEnable(gl.GL_DEPTH_TEST)
 
     def draw_solid_preview(self, md, color, alpha=0.45):
+        st = self._fstate
         gl.glDepthMask(gl.GL_FALSE)
-        gl.glEnable(gl.GL_LIGHTING)
-        gl.glEnable(gl.GL_COLOR_MATERIAL)
+        st.set(gl.GL_LIGHTING, True)
+        st.set(gl.GL_COLOR_MATERIAL, True)
         gl.glColor4f(*color, alpha)
-        gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
-        gl.glEnableClientState(gl.GL_NORMAL_ARRAY)
+        st.array(gl.GL_VERTEX_ARRAY, True)
+        st.array(gl.GL_NORMAL_ARRAY, True)
         gl.glVertexPointer(3, gl.GL_FLOAT, 0, md.tri_positions)
         gl.glNormalPointer(gl.GL_FLOAT, 0, md.tri_normals)
         gl.glDrawArrays(gl.GL_TRIANGLES, 0, len(md.tri_positions))
-        gl.glDisableClientState(gl.GL_NORMAL_ARRAY)
-        gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
-        gl.glDisable(gl.GL_LIGHTING)
-        gl.glDisable(gl.GL_COLOR_MATERIAL)
+        st.array(gl.GL_NORMAL_ARRAY, False)
+        st.array(gl.GL_VERTEX_ARRAY, False)
+        st.set(gl.GL_LIGHTING, False)
+        st.set(gl.GL_COLOR_MATERIAL, False)
         gl.glDepthMask(gl.GL_TRUE)
         if len(md.edge_positions):
             self.draw_lines(md.edge_positions, (0.1, 0.1, 0.1, 0.9), 1.2)

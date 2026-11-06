@@ -18,6 +18,7 @@ from datetime import datetime
 
 from PySide6.QtCore import QStandardPaths
 
+from . import _glconfig
 from .i18n import tr
 
 ERROR_STATUS = tr("Internal error, see volura.log")
@@ -74,6 +75,29 @@ def log_exception(exc_type=None, exc=None, tb=None, note=""):
 
 # ------------------------------------------------------------------ OpenGL
 
+GL_DEBUG_ENV = _glconfig.GL_DEBUG_ENV
+gl_debug = _glconfig.gl_debug
+
+
+def configure_pyopengl():
+    """Switch off the error check that PyOpenGL does after every GL call; returns whether it checks.
+
+    PyOpenGL wraps every call with ``glGetError`` when it decides to check at all - half
+    a second per twenty frames of the 3D view. The viewport drains the error queue itself
+    (``clear_gl_errors``), so the per call check is only wanted while looking for the call
+    that goes wrong: ``VOLURA_GL_DEBUG=1`` keeps it on.
+
+    That decision is taken from the environment when ``OpenGL`` is imported and from
+    ``OpenGL.ERROR_CHECKING`` when ``OpenGL.error`` is imported, so ``volura/__init__.py``
+    sets the environment (``_glconfig.apply_env``) before any OpenGL import and this sets
+    both again for the case in which ``OpenGL`` was already imported by something else.
+    Once ``OpenGL._configflags`` exists, nothing can change it any more;
+    ``_glconfig.error_checking()`` reports what PyOpenGL really does.
+    """
+    _glconfig.apply_env()
+    return _glconfig.apply_module()
+
+
 def clear_gl_errors(limit=GL_ERROR_DRAIN_MAX):
     """Empty the error queue of OpenGL; an old error must not come back at glClearColor.
 
@@ -81,6 +105,7 @@ def clear_gl_errors(limit=GL_ERROR_DRAIN_MAX):
     which is caught here too.
     """
     try:
+        configure_pyopengl()
         from OpenGL import GL as gl
     except Exception:
         return 0

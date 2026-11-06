@@ -6079,6 +6079,14 @@ class MainWindow(QMainWindow):
         self.autosave_timer.stop()
         self.spacemouse.stop()
         workers.shutdown()          # stop the worker processes on the way out
+        view = getattr(self, "view", None)
+        if view is not None and view.isVisible():
+            # the vertex buffers can only be given back while the context lives
+            try:
+                view.makeCurrent()
+                view.release_gl()
+            except Exception:
+                pass        # a view that cannot be made current has nothing left to give back
         self.settings.save()
         remove_autosave()       # closed properly: there is nothing to restore
         e.accept()

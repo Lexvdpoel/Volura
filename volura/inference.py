@@ -116,19 +116,25 @@ class GeoCache:
     @staticmethod
     def _triangulate(ents):
         """``(T, tri_fid, tri_nrm, face_tris)``: the world triangles of every face, in the
-        order the faces come in - the heavy part of the cache, done here in the main process."""
-        tris, tri_fid, tri_nrm, face_tris = [], [], [], {}
+        order the faces come in - the heavy part of the cache, done here in the main process.
+
+        The per triangle face id and normal are expanded from the per face values with
+        one ``np.repeat`` each, instead of one ``np.repeat`` and one list ``extend`` per
+        face, which is what made the first frame of a heavy model take seconds."""
+        tris, counts, normals, fids, face_tris = [], [], [], [], {}
         for f, face in ents.F.items():
             t, _ = ents.face_triangles(f)
             if not len(t):
                 continue
             face_tris[f] = t
             tris.append(t)
-            tri_fid.extend([f] * len(t))
-            tri_nrm.append(np.repeat(face.normal[None], len(t), axis=0))
+            counts.append(len(t))
+            normals.append(face.normal)
+            fids.append(f)
+        cnt = np.asarray(counts, dtype=np.int64)
         return (np.concatenate(tris) if tris else np.zeros((0, 3, 3)),
-                np.array(tri_fid, dtype=np.int64),
-                np.concatenate(tri_nrm) if tri_nrm else np.zeros((0, 3)),
+                np.repeat(np.asarray(fids, dtype=np.int64), cnt),
+                np.repeat(np.asarray(normals), cnt, axis=0) if normals else np.zeros((0, 3)),
                 face_tris)
 
     @staticmethod
@@ -136,17 +142,21 @@ class GeoCache:
         """The cache entry built around a group's triangulation ``(T, tri_fid, tri_nrm, face_tris)``."""
         T, tri_fid, tri_nrm, face_tris = tri
         hf, he = ents.hidden_f, ents.hidden_e
-        tri_hidden = np.fromiter((f in hf for f in tri_fid), dtype=bool, count=len(tri_fid))
-        hard = [e for e in ents.E if e not in ents.soft]
-        ehidden = np.fromiter((e in he for e in hard), dtype=bool, count=len(hard))
-        shown = [e for e, h in zip(hard, ~ehidden) if h]
-        A = np.array([ents.V[ents.E[e][0]] for e in hard]) if hard else np.zeros((0, 3))
-        B = np.array([ents.V[ents.E[e][1]] for e in hard]) if hard else np.zeros((0, 3))
-        soft = [e for e in ents.E if e in ents.soft]
-        SA = np.array([ents.V[ents.E[e][0]] for e in soft]) if soft else np.zeros((0, 3))
-        SB = np.array([ents.V[ents.E[e][1]] for e in soft]) if soft else np.zeros((0, 3))
-        vids = sorted({v for e in shown for v in ents.E[e]})
-        corners = np.array([ents.V[v] for v in vids]) if vids else np.zeros((0, 3))
+        tri_hidden = (np.isin(tri_fid, np.fromiter(hf, dtype=np.int64, count=len(hf)))
+                      if hf else np.zeros(len(tri_fid), dtype=bool))
+        eids = list(ents.E)
+        pos = ents._pos_by_id()
+        ab = (np.asarray([(ents.E[e][0], ents.E[e][1]) for e in eids], dtype=np.int64)
+              if eids else np.zeros((0, 2), dtype=np.int64))
+        ends = pos[ab] if len(ab) else np.zeros((0, 2, 3))
+        issoft = np.fromiter((e in ents.soft for e in eids), dtype=bool, count=len(eids))
+        ehidden = np.fromiter((e in he for e in eids), dtype=bool, count=len(eids))
+        hard = ~issoft
+        A, B = ends[hard, 0], ends[hard, 1]
+        SA, SB = ends[issoft, 0], ends[issoft, 1]
+        shown = np.flatnonzero(hard & ~ehidden)
+        vids = np.unique(ab[shown].ravel()) if len(shown) else np.zeros(0, dtype=np.int64)
+        corners = pos[vids] if len(vids) else np.zeros((0, 3))
         return {
             "ents": ents, "version": ents.version,
             "T": T, "tri_fid": tri_fid,
@@ -156,8 +166,8 @@ class GeoCache:
             "p0": T[:, 0] if len(T) else np.zeros((0, 3)),
             "e1": (T[:, 1] - T[:, 0]) if len(T) else np.zeros((0, 3)),
             "e2": (T[:, 2] - T[:, 0]) if len(T) else np.zeros((0, 3)),
-            "A": A, "B": B, "eids": hard, "ehidden": ehidden,
-            "SA": SA, "SB": SB, "sids": soft,
+            "A": A, "B": B, "eids": [eids[i] for i in np.flatnonzero(hard)], "ehidden": ehidden[hard],
+            "SA": SA, "SB": SB, "sids": [eids[i] for i in np.flatnonzero(issoft)],
             "corners": corners, "mid": (A + B) / 2 if len(A) else np.zeros((0, 3)),
             "bbox": ents.bbox(),
         }

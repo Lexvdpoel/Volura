@@ -66,6 +66,39 @@ def _ekey(a, b):
     return (a, b) if a < b else (b, a)
 
 
+TRI_TRIS = np.array([[0, 1, 2]], dtype=np.int64)     # the one triangulation of a triangle
+TRI_TRIS.flags.writeable = False        # shared by every triangular face
+
+
+def _triangle(V, loop, normal):
+    """The single triangle of a three vertex face, or None when the general way has to do it.
+
+    A triangle has only one triangulation, so ear clipping (and the plane it projects on)
+    is only needed for faces with more vertices. That is only the same answer as
+    ``mf.triangulate`` gives for a loop that runs counter clockwise around the face normal
+    and stands out of it far enough: ``Plane.to_local`` keeps that winding, and the
+    triangulation of a counter clockwise triangle is the identity, ``[[0, 1, 2]]`` (checked
+    against manifold on thousands of random ones). A clockwise loop comes out as one of
+    the three rotations of those indices and a flat loop as something else altogether, so
+    all of those keep the general way. Read-only result: ``TRI_TRIS`` is shared by every
+    triangular face."""
+    pa, pb, pc = V[loop[0]], V[loop[1]], V[loop[2]]
+    ax, ay, az = float(pa[0]), float(pa[1]), float(pa[2])
+    ux, uy, uz = float(pb[0]) - ax, float(pb[1]) - ay, float(pb[2]) - az
+    vx, vy, vz = float(pc[0]) - ax, float(pc[1]) - ay, float(pc[2]) - az
+    cx, cy, cz = uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx
+    nn = cx * cx + cy * cy + cz * cz
+    if nn <= 0.0:
+        return None                                        # repeated or collinear vertex
+    if nn <= 1e-24 * ((ux * ux + uy * uy + uz * uz) * (vx * vx + vy * vy + vz * vz)):
+        return None                                        # a sliver: another order there too
+    if cx * float(normal[0]) + cy * float(normal[1]) + cz * float(normal[2]) <= 0.0:
+        return None                                        # not counter clockwise around it
+    out = np.empty((1, 3, 3))
+    out[0] = (pa, pb, pc)
+    return out
+
+
 def _point_cells(P, size):
     """The cell of the `size` grid that holds every point of P, as (n, 3) integers."""
     return np.floor(P / size).astype(np.int64)
@@ -1959,8 +1992,13 @@ class Entities:
     def face_triangles(self, fid):
         """Triangles (k,3,3) of a face, wound counter clockwise around its normal."""
         face = self.F[fid]
-        pl = Plane(self.V[face.loops[0][0]], face.normal)
-        pts3 = [np.array([self.V[v] for v in loop]) for loop in face.loops]
+        loops = face.loops
+        if len(loops) == 1 and len(loops[0]) == 3:
+            tri = _triangle(self.V, loops[0], face.normal)
+            if tri is not None:
+                return tri, TRI_TRIS
+        pl = Plane(self.V[loops[0][0]], face.normal)
+        pts3 = [np.array([self.V[v] for v in loop]) for loop in loops]
         polys = [pl.to_local(p) for p in pts3]
         try:
             tris = np.asarray(mf.triangulate(polys), dtype=np.int64).reshape(-1, 3)
