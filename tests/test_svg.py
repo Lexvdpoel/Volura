@@ -105,6 +105,24 @@ def test_cubic_bezier_stays_within_tolerance():
     assert len(poly) > 4
 
 
+def test_a_scaled_down_curve_is_flattened_to_the_tolerance_in_millimetres():
+    # a tracer writes its paths ten times too big and scales them down (as potrace does):
+    # the tolerance holds for the drawing in mm, not for the units of the path, so the
+    # curve gets about as many points as the same curve drawn at its real size
+    real = svg.read_svg((HEAD + 'width="100mm" height="100mm" viewBox="0 0 100 100">'
+                         '<path d="M0 100C10 80 30 110 40 85" fill="none" stroke="#0000ff"/>'
+                         + TAIL).encode(), tol=0.01)
+    scaled = svg.read_svg((HEAD + 'width="100mm" height="100mm" viewBox="0 0 100 100">'
+                           '<g transform="scale(0.1)"><path d="M0 1000C100 800 300 1100 400 850"'
+                           ' fill="none" stroke="#0000ff"/></g>' + TAIL).encode(), tol=0.01)
+    assert abs(len(pts_of(scaled)) - len(pts_of(real))) <= 2
+    p0, p1, p2, p3 = (np.array(a, float) for a in ((0, 0), (10, 20), (30, -10), (40, 15)))
+    t = np.linspace(0.0, 1.0, 2001)[:, None]
+    curve = ((1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + 3 * (1 - t) * t * t * p2
+             + t ** 3 * p3)
+    assert max(seg_dist(pts_of(scaled), q) for q in curve) <= 0.01
+
+
 def test_quadratic_and_smooth_commands():
     d = doc('<path d="M0 0 Q10 20 20 0 T40 0" fill="none" stroke="#0000ff"/>')
     p = pts_of(d)

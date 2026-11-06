@@ -11,6 +11,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainterPath, QPen
 
 from . import fillet, icons, ops, vector_import
+from .background import BackgroundCancelled
 from .brep import Entities
 from .i18n import tr
 from .geom import (AXES, MeshData, Plane, arc_from_bulge, arc_from_center, arc_through_3,
@@ -215,6 +216,10 @@ class Tool:
         self.doc.checkpoint()
         try:
             result = fn()
+        except BackgroundCancelled:      # the user stopped it: back as it was, no message
+            self.doc.undo()
+            self.doc.redo_stack.clear()
+            return None
         except Exception as ex:  # keep the document consistent on errors
             import traceback
             traceback.print_exc()
@@ -1796,15 +1801,16 @@ class VectorPlaceTool(Tool):
         made = {}
         ok = {"done": False}
 
+        place_faces = getattr(self.view.window(), "place_faces", vector_import.place_faces)
+
         def fn():
             if extrude:
                 made["g"] = vector_import.place_extruded(self.doc, plane, regios, offset,
                                                           height, color, name)
                 if open_edges and open_paden:
-                    vector_import.place_faces(ents, plane, [], open_paden, offset)
+                    place_faces(ents, plane, [], open_paden, offset)
             else:
-                vector_import.place_faces(ents, plane, regios,
-                                          open_paden if open_edges else [], offset)
+                place_faces(ents, plane, regios, open_paden if open_edges else [], offset)
             ok["done"] = True
         self.commit(fn)
         if not ok["done"]:

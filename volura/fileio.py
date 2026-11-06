@@ -1,4 +1,4 @@
-"""Reading and writing Volura documents, STL and 3MF files."""
+"""Reading and writing Volura documents, importing meshes, writing STL and 3MF."""
 from __future__ import annotations
 
 import json
@@ -7,6 +7,7 @@ import re
 import struct
 import tempfile
 import zipfile
+from dataclasses import dataclass
 from xml.sax.saxutils import escape
 
 import numpy as np
@@ -17,6 +18,7 @@ from .brep import Entities, Face
 from .geom import Plane, manifold_from_mesh, merge_mesh, mesh_arrays
 from .i18n import tr
 from .model import ROOT, Document, Group, Guide
+from .mesh_formats import STL_RECORD, read_mesh, read_stl  # noqa: F401 (read_stl: API)
 from .ops import id_color, print_parts, union_all
 from .vector2d import Drawing
 
@@ -144,7 +146,7 @@ def write_stl(path, manifold, name="Volura"):
     n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
     ln = np.linalg.norm(n, axis=1)
     n = n / np.maximum(ln, 1e-30)[:, None]
-    rec = np.zeros(len(t), dtype=[("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")])
+    rec = np.zeros(len(t), dtype=STL_RECORD)
     rec["n"] = n
     rec["v"] = tri
 
@@ -157,22 +159,6 @@ def write_stl(path, manifold, name="Volura"):
 
     atomic_write(path, write)
     return len(t)
-
-
-def read_stl(path):
-    with open(path, "rb") as f:
-        data = f.read()
-    if len(data) >= 84:
-        count = struct.unpack("<I", data[80:84])[0]
-        if 84 + count * 50 == len(data):
-            rec = np.frombuffer(data[84:], dtype=[("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")])
-            verts = rec["v"].reshape(-1, 3).astype(float)
-            return verts, np.arange(len(verts)).reshape(-1, 3)
-    text = data.decode("ascii", "ignore")
-    nums = re.findall(r"vertex\s+([-+\deE.]+)\s+([-+\deE.]+)\s+([-+\deE.]+)", text)
-    verts = np.array(nums, dtype=float).reshape(-1, 3)
-    verts = verts[: len(verts) // 3 * 3]
-    return verts, np.arange(len(verts)).reshape(-1, 3)
 
 
 def _drop_duplicate_triangles(verts, tris):
@@ -209,17 +195,146 @@ def import_stl_report(path):
     v, t = read_stl(path)
     if not len(t):
         raise ValueError(tr("The STL file contains no triangles."))
-    t, removed = _drop_duplicate_triangles(v, t)
-    m = manifold_from_mesh(v, t)
-    if m.status() != mf.Error.NoError or m.is_empty():
+    vol = closed_volume(v, t)
+    if vol.manifold is None:
         raise ValueError(tr("The STL file is not watertight ({status}). "
-                            "Only closed volumes can be imported.").format(status=m.status()))
-    return m, removed
+                            "Only closed volumes can be imported.").format(status=vol.status))
+    return vol.manifold, vol.duplicates
 
 
 def import_stl(path):
     """Return a Manifold, raising ValueError when the mesh is not watertight."""
     return import_stl_report(path)[0]
+
+
+@dataclass
+class Volume:
+    """A closed volume read from a mesh file; `manifold` is None when the part is not closed."""
+
+    name: str
+    manifold: object
+    color: str | None = None
+    duplicates: int = 0          # duplicate triangles dropped
+    loose: int = 0               # loose triangles dropped (see _drop_fins)
+    status: object = None
+
+
+def _edge_use(tris):
+    """How many triangles use each edge of every triangle: an (M, 3) array."""
+    e = np.concatenate([tris[:, [0, 1]], tris[:, [1, 2]], tris[:, [2, 0]]])
+    e.sort(axis=1)
+    _, inverse, count = np.unique(e, axis=0, return_inverse=True, return_counts=True)
+    return count[inverse.ravel()].reshape(3, -1).T
+
+
+def _drop_fins(tris, rounds=8):
+    """Drop loose "fins": triangles with an open edge whose other edges are used by three or
+    more triangles. That is a stray triangle folded against a closed surface, the most common
+    flaw in a mesh a slicer still prints; without it the surface is closed again. Returns
+    ``(tris, dropped)``; a mesh without such triangles comes back as it was."""
+    dropped = 0
+    for _ in range(rounds):
+        use = _edge_use(tris)
+        bad = use != 2
+        if not bad.any():
+            break
+        fin = (use == 1).any(axis=1) & ((use == 1) | (use >= 3)).all(axis=1)
+        if not fin.any():
+            break
+        dropped += int(fin.sum())
+        tris = tris[~fin]
+    return tris, dropped
+
+
+def closed_volume(verts, tris, name=""):
+    """The triangle soup as a :class:`Volume`; its manifold is None when it is not one
+    closed volume (``status`` then says why), also after dropping duplicate triangles and
+    loose fins."""
+    if not len(tris):
+        return Volume(name, None, status="Empty")
+    tris, duplicates = _drop_duplicate_triangles(verts, tris)
+    m = manifold_from_mesh(verts, tris)
+    loose = 0
+    if m.status() == mf.Error.NotManifold:
+        v, t = merge_mesh(verts, tris)
+        t = t[(t[:, 0] != t[:, 1]) & (t[:, 1] != t[:, 2]) & (t[:, 0] != t[:, 2])]
+        t, loose = _drop_fins(t)
+        if loose:
+            m = manifold_from_mesh(v, t)
+    if m.status() != mf.Error.NoError or m.is_empty():
+        return Volume(name, None, duplicates=duplicates, status=m.status())
+    return Volume(name, m, duplicates=duplicates, loose=loose, status=m.status())
+
+
+def import_mesh_report(path, progress=None):
+    """Every closed volume in a mesh file (STL, OBJ, 3MF, ...): ``(volumes, notes)``.
+
+    ``volumes`` is a list of :class:`Volume` (color None where the file gives none);
+    ``notes`` are translated remarks on what was left out. A part that is not closed on its
+    own is tried together with the other open parts (an object can be split over several
+    meshes, e.g. one per material); what then still is not closed is left out. Raises
+    ValueError when nothing closed is left.
+    """
+    report = progress or (lambda fraction: None)
+    meshes = read_mesh(path, lambda f: report(0.7 * f))
+    if not meshes.parts:
+        raise ValueError(tr("The file contains no triangles."))
+    notes = list(meshes.notes)
+    volumes, open_parts, status = [], [], None
+    modifiers, owned = [], {}
+    total = sum(len(p.tris) for p in meshes.parts)
+    done = 0
+    for p in meshes.parts:
+        report(0.7 + 0.3 * done / max(total, 1))
+        done += len(p.tris)
+        vol = closed_volume(p.verts, p.tris, p.name)
+        vol.color = p.color
+        if p.modifier:
+            modifiers.append((p, vol))
+        elif vol.manifold is None:
+            open_parts.append(p)
+            status = vol.status
+        else:
+            volumes.append(vol)
+            owned.setdefault(p.owner, []).append(vol)
+    if len(open_parts) > 1:
+        verts = np.concatenate([p.verts for p in open_parts])
+        offsets = np.cumsum([0] + [len(p.verts) for p in open_parts[:-1]])
+        tris = np.concatenate([p.tris + o for p, o in zip(open_parts, offsets)])
+        vol = closed_volume(verts, tris, os.path.splitext(os.path.basename(path))[0])
+        if vol.manifold is not None:
+            colors = {p.color for p in open_parts}
+            vol.color = colors.pop() if len(colors) == 1 else None
+            volumes.append(vol)
+            open_parts = []
+    # a color modifier of a slicer becomes the part of its object it covers, in its color,
+    # cut out of the parts below it; as in the slicer a later modifier wins where they overlap
+    claimed = {}
+    regions = []
+    for p, vol in reversed(modifiers):
+        inside = None
+        if vol.manifold is not None and owned.get(p.owner):
+            inside = union_all([v.manifold for v in owned[p.owner]]) ^ vol.manifold
+            if p.owner in claimed:
+                inside = inside - claimed[p.owner]
+        if inside is None or inside.is_empty():
+            notes.append(tr("Color modifier left out: {name}").format(name=p.name))
+            continue
+        claimed[p.owner] = inside if p.owner not in claimed else claimed[p.owner] + inside
+        vol.manifold = inside
+        regions.append(vol)
+    for owner, cut in claimed.items():
+        for v in owned[owner]:
+            v.manifold = v.manifold - cut
+    volumes = [v for v in volumes if not v.manifold.is_empty()] + regions[::-1]
+    if not volumes:
+        raise ValueError(tr("The file is not watertight ({status}). "
+                            "Only closed volumes can be imported.").format(status=status))
+    if open_parts:
+        notes.append(tr("Not closed, left out: {names}").format(
+            names=", ".join(p.name for p in open_parts)))
+    report(1.0)
+    return volumes, notes
 
 
 def export_stl(path, part_list):

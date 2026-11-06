@@ -293,7 +293,8 @@ def run(window, task, *, text, can_cancel=True, delay_ms=PROGRESS_DELAY_MS,
 
     ``on_done(result)``, ``on_error(exc)`` and ``on_cancel()`` run on the GUI
     thread. With ``wait=True`` the call blocks (spinning the event loop) until the
-    task is over, so synchronous callers and tests can use the same route.
+    task is over, however long that takes, so synchronous callers and tests can use
+    the same route.
     """
     job = BackgroundJob(window, task, text, can_cancel=can_cancel,
                         delay_ms=delay_ms, show_dialog=show_dialog)
@@ -304,6 +305,6 @@ def run(window, task, *, text, can_cancel=True, delay_ms=PROGRESS_DELAY_MS,
     if on_cancel is not None:
         job.cancelled.connect(on_cancel)
     job.start()
-    if wait:
+    while wait and not job.done:
         job.wait()
     return job

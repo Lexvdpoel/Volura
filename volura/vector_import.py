@@ -77,21 +77,28 @@ def prepare(drawing, scale=1.0, target_width=None, anchor="center"):
     return regions(closed), open_paths
 
 
-def place_faces(ents, plane, regios, open_paden, offset):
+def place_faces(ents, plane, regios, open_paden, offset, progress=None):
     """Turn the regions into faces and the open paths into edges on `plane`.
 
     `regios` is the list of shapes from `prepare` (first loop the outer boundary, the
-    rest holes); each becomes one face with `ents.add_shape`. `open_paden` become
-    edges with `ents.add_segment`. `offset` is the 2D shift in the local frame of
-    `plane` (where the anchor ends up). Returns the new face ids.
+    rest holes); each becomes one face, all in one go with `ents.add_shapes`.
+    `open_paden` become edges with `ents.add_segment`. `offset` is the 2D shift in the
+    local frame of `plane` (where the anchor ends up). `progress(fraction)` is called
+    after every shape and path. Returns the new face ids.
     """
     offset = np.asarray(offset, dtype=float).reshape(2)
-    created = []
-    for shape in regios:
-        loops = [np.asarray(loop, dtype=float) + offset for loop in shape if len(loop) >= 3]
-        if loops:
-            created += list(ents.add_shape(plane, loops) or [])
+    shape_points = sum(len(loop) for shape in regios for loop in shape)
+    total = max(1, shape_points + sum(len(p) for p in open_paden or ()))
+    shapes = [[np.asarray(loop, dtype=float) + offset for loop in shape if len(loop) >= 3]
+              for shape in regios]
+    created = list(ents.add_shapes(
+        plane, shapes,
+        progress=(lambda f: progress(f * shape_points / total)) if progress else None) or [])
+    done = shape_points
     for path in open_paden or ():
+        done += len(path)
+        if progress:
+            progress(done / total)
         pts = np.asarray(path, dtype=float) + offset
         if len(pts) < 2:
             continue

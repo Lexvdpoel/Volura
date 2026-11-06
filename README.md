@@ -57,7 +57,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
     painting
   - **STL per color**
   - Where parts with different colors overlap, the part made later wins
-- Native file format `.volura` (files from version 0.1 are converted), STL import, unlimited undo
+- Native file format `.volura` (files from version 0.1 are converted), unlimited undo
+- **3D import**: STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB and COLLADA (DAE), with a progress
+  bar. Every closed part becomes a group in its own color; slicer projects (PrusaSlicer,
+  Bambu Studio, OrcaSlicer) keep their parts and filament colors
 
 ### Laser and mill
 
@@ -215,7 +218,8 @@ volura/
   geom.py       planes, 2D cross sections, mesh analysis
   model.py      document: loose geometry, groups, filaments, selection, undo/redo
   ops.py        push/pull, booleans, transformations, print preparation
-  fileio.py     .volura, STL, 3MF
+  fileio.py     .volura, STL, 3MF; closed volumes from imported meshes
+  mesh_formats.py  reading STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB, DAE
   camera.py     orbit camera (Z up)
   inference.py  SketchUp inference
   viewport.py   OpenGL view and input

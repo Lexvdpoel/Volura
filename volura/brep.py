@@ -1580,6 +1580,35 @@ class Entities:
         self._cleanup_vertices()
         return created
 
+    def add_shapes(self, plane, shapes, color=None, hint=None, progress=None):
+        """Several shapes on one plane, as `add_shape` one after the other would make them,
+        but with one rebuild of the plane at the end instead of one per shape: an imported
+        drawing with hundreds of shapes otherwise rebuilds a growing plane hundreds of times.
+        `progress(fraction)` is called after every shape. Returns the new face ids."""
+        plane0 = plane
+        shapes = [[np.asarray(l, dtype=float) for l in s if len(l) >= 3] for s in shapes]
+        shapes = [s for s in shapes if s]
+        if not shapes:
+            return []
+        plane, shift = canon_shift(plane0)
+        if shift[0] or shift[1]:
+            shapes = [[l + shift for l in s] for s in shapes]
+        cov = self.coverage(plane, self.faces_in_plane(plane))
+        for k, loops2d in enumerate(shapes):
+            for loop in loops2d:
+                W = plane.to_world(loop)
+                for i in range(len(W)):
+                    self.add_segment(W[i], W[(i + 1) % len(W)])
+            cov.append(self.cov_entry(loops2d, self._orient_shape(plane, loops2d, cov, hint),
+                                      color))
+            if progress:
+                progress(0.8 * (k + 1) / len(shapes))
+        created = self.rebuild_plane(plane, cov, hint=hint)
+        self._cleanup_vertices()
+        if progress:
+            progress(1.0)
+        return created
+
     def _orient_shape(self, plane, loops2d, cov, hint):
         sp = self._sample_point([loops2d[0]])
         for c in cov:
@@ -2049,7 +2078,7 @@ class Entities:
         return bad
 
     @classmethod
-    def from_manifold(cls, man, color=None):
+    def from_manifold(cls, man, color=None, progress=None):
         """A Manifold as SketchUp geometry: one face per coplanar region.
 
         The vertices of a manifold are already merged, so they are created in bulk
@@ -2062,12 +2091,17 @@ class Entities:
 
         The loops are built in "slot" numbers first - one per vertex, in the order
         the loops walk them - because which edges a region adds decides how many ids
-        the regions before it took, and so the number of the vertices that follow."""
+        the regions before it took, and so the number of the vertices that follow.
+
+        ``progress(fraction)`` is called between the steps, for a progress bar: on a big
+        mesh this takes seconds."""
+        progress = progress or (lambda fraction: None)
         ents = cls()
         if man.is_empty():
             return ents
         md = MeshData(man)
         index_loops = md.region_index_loops()
+        progress(0.2)
         nr = len(index_loops)
         seq, vreg = [], []
         for rid, loops in enumerate(index_loops):
@@ -2090,6 +2124,7 @@ class Entities:
         mesh_slot = np.zeros(len(md.verts), dtype=np.int64)
         mesh_slot[order] = slot
 
+        progress(0.25)
         face_loops, face_normal, face_region = [], [], []
         seq2, starts, lens, ford, rord = [], [], [], [], []
         for rid, loops in enumerate(index_loops):
@@ -2137,6 +2172,7 @@ class Entities:
         cumv = np.cumsum(cv)
         vid = np.empty(len(vrows) + 1, dtype=np.int64)
         vid[1:] = 1 + before[freg_v[vrows]] + np.arange(len(vrows)) -             (cumv[freg_v[vrows]] - cv[freg_v[vrows]])
+        progress(0.45)
         block = md.verts[order[vrows]].copy()
         ents.V = {int(vid[s]): block[i] for i, s in enumerate(slot[vrows])}
 
@@ -2151,6 +2187,7 @@ class Entities:
             ents.E = {int(eids[j]): (int(vid[A[erows[j]]]), int(vid[B[erows[j]]]))
                       for j in range(len(erows))}
             face_id = 1 + before[rof] + cv[rof] + ce[rof]
+            progress(0.55)
             for k in range(nf):
                 loops = [tuple(vid[l].tolist()) if isinstance(l, np.ndarray)
                          else tuple(int(vid[v]) for v in l) for l in face_loops[k]]
@@ -2159,6 +2196,7 @@ class Entities:
             ents.soft = _fold_edges(eid[inverse], FR, nf, np.array(face_normal))
         else:
             ents.next_id = int(1 + len(vrows))
+        progress(0.65)
         ents._index()
         ents.touch()
         return ents

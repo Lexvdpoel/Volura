@@ -30,6 +30,7 @@ from . import (__version__, background, boxgen, cam, dxf, errors, fileio, i18n, 
                workers)
 from .brep import Entities
 from .inference import GeoCache
+from .mesh_formats import MESH_EXTENSIONS, is_mesh
 from .geom import Plane
 from .i18n import tr, tr_noop
 from .icons import icon
@@ -236,6 +237,16 @@ class Settings:
         self.q.setValue("current_color", self.current_color)
         self.q.setValue("recent", self.recent[:8])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
+
+
+#: one file-dialog filter per 3D format Volura imports
+MESH_FILTERS = ["STL (*.stl)", "OBJ (*.obj)", "3MF (*.3mf)", "PLY (*.ply)", "OFF (*.off)",
+                "AMF (*.amf)", "glTF (*.glb *.gltf)", "COLLADA (*.dae)"]
+
+
+def mesh_filter():
+    """The file-dialog filter for every 3D format Volura imports."""
+    return tr("3D models") + " (" + " ".join(f"*{e}" for e in MESH_EXTENSIONS) + ")"
 
 
 def swatch(color, size=16):
@@ -3823,13 +3834,14 @@ class MainWindow(QMainWindow):
         if not self.confirm_discard():
             return
         if not path:
-            path, _ = QFileDialog.getOpenFileName(self, tr("Open Model"), self.last_dir(),
-                                                  tr("Volura model (*.volura);;STL (*.stl)"))
+            path, _ = QFileDialog.getOpenFileName(
+                self, tr("Open Model"), self.last_dir(),
+                ";;".join([tr("Volura model (*.volura)"), mesh_filter()] + MESH_FILTERS))
         if not path:
             return
-        if path.lower().endswith(".stl"):
+        if is_mesh(path):
             self.doc.reset()
-            self.import_stl(path)
+            self.import_mesh(path)
             return
         try:
             self.view.tool.reset()
@@ -3886,58 +3898,95 @@ class MainWindow(QMainWindow):
         return True
 
     def file_import(self):
+        vector = tr("Vector drawings") + " (*.svg *.dxf)"
+        everything = " ".join(f"*{e}" for e in MESH_EXTENSIONS + vector_import.VECTOR_EXTENSIONS)
         path, _ = QFileDialog.getOpenFileName(
             self, tr("Import"), self.last_dir(),
-            tr("All supported files (*.stl *.svg *.dxf);;STL (*.stl);;SVG (*.svg);;DXF (*.dxf)"))
+            ";;".join([tr("All supported files") + f" ({everything})", mesh_filter(), vector]
+                      + MESH_FILTERS + ["SVG (*.svg)", "DXF (*.dxf)"]))
         if not path:
             return
+        self.import_file(path)
+
+    def import_file(self, path):
+        """Import any supported file: a vector drawing or a 3D model."""
         if vector_import.is_vector(path):
             if self.mode == "2d":
-                self.import_vector_to_sheet(path)     # on the worksheet it stays flat
-            else:
-                self.import_vector_interactive(path)
-        else:
-            self.import_stl(path)
+                return self.import_vector_to_sheet(path)     # on the worksheet it stays flat
+            return self.import_vector_interactive(path)
+        return self.import_mesh(path)
 
-    def import_stl(self, path):
-        """Import an STL as a new group; the (possibly large) file is read in the background."""
+    def import_mesh(self, path):
+        """Import a 3D model (STL, OBJ, 3MF, ...): every closed volume in it becomes a group.
+
+        The file is read and the groups are built in the background, with a progress bar;
+        only adding them to the document happens on the GUI thread. Returns the job."""
         base = os.path.basename(path)
-        group_name = os.path.splitext(base)[0]
-        color = self.settings.current_color
+        file_name = os.path.splitext(base)[0]
+        default_color = self.settings.current_color
 
         def read(report):
             # everything heavy happens here, on geometry that is not in the document yet:
             # reading, building the faces and the render and snap cache of a model with
             # tens of thousands of triangles takes seconds
-            report(0.0, tr("Importing…"))
-            m, removed = fileio.import_stl_report(path)
-            report(0.3, tr("Building the model…"))
-            ents = Entities.from_manifold(m)
-            report(0.7, tr("Preparing the view…"))
-            cache = GeoCache.build(ents)
-            summary = ops.part_summary(group_name, color, ents, pool=True)
-            return m.num_tri(), removed, ents, cache, summary
+            report(0.0, tr("Reading {name}…").format(name=base))
+            volumes, notes = fileio.import_mesh_report(path, lambda f: report(0.3 * f))
+            n = sum(v.manifold.num_tri() for v in volumes)
+            done, parts = 0.0, []
+            for v in volumes:
+                share = v.manifold.num_tri() / max(n, 1)
+                name = file_name if len(volumes) == 1 else v.name
+                color = v.color or default_color
+
+                def step(f, at=done, share=share):
+                    report(0.3 + 0.7 * (at + share * f))
+                report(0.3 + 0.7 * done, tr("Building {name}…").format(name=name))
+                ents = Entities.from_manifold(v.manifold, progress=lambda f: step(0.7 * f))
+                step(0.7)
+                cache = GeoCache.build(ents)
+                step(0.8)
+                summary = ops.part_summary(name, color, ents, pool=True)
+                parts.append((name, color, ents, cache, summary))
+                done += share
+            report(1.0, tr("Preparing the view…"))
+            removed = sum(v.duplicates for v in volumes)
+            loose = sum(v.loose for v in volumes)
+            return n, removed, loose, notes, parts
 
         def imported(result):
-            n, removed, ents, cache, summary = result
+            n, removed, loose, notes, parts = result
             self.doc.checkpoint()
-            g = self.doc.add_group(ents, color, group_name)
-            self.view.engine.cache.put(cache)
-            self.info.remember_part(g, summary)
+            groups = []
+            for name, color, ents, cache, summary in parts:
+                g = self.doc.add_group(ents, color, name)
+                self.view.engine.cache.put(cache)
+                self.info.remember_part(g, summary)
+                groups.append(g)
             self.doc.active = ROOT
-            self.doc.set_selection([("g", g.id, g.id)])
+            self.doc.set_selection([("g", g.id, g.id) for g in groups])
             self.doc.notify()
             self.view.zoom_extents()
+            said = []
+            if len(groups) > 1:
+                said.append(tr("{n} parts imported from {name}").format(n=len(groups), name=base))
             if removed:
-                self.hint.setText(tr("{n} duplicate triangles removed from {name}").format(
+                said.append(tr("{n} duplicate triangles removed from {name}").format(
                     n=removed, name=base))
-            self._maybe_suggest_simplify(g, n)
+            if loose:
+                said.append(tr("{n} loose triangles removed from {name}").format(
+                    n=loose, name=base))
+            said += notes
+            if said:
+                self.hint.setText("; ".join(said))
+            self._maybe_suggest_simplify(groups, n)
 
         def failed(e):
             QMessageBox.critical(self, tr("Import Failed"), str(e))
 
         return background.run(self, read, text=tr("Importing…"),
                               on_done=imported, on_error=failed)
+
+    import_stl = import_mesh       # the name the STL import had
 
     # ------------------------------------------------------------ vector import
     def ask_vector_options(self, drawing, name="Vector"):
@@ -4045,15 +4094,20 @@ class MainWindow(QMainWindow):
         self.doc.checkpoint()
         offset = plane.to_local(point)
         group = None
-        if options.get("extrude"):
-            group = vector_import.place_extruded(
-                self.doc, plane, regios, offset, options.get("height", 3.0),
-                options.get("color", self.settings.current_color),
-                options.get("name", "Vector"))
-            if options.get("open_edges", True) and open_paden:
-                vector_import.place_faces(self.doc.active_ents(), plane, [], open_paden, offset)
-        else:
-            vector_import.place_faces(self.doc.active_ents(), plane, regios, open_paden, offset)
+        try:
+            if options.get("extrude"):
+                group = vector_import.place_extruded(
+                    self.doc, plane, regios, offset, options.get("height", 3.0),
+                    options.get("color", self.settings.current_color),
+                    options.get("name", "Vector"))
+                if options.get("open_edges", True) and open_paden:
+                    self.place_faces(self.doc.active_ents(), plane, [], open_paden, offset)
+            else:
+                self.place_faces(self.doc.active_ents(), plane, regios, open_paden, offset)
+        except background.BackgroundCancelled:
+            self.doc.undo()
+            self.doc.redo_stack.clear()
+            return None
         self.doc.active = ROOT
         if group is not None:
             self.doc.set_selection([("g", group.id, group.id)])
@@ -4061,12 +4115,50 @@ class MainWindow(QMainWindow):
         self.view.zoom_extents()
         return group
 
+    def load_vector(self, path):
+        """Read an SVG or DXF in the background, with a progress dialog when it takes a while.
+
+        Returns the drawing, or None after showing the error (or when cancelled)."""
+        name = os.path.basename(path)
+
+        def read(report):
+            report(None, tr("Reading {name}…").format(name=name))
+            return vector_import.load_vector(path)
+        job = background.run(self, read, text=tr("Reading {name}…").format(name=name), wait=True)
+        if job.error is not None:
+            QMessageBox.critical(self, tr("Import Failed"), str(job.error))
+        return job.result
+
+    #: from this many points on, a drawing is placed in the background
+    BACKGROUND_PLACE_POINTS = 2000
+
+    def place_faces(self, ents, plane, regios, open_paden, offset):
+        """`vector_import.place_faces`, for a big drawing off the GUI thread with a progress
+        bar: on a copy of `ents`, whose state then replaces that of `ents`. Raises
+        BackgroundCancelled when the user cancels, and the error of the placing."""
+        points = sum(len(loop) for shape in regios for loop in shape) + sum(
+            len(p) for p in open_paden or ())
+        if points < self.BACKGROUND_PLACE_POINTS:
+            return vector_import.place_faces(ents, plane, regios, open_paden, offset)
+        work = ents.copy()
+
+        def place(report):
+            report(0.0, tr("Placing the drawing…"))
+            return vector_import.place_faces(work, plane, regios, open_paden, offset,
+                                             progress=report)
+        job = background.run(self, place, text=tr("Placing the drawing…"), wait=True)
+        if job.was_cancelled:
+            raise background.BackgroundCancelled()
+        if job.error is not None:
+            raise job.error
+        ents.load_state(work.state())
+        ents.touch()
+        return job.result
+
     def import_vector(self, path, options=None):
         """Import an SVG/DXF onto the ground; `options` skips the dialog."""
-        try:
-            drawing = vector_import.load_vector(path)
-        except Exception as e:
-            QMessageBox.critical(self, tr("Import Failed"), str(e))
+        drawing = self.load_vector(path)
+        if drawing is None:
             return None
         if options is None:
             options = self.ask_vector_options(drawing,
@@ -4078,10 +4170,8 @@ class MainWindow(QMainWindow):
     def import_vector_interactive(self, path, drawing=None, name=None):
         """Choose options and place the drawing with the placement tool behind the cursor."""
         if drawing is None:
-            try:
-                drawing = vector_import.load_vector(path)
-            except Exception as e:
-                QMessageBox.critical(self, tr("Import Failed"), str(e))
+            drawing = self.load_vector(path)
+            if drawing is None:
                 return
         if name is None:
             name = os.path.splitext(os.path.basename(path))[0] if path else "Vector"
@@ -4124,10 +4214,8 @@ class MainWindow(QMainWindow):
         """
         name = os.path.splitext(os.path.basename(path))[0] if path else "Vector"
         if drawing is None:
-            try:
-                drawing = vector_import.load_vector(path)
-            except Exception as e:
-                QMessageBox.critical(self, tr("Import Failed"), str(e))
+            drawing = self.load_vector(path)
+            if drawing is None:
                 return None
         added = self.add_drawing_to_sheet(drawing, tr("{n} outlines added from {name}"), name=name)
         if added is not None and drawing.warnings:
@@ -4442,20 +4530,14 @@ class MainWindow(QMainWindow):
             svg.write_svg(drawing, path, layers=layers, fill_layers=fill_layers)
 
     def import_dropped_file(self, path):
-        """A dropped file: import .stl or .svg/.dxf."""
-        ext = os.path.splitext(path)[1].lower()
-        if vector_import.is_vector(path):
-            if self.mode == "2d":
-                self.import_vector_to_sheet(path)
-            else:
-                self.import_vector_interactive(path)
-        elif ext == ".stl":
-            self.import_stl(path)
+        """A dropped file: a 3D model or a vector drawing."""
+        if vector_import.is_vector(path) or is_mesh(path):
+            self.import_file(path)
 
     def dragEnterEvent(self, e):
         md = e.mimeData()
         if md.hasUrls() and any(vector_import.is_vector(u.toLocalFile()) or
-                                u.toLocalFile().lower().endswith(".stl") for u in md.urls()):
+                                is_mesh(u.toLocalFile()) for u in md.urls()):
             e.acceptProposedAction()
 
     def dragMoveEvent(self, e):
@@ -4466,8 +4548,7 @@ class MainWindow(QMainWindow):
         if not md.hasUrls():
             return
         paths = [u.toLocalFile() for u in md.urls() if u.isLocalFile()]
-        supported = [p for p in paths if vector_import.is_vector(p) or
-                     p.lower().endswith(".stl")]
+        supported = [p for p in paths if vector_import.is_vector(p) or is_mesh(p)]
         if not supported:
             return
         e.acceptProposedAction()
@@ -5202,15 +5283,17 @@ class MainWindow(QMainWindow):
                               on_done=done, on_error=self._failed)
 
     def _maybe_suggest_simplify(self, g, n=None):
-        """After a large import: ask whether to simplify the new group right away. `n` is
-        the triangle count when the caller already knows it (the import does)."""
-        if g is None or not self.settings.ask_simplify_import:
+        """After a large import: ask whether to simplify the new group (or list of groups)
+        right away. `n` is the triangle count when the caller already knows it (the import
+        does)."""
+        groups = [x for x in (g if isinstance(g, (list, tuple)) else [g]) if x is not None]
+        if not groups or not self.settings.ask_simplify_import:
             return
-        n = ops.tri_count(g.ents) if n is None else n
+        n = sum(ops.tri_count(x.ents) for x in groups) if n is None else n
         if n <= ops.LARGE_IMPORT_TRIANGLES:
             return
         if self._ask_simplify_import(n):
-            self.simplify_groups([g])
+            self.simplify_groups(groups)
 
     def _ask_simplify_import(self, n):
         """The large-import question; True when the user wants to simplify now. The

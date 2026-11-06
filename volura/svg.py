@@ -599,7 +599,10 @@ class _Reader:
             v = _numbers(elem.get(name))
             return v[0] if v else dflt
 
-        tol = self.tol
+        # the curves are flattened in the units of the element, which the transform still
+        # scales to millimetres: the tolerance in those units is tol over the largest stretch
+        stretch = float(np.linalg.norm(M[:2, :2], 2))
+        tol = self.tol / stretch if stretch > 1e-12 else self.tol
         if tag == "path":
             subs = path_subpaths(elem.get("d"), tol)
         elif tag == "rect":

@@ -139,6 +139,39 @@ def test_place_on_top_face_of_cube():
     assert abs(zc.min() - 10.0) < 1e-6 and abs(zc.max() - 15.0) < 1e-6
 
 
+def test_shapes_placed_in_one_go_match_shapes_placed_one_by_one():
+    # overlapping shapes, a ring, a shape inside a hole and an existing face below them:
+    # add_shapes rebuilds the plane once, add_shape after every shape; the result is the same
+    def ring(cx, cy, r, n=24):
+        a = np.linspace(0, 2 * math.pi, n, endpoint=False)
+        return np.c_[cx + r * np.cos(a), cy + r * np.sin(a)]
+    shapes = [[ring(0, 0, 10)], [ring(8, 0, 10)], [ring(40, 0, 15), ring(40, 0, 8)],
+              [ring(40, 0, 3)], [np.array([[-30, -30], [-10, -30], [-10, -10], [-30, -10.0]])]]
+    made = []
+    for batch in (False, True):
+        ents = Entities()
+        ents.add_shape(GROUND, [np.array([[-40, -40], [-20, -40], [-20, -20], [-40, -20.0]])])
+        if batch:
+            ents.add_shapes(GROUND, shapes)
+        else:
+            for s in shapes:
+                ents.add_shape(GROUND, s)
+        segs = sorted(tuple(sorted((tuple(np.round(ents.V[a], 6)), tuple(np.round(ents.V[b], 6)))))
+                      for a, b in ents.E.values())
+        areas = sorted(round(abs(polygon_area(np.array([ents.V[v][:2] for v in f.loops[0]]))), 4)
+                       for f in ents.F.values())
+        made.append((segs, areas, sorted(len(f.loops) for f in ents.F.values())))
+    assert made[0] == made[1]
+
+
+def test_place_faces_reports_progress_up_to_the_end():
+    seen = []
+    regions, opens = vi.prepare(svg_rect_with_hole())
+    vi.place_faces(Entities(), GROUND, regions, [np.array([[0, 20], [5, 20.0]])], np.zeros(2),
+                   progress=seen.append)
+    assert seen[-1] == 1.0 and all(b >= a for a, b in zip(seen, seen[1:]))
+
+
 # ------------------------------------------------------------------ target width scales proportionally
 
 def test_target_width_scales_proportionally():
