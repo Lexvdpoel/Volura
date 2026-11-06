@@ -719,6 +719,17 @@ def part_summary(name, color, ents, pool=False):
     return 0.0, 0.0, tr("faces are inside out")
 
 
+def filament_use(volume_mm3, density_g_cm3, diameter_mm, price_per_kg):
+    """``(grams, metres, cost)`` of filament for a solid of `volume_mm3` mm³.
+
+    The weight is the solid volume times the material density; the length follows from
+    the cross-section of the filament and the cost from the price per kilogram. A print
+    with infill is lighter, so this is the most a part of this volume can use."""
+    grams = volume_mm3 / 1000.0 * density_g_cm3
+    length_mm = volume_mm3 / (math.pi * (diameter_mm / 2.0) ** 2)
+    return grams, length_mm / 1000.0, grams / 1000.0 * price_per_kg
+
+
 # Triangulating a group in a worker only pays once it is big enough to beat the
 # cost of pickling its loops over and the triangles back. Measured on the
 # benchmark model (24 groups, 16k faces) ops.parts falls from ~2.0 s to ~0.7 s

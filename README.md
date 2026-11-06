@@ -45,6 +45,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - Print bed of your printer (Bambu, Prusa, Creality, Voron or a custom size) and a print check
 - **Model Info** (Window) with the pages Units (length rounding and the number of decimals of the
   Measurements box), Statistics (groups, loose edges and faces, total volume) and Print Bed
+- **Filament** (File > Printer Setup > Print Bed): the material (PLA, PETG, ABS, ASA, TPU, Nylon
+  or a custom density), the diameter (1.75 or 2.85 mm) and the price per kg; **Entity Info** then
+  shows the weight, length and cost of a selected part as a solid print (with infill it is less)
 - **Preferences** (Window) with circle segments and a Shortcuts page like in SketchUp: search,
   commands per menu, add or remove a shortcut and reset everything
 - A welcome screen at startup (Help > Welcome to Volura), which can be turned off

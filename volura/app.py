@@ -55,6 +55,17 @@ PRINTERS = [
     ("Voron 2.4 (350)", (350, 350, 340)),
 ]
 
+# The materials on the Printer Setup page: name and density in g/cm³. The dialog adds a
+# "Custom" choice with an editable density, so an unusual spool is not left out.
+FILAMENT_MATERIALS = [
+    ("PLA", 1.24),
+    ("PETG", 1.27),
+    ("ABS", 1.04),
+    ("ASA", 1.07),
+    ("TPU", 1.21),
+    ("Nylon", 1.14),
+]
+
 TOOL_INFO = [
     # name, label (English, translated at use), icon, shortcut
     ("select", tr_noop("Select"), "select", "Space"),
@@ -208,6 +219,22 @@ class Settings:
         except (TypeError, ValueError):
             self.spacemouse_speed = 1.0
         self.spacemouse_speed = max(0.05, min(2.0, self.spacemouse_speed))
+        self.filament_material = str(self.q.value("filament_material", "PLA"))
+        try:
+            self.filament_density = float(self.q.value("filament_density", 1.24))
+        except (TypeError, ValueError):
+            self.filament_density = 1.24
+        self.filament_density = max(0.1, min(20.0, self.filament_density))
+        try:
+            self.filament_diameter = float(self.q.value("filament_diameter", 1.75))
+        except (TypeError, ValueError):
+            self.filament_diameter = 1.75
+        self.filament_diameter = max(0.5, min(5.0, self.filament_diameter))
+        try:
+            self.filament_price = float(self.q.value("filament_price", 20.0))
+        except (TypeError, ValueError):
+            self.filament_price = 20.0
+        self.filament_price = max(0.0, min(100000.0, self.filament_price))
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
@@ -236,6 +263,10 @@ class Settings:
         self.q.setValue("length_snap", self.length_snap)
         self.q.setValue("length_precision", self.length_precision)
         self.q.setValue("current_color", self.current_color)
+        self.q.setValue("filament_material", self.filament_material)
+        self.q.setValue("filament_density", self.filament_density)
+        self.q.setValue("filament_diameter", self.filament_diameter)
+        self.q.setValue("filament_price", self.filament_price)
         self.q.setValue("recent", self.recent[:8])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
@@ -583,13 +614,18 @@ class EntityInfoPanel(QWidget):
         while len(self._part_cache) > 16:          # it holds the geometry: only a few
             del self._part_cache[next(iter(self._part_cache))]
 
-    @staticmethod
-    def _part_rows(form, summary):
-        """Volume, surface and whether the group prints, as `summary` gives them."""
+    def _part_rows(self, form, summary):
+        """Volume, surface, filament and whether the group prints, as `summary` gives them."""
         vol, area, problem = summary
         if problem is None:
             form.addRow(tr("Volume"), QLabel(f"{vol / 1000:.3f} cm³"))
             form.addRow(tr("Surface"), QLabel(f"{area / 100:.2f} cm²"))
+            s = self.win.settings
+            grams, metres, cost = ops.filament_use(vol, s.filament_density,
+                                                   s.filament_diameter, s.filament_price)
+            form.addRow(tr("Weight"),
+                        QLabel(f"≈ {grams:.1f} g ({tr(s.filament_material)}, {tr('solid')})"))
+            form.addRow(tr("Filament"), QLabel(f"≈ {metres:.2f} m · {cost:.2f}"))
             ok = QLabel(tr("✔ closed volume (solid)"))
             ok.setStyleSheet(f"color: {theme.color('ok')}; font-weight: bold;")
         else:
@@ -2014,6 +2050,48 @@ class ModelInfoDialog(PageDialog):
         form.insertRow(0, tr("Printer"), self.printer)
         form.addRow(note(tr("The bed sets the grid of the drawing area and the limits of the "
                             "print check.")))
+        box = QGroupBox(tr("Filament"))
+        inner = QFormLayout(box)
+        self.filament = QComboBox()
+        for name, density in FILAMENT_MATERIALS:
+            self.filament.addItem(f"{name} ({density} g/cm³)", (name, density))
+        self.filament.addItem(tr("Custom"), ("Custom", None))
+        self.filament_density = QDoubleSpinBox()
+        self.filament_density.setRange(0.1, 20.0)
+        self.filament_density.setDecimals(2)
+        self.filament_density.setSuffix(" g/cm³")
+        self.filament_diameter = QDoubleSpinBox()
+        self.filament_diameter.setRange(0.5, 5.0)
+        self.filament_diameter.setDecimals(2)
+        self.filament_diameter.setSingleStep(0.05)
+        self.filament_diameter.setSuffix(" mm")
+        self.filament_price = QDoubleSpinBox()
+        self.filament_price.setRange(0.0, 100000.0)
+        self.filament_price.setDecimals(2)
+        self.filament_price.setSuffix(" " + tr("per kg"))
+        s = self.win.settings
+        self.filament.setCurrentIndex(max(
+            (i for i in range(self.filament.count())
+             if self.filament.itemData(i)[0] == s.filament_material),
+            default=self.filament.count() - 1))
+        self.filament_density.setValue(s.filament_density)
+        self.filament_diameter.setValue(s.filament_diameter)
+        self.filament_price.setValue(s.filament_price)
+
+        def pick_material(i):
+            density = self.filament.itemData(i)[1]
+            self.filament_density.setEnabled(density is None)
+            if density is not None:
+                self.filament_density.setValue(density)
+        self.filament.currentIndexChanged.connect(pick_material)
+        pick_material(self.filament.currentIndex())
+        inner.addRow(tr("Material"), self.filament)
+        inner.addRow(tr("Density"), self.filament_density)
+        inner.addRow(tr("Filament diameter"), self.filament_diameter)
+        inner.addRow(tr("Price"), self.filament_price)
+        form.addRow(box)
+        form.addRow(note(tr("Entity Info shows the weight and cost of a selected part as a "
+                            "solid print; with infill it uses less.")))
         self.add_page(page)
 
     def apply(self):
@@ -2021,6 +2099,11 @@ class ModelInfoDialog(PageDialog):
         s.length_snap = self.snap.value() if self.snap_on.isChecked() else 0.0
         s.length_precision = self.precision.currentIndex()
         s.bed_size = tuple(sp.value() for sp in self.bed_spins)
+        name, density = self.filament.currentData()
+        s.filament_material = name
+        s.filament_density = density if density is not None else self.filament_density.value()
+        s.filament_diameter = self.filament_diameter.value()
+        s.filament_price = self.filament_price.value()
         s.save()
         set_length_precision(s.length_precision)
         self.win.view.update()
