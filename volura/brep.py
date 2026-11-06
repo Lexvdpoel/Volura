@@ -591,17 +591,18 @@ class Entities:
     # add_segment looks for the edges and vertices it must split or cross. Only
     # geometry near the new segment can qualify, so a coarse grid (ECELL mm cells)
     # over edge bounding boxes and vertex positions keeps that a local lookup
-    # instead of a scan of the whole model. A query returns a superset (cells are
-    # expanded by one) and the exact tests still decide, so the result is identical
-    # to scanning everything; edges too long for the grid go to a linear list.
+    # instead of a scan of the whole model. A query box already includes TOL, and an
+    # edge that can qualify has a bounding box overlapping it, so the two share a cell:
+    # the query returns a superset and the exact tests still decide, so the result is
+    # identical to scanning everything; edges too long for the grid go to a linear list.
     @staticmethod
     def _ecell(p):
         return (math.floor(p[0] / ECELL), math.floor(p[1] / ECELL),
                 math.floor(p[2] / ECELL))
 
     def _ecells(self, lo, hi):
-        c0 = [math.floor(lo[i] / ECELL) - 1 for i in range(3)]
-        c1 = [math.floor(hi[i] / ECELL) + 1 for i in range(3)]
+        c0 = [math.floor(lo[i] / ECELL) for i in range(3)]
+        c1 = [math.floor(hi[i] / ECELL) for i in range(3)]
         for i in range(c0[0], c1[0] + 1):
             for j in range(c0[1], c1[1] + 1):
                 for k in range(c0[2], c1[2] + 1):
@@ -961,23 +962,24 @@ class Entities:
         if not self.E:
             return
         p = self.V[v]
-        for e in sorted(self._edges_near(p - TOL, p + TOL)):
-            if e not in self.E:
-                continue
-            a, b = self.E[e]
-            if a == v or b == v:
-                continue
-            A, B = self.V[a], self.V[b]
-            d = B - A
-            l2 = float(d @ d)
-            if l2 < 1e-18:
-                continue
-            t = float((p - A) @ d) / l2
-            if not (0.0 < t < 1.0):
-                continue
-            if float(np.linalg.norm(A + d * t - p)) < TOL:
-                self._split_edge(e, v)
-                return
+        # all candidates at once: where many short edges meet (a flattened spline, a
+        # thread) a cell holds thousands of them, and a loop per edge made every new
+        # segment cost milliseconds
+        ids = [e for e in sorted(self._edges_near(p - TOL, p + TOL))
+               if e in self.E and v not in self.E[e]]
+        if not ids:
+            return
+        pos = self._pos_by_id()
+        ab = np.array([self.E[e] for e in ids])
+        A, B = pos[ab[:, 0]], pos[ab[:, 1]]
+        d = B - A
+        l2 = np.einsum("ij,ij->i", d, d)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t = np.einsum("ij,ij->i", p - A, d) / l2
+        dist = np.linalg.norm(A + d * t[:, None] - p, axis=1)
+        hit = np.flatnonzero((l2 >= 1e-18) & (t > 0.0) & (t < 1.0) & (dist < TOL))
+        if len(hit):
+            self._split_edge(ids[hit[0]], v)       # the first in id order, as before
 
     def add_segment(self, p, q):
         """Add an edge from p to q, splitting and merging with existing geometry.

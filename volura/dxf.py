@@ -27,7 +27,8 @@ import numpy as np
 
 from . import fileio
 from .i18n import tr
-from .vector2d import Drawing, Layer, TOL, arc_points, ellipse_arc_points, join_open_paths
+from .vector2d import (MAX_DEPTH, Drawing, Layer, TOL, _subdivide, arc_points,
+                       ellipse_arc_points, join_open_paths)
 
 # Units from $INSUNITS, converted to millimetres (0 or missing = mm).
 INSUNITS_MM = {1: 25.4, 2: 304.8, 3: 3048.006096, 4: 1.0, 5: 10.0, 6: 1000.0,
@@ -59,6 +60,9 @@ SKIP_MESSAGES = {
 }
 
 SUPPORTED = {"LINE", "LWPOLYLINE", "POLYLINE", "CIRCLE", "ARC", "ELLIPSE", "SPLINE"}
+
+# A NURBS knot span starts as this many pieces before it is refined to the tolerance.
+NURBS_START_PIECES = 4
 
 
 # --------------------------------------------------------------------------
@@ -303,18 +307,28 @@ def _find_span(knots, degree, u, n):
 
 
 def _de_boor(degree, knots, pw, span, u):
-    d = [pw[span - degree + k].copy() for k in range(degree + 1)]
+    """The homogeneous point (x·w, y·w, w) at `u`; plain floats, as numpy costs far more
+    than the arithmetic on three numbers (a spline is evaluated thousands of times)."""
+    d = [(float(p[0]), float(p[1]), float(p[2]))
+         for p in pw[span - degree:span + 1]]
     for r in range(1, degree + 1):
         for k in range(degree, r - 1, -1):
             ki = span - degree + k
             den = knots[ki + degree - r + 1] - knots[ki]
             a = 0.0 if abs(den) < 1e-15 else (u - knots[ki]) / den
-            d[k] = (1.0 - a) * d[k - 1] + a * d[k]
-    return d[degree]
+            b = 1.0 - a
+            p, q = d[k - 1], d[k]
+            d[k] = (b * p[0] + a * q[0], b * p[1] + a * q[1], b * p[2] + a * q[2])
+    return np.array(d[degree])
 
 
-def nurbs_points(degree, knots, ctrl, weights=None, samples_per_span=24):
-    """NURBS curve as a polyline, evaluated with de Boor (rational with weights)."""
+def nurbs_points(degree, knots, ctrl, weights=None, samples_per_span=24, tol=None):
+    """NURBS curve as a polyline, evaluated with de Boor (rational with weights).
+
+    With `tol` the curve is flattened like an arc: every knot span starts as
+    ``NURBS_START_PIECES`` pieces, so an S-bend inside one span is not missed, and a
+    piece is halved until its middle lies within `tol` of the chord. Without it every
+    span gets `samples_per_span` pieces, however small the span is."""
     ctrl = np.asarray(ctrl, dtype=float).reshape(-1, 2)
     n = len(ctrl) - 1
     if n < 1 or degree < 1 or len(knots) < n + degree + 2:
@@ -328,6 +342,23 @@ def nurbs_points(degree, knots, ctrl, weights=None, samples_per_span=24):
         return ctrl.copy()
     interior = sorted({k for k in knots if u0 < k < u1})
     bounds = [u0] + interior + [u1]
+    if tol is not None:
+        def point(u):
+            u = min(max(u, u0), u1)
+            h = _de_boor(degree, knots, pw, _find_span(knots, degree, u, n), u)
+            return h[:2] / h[2] if abs(h[2]) > 1e-15 else h[:2]
+
+        out = [point(u0)]
+        for a, b in zip(bounds[:-1], bounds[1:]):
+            step = (b - a) / NURBS_START_PIECES
+            for j in range(NURBS_START_PIECES):
+                _subdivide(point, a + j * step, b if j == NURBS_START_PIECES - 1
+                           else a + (j + 1) * step, tol, out, MAX_DEPTH)
+        pts = [out[0]]
+        for p in out[1:]:
+            if float(np.linalg.norm(p - pts[-1])) > 1e-12:
+                pts.append(np.asarray(p, dtype=float))
+        return np.asarray(pts, dtype=float).reshape(-1, 2)
     out = []
     for a, b in zip(bounds[:-1], bounds[1:]):
         m = max(2, int(samples_per_span))
@@ -693,7 +724,8 @@ class _Reader:
         weights = ent.floats(42)
         verts, _ = _vertices_and_bulges(ent.pairs)
         if len(verts) >= 2 and degree >= 1 and len(knots) >= len(verts) + degree + 1:
-            pts = nurbs_points(degree, knots, verts, weights or None)
+            pts = nurbs_points(degree, knots, verts, weights or None,
+                               tol=self.tol / self.factor if self.factor > 0 else self.tol)
             return [(pts, False)] if len(pts) >= 2 else []
         fx, fy = ent.floats(11), ent.floats(21)
         m = min(len(fx), len(fy))

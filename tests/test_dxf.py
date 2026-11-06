@@ -272,6 +272,26 @@ def test_write_header_and_format():
     assert "\nLINE\n" in text
 
 
+def test_a_small_spline_is_flattened_to_the_tolerance_not_to_a_fixed_count():
+    """A thread drawn with splines of a fraction of a millimetre: 24 points per knot span
+    gave segments of 0.02 mm, thousands of them, which made placing the drawing take
+    minutes. Flattened to the tolerance, the curve keeps its shape with far fewer."""
+    knots = [0, 0, 0, 0, 0.25, 0.5, 0.75, 1, 1, 1, 1]
+    ctrl = [(0, 0), (0.1, 0.3), (0.3, 0.35), (0.5, 0.1), (0.7, 0.35), (0.9, 0.3), (1.0, 0)]
+    dense = dxf.nurbs_points(3, knots, ctrl, samples_per_span=400)
+    flat = dxf.nurbs_points(3, knots, ctrl, tol=0.01)
+    assert len(dense) == 1601
+    assert len(flat) < 60
+    assert np.allclose(flat[0], ctrl[0]) and np.allclose(flat[-1], ctrl[-1])
+    # every point of the true curve lies within the tolerance of the polyline
+    a, b = flat[:-1], flat[1:]
+    d = b - a
+    t = np.clip(np.einsum("pij,ij->pi", dense[:, None, :] - a[None], d)
+                / np.einsum("ij,ij->i", d, d), 0, 1)
+    gap = np.linalg.norm(a[None] + t[..., None] * d[None] - dense[:, None, :], axis=2).min(axis=1)
+    assert gap.max() < 0.01
+
+
 def test_an_empty_value_keeps_the_pairs_in_step():
     """An empty text value (a custom property without a value in the header, as some CAD
     programs write) is a line of its own: it must not shift every later pair."""
