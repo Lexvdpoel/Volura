@@ -3,6 +3,26 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.8 — 2026-11-07
+
+### New
+- **Filament use** in Entity Info: a closed part shows the weight, length and cost of the
+  filament it takes as a solid print. Choose the material (PLA, PETG, ABS, ASA, TPU, Nylon or
+  your own density), the filament diameter and the price per kg under File > Printer Setup.
+- **Overhang view** (View > Face Style > Overhangs): faces that hang over too far to print
+  without support are coloured, and the status bar counts them. The limit is 45° from the
+  vertical, adjustable under Window > Preferences > Drawing. Faces on the print bed are left
+  alone.
+- **Arrange on Bed** (Tools, or right-click): lays the selected groups, or all groups, side by
+  side on the print bed without overlapping, turned where that helps. One undo puts
+  everything back.
+- **Circular arrays**: after a rotate copy, type `5x` for 5 more copies around the same axis,
+  or `/5` to divide the angle into 5 steps, just like Move makes a row.
+
+### Improved
+- The website now takes its feature list and manual from each release, so they always match
+  the latest version.
+
 ## 0.2.7 — 2026-11-06
 
 ### New
