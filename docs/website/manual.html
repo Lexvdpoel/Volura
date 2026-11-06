@@ -1,0 +1,331 @@
+<!-- The manual of volura.dev. The site loads this file from the latest release on GitHub,
+     so a change here is online with the next release. Every text is in English and Dutch
+     (lang="en" / lang="nl"); in the manual every <h2> needs an id (the table of contents
+     is made from them). No scripts: they are removed when the page loads this file. -->
+    <h1><span lang="en">Volura manual</span><span lang="nl">Handleiding Volura</span></h1>
+    <p lang="en">This manual explains the functions of Volura step by step. The interface is in English or Dutch (see <a href="#language">Language</a>); menu names are given here as they appear in the English interface. Inside Volura, <kbd>F1</kbd> opens the help and <b>Window &gt; Preferences &gt; Shortcuts</b> lists every shortcut.</p>
+    <p lang="nl">Deze handleiding legt de functies van Volura stap voor stap uit. De interface is in het Engels of het Nederlands (zie <a href="#language">Taal</a>); de menunamen staan hier zoals in de Nederlandse interface. In Volura zelf opent <kbd>F1</kbd> de help en staan alle sneltoetsen onder <b>Venster &gt; Voorkeuren &gt; Sneltoetsen</b>.</p>
+
+    <!-- ===================================================== install -->
+    <h2 id="install"><span lang="en">Installing</span><span lang="nl">Installeren</span></h2>
+    <h3>Windows</h3>
+    <p lang="en">Download <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-setup.exe"><code>Volura-windows-setup.exe</code></a> and run it. It needs no administrator rights: it installs for you only, in <code>%LOCALAPPDATA%\Programs\Volura</code>, adds Volura to the Start menu and opens <code>.volura</code> files with Volura. Uninstall it from <b>Settings &gt; Apps</b>.</p>
+    <p lang="nl">Download <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-setup.exe"><code>Volura-windows-setup.exe</code></a> en start het. Er zijn geen beheerdersrechten nodig: het installeert alleen voor jou, in <code>%LOCALAPPDATA%\Programs\Volura</code>, zet Volura in het Startmenu en opent <code>.volura</code>-bestanden met Volura. Verwijderen gaat via <b>Instellingen &gt; Apps</b>.</p>
+    <p lang="en">Prefer no installation? Unzip <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-x86_64.zip"><code>Volura-windows-x86_64.zip</code></a> anywhere and start <code>Volura\Volura.exe</code>. Your settings and the automatic backup of an unsaved model are kept in <code>%APPDATA%\Volura</code>.</p>
+    <p lang="nl">Liever zonder installatie? Pak <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-x86_64.zip"><code>Volura-windows-x86_64.zip</code></a> uit waar je wilt en start <code>Volura\Volura.exe</code>. Je instellingen en de automatische reservekopie van een niet-opgeslagen model staan in <code>%APPDATA%\Volura</code>.</p>
+    <h3>Updates</h3>
+    <p lang="en">Once a day at startup Volura checks GitHub for a newer version. When you installed it with the installer, <b>Update Now</b> downloads and verifies the new version, installs it and starts Volura again; your model is saved first if you want. The zip and Linux versions open the <a href="https://github.com/Lexvdpoel/Volura/releases/latest">download page</a>. Check yourself with <b>Help &gt; Check for Updates…</b>, or switch the daily check off in <b>Window &gt; Preferences &gt; General</b>.</p>
+    <p lang="nl">Bij het opstarten kijkt Volura één keer per dag op GitHub of er een nieuwere versie is. Heb je het met de installatie geïnstalleerd, dan downloadt en controleert <b>Nu bijwerken</b> de nieuwe versie, installeert die en start Volura opnieuw; je model wordt eerst bewaard als je dat wilt. De zip- en Linux-versie openen de <a href="https://github.com/Lexvdpoel/Volura/releases/latest">downloadpagina</a>. Zelf kijken kan met <b>Help &gt; Controleren op updates…</b>; de dagelijkse controle zet je uit in <b>Venster &gt; Voorkeuren &gt; Algemeen</b>.</p>
+    <h3>Linux</h3>
+    <p lang="en">Download <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-linux-x86_64.tar.gz"><code>Volura-linux-x86_64.tar.gz</code></a> and:</p>
+    <p lang="nl">Download <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-linux-x86_64.tar.gz"><code>Volura-linux-x86_64.tar.gz</code></a> en:</p>
+    <pre><code>tar xzf Volura-linux-x86_64.tar.gz
+cd Volura
+./install.sh      # ~/.local/opt/volura + menu item
+volura</code></pre>
+    <p lang="en"><code>./install.sh --remove</code> removes everything again. Volura needs OpenGL (Mesa is fine) and a few Qt libraries; on Debian and Ubuntu:</p>
+    <p lang="nl"><code>./install.sh --remove</code> haalt alles weer weg. Volura heeft OpenGL nodig (Mesa is genoeg) en een paar Qt-bibliotheken; op Debian en Ubuntu:</p>
+    <pre><code>sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3</code></pre>
+    <p lang="en">Under Wayland, Volura starts through XWayland automatically. For a <a href="#spacemouse">3D mouse</a>, install and start <code>spacenavd</code>.</p>
+    <p lang="nl">Onder Wayland start Volura automatisch via XWayland. Voor een <a href="#spacemouse">3D-muis</a> installeer en start je <code>spacenavd</code>.</p>
+    <h3><span lang="en">From source</span><span lang="nl">Vanaf de broncode</span></h3>
+    <p lang="en">With Python 3.10 or newer: double-click <code>run.bat</code> (Windows) or run <code>./run.sh</code> (Linux). Both create a virtual environment and install the requirements the first time.</p>
+    <p lang="nl">Met Python 3.10 of nieuwer: dubbelklik <code>run.bat</code> (Windows) of start <code>./run.sh</code> (Linux). Beide maken de eerste keer een virtuele omgeving en installeren wat nodig is.</p>
+
+    <!-- ===================================================== window -->
+    <h2 id="window"><span lang="en">The window</span><span lang="nl">Het venster</span></h2>
+    <ul lang="en">
+      <li><b>Menu bar and toolbar</b> at the top, with the drawing and editing tools.</li>
+      <li><b>The drawing area</b> with the red, green and blue axes and the print bed of your printer.</li>
+      <li><b>Default Tray</b> on the right: Entity Info (what is selected), Materials (your filaments), Outliner and Print Check.</li>
+      <li><b>Status bar</b> at the bottom: tells you what the current tool expects next.</li>
+      <li><b>Measurements box</b> at the bottom right: shows lengths while you draw and takes typed values. You never need to click it; just type.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Menubalk en werkbalk</b> bovenaan, met de teken- en bewerkingsgereedschappen.</li>
+      <li><b>Het tekenvlak</b> met de rode, groene en blauwe as en het printbed van je printer.</li>
+      <li><b>Standaardvenster</b> rechts: Entiteitsinfo (wat er geselecteerd is), Materialen (je filamenten), Overzicht en Printcontrole.</li>
+      <li><b>Statusbalk</b> onderaan: vertelt wat het gekozen gereedschap als volgende verwacht.</li>
+      <li><b>Meetvak</b> (Afmetingen) rechtsonder: toont lengtes tijdens het tekenen en neemt getypte waarden aan. Je hoeft er nooit in te klikken; gewoon typen.</li>
+    </ul>
+
+    <!-- ===================================================== navigate -->
+    <h2 id="navigate"><span lang="en">Navigating</span><span lang="nl">Navigeren</span></h2>
+    <div class="tbl"><table>
+      <tr><th><span lang="en">Action</span><span lang="nl">Actie</span></th><th><span lang="en">Mouse</span><span lang="nl">Muis</span></th><th><span lang="en">Tool</span><span lang="nl">Gereedschap</span></th></tr>
+      <tr><td><span lang="en">Orbit</span><span lang="nl">Draaien</span></td><td><span lang="en">middle button</span><span lang="nl">middelste knop</span></td><td><kbd>O</kbd></td></tr>
+      <tr><td><span lang="en">Pan</span><span lang="nl">Pannen</span></td><td><kbd>Shift</kbd> + <span lang="en">middle button</span><span lang="nl">middelste knop</span></td><td><kbd>H</kbd></td></tr>
+      <tr><td><span lang="en">Zoom</span><span lang="nl">Zoomen</span></td><td><span lang="en">scroll wheel (towards the cursor)</span><span lang="nl">scrollwiel (naar de cursor)</span></td><td><kbd>Z</kbd></td></tr>
+      <tr><td><span lang="en">Zoom extents</span><span lang="nl">Zoomen tot alles</span></td><td></td><td><kbd>Shift</kbd>+<kbd>Z</kbd></td></tr>
+    </table></div>
+    <p lang="en">The <b>Camera</b> menu has the standard views (top, front, right, back, left, iso), parallel projection or perspective, field of view, zoom window, and previous/next view.</p>
+    <p lang="nl">Het menu <b>Camera</b> heeft de standaardweergaven (boven, voor, rechts, achter, links, iso), parallelle projectie of perspectief, gezichtsveld, zoomvenster en vorige/volgende weergave.</p>
+    <p lang="en">With a 3Dconnexion SpaceMouse you can also steer with your other hand while you draw; see <a href="#spacemouse">3D mouse</a>.</p>
+    <p lang="nl">Met een SpaceMouse van 3Dconnexion stuur je ook met je andere hand terwijl je tekent; zie <a href="#spacemouse">3D-muis</a>.</p>
+
+    <!-- ===================================================== spacemouse -->
+    <h2 id="spacemouse"><span lang="en">3D mouse</span><span lang="nl">3D-muis</span></h2>
+    <p lang="en">Volura works with 3Dconnexion 3D mice: the current SpaceMouse models (Wireless, Pro, Compact, Enterprise and the Universal Receiver) and older ones such as the SpaceNavigator, SpaceExplorer and SpacePilot.</p>
+    <p lang="nl">Volura werkt met 3D-muizen van 3Dconnexion: de huidige SpaceMouse-modellen (Wireless, Pro, Compact, Enterprise en de Universal Receiver) en oudere zoals de SpaceNavigator, SpaceExplorer en SpacePilot.</p>
+    <div class="tbl"><table>
+      <tr><th><span lang="en">Cap</span><span lang="nl">Kap</span></th><th>3D</th><th>2D</th></tr>
+      <tr><td><span lang="en">Slide</span><span lang="nl">Schuiven</span></td><td><span lang="en">moves (pans) the model</span><span lang="nl">verschuift het model</span></td><td><span lang="en">pans the sheet</span><span lang="nl">verschuift het werkblad</span></td></tr>
+      <tr><td><span lang="en">Pull up / push down</span><span lang="nl">Omhoog trekken / omlaag duwen</span></td><td><span lang="en">zooms</span><span lang="nl">zoomt</span></td><td><span lang="en">zooms the sheet</span><span lang="nl">zoomt het werkblad</span></td></tr>
+      <tr><td><span lang="en">Twist / tilt</span><span lang="nl">Draaien / kantelen</span></td><td><span lang="en">rotates the model</span><span lang="nl">draait het model</span></td><td></td></tr>
+      <tr><td><span lang="en">Buttons</span><span lang="nl">Knoppen</span></td><td colspan="2"><span lang="en">Fit (zoom extents) and the standard views</span><span lang="nl">Passend maken (zoomen tot alles) en de standaardweergaven</span></td></tr>
+    </table></div>
+    <ul lang="en">
+      <li><b>With the driver</b>: with 3DxWare 10 or the older 3DxSoftware installed, Volura uses the driver. Volura gets its own profile in 3DxWare, where you set up the buttons and axes.</li>
+      <li><b>Without a driver on Windows</b>: Volura reads the device directly; the left button goes to the iso view, the right button to zoom extents.</li>
+      <li><b>Linux</b>: through <code>spacenavd</code>; install and start it.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Met stuurprogramma</b>: is 3DxWare 10 of het oudere 3DxSoftware geïnstalleerd, dan gebruikt Volura het stuurprogramma. Volura krijgt een eigen profiel in 3DxWare, waarin je de knoppen en assen instelt.</li>
+      <li><b>Zonder stuurprogramma onder Windows</b>: Volura leest het apparaat zelf; de linkerknop gaat naar het iso-aanzicht, de rechterknop zoomt tot alles.</li>
+      <li><b>Linux</b>: via <code>spacenavd</code>; installeer en start het.</li>
+    </ul>
+    <p lang="en">Under <b>Window &gt; Preferences &gt; 3D Mouse</b> you switch the 3D mouse on or off, set the speed, see how it is connected and test it live: move the cap and the values change.</p>
+    <p lang="nl">Onder <b>Venster &gt; Voorkeuren &gt; 3D-muis</b> zet je de 3D-muis aan of uit, stel je de snelheid in, zie je hoe hij verbonden is en test je hem meteen: beweeg de kap en de waarden veranderen.</p>
+
+    <!-- ===================================================== draw -->
+    <h2 id="draw"><span lang="en">Drawing</span><span lang="nl">Tekenen</span></h2>
+    <p lang="en">A model is made of <b>edges and faces</b>. Edges split each other where they cross, a closed shape becomes a face, a line across a face splits it, and erasing an edge merges faces again.</p>
+    <p lang="nl">Een model bestaat uit <b>randen en vlakken</b>. Randen splitsen elkaar waar ze kruisen, een gesloten vorm wordt een vlak, een lijn over een vlak splitst het, en een rand wissen voegt vlakken weer samen.</p>
+    <div class="tbl"><table>
+      <tr><th><span lang="en">Tool</span><span lang="nl">Gereedschap</span></th><th><span lang="en">Key</span><span lang="nl">Toets</span></th><th><span lang="en">How</span><span lang="nl">Werking</span></th></tr>
+      <tr><td><span lang="en">Line</span><span lang="nl">Lijn</span></td><td><kbd>L</kbd></td><td><span lang="en">Click points; type a length for the next segment. Closing a shape makes a face.</span><span lang="nl">Klik punten; typ een lengte voor het volgende stuk. Een gesloten vorm wordt een vlak.</span></td></tr>
+      <tr><td><span lang="en">Freehand</span><span lang="nl">Uit de vrije hand</span></td><td></td><td><span lang="en">Drag to sketch a curve (Draw &gt; Lines).</span><span lang="nl">Sleep om een kromme te schetsen (Tekenen &gt; Lijnen).</span></td></tr>
+      <tr><td><span lang="en">Rectangle</span><span lang="nl">Rechthoek</span></td><td><kbd>R</kbd></td><td><span lang="en">Two corners, or type <code>width;depth</code>.</span><span lang="nl">Twee hoeken, of typ <code>breedte;diepte</code>.</span></td></tr>
+      <tr><td><span lang="en">Rotated rectangle</span><span lang="nl">Gedraaide rechthoek</span></td><td></td><td><span lang="en">Draw &gt; Shapes: first edge in any direction, then the width.</span><span lang="nl">Tekenen &gt; Vormen: eerste rand in elke richting, dan de breedte.</span></td></tr>
+      <tr><td><span lang="en">Circle</span><span lang="nl">Cirkel</span></td><td><kbd>C</kbd></td><td><span lang="en">Centre, then radius. Type <code>64s</code> first for 64 segments.</span><span lang="nl">Middelpunt, dan straal. Typ eerst <code>64s</code> voor 64 segmenten.</span></td></tr>
+      <tr><td><span lang="en">Polygon</span><span lang="nl">Veelhoek</span></td><td></td><td><span lang="en">Like the circle, with straight sides (<code>6s</code> = hexagon).</span><span lang="nl">Zoals de cirkel, met rechte zijden (<code>6s</code> = zeshoek).</span></td></tr>
+      <tr><td><span lang="en">Arcs</span><span lang="nl">Bogen</span></td><td><kbd>A</kbd></td><td><span lang="en">2-point arc, arc from centre, 3-point arc and pie (Draw &gt; Arcs).</span><span lang="nl">Boog door 2 punten, boog vanuit middelpunt, boog door 3 punten en taartpunt (Tekenen &gt; Bogen).</span></td></tr>
+      <tr><td><span lang="en">3D text</span><span lang="nl">3D-tekst</span></td><td><kbd>Shift</kbd>+<kbd>T</kbd></td><td><span lang="en">Type a text, choose font and height, click to place it on a face; then push/pull.</span><span lang="nl">Typ een tekst, kies lettertype en hoogte, klik om hem op een vlak te zetten; daarna duwen/trekken.</span></td></tr>
+      <tr><td><span lang="en">Primitives</span><span lang="nl">Basisvormen</span></td><td></td><td><span lang="en">Box, cylinder, cone, sphere and torus with exact sizes.</span><span lang="nl">Kubus/balk, cilinder, kegel, bol en torus met exacte maten.</span></td></tr>
+    </table></div>
+
+    <!-- ===================================================== vcb -->
+    <h2 id="vcb"><span lang="en">Typing exact sizes</span><span lang="nl">Maten typen</span></h2>
+    <p lang="en">While a tool is active, just type and press <kbd>Enter</kbd>. The direction follows your mouse. Millimetres are the default unit.</p>
+    <p lang="nl">Typ gewoon terwijl een gereedschap actief is en druk op <kbd>Enter</kbd>. De richting volgt je muis. Millimeter is de standaardeenheid.</p>
+    <div class="tbl"><table>
+      <tr><th><span lang="en">Input</span><span lang="nl">Invoer</span></th><th><span lang="en">Meaning</span><span lang="nl">Betekenis</span></th></tr>
+      <tr><td><code>25</code></td><td><span lang="en">25 mm</span><span lang="nl">25 mm</span></td></tr>
+      <tr><td><code>2,5cm</code> · <code>1in</code></td><td><span lang="en">other units (comma or point as decimal sign)</span><span lang="nl">andere eenheden (komma of punt als decimaalteken)</span></td></tr>
+      <tr><td><code>40;20</code></td><td><span lang="en">rectangle of 40 × 20</span><span lang="nl">rechthoek van 40 × 20</span></td></tr>
+      <tr><td><code>10;0;5</code></td><td><span lang="en">move by x;y;z</span><span lang="nl">verplaatsen over x;y;z</span></td></tr>
+      <tr><td><code>64s</code></td><td><span lang="en">number of segments of a circle, polygon or arc</span><span lang="nl">aantal segmenten van een cirkel, veelhoek of boog</span></td></tr>
+      <tr><td><code>5x</code> · <code>/5</code></td><td><span lang="en">after a copy with Move: 5 copies in a row, or 5 copies divided over the distance; after a copy with Rotate: 5 copies around the same axis, or the angle divided into 5 steps</span><span lang="nl">na een kopie met Verplaatsen: 5 kopieën op een rij, of 5 kopieën verdeeld over de afstand; na een kopie met Roteren: 5 kopieën rond dezelfde as, of de hoek verdeeld in 5 stappen</span></td></tr>
+    </table></div>
+    <p lang="en">Typing right after an operation changes it: pull a face 10 mm, type <code>12</code> and the face goes to 12 mm instead.</p>
+    <p lang="nl">Typen direct na een handeling past die aan: trek een vlak 10 mm op, typ <code>12</code> en het vlak gaat naar 12 mm.</p>
+
+    <!-- ===================================================== inference -->
+    <h2 id="inference"><span lang="en">Snapping</span><span lang="nl">Snappen</span></h2>
+    <p lang="en">Volura shows what the cursor snaps to: <b>endpoint</b> (green), <b>midpoint</b> (cyan), <b>on edge</b>, <b>on face</b>, the <b>origin</b>, and the <b>red, green and blue axis</b> directions. Lengths snap to 1 mm and angles to 15° (adjustable).</p>
+    <p lang="nl">Volura toont waarop de cursor snapt: <b>eindpunt</b> (groen), <b>middelpunt</b> (cyaan), <b>op rand</b>, <b>op vlak</b>, de <b>oorsprong</b> en de richting van de <b>rode, groene en blauwe as</b>. Lengtes snappen op 1 mm en hoeken op 15° (instelbaar).</p>
+    <ul lang="en">
+      <li>Hold <kbd>Shift</kbd> to lock the current direction.</li>
+      <li>The arrow keys lock a direction: <kbd>→</kbd> red, <kbd>←</kbd> green, <kbd>↑</kbd> blue.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Houd <kbd>Shift</kbd> vast om de huidige richting te vergrendelen.</li>
+      <li>De pijltjestoetsen vergrendelen een richting: <kbd>→</kbd> rood, <kbd>←</kbd> groen, <kbd>↑</kbd> blauw.</li>
+    </ul>
+
+    <!-- ===================================================== pushpull -->
+    <h2 id="pushpull"><span lang="en">Push/pull</span><span lang="nl">Duwen/trekken</span></h2>
+    <p lang="en">Push/pull (<kbd>P</kbd>) turns a face into a solid. Click a face, move the mouse and click again, or type a distance. Pulling up or out of a solid is positive, pushing in is negative.</p>
+    <p lang="nl">Duwen/trekken (<kbd>P</kbd>) maakt van een vlak een volume. Klik op een vlak, beweeg de muis en klik nog eens, of typ een afstand. Omhoog of uit een volume trekken is positief, erin duwen is negatief.</p>
+    <ul lang="en">
+      <li>Push a face all the way through to make a hole.</li>
+      <li><kbd>Ctrl</kbd>: keep the starting face (start a new face).</li>
+      <li><kbd>Alt</kbd>: make a <b>separate part</b>. Inwards it makes an inlay (a pocket plus a filled part in the current colour), outwards a separate part. This is how you make multicolour models.</li>
+      <li>Double-click a face to repeat the last distance.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Duw een vlak helemaal door om een gat te maken.</li>
+      <li><kbd>Ctrl</kbd>: houd het beginvlak (begin een nieuw vlak).</li>
+      <li><kbd>Alt</kbd>: maak een <b>apart onderdeel</b>. Naar binnen maakt het een inleg (een uitsparing plus een gevuld deel in de huidige kleur), naar buiten een apart onderdeel. Zo maak je meerkleurenmodellen.</li>
+      <li>Dubbelklik op een vlak om de laatste afstand te herhalen.</li>
+    </ul>
+
+    <!-- ===================================================== edit -->
+    <h2 id="edit"><span lang="en">Editing</span><span lang="nl">Bewerken</span></h2>
+    <div class="tbl"><table>
+      <tr><th><span lang="en">Tool</span><span lang="nl">Gereedschap</span></th><th><span lang="en">Key</span><span lang="nl">Toets</span></th><th><span lang="en">How</span><span lang="nl">Werking</span></th></tr>
+      <tr><td><span lang="en">Select</span><span lang="nl">Selecteren</span></td><td><kbd>Space</kbd></td><td><span lang="en">Click; double-click selects a face with its edges, triple-click everything connected. Drag left-to-right for a window, right-to-left for crossing. <kbd>Shift</kbd> adds or removes.</span><span lang="nl">Klik; dubbelklik selecteert een vlak met randen, driemaal klikken alles wat verbonden is. Sleep van links naar rechts voor een venster, van rechts naar links voor kruisen. <kbd>Shift</kbd> voegt toe of haalt weg.</span></td></tr>
+      <tr><td><span lang="en">Move</span><span lang="nl">Verplaatsen</span></td><td><kbd>M</kbd></td><td><span lang="en">Base point, then target or distance. <kbd>Ctrl</kbd> makes a copy.</span><span lang="nl">Basispunt, dan doel of afstand. <kbd>Ctrl</kbd> maakt een kopie.</span></td></tr>
+      <tr><td><span lang="en">Rotate</span><span lang="nl">Roteren</span></td><td><kbd>Q</kbd></td><td><span lang="en">Centre and axis, start direction, then angle (type degrees). <kbd>Ctrl</kbd> makes a copy; then type <code>5x</code> for a circular pattern: rotate-copy a spoke 60° and type <code>5x</code> for 6 spokes.</span><span lang="nl">Middelpunt en as, beginrichting, dan hoek (graden typen). <kbd>Ctrl</kbd> maakt een kopie; typ daarna <code>5x</code> voor een cirkelpatroon: roteer-kopieer een spaak 60° en typ <code>5x</code> voor 6 spaken.</span></td></tr>
+      <tr><td><span lang="en">Scale</span><span lang="nl">Schalen</span></td><td><kbd>S</kbd></td><td><span lang="en">Drag a grip, or type a factor such as <code>2</code> or <code>0,5</code>.</span><span lang="nl">Sleep een greep, of typ een factor zoals <code>2</code> of <code>0,5</code>.</span></td></tr>
+      <tr><td><span lang="en">Offset</span><span lang="nl">Verschuiving</span></td><td><kbd>F</kbd></td><td><span lang="en">Copies the edges of a face inwards or outwards.</span><span lang="nl">Kopieert de randen van een vlak naar binnen of buiten.</span></td></tr>
+      <tr><td><span lang="en">Follow me</span><span lang="nl">Volg mij</span></td><td></td><td><span lang="en">Sweeps a profile along a path (Tools &gt; Follow Me).</span><span lang="nl">Trekt een profiel langs een pad (menu Gereedschap).</span></td></tr>
+      <tr><td><span lang="en">Eraser</span><span lang="nl">Gum</span></td><td><kbd>E</kbd></td><td><span lang="en">Click or drag over edges. <kbd>Shift</kbd> hides, <kbd>Ctrl</kbd> softens.</span><span lang="nl">Klik of sleep over randen. <kbd>Shift</kbd> verbergt, <kbd>Ctrl</kbd> verzacht.</span></td></tr>
+      <tr><td><span lang="en">Paint bucket</span><span lang="nl">Verfemmer</span></td><td><kbd>B</kbd></td><td><span lang="en">Gives a face or group the current filament colour. Painted faces are exported as colour painting in the 3MF.</span><span lang="nl">Geeft een vlak of groep de huidige filamentkleur. Geverfde vlakken worden in de 3MF als kleurbeschildering geëxporteerd.</span></td></tr>
+      <tr><td><span lang="en">Tape measure</span><span lang="nl">Meetlint</span></td><td><kbd>T</kbd></td><td><span lang="en">Measures distances and makes guide lines and guide points.</span><span lang="nl">Meet afstanden en maakt hulplijnen en hulppunten.</span></td></tr>
+      <tr><td><span lang="en">Protractor</span><span lang="nl">Gradenboog</span></td><td></td><td><span lang="en">Makes guide lines at an angle.</span><span lang="nl">Maakt hulplijnen onder een hoek.</span></td></tr>
+    </table></div>
+    <p lang="en">The <b>Edit</b> menu also has hide/unhide, lock/unlock, and <b>Intersect Faces</b> with the model or with the selection. Undo (<kbd>Ctrl</kbd>+<kbd>Z</kbd>) is unlimited.</p>
+    <p lang="nl">Het menu <b>Bewerken</b> heeft ook verbergen/zichtbaar maken, vergrendelen/ontgrendelen en <b>Vlakken snijden</b> met het model of met de selectie. Ongedaan maken (<kbd>Ctrl</kbd>+<kbd>Z</kbd>) is onbeperkt.</p>
+
+    <!-- ===================================================== groups -->
+    <h2 id="groups"><span lang="en">Groups and colours</span><span lang="nl">Groepen en kleuren</span></h2>
+    <p lang="en">Select geometry (triple-click) and press <kbd>G</kbd> to make a <b>group</b>. A group is one printable part with its own filament colour. Double-click a group to edit its contents; press <kbd>Esc</kbd> or click outside to close it.</p>
+    <p lang="nl">Selecteer geometrie (driemaal klikken) en druk op <kbd>G</kbd> om een <b>groep</b> te maken. Een groep is één printbaar onderdeel met een eigen filamentkleur. Dubbelklik op een groep om de inhoud te bewerken; druk op <kbd>Esc</kbd> of klik ernaast om hem te sluiten.</p>
+    <p lang="en">The filament list in the <b>Materials</b> panel sets the order of the filaments. On export, only the colours you actually use get a filament number: 1, 2, 3… in the order of this list. A model with three colours therefore always uses filaments 1 to 3, even if those colours are further down the list. Add, change or remove filaments there.</p>
+    <p lang="nl">De filamentlijst in het paneel <b>Materialen</b> bepaalt de volgorde van de filamenten. Bij het exporteren krijgen alleen de kleuren die je echt gebruikt een filamentnummer: 1, 2, 3… in de volgorde van deze lijst. Een model met drie kleuren gebruikt dus altijd filament 1 tot en met 3, ook als die kleuren verderop in de lijst staan. Daar voeg je filamenten toe, wijzig je ze of haal je ze weg.</p>
+    <div class="note" lang="en">Loose geometry that forms a closed solid also counts as a part. Make it a group to give it its own colour.</div>
+    <div class="note" lang="nl">Losse geometrie die een gesloten volume vormt telt ook als onderdeel. Maak er een groep van om het een eigen kleur te geven.</div>
+
+    <!-- ===================================================== solids -->
+    <h2 id="solids"><span lang="en">Solid tools</span><span lang="nl">Volumegereedschap</span></h2>
+    <p lang="en">Under <b>Tools &gt; Solid Tools</b> and in the right-click menu of selected groups:</p>
+    <p lang="nl">Onder <b>Gereedschap &gt; Volumegereedschap</b> en in het rechtsklikmenu van geselecteerde groepen:</p>
+    <div class="tbl"><table>
+      <tr><td><b><span lang="en">Union</span><span lang="nl">Samenvoegen</span></b></td><td><span lang="en">merges solids into one</span><span lang="nl">voegt volumes samen tot één</span></td></tr>
+      <tr><td><b><span lang="en">Subtract</span><span lang="nl">Aftrekken</span></b></td><td><span lang="en">removes the second from the first</span><span lang="nl">haalt het tweede van het eerste af</span></td></tr>
+      <tr><td><b><span lang="en">Intersect</span><span lang="nl">Snijpunt</span></b></td><td><span lang="en">keeps only the overlap</span><span lang="nl">houdt alleen de overlap over</span></td></tr>
+      <tr><td><b><span lang="en">Trim</span><span lang="nl">Bijsnijden</span></b></td><td><span lang="en">cuts one solid away from another but keeps both</span><span lang="nl">snijdt het ene volume weg uit het andere maar houdt beide</span></td></tr>
+      <tr><td><b><span lang="en">Split</span><span lang="nl">Splitsen</span></b></td><td><span lang="en">splits overlapping solids into separate parts</span><span lang="nl">splitst overlappende volumes in losse delen</span></td></tr>
+    </table></div>
+    <p lang="en">Directly in the <b>Tools</b> menu (Outer Shell also in the right-click menu):</p>
+    <p lang="nl">Direct in het menu <b>Gereedschap</b> (Buitenschil ook in het rechtsklikmenu):</p>
+    <div class="tbl"><table>
+      <tr><td><b><span lang="en">Outer Shell</span><span lang="nl">Buitenschil</span></b></td><td><span lang="en">keeps only the outside of overlapping solids</span><span lang="nl">houdt alleen de buitenkant van overlappende volumes over</span></td></tr>
+      <tr><td><b><span lang="en">Simplify Model…</span><span lang="nl">Model versimpelen…</span></b></td><td><span lang="en">fewer triangles on the selected groups, see <a href="#simplify">Simplify Model</a></span><span lang="nl">minder driehoeken op de geselecteerde groepen, zie <a href="#simplify">Model versimpelen</a></span></td></tr>
+    </table></div>
+    <p lang="en"><b>Tools &gt; Arrange on Bed</b> (also in the right-click menu) lays the selected groups, or every group when nothing is selected, side by side on the print bed without overlapping, like a slicer: turned 0, 90, 180 or 270 degrees, 5 mm from the edge and from each other. When the parts do not fit on one bed, nothing moves. One undo puts everything back.</p>
+    <p lang="nl"><b>Gereedschap &gt; Schikken op bed</b> (ook in het rechtsklikmenu) zet de geselecteerde groepen, of alle groepen als er niets geselecteerd is, naast elkaar op het printbed zonder dat ze elkaar raken, zoals een slicer: 0, 90, 180 of 270 graden gedraaid, 5 mm van de rand en van elkaar. Passen de onderdelen niet op één bed, dan verschuift er niets. Eén keer ongedaan maken zet alles terug.</p>
+    <p lang="en">Right-click a group for <b>Drop to Bed</b> (<kbd>Ctrl</kbd>+<kbd>B</kbd>), which puts it on the build plate of your printer, and <b>Center on Bed</b>, which also moves it to the middle of the plate. <b>Flip Along</b> mirrors it along the red, green or blue axis.</p>
+    <p lang="nl">Klik met rechts op een groep voor <b>Op bed plaatsen</b> (<kbd>Ctrl</kbd>+<kbd>B</kbd>), dat hem op het printbed van je printer zet, en <b>Centreren op bed</b>, dat hem ook naar het midden van het bed schuift. <b>Spiegelen langs</b> spiegelt hem langs de rode, groene of blauwe as.</p>
+
+    <!-- ===================================================== print -->
+    <h2 id="print"><span lang="en">Print tools</span><span lang="nl">Printhulpmiddelen</span></h2>
+    <h3><span lang="en">Print check</span><span lang="nl">Printcontrole</span></h3>
+    <p lang="en"><b>File &gt; Print Check</b> (<kbd>F5</kbd>, and the Print Check panel in the Default Tray) lists every part and why it is or isn't a valid solid: holes, open edges, double faces or loose geometry. Click a problem to see it in the model, and let Volura repair it.</p>
+    <p lang="nl"><b>Bestand &gt; Printcontrole</b> (<kbd>F5</kbd>, en het paneel in het standaardvenster) toont per onderdeel waarom het wel of geen geldig volume is: gaten, open randen, dubbele vlakken of losse geometrie. Klik op een probleem om het in het model te zien, en laat Volura het repareren.</p>
+    <h3 id="filament"><span lang="en">Filament use</span><span lang="nl">Filamentverbruik</span></h3>
+    <p lang="en">Select a closed group and <b>Entity Info</b> shows, under its volume, the weight, length and cost of the filament it takes as a solid print (with infill it uses less). Choose the material (PLA, PETG, ABS, ASA, TPU, Nylon or your own density), the filament diameter and the price per kg under <b>File &gt; Printer Setup…</b>, on the Print Bed page.</p>
+    <p lang="nl">Selecteer een gesloten groep en <b>Entiteitsinfo</b> toont onder het volume het gewicht, de lengte en de kosten van het filament dat hij als massieve print nodig heeft (met vulling gebruik je minder). Kies het materiaal (PLA, PETG, ABS, ASA, TPU, Nylon of een eigen dichtheid), de filamentdiameter en de prijs per kg onder <b>Bestand &gt; Printer instellen…</b>, op de pagina Printbed.</p>
+    <h3 id="overhangs"><span lang="en">Overhangs</span><span lang="nl">Overhang</span></h3>
+    <p lang="en"><b>View &gt; Face Style &gt; Overhangs</b> colours every face that hangs over too far to print without support, and the status bar counts them. The limit is 45° from the vertical; change it under <b>Window &gt; Preferences &gt; Drawing</b>. Faces that lie on the print bed (the lowest point of the model) are never marked.</p>
+    <p lang="nl"><b>Beeld &gt; Vlakstijl &gt; Overhang</b> kleurt elk vlak dat te ver overhangt om zonder support te printen, en de statusbalk telt ze. De grens is 45° vanaf de verticaal; wijzig die onder <b>Venster &gt; Voorkeuren &gt; Tekenen</b>. Vlakken die op het printbed liggen (het laagste punt van het model) worden nooit gemarkeerd.</p>
+    <h3><span lang="en">Threads, bolts and nuts</span><span lang="nl">Schroefdraad, bouten en moeren</span></h3>
+    <p lang="en">Under <b>Tools &gt; Print Tools</b>: <i>External Thread on Cylinder</i>, <i>Internal Thread in Hole</i>, <i>New Bolt</i> and <i>New Nut or Sleeve</i>. Choose a metric size; the clearance is set so that printed parts fit together.</p>
+    <p lang="nl">Onder <b>Gereedschap &gt; Printhulpmiddelen</b>: Buitendraad op cilinder, Binnendraad in gat, Nieuwe bout en Nieuwe moer of bus. Kies een metrische maat; de speling is zo gekozen dat geprinte delen in elkaar passen.</p>
+    <h3><span lang="en">Cut and join</span><span lang="nl">Snijden en verbinden</span></h3>
+    <p lang="en">The <b>Cut</b> tool cuts a group on a plane. <b>Cut and Join</b> also adds connections so the halves fit back together: pins, holes for separate pins, or a dovetail, with adjustable size and clearance. Ideal for models that are bigger than your print bed.</p>
+    <p lang="nl">Het gereedschap <b>Snijden</b> knipt een groep op een vlak door. <b>Snijden en verbinden</b> voegt ook verbindingen toe zodat de helften weer in elkaar passen: pennen, gaten voor losse pennen of een zwaluwstaart, met instelbare maat en speling. Ideaal voor modellen die groter zijn dan je printbed.</p>
+    <h3><span lang="en">Fillet and chamfer</span><span lang="nl">Afronden en afschuinen</span></h3>
+    <p lang="en">Choose <b>Fillet</b> or <b>Chamfer</b> (<b>Tools &gt; Print Tools</b>), click the edges (a click on a smooth edge selects the whole curve, a click on a face selects all its edges), type the radius or distance and press <kbd>Enter</kbd>.</p>
+    <p lang="nl">Kies <b>Afronden</b> of <b>Afschuinen</b> (<b>Gereedschap &gt; Printhulpmiddelen</b>), klik de randen aan (een klik op een gladde rand kiest de hele ronding, een klik op een vlak al zijn randen), typ de straal of afstand en druk op <kbd>Enter</kbd>.</p>
+    <h3 id="simplify"><span lang="en">Simplify Model</span><span lang="nl">Model versimpelen</span></h3>
+    <p lang="en">A scan or a downloaded model can have hundreds of thousands of triangles, which makes Volura slow. <b>Tools &gt; Simplify Model…</b> removes triangles from the selected groups. The slider goes from <i>Lossless</i> (0.005 mm) to <i>Half the nozzle</i> (0.2 mm); each step tells you what to expect in the print, and a live estimate shows how many triangles remain. The default, 0.02 mm, stays far below a 0.1 mm layer. One undo restores everything.</p>
+    <p lang="nl">Een scan of gedownload model kan honderdduizenden driehoeken hebben, en dat maakt Volura traag. <b>Gereedschap &gt; Model versimpelen…</b> haalt driehoeken weg uit de geselecteerde groepen. De schuifregelaar loopt van <i>Verliesvrij</i> (0,005 mm) tot <i>Halve nozzle</i> (0,2 mm); bij elke stap staat wat je in de print kunt verwachten, en een schatting toont meteen hoeveel driehoeken er overblijven. De standaard, 0,02 mm, blijft ver onder een laag van 0,1 mm. Eén keer ongedaan maken zet alles terug.</p>
+
+    <!-- ===================================================== import -->
+    <h2 id="import"><span lang="en">Importing 3D models</span><span lang="nl">3D-modellen importeren</span></h2>
+    <p lang="en"><b>File &gt; Import…</b> (or <b>File &gt; Open</b>, or dragging a file onto the window) reads STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB and COLLADA (DAE). A progress bar shows how far it is, and a big file can be cancelled. Every closed part becomes a group in its own colour, and all of them together are one undo step.</p>
+    <p lang="nl"><b>Bestand &gt; Importeren…</b> (of <b>Bestand &gt; Openen</b>, of een bestand op het venster slepen) leest STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB en COLLADA (DAE). Een voortgangsbalk toont hoe ver het is, en een groot bestand kun je annuleren. Elk gesloten onderdeel wordt een groep in een eigen kleur, en samen zijn ze één stap om ongedaan te maken.</p>
+    <ul lang="en">
+      <li><b>Colours</b>: OBJ materials, 3MF colours and the parts and filament colours of PrusaSlicer, Bambu Studio and OrcaSlicer projects (including colour modifiers) are kept.</li>
+      <li><b>Repair</b>: a model that is not closed is repaired where possible. Faces on both sides or the wrong way round, holes, parts that touch along an edge, small knots and the inner walls of SketchUp models are fixed; the status bar says what was done. A model that cannot be repaired reliably is refused, with the reason.</li>
+      <li><b>Units</b>: STL has no unit. When a model comes in smaller than 5 mm, it was probably made in inches, centimetres or metres; Volura asks whether to scale it up. The scaling is an undo step of its own.</li>
+      <li><b>Large models</b>: after importing more than 20,000 triangles Volura offers to <a href="#simplify">simplify</a> the model. Turn the question off with <i>Don't ask again</i>, and back on under <b>Window &gt; Preferences &gt; General</b>.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Kleuren</b>: OBJ-materialen, 3MF-kleuren en de onderdelen en filamentkleuren van projecten uit PrusaSlicer, Bambu Studio en OrcaSlicer (ook kleurmodifiers) blijven behouden.</li>
+      <li><b>Reparatie</b>: een model dat niet gesloten is wordt waar mogelijk gerepareerd. Vlakken aan beide kanten of verkeerd om, gaten, delen die elkaar langs een rand raken, kleine knopen en de binnenwanden van SketchUp-modellen worden hersteld; de statusbalk zegt wat er is gedaan. Een model dat niet betrouwbaar te repareren is, wordt geweigerd, met de reden.</li>
+      <li><b>Eenheden</b>: STL heeft geen eenheid. Komt een model kleiner dan 5 mm binnen, dan is het waarschijnlijk in inches, centimeters of meters gemaakt; Volura vraagt of je het wilt opschalen. Het opschalen is een eigen stap om ongedaan te maken.</li>
+      <li><b>Grote modellen</b>: na het importeren van meer dan 20.000 driehoeken biedt Volura aan het model te <a href="#simplify">versimpelen</a>. Zet de vraag uit met <i>Niet meer vragen</i>, en weer aan onder <b>Venster &gt; Voorkeuren &gt; Algemeen</b>.</li>
+    </ul>
+    <p lang="en">SVG and DXF drawings are imported too: see <a href="#laser">Laser and CNC</a>.</p>
+    <p lang="nl">SVG- en DXF-tekeningen importeer je ook: zie <a href="#laser">Laser en frees</a>.</p>
+
+    <!-- ===================================================== export -->
+    <h2 id="export"><span lang="en">Export and files</span><span lang="nl">Exporteren en bestanden</span></h2>
+    <div class="tbl"><table>
+      <tr><th><span lang="en">Format</span><span lang="nl">Formaat</span></th><th><span lang="en">What you get</span><span lang="nl">Wat je krijgt</span></th></tr>
+      <tr><td><b>STL</b></td><td><span lang="en">all (or the selected) parts merged into one watertight object</span><span lang="nl">alle (of de geselecteerde) onderdelen samengevoegd tot één waterdicht object</span></td></tr>
+      <tr><td><b><span lang="en">Multicolour 3MF</span><span lang="nl">Meerkleuren-3MF</span></b></td><td><span lang="en">one object with one part per filament colour, already linked to the right filament (PrusaSlicer, OrcaSlicer, Bambu Studio). Painted faces become the slicer's own colour painting. Where parts of different colours overlap, the newest part wins. After exporting, Volura shows which colour is on which filament; the slicer shows its own filament colours, so give its filaments those colours.</span><span lang="nl">één object met één onderdeel per filamentkleur, al gekoppeld aan het juiste filament (PrusaSlicer, OrcaSlicer, Bambu Studio). Geverfde vlakken worden de eigen kleurbeschildering van de slicer. Waar onderdelen met verschillende kleuren overlappen, wint het nieuwste onderdeel. Na het exporteren toont Volura welke kleur op welk filament staat; de slicer toont zijn eigen filamentkleuren, dus geef zijn filamenten die kleuren.</span></td></tr>
+      <tr><td><b><span lang="en">STL per colour</span><span lang="nl">STL per kleur</span></b></td><td><span lang="en">a separate STL file for each colour</span><span lang="nl">een apart STL-bestand per kleur</span></td></tr>
+      <tr><td><b>.volura</b></td><td><span lang="en">Volura's own file with groups, colours and guides</span><span lang="nl">het eigen bestand van Volura, met groepen, kleuren en hulplijnen</span></td></tr>
+    </table></div>
+    <p lang="en">Before exporting, Volura checks that every part is a closed solid and tells you which parts are not. Volura saves a backup of your work automatically and offers to restore it after a crash.</p>
+    <p lang="nl">Voor het exporteren controleert Volura of elk onderdeel een gesloten volume is en zegt welke onderdelen dat niet zijn. Volura bewaart automatisch een reservekopie van je werk en biedt na een crash aan die terug te zetten.</p>
+
+    <!-- ===================================================== laser -->
+    <h2 id="laser"><span lang="en">Laser and CNC</span><span lang="nl">Laser en frees</span></h2>
+    <p lang="en">Next to the 3D model every file has a 2D worksheet for laser cutters and CNC routers. Switch with <b>View &gt; 2D Worksheet</b>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>2</kbd> or the <b>3D | 2D</b> button at the bottom right.</p>
+    <p lang="nl">Naast het 3D-model heeft elk bestand een 2D-werkblad voor lasersnijders en freesmachines. Schakel met <b>Beeld &gt; 2D-werkblad</b>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>2</kbd> of de knop <b>3D | 2D</b> rechtsonder.</p>
+    <ul lang="en">
+      <li><b>SVG and DXF import</b>: place a vector drawing on a face or the ground and push/pull it, or extrude it straight into a part.</li>
+      <li><b>2D export</b>: selected faces at true size, the top view or a section at any height, as SVG or DXF.</li>
+      <li><b>2D workspace</b>: switch between 3D and 2D with one button. Draw with lines, rectangles, circles, arcs, polygons and text; offset, union, subtract and align.</li>
+      <li><b>Operation layers</b> for cutting, engraving, raster fill, profiling inside or outside, pocketing and drilling, in the colours that laser software recognises.</li>
+      <li><b>Kerf and tool compensation</b>, with dogbones or T-bones in inside corners for CNC.</li>
+      <li><b>Sheet size and nesting</b>: place parts on the sheet with as little waste as possible, over several sheets if needed.</li>
+      <li><b>Finger-joint boxes</b>: enter the size and material thickness, get the panels on the sheet and a 3D preview of the assembled box.</li>
+    </ul>
+    <h3><span lang="en">Model and sheet together</span><span lang="nl">Model en werkblad samen</span></h3>
+    <ul lang="en">
+      <li><b>From 3D to the sheet</b>: select faces or plates (groups) in the model, right-click and choose <b>Laser / Mill</b>, then the layer: Cut, Engrave, Mill outside and so on. Faces arrive at true size, plates as their top view, next to what is already on the sheet. If the sheet has no thickness yet, it takes over the thickness of the plates. Also in <b>Edit &gt; To Laser or Mill…</b>.</li>
+      <li><b>From the sheet to 3D</b>: set the thickness in <b>View &gt; Sheet…</b> (for example 3 mm) and choose <b>Parts to 3D Model</b> in the sheet toolbar, the right-click menu or the View menu. Every part with a closed outline on a cut, mill or drill layer becomes a plate of that thickness at the same position; holes go through, pockets are cut to their depth from the top, engravings stay 2D. Doing it again replaces the earlier parts; with a selection on the sheet only those parts are added.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Van 3D naar het werkblad</b>: selecteer vlakken of platen (groepen) in het model, klik met rechts en kies <b>Laseren / frezen</b> en dan de laag: snijden, graveren, frezen enzovoort. Vlakken komen op ware grootte, platen als bovenaanzicht, naast wat er al op het werkblad staat. Heeft het werkblad nog geen dikte, dan neemt het de dikte van de platen over. Ook via <b>Bewerken &gt; Naar laser of frees…</b>.</li>
+      <li><b>Van het werkblad naar 3D</b>: stel de dikte in bij <b>Beeld &gt; Plaat…</b> (bijvoorbeeld 3 mm) en kies <b>Onderdelen naar 3D-model</b> in de werkbalk van het werkblad, het rechtsklikmenu of het menu Beeld. Elk onderdeel met een gesloten rand op een snij-, frees- of boorlaag wordt een plaat met die dikte op dezelfde plek; gaten gaan erdoor, uitkameringen gaan van boven tot hun diepte, gravures blijven 2D. Nog een keer vervangt de vorige onderdelen; met een selectie op het werkblad komen alleen die onderdelen erbij.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>SVG en DXF importeren</b>: een vectortekening op een vlak of de grond plaatsen en duwen/trekken, of direct extruderen tot een onderdeel.</li>
+      <li><b>2D-export</b>: geselecteerde vlakken op ware grootte, het bovenaanzicht of een doorsnede op elke hoogte, als SVG of DXF.</li>
+      <li><b>2D-werkblad</b>: met één knop schakelen tussen 3D en 2D. Tekenen met lijnen, rechthoeken, cirkels, bogen, veelhoeken en tekst; verschuiven, samenvoegen, aftrekken en uitlijnen.</li>
+      <li><b>Bewerkingslagen</b> voor snijden, graveren, rasteren, buiten of binnen frezen, uitkameren en boren, in de kleuren die lasersoftware herkent.</li>
+      <li><b>Kerf- en freescorrectie</b>, met dogbones of T-bones in binnenhoeken voor frezen.</li>
+      <li><b>Plaatformaat en nesten</b>: onderdelen met zo min mogelijk afval op de plaat zetten, zo nodig over meerdere platen.</li>
+      <li><b>Dozen met vingerlassen</b>: geef de maat en materiaaldikte op en krijg de panelen op de plaat en een 3D-voorbeeld van de gemonteerde doos.</li>
+    </ul>
+
+    <!-- ===================================================== settings -->
+    <h2 id="settings"><span lang="en">Settings</span><span lang="nl">Instellingen</span></h2>
+    <ul lang="en">
+      <li><b>File &gt; Printer Setup…</b>: choose your printer (Bambu, Prusa, Creality, Voron or a custom size) for the print bed, and the <a href="#filament">filament</a>.</li>
+      <li><b>Window &gt; Model Info</b>: units and precision, statistics (groups, loose edges and faces, total volume) and the print bed.</li>
+      <li><b>Window &gt; Preferences</b>: General (circle segments, the update check, the question to simplify a large import and the <a href="#language">language</a>), Display (the <a href="#theme">theme</a>), Drawing (the <a href="#overhangs">overhang limit</a>), <a href="#spacemouse">3D Mouse</a> and Shortcuts (search, add, remove, reset).</li>
+      <li><b>View</b>: Wireframe, Hidden Line, Shaded and Monochrome (Face Style); X-ray (<kbd>Alt</kbd>+<kbd>X</kbd>), back edges (<kbd>K</kbd>), hidden geometry, guides, axes and print bed.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Bestand &gt; Printer instellen</b>: kies je printer (Bambu, Prusa, Creality, Voron of een eigen maat) voor het printbed, en het <a href="#filament">filament</a>.</li>
+      <li><b>Venster &gt; Modelinfo</b>: eenheden en nauwkeurigheid, statistieken (groepen, losse randen en vlakken, totaal volume) en het printbed.</li>
+      <li><b>Venster &gt; Voorkeuren</b>: Algemeen (cirkelsegmenten, de updatecontrole, de vraag om een grote import te versimpelen en de <a href="#language">taal</a>), Weergave (het <a href="#theme">thema</a>), Tekenen (de <a href="#overhangs">overhanggrens</a>), <a href="#spacemouse">3D-muis</a> en Sneltoetsen (zoeken, toevoegen, weghalen, terugzetten).</li>
+      <li><b>Beeld</b>: draadmodel, verborgen lijnen, gearceerd en monochroom; röntgen (<kbd>Alt</kbd>+<kbd>X</kbd>), achterliggende randen (<kbd>K</kbd>), verborgen geometrie, hulplijnen, assen en printbed.</li>
+    </ul>
+    <h3 id="language"><span lang="en">Language</span><span lang="nl">Taal</span></h3>
+    <p lang="en">The interface of Volura is in English or Dutch. Choose under <b>Window &gt; Preferences &gt; General &gt; Language</b>: <i>System</i> (the default) follows the language of your system and uses English if Volura does not have it; <i>English</i> and <i>Nederlands</i> pick a fixed language. The change takes effect after you restart Volura.</p>
+    <p lang="nl">De interface van Volura is in het Engels of het Nederlands. Kies onder <b>Venster &gt; Voorkeuren &gt; Algemeen &gt; Taal</b>: <i>Systeem</i> (standaard) volgt de taal van je systeem en gebruikt Engels als Volura die taal niet heeft; <i>English</i> en <i>Nederlands</i> kiezen een vaste taal. De wijziging werkt na het opnieuw starten van Volura.</p>
+    <h3 id="theme"><span lang="en">Light or dark theme</span><span lang="nl">Licht of donker thema</span></h3>
+    <p lang="en">Under <b>Window &gt; Preferences &gt; Display &gt; Theme</b> you choose <i>System</i> (follows the light or dark setting of your system), <i>Light</i> or <i>Dark</i>. The new theme is applied right away.</p>
+    <p lang="nl">Onder <b>Venster &gt; Voorkeuren &gt; Weergave &gt; Thema</b> kies je <i>Systeem</i> (volgt de lichte of donkere instelling van je systeem), <i>Licht</i> of <i>Donker</i>. Het nieuwe thema gaat meteen in.</p>
+    <div class="note" lang="en">In the dark theme the plate on the 2D worksheet stays light, so the laser layer colours (pure red, blue, black) stay easy to read, and the 3D view gets a muted grey background on which both the black edges and the white faces stand out.</div>
+    <div class="note" lang="nl">In het donkere thema blijft de plaat op het 2D-werkblad licht, zodat de laagkleuren voor de laser (puur rood, blauw, zwart) goed leesbaar blijven, en krijgt het 3D-venster een gedempt grijze achtergrond waarop zowel de zwarte randen als de witte vlakken goed uitkomen.</div>
+
+    <!-- ===================================================== keys -->
+    <h2 id="keys"><span lang="en">Keyboard shortcuts</span><span lang="nl">Sneltoetsen</span></h2>
+    <div class="tbl"><table>
+      <tr><th><span lang="en">Key</span><span lang="nl">Toets</span></th><th><span lang="en">Tool</span><span lang="nl">Gereedschap</span></th><th><span lang="en">Key</span><span lang="nl">Toets</span></th><th><span lang="en">Tool</span><span lang="nl">Gereedschap</span></th></tr>
+      <tr><td><kbd>Space</kbd></td><td><span lang="en">Select</span><span lang="nl">Selecteren</span></td><td><kbd>P</kbd></td><td><span lang="en">Push/pull</span><span lang="nl">Duwen/trekken</span></td></tr>
+      <tr><td><kbd>E</kbd></td><td><span lang="en">Eraser</span><span lang="nl">Gum</span></td><td><kbd>F</kbd></td><td><span lang="en">Offset</span><span lang="nl">Verschuiving</span></td></tr>
+      <tr><td><kbd>B</kbd></td><td><span lang="en">Paint bucket</span><span lang="nl">Verfemmer</span></td><td><kbd>M</kbd></td><td><span lang="en">Move (<kbd>Ctrl</kbd> = copy)</span><span lang="nl">Verplaatsen (<kbd>Ctrl</kbd> = kopie)</span></td></tr>
+      <tr><td><kbd>L</kbd></td><td><span lang="en">Line</span><span lang="nl">Lijn</span></td><td><kbd>Q</kbd></td><td><span lang="en">Rotate</span><span lang="nl">Roteren</span></td></tr>
+      <tr><td><kbd>R</kbd></td><td><span lang="en">Rectangle</span><span lang="nl">Rechthoek</span></td><td><kbd>S</kbd></td><td><span lang="en">Scale</span><span lang="nl">Schalen</span></td></tr>
+      <tr><td><kbd>C</kbd></td><td><span lang="en">Circle</span><span lang="nl">Cirkel</span></td><td><kbd>T</kbd></td><td><span lang="en">Tape measure</span><span lang="nl">Meetlint</span></td></tr>
+      <tr><td><kbd>A</kbd></td><td><span lang="en">2-point arc</span><span lang="nl">Boog door 2 punten</span></td><td><kbd>O</kbd> <kbd>H</kbd> <kbd>Z</kbd></td><td><span lang="en">Orbit, pan, zoom</span><span lang="nl">Draaien, pannen, zoomen</span></td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>T</kbd></td><td><span lang="en">3D text</span><span lang="nl">3D-tekst</span></td><td><kbd>Shift</kbd>+<kbd>Z</kbd></td><td><span lang="en">Zoom extents</span><span lang="nl">Zoomen tot alles</span></td></tr>
+      <tr><td><kbd>G</kbd></td><td><span lang="en">Make group</span><span lang="nl">Groep maken</span></td><td><kbd>Alt</kbd>+<kbd>X</kbd></td><td><span lang="en">X-ray</span><span lang="nl">Röntgen</span></td></tr>
+      <tr><td><kbd>K</kbd></td><td><span lang="en">Back edges</span><span lang="nl">Achterliggende randen</span></td><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td><span lang="en">Undo / redo</span><span lang="nl">Ongedaan maken / opnieuw</span></td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td><span lang="en">Print (multicolour 3MF)</span><span lang="nl">Afdrukken (meerkleuren-3MF)</span></td><td><kbd>F1</kbd></td><td>Help</td></tr>
+      <tr><td><kbd>F5</kbd></td><td><span lang="en">Print check</span><span lang="nl">Printcontrole</span></td><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td><span lang="en">Drop to bed</span><span lang="nl">Op bed plaatsen</span></td></tr>
+    </table></div>
+    <p lang="en">You can change every shortcut under <b>Window &gt; Preferences &gt; Shortcuts</b>.</p>
+    <p lang="nl">Elke sneltoets kun je aanpassen onder <b>Venster &gt; Voorkeuren &gt; Sneltoetsen</b>.</p>
+  

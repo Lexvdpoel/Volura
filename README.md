@@ -252,6 +252,8 @@ volura/
   updater.py    checking for a newer version and installing it
 tests/          tests without a GUI (pytest); test_brep.py compares with results from SketchUp 2017
                 test_portability.py keeps Windows assumptions out of volura/
+docs/website/   the feature cards and the manual of volura.dev, in English and Dutch; the site
+                loads them from the latest release, so they go online with each version
 packaging/      build.py (PyInstaller), make_icons.py (icon), windows/ (Inno Setup),
                 linux/ (volura.desktop, install.sh)
 .github/        build.yml: tests and builds for Windows and Linux
