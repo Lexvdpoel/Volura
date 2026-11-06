@@ -12,7 +12,8 @@ from .geom import (Plane, default_u, extrude_cs, manifold_from_mesh, mesh_arrays
                    rotation_matrix)
 from .i18n import tr, tr_noop
 from .model import ROOT, Document, Group
-from . import workers
+from .vector2d import VPath, polygon_area
+from . import nesting, workers
 
 DEFAULT_COLOR = "#f2f2f2"
 
@@ -444,6 +445,113 @@ def center_on_bed(doc: Document, items, bed):
         c = bb.mean(axis=0)
         transform_selection(doc, np.eye(3), np.array([bed[0] / 2 - c[0], bed[1] / 2 - c[1], -bb[0][2]]),
                             items=items)
+
+
+# What Arrange on Bed leaves free: the same 5 mm a slicer usually keeps from the edge
+# and between the parts.
+BED_MARGIN = 5.0
+BED_GAP = 5.0
+FLAT_AREA = 1e-6          # mm²: below this a footprint has no area and is treated as flat
+
+
+def _turn_2d(o, a, b) -> float:
+    """Which way the way goes on from o via a to b: left (positive), straight, right (negative)."""
+    return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+
+def hull_2d(pts) -> np.ndarray:
+    """The convex hull of 2D points as a counter-clockwise loop (Andrew's monotone chain)."""
+    P = np.unique(np.asarray(pts, dtype=float).reshape(-1, 2), axis=0)
+    if len(P) < 3:
+        return P
+
+    def chain(points):
+        """Half of the hull: every point that would make a right turn is dropped again."""
+        out = []
+        for p in points:
+            while len(out) >= 2 and _turn_2d(out[-2], out[-1], p) <= 0:
+                out.pop()
+            out.append(p)
+        return out
+
+    return np.array(chain(P) + chain(P[::-1])[:-1], dtype=float)
+
+
+def footprint_part(ents) -> nesting.Part | None:
+    """The footprint of a piece of geometry as a nesting part: the hull of its vertices on XY."""
+    if not ents.V:
+        return None
+    P = np.array(list(ents.V.values()), dtype=float)[:, :2]
+    hull = hull_2d(P)
+    if len(hull) < 3 or abs(polygon_area(hull)) < FLAT_AREA:
+        # a group that stands flat on the bed has no area: nest on its bounding box instead
+        lo, hi = P.min(axis=0), P.max(axis=0)
+        hull = np.array([[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]], dtype=float)
+    if polygon_area(hull) < 0:
+        hull = hull[::-1].copy()
+    lo, hi = hull.min(axis=0), hull.max(axis=0)
+    return nesting.Part(paths=[VPath(np.ascontiguousarray(np.vstack([hull, hull[:1]])), True)],
+                        outline=hull, bbox=(float(lo[0]), float(lo[1]), float(hi[0]), float(hi[1])),
+                        area=abs(polygon_area(hull)))
+
+
+def arrange_placements(doc: Document, items, bed, gap=BED_GAP, margin=BED_MARGIN):
+    """The move per group that lays the parts side by side on the bed: `(gid, M3, t)`.
+
+    Every group is one part: the convex hull of its vertices projected on XY. The parts
+    are placed with the same nesting as the worksheet (largest first, in the lowest and
+    then leftmost free spot) on a bed of `bed[0]` × `bed[1]` mm, with `margin` mm along
+    the edge and `gap` mm between the parts, rotated 0, 90, 180 or 270 degrees about
+    their own footprint. Locked groups and groups without geometry are left out, and the
+    height is not touched: `arrange_on_bed` drops the parts on the bed afterwards.
+
+    Nothing is moved here; a `ValueError` is raised when the parts do not fit on one bed.
+    """
+    parts, owners, seen = [], {}, set()
+    for k, _ctx, i in items:
+        g = doc.group(i) if k == "g" else None
+        if g is None or g.locked or g.id in seen:
+            continue
+        part = footprint_part(g.ents)
+        if part is None:
+            continue
+        seen.add(g.id)
+        parts.append(part)
+        owners[id(part)] = g
+    if not parts:
+        return []
+    try:
+        placements = nesting.nest(parts, float(bed[0]), float(bed[1]), margin, gap,
+                                  rotations=(0, 90, 180, 270), max_sheets=1)
+    except ValueError:
+        raise ValueError(tr("The parts do not fit on one bed of {w:.0f} × {h:.0f} mm.").format(
+            w=float(bed[0]), h=float(bed[1])))
+    moves = []
+    for part, _sheet, angle, dx, dy in placements:
+        M = nesting.place_transform(part, angle, dx, dy)
+        M3 = np.eye(3)
+        M3[:2, :2] = M[:2, :2]           # turn about the vertical axis, keep the height
+        moves.append((owners[id(part)].id, M3, np.array([M[0, 2], M[1, 2], 0.0])))
+    return moves
+
+
+def arrange_on_bed(doc: Document, items, bed, gap=BED_GAP, margin=BED_MARGIN):
+    """Arrange on Bed: lay the groups side by side on the print bed, like a slicer.
+
+    See `arrange_placements` for the search for a place; here every group is turned to
+    its place and dropped on the bed, so all parts stand on the bed without overlapping.
+    The caller takes the checkpoint, so one undo brings the old places back. Returns how
+    many groups did not get a place; when the bed is too small nothing moves and a
+    `ValueError` tells so.
+    """
+    wanted = {i for k, _ctx, i in items if k == "g" and doc.group(i) is not None
+              and not doc.group(i).locked}
+    moves = arrange_placements(doc, items, bed, gap=gap, margin=margin)
+    for gid, M3, t in moves:
+        sel = [("g", gid, gid)]
+        transform_selection(doc, M3, t, items=sel)
+        drop_to_bed(doc, sel)
+    return max(0, len(wanted) - len(moves))
 
 
 def mirror(doc: Document, items, axis):

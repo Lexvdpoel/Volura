@@ -2900,6 +2900,8 @@ class MainWindow(QMainWindow):
         self.a_protractor = self.tool_act(tr("&Protractor"), "protractor")
         self.a_drop = A(tr("Drop to Bed"), self.drop_to_bed, "Ctrl+B", "bed")
         self.a_center = A(tr("Center on Bed"), self.center_on_bed)
+        self.a_arrange = A(tr("Arrange on Bed"), self.arrange_on_bed, None, None, False,
+                           tr("Lay the groups side by side on the print bed, without overlapping"))
 
         self.a_thread = A(tr("Thread..."), lambda checked=False: self.thread_dialog(), None, "thread",
                           False, tr("Add a screw thread or make a bolt or nut (ISO metric)"))
@@ -3111,7 +3113,7 @@ class MainWindow(QMainWindow):
                       self.tool_actions["move"], self.tool_actions["rotate"], self.tool_actions["scale"],
                       None,
                       self.tool_actions["pushpull"], self.a_follow_me, self.tool_actions["offset"], None,
-                      self.a_shell, self.a_simplify, solids, None,
+                      self.a_shell, self.a_simplify, self.a_arrange, solids, None,
                       self.tool_actions["tape"], self.a_protractor, None,
                       self.tool_actions["text"], None,
                       self.print_tools_menu))
@@ -5527,6 +5529,34 @@ class MainWindow(QMainWindow):
             ops.center_on_bed(self.doc, items, self.settings.bed_size)
             self.doc.notify()
 
+    def arrange_on_bed(self):
+        """Tools > Arrange on Bed: lay the groups side by side on the bed, like a slicer."""
+        items = [it for it in self._target_items() if it[0] == "g"]
+        if not items:
+            return
+
+        def work(report):
+            # looking for a place for every part is the slow part: seconds for a pile of
+            # parts, so it happens here and the window keeps responding
+            report(0.1, tr("Arranging parts…"))
+            return ops.arrange_placements(self.doc, items, self.settings.bed_size)
+
+        def done(moves):
+            if not moves:
+                return                        # nothing to move: no undo step either
+            self.doc.checkpoint()             # one undo brings all the old places back
+            for gid, M3, t in moves:
+                sel = [("g", gid, gid)]
+                ops.transform_selection(self.doc, M3, t, items=sel)
+                ops.drop_to_bed(self.doc, sel)
+            self.doc.notify()
+            self.hint.setText(tr("Arranged {n} parts on the bed.").format(n=len(moves)))
+
+        def failed(exc):
+            QMessageBox.warning(self, "Volura", str(exc))    # nothing moved, so no undo either
+
+        background.run(self, work, text=tr("Arranging…"), on_done=done, on_error=failed)
+
     def mirror(self, axis):
         items = list(self.doc.selection)
         if items:
@@ -6362,6 +6392,7 @@ class MainWindow(QMainWindow):
                 mm.addAction(naam, lambda checked=False, ax=i: self.mirror(ax))
             m.addAction(self.a_drop)
             m.addAction(self.a_center)
+            m.addAction(self.a_arrange)
         else:
             m.addAction(self.a_sel_all)
             m.addAction(tr("Unhide All"), self.unhide_all)
