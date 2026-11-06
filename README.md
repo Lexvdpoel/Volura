@@ -4,7 +4,7 @@
 Windows and Linux. It works like SketchUp 2017: you draw a flat face and turn it into a volume with
 **Push/Pull**.
 
-Website and manual: [volura.dev](https://volura.dev) · Downloads: [Releases](https://github.com/Lexvdpoel/Volura/releases/latest)
+Website and manual: [volura.dev](https://volura.dev) · Downloads: [Releases](https://github.com/Lexvdpoel/Volura/releases/latest) · What changed: [Changelog](CHANGELOG.md)
 
 Just like in SketchUp, a model consists of **edges and faces**: edges split each other where they
 cross, a closed shape becomes a face, a line across a face splits it, and the Eraser removes (parts
@@ -155,7 +155,8 @@ platform you are building for. The GitHub Actions workflow in `.github/workflows
 and tests both platforms automatically (Python 3.12, tests with `QT_QPA_PLATFORM=offscreen`) and
 attaches the installer, the zip and the tar.gz to a release for a `v*` tag.
 
-Releasing a new version: raise `__version__` in `volura/__init__.py`, commit, and push a tag with the
+Releasing a new version: raise `__version__` in `volura/__init__.py`, add a `## x.y.z — date` section
+to `CHANGELOG.md` (the release notes are taken from it), commit, and push a tag with the
 same number (`git tag v0.2.0 && git push origin v0.2.0`). The update check in Volura looks at the
 newest release.
 `python packaging/make_icons.py` regenerates the icon: `assets/volura.png` and `assets/volura.ico`

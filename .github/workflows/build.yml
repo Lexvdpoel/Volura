@@ -61,10 +61,21 @@ jobs:
             dist/Volura-*.exe
           if-no-files-found: error
 
+      - name: Release notes from the changelog
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          # the section of CHANGELOG.md for this version: from its "## x.y.z" heading to the next
+          awk -v v="${GITHUB_REF_NAME#v}" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > release_notes.md
+          echo "" >> release_notes.md
+          echo "All versions: [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md)" >> release_notes.md
+          cat release_notes.md
+
       - name: Attach to the release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
+          body_path: release_notes.md
           files: |
             dist/Volura-*.zip
             dist/Volura-*.tar.gz
