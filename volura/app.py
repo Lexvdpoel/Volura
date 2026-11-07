@@ -312,6 +312,21 @@ class Settings:
             self.hinge_margin = 3.0
         self.hinge_margin = max(0.0, min(20.0, self.hinge_margin))
         self.hinge_vertical = self._bool("hinge_vertical", True)
+        try:
+            self.fit_test_first = float(self.q.value("fit_test_first", -0.2))
+        except (TypeError, ValueError):
+            self.fit_test_first = -0.2
+        self.fit_test_first = max(-1.0, min(0.0, self.fit_test_first))
+        try:
+            self.fit_test_step = float(self.q.value("fit_test_step", 0.1))
+        except (TypeError, ValueError):
+            self.fit_test_step = 0.1
+        self.fit_test_step = max(0.02, min(0.5, self.fit_test_step))
+        try:
+            self.fit_test_count = int(float(self.q.value("fit_test_count", 5)))
+        except (TypeError, ValueError):
+            self.fit_test_count = 5
+        self.fit_test_count = max(2, min(10, self.fit_test_count))
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
@@ -362,6 +377,9 @@ class Settings:
         self.q.setValue("hinge_pitch", self.hinge_pitch)
         self.q.setValue("hinge_margin", self.hinge_margin)
         self.q.setValue("hinge_vertical", self.hinge_vertical)
+        self.q.setValue("fit_test_first", self.fit_test_first)
+        self.q.setValue("fit_test_step", self.fit_test_step)
+        self.q.setValue("fit_test_count", self.fit_test_count)
         self.q.setValue("recent", self.recent[:8])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
@@ -1968,6 +1986,57 @@ class LivingHingeDialog(QDialog):
                 "vertical": bool(self.vertical.currentData())}
 
 
+class FitTestDialog(QDialog):
+    """The "Fit Test…" dialog: the slots of a press-fit test for the sheet in use.
+
+    A fit test is a comb of slots, one per offset on the thickness of the sheet: the user
+    cuts it from the same plywood, pushes an offcut in every slot and keeps the offset of
+    the slot that holds best. That offset comes back in the kerf and the finger width of a
+    box, so the dialog starts at the last values (Settings) and remembers the new ones.
+    The thickness is not remembered: it is a property of the sheet on the table, and the
+    worksheet already knows that.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Fit Test"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.t = spin(0.5, 20.0, win.doc.sheet.sheet_thickness or boxgen.DEFAULT_THICKNESS, 0.5)
+        self.t.setToolTip(tr("Thickness of the sheet you are cutting"))
+        self.first = spin(-1.0, 0.0, s.fit_test_first, 0.05)
+        self.first.setToolTip(tr("Offset of the first slot: a negative offset makes a slot "
+                                 "tighter than the sheet"))
+        self.step = spin(0.02, 0.5, s.fit_test_step, 0.05)
+        self.step.setToolTip(tr("How much wider every next slot is than the one before it"))
+        self.count = QSpinBox()
+        self.count.setRange(2, 10)
+        self.count.setValue(s.fit_test_count)
+        self.count.setToolTip(tr("Number of slots, narrow on the left and wide on the right"))
+        lay.addRow(tr("Sheet thickness"), self.t)
+        lay.addRow(tr("First offset"), self.first)
+        lay.addRow(tr("Step"), self.step)
+        lay.addRow(tr("Number of slots"), self.count)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"t": round(self.t.value(), 6), "first": round(self.first.value(), 6),
+                "step": round(self.step.value(), 6), "count": int(self.count.value())}
+
+
 class SimplifyDialog(QDialog):
     """Tools > Simplify Model: a quality slider and a live estimate of the result.
 
@@ -3225,6 +3294,11 @@ class MainWindow(QMainWindow):
                          lambda checked=False: self.living_hinge_dialog(), None, "hinge", False,
                          tr("Fill a rectangle on the worksheet with the slits of a living "
                             "hinge, so the panel bends there"))
+        # ---- fit test
+        self.a_fit_test = A(tr("Fit Test…"),
+                            lambda checked=False: self.fit_test_dialog(), None, None, False,
+                            tr("A comb of slots that shows which offset gives a good press "
+                               "fit for the sheet you are cutting"))
 
     def sheet_tool_act(self, label, name, tip=None):
         """Button for a 2D tool; the key works on the worksheet (M, Q, S, Space)."""
@@ -3279,7 +3353,7 @@ class MainWindow(QMainWindow):
         self.fill(comp_edit, (self.a_hide_rest,))
         self.fill(m, (self.a_toolbars, self.a_sheet, None,
                       self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint, self.a_hinge,
-                      self.a_sheet_to_model, None,
+                      self.a_fit_test, self.a_sheet_to_model, None,
                       self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid, None,
                       edge_style, face_style, comp_edit))
 
@@ -3386,7 +3460,7 @@ class MainWindow(QMainWindow):
                       self.a_sheet_distribute, self.a_sheet_duplicate, None,
                       self.a_sheet_grid, self.a_sheet_round, self.a_sheet_to_layer,
                       None, self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint,
-                      self.a_hinge, self.a_sheet_to_model, None, self.a_extents):
+                      self.a_hinge, self.a_fit_test, self.a_sheet_to_model, None, self.a_extents):
                 bar.addSeparator() if a is None else bar.addAction(a)
             self._add_dropdown(bar, self.a_sheet_align,
                                tuple(self.sheet_align_actions.values()))
@@ -3717,6 +3791,54 @@ class MainWindow(QMainWindow):
         self.sheet_view.set_selection(added)
         self.sheet_view._refresh_outside(announce=False)
         self.hint.setText(tr("{n} slits added: the panel bends there.").format(n=len(added)))
+        return added
+
+    # ------------------------------------------------------------ fit test
+    def fit_test_dialog(self):
+        """View > Fit Test…: a comb of slots that shows which offset presses best."""
+        dlg = FitTestDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.fit_test_first = float(options["first"])
+        self.settings.fit_test_step = float(options["step"])
+        self.settings.fit_test_count = int(options["count"])
+        self.settings.save()
+        made = self.make_fit_test_sheet(options)
+        self.setFocus()
+        return made
+
+    def make_fit_test_sheet(self, options):
+        """The comb on the cut layer: one undo step, next to what is already on the sheet.
+
+        The test is a small part that lives beside the real parts, so it is not nested on
+        the sheets like the panels of a box: it takes the free place to the right of the
+        drawing, one gap further on.
+        """
+        self.set_mode("2d")
+        sheet = self.doc.sheet
+        offs = tuple(float(options["first"]) + i * float(options["step"])
+                     for i in range(int(options["count"])))
+        try:
+            drawing = boxgen.fit_test(float(options["t"]), offs,
+                                      layer=sheet.default_layer("cut") or None,
+                                      label_layer=sheet.default_layer("engrave") or None)
+        except Exception as e:                      # the generator must never crash
+            return self._box_failure(e, "the fit test", tr("The fit test failed: {error}"))
+        b = sheet.bounds()
+        if b is not None:
+            dx = float(b[2]) + max(0.0, float(sheet.sheet_gap or 0.0))
+            drawing = drawing.transformed(np.array([[1.0, 0.0, dx], [0.0, 1.0, float(b[1])],
+                                                    [0.0, 0.0, 1.0]]))
+        self.doc.checkpoint()
+        added = sheet.merge(drawing)
+        self.doc.notify()
+        self.sheet_view.set_selection(added)
+        self.sheet_view.zoom_extents()
+        self.sheet_view._refresh_outside(announce=False)
+        self.hint.setText(tr("Cut it and use the slot that holds the sheet best: its offset "
+                             "goes into the kerf or the finger width."))
         return added
 
     def ask_sheet_text(self):

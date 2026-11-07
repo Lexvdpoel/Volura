@@ -38,6 +38,10 @@ A **living hinge** (`living_hinge`) is the other classic cut in plywood: a field
 straight slits next to each other, close enough together that the panel bends there
 instead of breaking. It is the same kind of work as a finger joint — rows of cuts that
 have to stay in step with each other — so it lives in this file too.
+
+A **fit test** (`fit_test`) is the third classic cut: a comb of slots of `t + offset`
+wide, cut from the sheet that is on the table, so the user learns which offset gives a
+good press fit. Again a row of cuts that have to stay in step, so it lives here too.
 """
 from __future__ import annotations
 
@@ -589,3 +593,111 @@ def living_hinge(x0, y0, x1, y1, slit=15.0, gap=3.0, pitch=2.0, margin=3.0,
                                     dtype=float))
             j += 1
     return out
+
+
+# --------------------------------------------------------------------------
+#  fit test
+# --------------------------------------------------------------------------
+
+#: mm of material at both ends of a fit test
+FIT_TEST_END = 6.0
+#: mm of material between two slots of a fit test
+FIT_TEST_TOOTH = 10.0
+#: mm of material under the slots of a fit test, beside the height of the letters
+FIT_TEST_ROOM = 6.0
+
+
+def _offset_text(offset) -> str:
+    """How the offset of a fit test stands under its slot: "-0.1", "0", "+0.1"."""
+    o = float(offset)
+    return "0" if abs(o) < 1e-9 else f"{o:+g}"
+
+
+def _fit_label(text, height, max_width) -> list[np.ndarray]:
+    """The outlines of `text`, centred on the origin and at most `max_width` mm wide.
+
+    Empty when this core runs without a Qt app, without fonts, or when the text yields
+    nothing: a comb without labels is not an error, its slots are in order anyway.
+    """
+    from PySide6.QtGui import QGuiApplication
+    if QGuiApplication.instance() is None:
+        return []                         # letters need a Qt app; this core is not one
+    from . import fonts                   # Qt: only here, this core is Qt-free
+    if not fonts.has_fonts():
+        return []
+    try:
+        loops = fonts.text_loops(text, height=max(0.5, float(height)))
+    except Exception:
+        return []
+    if not loops:
+        return []
+    allp = np.concatenate([np.asarray(L, dtype=float) for L in loops])
+    wide = float(allp[:, 0].max() - allp[:, 0].min())
+    s = min(1.0, float(max_width) / wide) if wide > 1e-9 else 1.0
+    c = 0.5 * (allp.min(axis=0) + allp.max(axis=0))
+    return [np.ascontiguousarray((np.asarray(L, dtype=float) - c) * s) for L in loops]
+
+
+def fit_test(t, offsets=(-0.2, -0.1, 0.0, 0.1, 0.2), slot_depth=None, label_height=4.0,
+             layer=None, label_layer=None) -> Drawing:
+    """A comb of slots that shows which offset presses best on the sheet in use.
+
+    Returns a `Drawing` with one part: a strip whose top edge carries one slot per offset,
+    `t + offset` wide and `slot_depth` deep (by default `2 × t`, never shallower than 5 mm,
+    so an offcut has something to grip). The slots stand in cells of `10 + t` mm, so about
+    10 mm of material always stays between two of them, and 6 mm stays free at both ends
+    and under the slots — under the slots there is `label_height` more, the room the
+    letters need. Under every slot its offset stands engraved, so the user knows later
+    what the number meant.
+
+    The user cuts the comb from the sheet on the table, pushes an offcut of the same sheet
+    into every slot and keeps the offset of the slot that holds it best: that is the kerf
+    to fill or the finger width to use. The offsets run from small on the left to large on
+    the right, so the slots grow from left to right; without fonts the comb simply has no
+    labels and the order still tells the slots apart.
+
+    `layer` and `label_layer` are the cut and the engrave layer to draw on, by default the
+    default layers in the current language, as `panels_to_drawing` uses them. Outline and
+    labels share one source number, so arranging the sheet moves the comb with its
+    engravings as one whole.
+    """
+    t = float(t)
+    if t <= 0.0:
+        raise ValueError(tr("The material thickness must be greater than zero."))
+    offs = [float(o) for o in offsets]
+    if len(offs) < 2:
+        raise ValueError(tr("A fit test needs at least two slots."))
+    if any(t + o <= 0.0 for o in offs):
+        raise ValueError(tr("A slot may not be zero or less wide."))
+    depth = max(2.0 * t, 5.0) if slot_depth is None else float(slot_depth)
+    if depth <= 0.0:
+        raise ValueError(tr("The slot depth must be greater than zero."))
+    lh = max(0.0, float(label_height))
+    pitch = FIT_TEST_TOOTH + t
+    width = 2.0 * FIT_TEST_END + len(offs) * pitch
+    top = depth + FIT_TEST_ROOM + lh          # the top edge of the strip
+    floor = top - depth                       # the bottom of the slots
+    xs = [FIT_TEST_END + (i + 0.5) * pitch for i in range(len(offs))]
+
+    pts = [(0.0, 0.0), (width, 0.0), (width, top)]
+    for cx, o in reversed(list(zip(xs, offs))):
+        half = 0.5 * (t + o)
+        pts += [(cx + half, top), (cx + half, floor), (cx - half, floor), (cx - half, top)]
+    pts.append((0.0, top))
+
+    layer = layer or _LAYER_BY_OP["cut"]
+    if label_layer is None:
+        label_layer = _LAYER_BY_OP["engrave"]
+    dr = Drawing()
+    dr.ensure_layer(layer, "#ff0000", "cut")
+    src = 1
+    dr.add_path(_clean(pts), closed=True, layer=layer, filled=True, src=src)
+    labels = []
+    for cx, o in zip(xs, offs):
+        place = np.array([cx, 0.5 * (FIT_TEST_ROOM + lh)], dtype=float)
+        labels += [loop + place for loop in _fit_label(_offset_text(o), lh, pitch - 2.0)]
+    if labels and label_layer:
+        dr.ensure_layer(label_layer, "#0000ff", "engrave")
+        for loop in labels:
+            dr.add_path(loop, closed=True, layer=label_layer, filled=True, src=src)
+    return dr
