@@ -3,6 +3,16 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.16 — 2026-11-07
+
+### Improved
+- **Print Check** says what to do with a part outside the print volume: it only lies in the
+  wrong place (Arrange on Bed), it fits turned a quarter turn, or it is larger than the
+  print volume (Cut and Join splits it into parts that fit).
+- **Print Check** reports how much of each part hangs over more steeply than the overhang
+  limit and needs support, and suggests Orient for Printing when turning the part brings
+  that down by at least a quarter.
+
 ## 0.2.15 — 2026-11-07
 
 ### Fixed
