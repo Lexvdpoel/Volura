@@ -224,6 +224,11 @@ SVG = {
                 f'stroke-linecap="round"/>'
                 f'<path d="M20 9 L20 6 M17 6 L17 9 M14 6 L14 9" {N} stroke="#d23b3b" '
                 f'stroke-width="1.5" stroke-linecap="round"/>',
+    # living hinge: staggered slits in a plate of plywood
+    "hinge": f'<rect x="3" y="5" width="18" height="14" rx="1" fill="#e8c897" {S()}/>'
+             f'<path d="M7.5 7 L7.5 11.5 M7.5 13.5 L7.5 17 M12 7 L12 9.5 M12 11.5 L12 14.5 '
+             f'M12 16.5 L12 17 M16.5 7 L16.5 11.5 M16.5 13.5 L16.5 17" {N} stroke="#d23b3b" '
+             f'stroke-width="1.5" stroke-linecap="round"/>',
     # worksheet to model: a red cut contour rising up as a thick plate
     "to_model": f'<path d="M3 20 L11 16 L21 19 L13 23 Z" {N} stroke="#d23b3b" stroke-width="1.4" '
                 f'stroke-dasharray="2 1.4" stroke-linejoin="round"/>'

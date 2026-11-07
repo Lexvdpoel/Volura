@@ -116,6 +116,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
   drill, with kerf and tool compensation and dogbones or T-bones
 - **Sheet size and automatic arrange** (nesting) over one or more sheets
 - **Boxes with finger joints**, on the worksheet or as a 3D preview
+- **Living hinges**: fill a selected rectangle with staggered slits, so plywood or MDF
+  bends there when it is cut
 - **Model and worksheet together**: right-click a face or sheet > *Laser / Mill* puts it on a layer of
   the worksheet; *Parts to 3D Model* places everything that is cut as a sheet with the sheet thickness
   in 3D

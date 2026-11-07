@@ -41,7 +41,7 @@ from .tools import TOOL_CLASSES, fmt_deg, format_length, parse_length, set_lengt
 from .tray import TRAY_WIDTH, Tray
 from .vector2d import (CORNER_LABELS, CORNER_STYLES, SHEET_SPACING, Drawing, LASER_OPS,
                        LASER_PARAMS, MILL_OPS, MILL_PARAMS, OP_LABELS, OPS, PARAM_LABELS,
-                       VPath, _transform_meta, layer_param)
+                       VPath, _transform_meta, default_layer_names, layer_param)
 from .viewport import (FACE_STYLES, HIDDENLINE, MONOCHROME, SHADED, WIREFRAME, Viewport)
 
 PRINTERS = [
@@ -291,6 +291,27 @@ class Settings:
         except (TypeError, ValueError):
             self.clearance_test_count = 6
         self.clearance_test_count = max(2, min(10, self.clearance_test_count))
+        try:
+            self.hinge_slit = float(self.q.value("hinge_slit", 15.0))
+        except (TypeError, ValueError):
+            self.hinge_slit = 15.0
+        self.hinge_slit = max(5.0, min(100.0, self.hinge_slit))
+        try:
+            self.hinge_gap = float(self.q.value("hinge_gap", 3.0))
+        except (TypeError, ValueError):
+            self.hinge_gap = 3.0
+        self.hinge_gap = max(1.0, min(20.0, self.hinge_gap))
+        try:
+            self.hinge_pitch = float(self.q.value("hinge_pitch", 2.0))
+        except (TypeError, ValueError):
+            self.hinge_pitch = 2.0
+        self.hinge_pitch = max(0.5, min(10.0, self.hinge_pitch))
+        try:
+            self.hinge_margin = float(self.q.value("hinge_margin", 3.0))
+        except (TypeError, ValueError):
+            self.hinge_margin = 3.0
+        self.hinge_margin = max(0.0, min(20.0, self.hinge_margin))
+        self.hinge_vertical = self._bool("hinge_vertical", True)
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
@@ -336,6 +357,11 @@ class Settings:
         self.q.setValue("clearance_test_first", self.clearance_test_first)
         self.q.setValue("clearance_test_step", self.clearance_test_step)
         self.q.setValue("clearance_test_count", self.clearance_test_count)
+        self.q.setValue("hinge_slit", self.hinge_slit)
+        self.q.setValue("hinge_gap", self.hinge_gap)
+        self.q.setValue("hinge_pitch", self.hinge_pitch)
+        self.q.setValue("hinge_margin", self.hinge_margin)
+        self.q.setValue("hinge_vertical", self.hinge_vertical)
         self.q.setValue("recent", self.recent[:8])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
@@ -1886,6 +1912,62 @@ class BoxJointDialog(QDialog):
                 "labels": self.labels.isChecked(), "mode": self.mode}
 
 
+class LivingHingeDialog(QDialog):
+    """The "Living Hinge…" dialog: the slits of a bendable cut in plywood.
+
+    A living hinge is a field of straight slits in a panel: the laser cuts them full
+    through and the panel bends there. The values are the same for the same plywood, so
+    the dialog starts where the user left them (Settings) and remembers the new ones.
+    The direction says around which axis the panel has to bend: with slits along Y the
+    hinge is a vertical line in the drawing and the panel bends around a vertical axis.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Living Hinge"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.slit = spin(5.0, 100.0, s.hinge_slit, 1.0)
+        self.slit.setToolTip(tr("Length of one slit; the longer the slits, the easier the "
+                                "panel bends"))
+        self.gap = spin(1.0, 20.0, s.hinge_gap, 0.5)
+        self.gap.setToolTip(tr("Width of the material between two slits; too thin and it "
+                               "tears out"))
+        self.pitch = spin(0.5, 10.0, s.hinge_pitch, 0.5)
+        self.pitch.setToolTip(tr("Distance from one column of slits to the next"))
+        self.margin = spin(0.0, 20.0, s.hinge_margin, 0.5)
+        self.margin.setToolTip(tr("Material that stays free of slits along the edge, so the "
+                                  "pattern cannot cut the panel loose"))
+        self.vertical = QComboBox()
+        self.vertical.addItem(tr("Bend around a vertical axis"), True)
+        self.vertical.addItem(tr("Bend around a horizontal axis"), False)
+        self.vertical.setCurrentIndex(0 if s.hinge_vertical else 1)
+        lay.addRow(tr("Slit length"), self.slit)
+        lay.addRow(tr("Bridge"), self.gap)
+        lay.addRow(tr("Column spacing"), self.pitch)
+        lay.addRow(tr("Edge margin"), self.margin)
+        lay.addRow(tr("Direction"), self.vertical)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"slit": round(self.slit.value(), 6), "gap": round(self.gap.value(), 6),
+                "pitch": round(self.pitch.value(), 6), "margin": round(self.margin.value(), 6),
+                "vertical": bool(self.vertical.currentData())}
+
+
 class SimplifyDialog(QDialog):
     """Tools > Simplify Model: a quality slider and a live estimate of the result.
 
@@ -3138,6 +3220,11 @@ class MainWindow(QMainWindow):
                              False,
                              tr("Box with finger joints for the laser cutter, on the worksheet "
                                 "or as a preview in 3D"))
+        # ---- living hinge
+        self.a_hinge = A(tr("&Living Hinge…"),
+                         lambda checked=False: self.living_hinge_dialog(), None, "hinge", False,
+                         tr("Fill a rectangle on the worksheet with the slits of a living "
+                            "hinge, so the panel bends there"))
 
     def sheet_tool_act(self, label, name, tip=None):
         """Button for a 2D tool; the key works on the worksheet (M, Q, S, Space)."""
@@ -3191,7 +3278,7 @@ class MainWindow(QMainWindow):
         comp_edit = QMenu(tr("Co&mponent Edit"), m)
         self.fill(comp_edit, (self.a_hide_rest,))
         self.fill(m, (self.a_toolbars, self.a_sheet, None,
-                      self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint,
+                      self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint, self.a_hinge,
                       self.a_sheet_to_model, None,
                       self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid, None,
                       edge_style, face_style, comp_edit))
@@ -3299,7 +3386,7 @@ class MainWindow(QMainWindow):
                       self.a_sheet_distribute, self.a_sheet_duplicate, None,
                       self.a_sheet_grid, self.a_sheet_round, self.a_sheet_to_layer,
                       None, self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint,
-                      self.a_sheet_to_model, None, self.a_extents):
+                      self.a_hinge, self.a_sheet_to_model, None, self.a_extents):
                 bar.addSeparator() if a is None else bar.addAction(a)
             self._add_dropdown(bar, self.a_sheet_align,
                                tuple(self.sheet_align_actions.values()))
@@ -3548,6 +3635,89 @@ class MainWindow(QMainWindow):
         self.hint.setText(tr("{n} panels of the box placed in the model ({w:g} × {d:g} × {h:g} mm)")
                           .format(n=len(groups), w=W, d=D, h=H))
         return groups
+
+    # ------------------------------------------------------------ living hinge
+    def _hinge_rectangle(self, paths=None, tol=0.01):
+        """(x0, y0, x1, y1) when the selection is one rectangle lying straight, else None.
+
+        A living hinge only fits in a rectangle of the drawing: four points on two
+        vertical and two horizontal lines, within `tol` mm. A rotated rectangle is not
+        one; the slits of a hinge run along the axes of the sheet.
+        """
+        sel = self.sheet_view.selected_paths() if paths is None else list(paths)
+        if len(sel) != 1 or not sel[0].closed or len(sel[0].pts) != 4:
+            return None
+        pts = np.asarray(sel[0].pts, dtype=float)
+        x0, x1 = float(pts[:, 0].min()), float(pts[:, 0].max())
+        y0, y1 = float(pts[:, 1].min()), float(pts[:, 1].max())
+        if x1 - x0 <= tol or y1 - y0 <= tol:
+            return None
+        corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+        for p in pts:
+            if not any(abs(p[0] - cx) <= tol and abs(p[1] - cy) <= tol for cx, cy in corners):
+                return None
+        for cx, cy in corners:
+            if not any(abs(p[0] - cx) <= tol and abs(p[1] - cy) <= tol for p in pts):
+                return None
+        return (x0, y0, x1, y1)
+
+    def living_hinge_dialog(self):
+        """View > Living Hinge…: the slits of a living hinge in the selected rectangle."""
+        sel = self.sheet_view.selected_paths()
+        rect = self._hinge_rectangle(sel)
+        if rect is None:
+            self.hint.setText(tr("Select one rectangle on the worksheet first."))
+            self.setFocus()
+            return None
+        dlg = LivingHingeDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.hinge_slit = float(options["slit"])
+        self.settings.hinge_gap = float(options["gap"])
+        self.settings.hinge_pitch = float(options["pitch"])
+        self.settings.hinge_margin = float(options["margin"])
+        self.settings.hinge_vertical = bool(options["vertical"])
+        self.settings.save()
+        made = self.make_hinge_sheet(rect, options, src=int(sel[0].src))
+        self.setFocus()
+        return made
+
+    def make_hinge_sheet(self, rect, options, src=None):
+        """The slits on the cut layer of the worksheet: one undo step, all of them selected.
+
+        Every slit gets the source number of the rectangle, so clicking the panel,
+        moving it and arranging the sheet take the pattern along with the panel it is
+        cut in.
+        """
+        self.set_mode("2d")
+        sheet = self.doc.sheet
+        try:
+            slits = boxgen.living_hinge(rect[0], rect[1], rect[2], rect[3],
+                                        slit=options["slit"], gap=options["gap"],
+                                        pitch=options["pitch"], margin=options["margin"],
+                                        vertical=options["vertical"])
+        except Exception as e:                      # the generator must never crash
+            return self._box_failure(e, "the living hinge",
+                                     tr("The living hinge failed: {error}"))
+        if not slits:
+            self.hint.setText(tr("There is no room left for slits in this rectangle."))
+            return None
+        layer = sheet.default_layer("cut") or default_layer_names("cut")[0]
+        drawing = Drawing()
+        for pts in slits:
+            drawing.add_path(pts, closed=False, layer=layer, src=1)
+        self.doc.checkpoint()
+        added = sheet.merge(drawing)
+        if src:
+            for p in added:
+                p.src = int(src)
+        self.doc.notify()
+        self.sheet_view.set_selection(added)
+        self.sheet_view._refresh_outside(announce=False)
+        self.hint.setText(tr("{n} slits added: the panel bends there.").format(n=len(added)))
+        return added
 
     def ask_sheet_text(self):
         """Dialog of the 2D text tool: text, font, height and bold."""

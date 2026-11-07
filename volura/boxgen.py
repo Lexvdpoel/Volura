@@ -33,6 +33,11 @@ cell of that joint is not a finger but material of the bottom. That way the bott
 keeps a square of `t` × `t` at every corner that is attached to the plate with two full
 edges. Without that phase the recesses of two perpendicular edges touch in exactly one
 point, the outline of the bottom crosses itself and the corner square hangs on nothing.
+
+A **living hinge** (`living_hinge`) is the other classic cut in plywood: a field of
+straight slits next to each other, close enough together that the panel bends there
+instead of breaking. It is the same kind of work as a finger joint — rows of cuts that
+have to stay in step with each other — so it lives in this file too.
 """
 from __future__ import annotations
 
@@ -525,3 +530,62 @@ def box_size(w, d, h, t, inner=True, lid="none"):
     if inner:
         return (w + 2.0 * t, d + 2.0 * t, h + (2.0 if closed else 1.0) * t)
     return (w, d, h)
+
+
+# --------------------------------------------------------------------------
+#  living hinge
+# --------------------------------------------------------------------------
+
+def living_hinge(x0, y0, x1, y1, slit=15.0, gap=3.0, pitch=2.0, margin=3.0,
+                 vertical=True) -> list[np.ndarray]:
+    """The slits of a living hinge in the rectangle (x0, y0) to (x1, y1), each as (2, 2).
+
+    A **living hinge** is a field of straight slits, cut full through plywood or MDF:
+    the panel bends there, so a laser cutter makes a curved part out of flat stock. The
+    slits stand in columns `pitch` apart; in a column the slits are `slit` long with a
+    bridge of `gap` between them. Every second column is shifted by half the period
+    `slit + gap`, so the bridges of neighbouring columns never lie in a row: that
+    zigzag of material is what holds the panel together while it bends.
+
+    `margin` stays free of slits along all four edges, so the pattern cannot cut the
+    panel loose; the columns start `margin` from the left edge and stop `margin` before
+    the right one. Even columns begin with a full slit at the bottom margin; the shifted
+    columns get a piece of a slit at both margins, so they bend all the way along too — a
+    piece shorter than `gap` is dropped, and so is a slit that would run from the bottom
+    margin to the top one, because that would cut the panel in two.
+
+    With `vertical=True` the slits run along Y and the sheet bends around a vertical
+    axis; `vertical=False` is the same pattern turned 90°.
+    """
+    x0, x1 = sorted((float(x0), float(x1)))
+    y0, y1 = sorted((float(y0), float(y1)))
+    slit, gap, pitch = float(slit), float(gap), float(pitch)
+    margin = max(0.0, float(margin))
+    if slit <= gap:
+        raise ValueError(tr("The slits must be longer than the bridges between them."))
+    if pitch <= 0.0:
+        raise ValueError(tr("The distance between the columns must be greater than zero."))
+    along, across = ((y0, y1), (x0, x1)) if vertical else ((x0, x1), (y0, y1))
+    inner = (along[1] - along[0]) - 2.0 * margin
+    cols = int(math.floor((across[1] - across[0] - 2.0 * margin) / pitch)) + 1
+    if cols < 2 or inner <= 0.0:
+        raise ValueError(tr("That rectangle is too small for a living hinge."))
+    period = slit + gap
+    lo, hi = along[0] + margin, along[1] - margin
+    out = []
+    for k in range(cols):
+        c = across[0] + margin + k * pitch
+        # a shifted column starts one period lower, so it also has a piece of a slit at the
+        # bottom margin, just like at the top: otherwise its bottom stays stiff
+        j = -(k % 2)
+        while True:
+            a = lo + 0.5 * period * (k % 2) + j * period      # every other column, half a step
+            if a >= hi:
+                break
+            b = min(a + slit, hi)
+            a = max(a, lo)
+            if gap <= b - a < inner:
+                out.append(np.array([[c, a], [c, b]] if vertical else [[a, c], [b, c]],
+                                    dtype=float))
+            j += 1
+    return out
