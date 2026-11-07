@@ -3,6 +3,17 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.11 — 2026-11-07
+
+### New
+- **Mouse Ears** (Tools > Print Tools): thin round discs on the bed under the sharp bottom
+  corners of the selected parts, so those corners do not lift (warp) while printing; cut them
+  off after printing.
+- **Screw Hole: nut pocket**: a fourth kind that makes a hexagonal pocket in which a hex nut
+  (ISO 4032) sits, with the straight hole for the screw through the rest.
+- **Screw Hole: teardrop for sideways holes**: a hole that runs sideways gets a 45° roof, so
+  it prints without support.
+
 ## 0.2.10 — 2026-11-07
 
 ### New
