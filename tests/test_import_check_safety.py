@@ -60,6 +60,10 @@ def kinds(msgs):
     return [k for k, _ in msgs]
 
 
+def bed_warnings(msgs):
+    return [m for k, m in msgs if k == "waarschuwing"]
+
+
 @pytest.fixture()
 def win(monkeypatch, tmp_path):
     """A window, so a test can import through the app exactly as the user does."""
@@ -257,3 +261,34 @@ def test_check_follows_a_moved_imported_group(tmp_path):
 
     doc.undo()
     assert kinds(ops.check_parts(ops.parts(doc), bed)) == ["ok"]
+
+
+def test_check_tells_a_misplaced_part_that_arrange_on_bed_fixes_it():
+    doc = Document()
+    ops.group_from_manifold(doc, mf.Manifold.cube((20, 20, 20)).translate((90, 0, 0)), "#f2f2f2", "Cube")
+    msgs = ops.check_parts(ops.parts(doc), (100, 100, 100))
+    assert any("outside the print volume" in m and "Arrange on Bed" in m for m in bed_warnings(msgs))
+
+
+def test_check_tells_a_long_part_to_turn_it_a_quarter_turn():
+    doc = Document()
+    ops.group_from_manifold(doc, mf.Manifold.cube((80, 40, 20)), "#f2f2f2", "Bar")
+    msgs = ops.check_parts(ops.parts(doc), (50, 100, 100))
+    assert any("quarter turn" in m for m in bed_warnings(msgs))
+
+
+def test_check_tells_a_part_that_is_too_big_for_the_bed():
+    doc = Document()
+    ops.group_from_manifold(doc, mf.Manifold.cube((200, 200, 200)), "#f2f2f2", "Big")
+    msgs = ops.check_parts(ops.parts(doc), (100, 100, 100))
+    assert any("200 × 200 × 200 mm" in m and "larger than the print volume" in m
+               and "Cut and Join" in m for m in bed_warnings(msgs))
+
+
+def test_check_gives_no_bed_warning_for_a_part_that_fits_on_the_bed():
+    doc = Document()
+    ops.group_from_manifold(doc, mf.Manifold.cube((20, 20, 20)), "#f2f2f2", "Cube")
+    text = " ".join(bed_warnings(ops.check_parts(ops.parts(doc), (100, 100, 100))))
+    assert "outside the print volume" not in text
+    assert "quarter turn" not in text
+    assert "larger than the print volume" not in text

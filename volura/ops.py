@@ -1279,8 +1279,21 @@ def check_parts(part_list, bed=None):
                          .format(name=p.name, d=-lo[2])))
         if bed and (lo[0] < -1e-4 or lo[1] < -1e-4 or hi[0] > bed[0] + 1e-4 or hi[1] > bed[1] + 1e-4
                     or hi[2] > bed[2] + 1e-4):
-            msgs.append(("waarschuwing",
-                         tr("{name}: lies (partly) outside the print volume.").format(name=p.name)))
+            dx, dy, dz = hi - lo
+            bx, by, bz = bed
+            if dx <= bx + 1e-4 and dy <= by + 1e-4 and dz <= bz + 1e-4:
+                msgs.append(("waarschuwing",
+                             tr("{name}: lies (partly) outside the print volume; Arrange on Bed puts "
+                                "it on the bed.").format(name=p.name)))
+            elif dy <= bx + 1e-4 and dx <= by + 1e-4 and dz <= bz + 1e-4:
+                msgs.append(("waarschuwing",
+                             tr("{name}: only fits on the bed turned a quarter turn.").format(name=p.name)))
+            else:
+                msgs.append(("waarschuwing",
+                             tr("{name}: is {dx:.0f} × {dy:.0f} × {dz:.0f} mm, larger than the print "
+                                "volume of {bx:.0f} × {by:.0f} × {bz:.0f} mm; Cut and Join splits it "
+                                "into parts that fit.").format(name=p.name, dx=dx, dy=dy, dz=dz,
+                                                               bx=bx, by=by, bz=bz)))
     valid = [p for p in part_list if p.manifold is not None]
     if valid:
         zmin = min(p.manifold.bounding_box()[2] for p in valid)
