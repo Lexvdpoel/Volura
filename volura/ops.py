@@ -766,6 +766,7 @@ ORIENT_SAME_DEG = 1.0         # a direction this close to straight down needs no
 ORIENT_TIE = 0.01             # scores within 1% of the best score are a tie
 ORIENT_EPS = 1e-9             # mm²: what no program can measure, so what counts as nothing
 ORIENT_CHECK_MAX_TRIS = 20000  # a part with more triangles is not searched through by a check
+ORIENT_CHECK_MAX_HULL = 1000   # nor one whose convex hull has more: the search grows with it
 DOWN_DIR = np.array([0.0, 0.0, -1.0])
 
 
@@ -803,19 +804,21 @@ def hull_directions(man, merge_deg=ORIENT_MERGE_DEG, max_candidates=40):
     n = np.cross(V[T[:, 1]] - V[T[:, 0]], V[T[:, 2]] - V[T[:, 0]])
     length = np.linalg.norm(n, axis=1)
     limit = math.cos(math.radians(merge_deg))
-    dirs, areas = [], []
+    # the hull of a smooth part has thousands of directions: compare a face with all of
+    # them at once, a loop in Python over them took minutes for a sphere of 20000 triangles
+    dirs = np.empty((len(T), 3))
+    areas = []
     for i in np.argsort(-length):
         if length[i] <= ORIENT_EPS:
             continue
         u = n[i] / length[i]
-        for j, w in enumerate(dirs):
-            if float(np.dot(u, w)) >= limit:
-                areas[j] += 0.5 * float(length[i])
-                break
+        hit = np.flatnonzero(dirs[:len(areas)] @ u >= limit)
+        if len(hit):
+            areas[hit[0]] += 0.5 * float(length[i])
         else:
-            dirs.append(u)
+            dirs[len(areas)] = u
             areas.append(0.5 * float(length[i]))
-    out = [(dirs[i], areas[i]) for i in np.argsort(-np.asarray(areas))[:int(max_candidates)]]
+    out = [(dirs[i].copy(), areas[i]) for i in np.argsort(-np.asarray(areas))[:int(max_candidates)]]
     if not any(float(np.dot(d, DOWN_DIR)) >= limit for d, _area in out):
         out.append((DOWN_DIR.copy(), 0.0))
     return out
@@ -1304,7 +1307,7 @@ def check_parts(part_list, bed=None, overhang_limit=None):
                     .format(name=p.name, area=area / 100.0, limit=overhang_limit)
                 # the best way is not free to look for, so only for a part that fits the search
                 # and only when turning it clearly helps: a quarter of the support less
-                if len(T) <= ORIENT_CHECK_MAX_TRIS:
+                if len(T) <= ORIENT_CHECK_MAX_TRIS and m.hull().num_tri() <= ORIENT_CHECK_MAX_HULL:
                     best = best_down_direction(V, T, overhang_limit)[1]
                     if best <= 0.75 * area:
                         text += " " + tr("Orient for Printing can bring that down to "

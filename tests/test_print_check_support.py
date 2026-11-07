@@ -133,3 +133,17 @@ def test_without_a_limit_nothing_is_said_about_support():
     parts = parts_of(t_shape(), "T")
     assert support_msgs(check(t_shape(), "T", limit=None)) == []
     assert support_msgs(ops.check_parts(parts)) == []
+
+
+def test_a_smooth_part_is_checked_without_freezing():
+    """A sphere has a hull of thousands of faces: the search for the best way down took
+    minutes on 20000 triangles, on the UI thread. Now the check leaves that search out for
+    such a hull, and the directions of the hull are found in well under a second."""
+    import time
+    t0 = time.perf_counter()
+    msgs = support_msgs(check(mf.Manifold.sphere(20.0, 200).translate((0.0, 0.0, 20.0)), "Ball"))
+    assert time.perf_counter() - t0 < 10.0
+    assert len(msgs) == 1 and "Orient for Printing" not in msgs[0]
+    t0 = time.perf_counter()
+    assert len(ops.hull_directions(mf.Manifold.sphere(20.0, 100))) == 41
+    assert time.perf_counter() - t0 < 5.0
