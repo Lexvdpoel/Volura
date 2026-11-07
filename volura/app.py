@@ -5834,8 +5834,7 @@ class MainWindow(QMainWindow):
     def elephant_foot_chamfer(self):
         """Tools > Print Tools > Elephant Foot Chamfer: a small chamfer along the bottom
         edges of the selected groups, so the squashed first layer does not stick out."""
-        gids = list(dict.fromkeys(i for k, _ctx, i in self._target_items()
-                                  if k == "g" and self.doc.group(i) is not None))
+        gids = self._target_groups()
         if not gids:
             return
         size, ok = QInputDialog.getDouble(self, tr("Elephant Foot Chamfer"),
@@ -5888,8 +5887,7 @@ class MainWindow(QMainWindow):
     def mouse_ears_dialog(self):
         """Tools > Print Tools > Mouse Ears…: thin discs on the bed under the sharp bottom
         corners of the selected groups, so those corners do not lift (warp) while printing."""
-        gids = list(dict.fromkeys(i for k, _ctx, i in self._target_items()
-                                  if k == "g" and self.doc.group(i) is not None))
+        gids = self._target_groups()
         if not gids:
             return
         dlg = QDialog(self)
@@ -5956,8 +5954,7 @@ class MainWindow(QMainWindow):
     def orient_for_printing(self):
         """Tools > Print Tools > Orient for Printing: turn the selected groups so that each
         stands on the face that needs the least support, like the auto-orient of a slicer."""
-        gids = list(dict.fromkeys(i for k, _ctx, i in self._target_items()
-                                  if k == "g" and self.doc.group(i) is not None))
+        gids = self._target_groups()
         if not gids:
             return
         limit = float(self.settings.overhang_limit)
@@ -5982,10 +5979,15 @@ class MainWindow(QMainWindow):
                 self.hint.setText(tr("None of these parts can be turned: locked or not a "
                                      "closed volume."))
                 return
-            self.doc.checkpoint()         # one undo brings all the old places back
+            # a part that already stands the right way round on the bed does not move, so
+            # when no part moves there is nothing to undo and no checkpoint is taken
+            moving = {gid for gid, d in out
+                      if not ops.is_down(d) or abs(float(self.doc.group(gid).bbox()[0][2])) > 1e-6}
+            if moving:
+                self.doc.checkpoint()     # one undo brings all the old places back
             turned = unchanged = 0
             for gid, d in out:
-                if ops.orient_group(self.doc, gid, d):
+                if gid in moving and ops.orient_group(self.doc, gid, d):
                     turned += 1
                 else:
                     unchanged += 1
@@ -6116,6 +6118,20 @@ class MainWindow(QMainWindow):
     def _target_items(self):
         return list(self.doc.selection) or ops.whole_items(self.doc)
 
+    def _target_groups(self):
+        """The groups the target items refer to: the selected groups, plus the group that a
+        selected face or edge belongs to, so that clicking a face of a part means the part.
+        Loose geometry has no group and is left out; with nothing selected this is every
+        visible group (see `whole_items`), so hidden groups are never touched."""
+        gids, seen = [], set()
+        for k, ctx, i in self._target_items():
+            gid = ctx if k in ("f", "e") else (i if k == "g" else None)
+            if gid is None or gid == ROOT or gid in seen or self.doc.group(gid) is None:
+                continue
+            seen.add(gid)
+            gids.append(gid)
+        return gids
+
     def drop_to_bed(self):
         items = self._target_items()
         if items:
@@ -6132,7 +6148,7 @@ class MainWindow(QMainWindow):
 
     def arrange_on_bed(self):
         """Tools > Arrange on Bed: lay the groups side by side on the bed, like a slicer."""
-        items = [it for it in self._target_items() if it[0] == "g"]
+        items = [("g", gid, gid) for gid in self._target_groups()]
         if not items:
             return
 
@@ -6143,15 +6159,20 @@ class MainWindow(QMainWindow):
             return ops.arrange_placements(self.doc, items, self.settings.bed_size)
 
         def done(moves):
-            if not moves:
+            # a part that already stands exactly where the nest puts it (no turn, no move,
+            # already on the bed) does not change: it is no reason for an undo step
+            real = [(gid, M3, t) for gid, M3, t in moves
+                    if not np.allclose(M3, np.eye(3)) or not np.allclose(t, 0.0)
+                    or abs(float(self.doc.group(gid).bbox()[0][2])) > 1e-6]
+            if not real:
                 return                        # nothing to move: no undo step either
             self.doc.checkpoint()             # one undo brings all the old places back
-            for gid, M3, t in moves:
+            for gid, M3, t in real:
                 sel = [("g", gid, gid)]
                 ops.transform_selection(self.doc, M3, t, items=sel)
                 ops.drop_to_bed(self.doc, sel)
             self.doc.notify()
-            self.hint.setText(tr("Arranged {n} parts on the bed.").format(n=len(moves)))
+            self.hint.setText(tr("Arranged {n} parts on the bed.").format(n=len(real)))
 
         def failed(exc):
             QMessageBox.warning(self, "Volura", str(exc))    # nothing moved, so no undo either
@@ -7101,6 +7122,13 @@ class MainWindow(QMainWindow):
         g, fid = face
         if g.locked:
             self.warn_locked()
+            return
+        # a face that already points straight down on a part that already stands on the bed
+        # does not move: no reason to turn it, and no reason to take an undo step either
+        bb = g.bbox()
+        if (fid in g.ents.F and np.allclose(np.asarray(g.ents.F[fid].normal, dtype=float),
+                                            ops.DOWN_DIR, atol=1e-9)
+                and bb is not None and abs(float(bb[0][2])) <= 1e-6):
             return
         self.doc.checkpoint()
         ops.lay_flat(self.doc, g.id, fid)
