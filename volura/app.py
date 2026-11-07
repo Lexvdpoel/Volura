@@ -3719,9 +3719,14 @@ class MainWindow(QMainWindow):
         one; the slits of a hinge run along the axes of the sheet.
         """
         sel = self.sheet_view.selected_paths() if paths is None else list(paths)
-        if len(sel) != 1 or not sel[0].closed or len(sel[0].pts) != 4:
+        if len(sel) != 1 or not sel[0].closed:
             return None
         pts = np.asarray(sel[0].pts, dtype=float)
+        # Imported rectangles often end on their first point again; that is still four.
+        if len(pts) == 5 and np.all(np.abs(pts[0] - pts[-1]) <= tol):
+            pts = pts[:-1]
+        if len(pts) != 4:
+            return None
         x0, x1 = float(pts[:, 0].min()), float(pts[:, 0].max())
         y0, y1 = float(pts[:, 1].min()), float(pts[:, 1].max())
         if x1 - x0 <= tol or y1 - y0 <= tol:
