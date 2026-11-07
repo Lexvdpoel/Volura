@@ -3,6 +3,16 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.12 — 2026-11-07
+
+### New
+- **Orient for Printing** (Tools > Print Tools): turns every selected part so that it stands
+  on the face that needs the least support, like the auto-orient of a slicer; parts that
+  already stand right stay where they are.
+- **Clearance Test** (Tools > Print Tools): a small test print with a row of holes that grow
+  by a step, each labelled with its clearance, and a loose pin. Print it, try the pin in
+  every hole and use the clearance of the best fit in Screw Hole, threads and Cut and Join.
+
 ## 0.2.11 — 2026-11-07
 
 ### New
