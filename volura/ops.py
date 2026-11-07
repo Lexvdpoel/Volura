@@ -765,6 +765,7 @@ ORIENT_MERGE_DEG = 1.0        # hull faces whose normals lie within this are one
 ORIENT_SAME_DEG = 1.0         # a direction this close to straight down needs no turning
 ORIENT_TIE = 0.01             # scores within 1% of the best score are a tie
 ORIENT_EPS = 1e-9             # mm²: what no program can measure, so what counts as nothing
+ORIENT_CHECK_MAX_TRIS = 20000  # a part with more triangles is not searched through by a check
 DOWN_DIR = np.array([0.0, 0.0, -1.0])
 
 
@@ -1263,7 +1264,8 @@ def print_parts(part_list):
     return out
 
 
-def check_parts(part_list, bed=None):
+def check_parts(part_list, bed=None, overhang_limit=None):
+    """The messages of a print check; `overhang_limit` (degrees) adds what needs support."""
     msgs = []
     for p in part_list:
         if p.problem:
@@ -1294,6 +1296,20 @@ def check_parts(part_list, bed=None):
                                 "volume of {bx:.0f} × {by:.0f} × {bz:.0f} mm; Cut and Join splits it "
                                 "into parts that fit.").format(name=p.name, dx=dx, dy=dy, dz=dz,
                                                                bx=bx, by=by, bz=bz)))
+        if overhang_limit is not None:
+            V, T = mesh_arrays(m)
+            area = overhang_area(V, T, DOWN_DIR, overhang_limit)
+            if area >= 1.0:       # mm²: less than this is nothing a printer has to support
+                text = tr("{name}: {area:.1f} cm² hangs over more than {limit}° and needs support.") \
+                    .format(name=p.name, area=area / 100.0, limit=overhang_limit)
+                # the best way is not free to look for, so only for a part that fits the search
+                # and only when turning it clearly helps: a quarter of the support less
+                if len(T) <= ORIENT_CHECK_MAX_TRIS:
+                    best = best_down_direction(V, T, overhang_limit)[1]
+                    if best <= 0.75 * area:
+                        text += " " + tr("Orient for Printing can bring that down to "
+                                         "{best:.1f} cm².").format(best=best / 100.0)
+                msgs.append(("info", text))
     valid = [p for p in part_list if p.manifold is not None]
     if valid:
         zmin = min(p.manifold.bounding_box()[2] for p in valid)

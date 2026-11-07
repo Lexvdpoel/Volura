@@ -46,6 +46,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
   older 3DxSoftware (siappdll), without a driver through Windows Raw Input, and on Linux through
   spacenavd
 - Print bed of your printer (Bambu, Prusa, Creality, Voron or a custom size) and a print check
+  that also says how much of a part hangs over more steeply than the overhang limit and needs
+  support, and how much less Orient for Printing can make that
 - **Arrange on Bed** (Tools or right-click): lay the selected groups, or all groups when nothing is
   selected, side by side on the print bed without overlapping, like a slicer does; parts are turned
   0, 90, 180 or 270 degrees and stand on the bed, 5 mm from the edge and from each other

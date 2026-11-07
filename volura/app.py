@@ -6830,7 +6830,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ printing
     def print_check(self):
         part_list = ops.parts(self.doc)
-        msgs = ops.check_parts(part_list, self.settings.bed_size)
+        msgs = ops.check_parts(part_list, self.settings.bed_size, self.settings.overhang_limit)
         if not part_list:
             msgs = [("info", tr("The model has no volumes yet."))]
         loose = len(self.doc.root.loose_edges())
