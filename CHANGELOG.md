@@ -3,6 +3,17 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.15 — 2026-11-07
+
+### Fixed
+- Elephant Foot Chamfer, Mouse Ears, Orient for Printing and Arrange on Bed now act on the
+  part when a face or edge of it is selected, instead of doing nothing; with nothing
+  selected they leave hidden parts alone.
+- Orient for Printing, Arrange on Bed and Lay Flat on This Face no longer leave an empty
+  undo step when nothing moves.
+- Living Hinge recognises a rectangle whose outline ends on its first point again, as
+  imported rectangles often do.
+
 ## 0.2.14 — 2026-11-07
 
 ### New
