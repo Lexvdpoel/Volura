@@ -3,6 +3,12 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.17 — 2026-11-07
+
+### Fixed
+- Print Check could freeze Volura for minutes on a smooth part (a sphere or a scanned
+  figure), and Orient for Printing took just as long on it. Both are fast again.
+
 ## 0.2.16 — 2026-11-07
 
 ### Improved
