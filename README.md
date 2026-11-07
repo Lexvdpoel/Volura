@@ -69,6 +69,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   a classic trick for ABS and ASA and for large flat parts; a corner is sharp when its angle is at
   most 100°, so a box gets an ear on each corner and a cylinder gets none, and the discs are cut off
   after printing
+- **Orient for Printing** (Tools > Print Tools): turn the selected groups, or all visible ones, so
+  that each stands on the face that needs the least support, like the auto-orient of a slicer; the
+  flat sides of the convex hull are tried at the overhang limit, the largest face wins a tie, a part
+  that already stands right is only dropped on the bed, and locked or open groups are left alone
 - **Overhang view** (View > Face Style > Overhangs): marks every face that hangs over more steeply
   than the limit (45° from the vertical by default, under *Window > Preferences > Drawing*) in a
   warning colour, so you see at a glance what needs support; faces that lie on the print bed are

@@ -754,6 +754,168 @@ def mouse_ears(doc: Document, items, diameter, height, segments=48):
     return changed, skipped
 
 
+# Orient for Printing (Tools > Print Tools) turns a part so that it stands on the face that
+# needs the least support, like the auto-orient of a slicer. The faces a part can stand on
+# are the faces of its convex hull: only those are flat and large enough to print on, and on
+# a scanned model there are far fewer of them than of triangles. The hull faces whose normals
+# lie within a degree of each other count as one (the side of a cylinder of 64 segments is 64
+# of them), and of the rest only the largest `max_candidates` are tried: a part never stands
+# on a face of a square micrometre, and a hull of a big scan has thousands.
+ORIENT_MERGE_DEG = 1.0        # hull faces whose normals lie within this are one candidate
+ORIENT_SAME_DEG = 1.0         # a direction this close to straight down needs no turning
+ORIENT_TIE = 0.01             # scores within 1% of the best score are a tie
+ORIENT_EPS = 1e-9             # mm²: what no program can measure, so what counts as nothing
+DOWN_DIR = np.array([0.0, 0.0, -1.0])
+
+
+def is_down(d, tol_deg=ORIENT_SAME_DEG) -> bool:
+    """Whether the direction `d` already points straight down, within `tol_deg` degrees."""
+    cos = float(np.dot(normalize(d), DOWN_DIR))
+    return math.degrees(math.acos(min(1.0, max(-1.0, cos)))) <= tol_deg
+
+
+def overhang_area(V, T, d, limit_deg) -> float:
+    """The area of the triangles that need support when the part stands with `d` down.
+
+    The triangles of `V` (n, 3) and `T` (m, 3) are turned until `d` points straight down and
+    marked with `overhang_mask`, with the lowest turned vertex as the print bed; the areas of
+    the marked ones are added. Turning does not change an area, so the answer is the same in
+    every frame of reference."""
+    tri = np.asarray(V, dtype=float)[np.asarray(T, dtype=np.int64).reshape(-1, 3)]
+    tri = tri @ joints.align_rotation(d, DOWN_DIR).T
+    n = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    mark = overhang_mask(n, tri.mean(axis=1)[:, 2], float(tri[:, :, 2].min()), limit_deg)
+    return float(0.5 * np.linalg.norm(n[mark], axis=1).sum())
+
+
+def hull_directions(man, merge_deg=ORIENT_MERGE_DEG, max_candidates=40):
+    """The directions a part can stand on, as `(direction, area)` of the convex hull faces.
+
+    The outward normals of the faces of the hull of the manifold `man`, largest first. Faces
+    whose normals lie within `merge_deg` of each other are one direction and add their areas,
+    and the `max_candidates` largest remain. The direction that is already straight down is
+    always there, also when it is not a face of the hull or did not survive the cut, so that
+    a part that is already right is not turned for nothing."""
+    mesh = man.hull().to_mesh()
+    V = np.asarray(mesh.vert_properties, dtype=float)[:, :3]
+    T = np.asarray(mesh.tri_verts, dtype=np.int64).reshape(-1, 3)
+    n = np.cross(V[T[:, 1]] - V[T[:, 0]], V[T[:, 2]] - V[T[:, 0]])
+    length = np.linalg.norm(n, axis=1)
+    limit = math.cos(math.radians(merge_deg))
+    dirs, areas = [], []
+    for i in np.argsort(-length):
+        if length[i] <= ORIENT_EPS:
+            continue
+        u = n[i] / length[i]
+        for j, w in enumerate(dirs):
+            if float(np.dot(u, w)) >= limit:
+                areas[j] += 0.5 * float(length[i])
+                break
+        else:
+            dirs.append(u)
+            areas.append(0.5 * float(length[i]))
+    out = [(dirs[i], areas[i]) for i in np.argsort(-np.asarray(areas))[:int(max_candidates)]]
+    if not any(float(np.dot(d, DOWN_DIR)) >= limit for d, _area in out):
+        out.append((DOWN_DIR.copy(), 0.0))
+    return out
+
+
+def best_down_direction(V, T, limit_deg=45.0, max_candidates=40):
+    """The way a part has to point down to need the least support, as `(direction, area)`.
+
+    `V` (n, 3) and `T` (m, 3) are the triangles of the part, for instance of
+    `mesh_arrays(g.ents.to_manifold())`. The candidates to stand on are the faces of the
+    convex hull, see `hull_directions`; for each of them the part is turned until that face
+    points straight down and `overhang_area` says how much has to be supported. The least of
+    that wins. A tie of 1% goes to the candidate with the largest hull face, because that
+    stands the most steadily on the bed, and a tie that is left goes to the way the part
+    already stands, so a part that is fine is not turned. The area is the overhang area of
+    the chosen way, 0.0 for a part that prints without support."""
+    V = np.asarray(V, dtype=float)
+    T = np.asarray(T, dtype=np.int64).reshape(-1, 3)
+    if not len(T):
+        return DOWN_DIR.copy(), 0.0
+    scored = [(overhang_area(V, T, d, limit_deg), area, d)
+              for d, area in hull_directions(manifold_from_mesh(V, T),
+                                              max_candidates=max_candidates)]
+    best = min(score for score, _area, _d in scored)
+    tied = [c for c in scored if c[0] <= best * (1.0 + ORIENT_TIE) + ORIENT_EPS]
+    top = max(area for _score, area, _d in tied)
+    tied = [c for c in tied if c[1] >= top * (1.0 - ORIENT_TIE) - ORIENT_EPS]
+    for score, _area, d in tied:
+        if is_down(d):
+            return d, score
+    score, _area, d = min(tied, key=lambda c: c[0])
+    return d, score
+
+
+def orient_direction(g: Group, limit_deg):
+    """The way the part of `g` has to point down, or None when `g` cannot be turned.
+
+    Reads the group and changes nothing, so it can run in a background task, as
+    `elephant_foot_chamfer` does. None for a locked group and for one that is not a closed
+    volume; see `best_down_direction` for the way itself."""
+    if g.locked:
+        return None
+    try:
+        V, T = mesh_arrays(closed_manifold(g))
+    except Exception:
+        return None
+    if not len(T):
+        return None
+    return best_down_direction(V, T, limit_deg)[0]
+
+
+def orient_group(doc: Document, gid, d) -> bool:
+    """Turn a group until `d` points straight down and drop it on the bed, like `lay_flat`.
+
+    The group turns about the centre of its own bounding box; one that already stands with
+    `d` down is only dropped on the bed. True when the group was turned, False when it only
+    came down. A locked group is not touched; the caller takes the checkpoint, so one undo
+    brings the old place back."""
+    g = doc.group(gid)
+    if g is None or g.locked:
+        return False
+    item = [("g", g.id, g.id)]
+    if is_down(d):
+        drop_to_bed(doc, item)
+        return False
+    bb = g.bbox()
+    if bb is None:
+        return False
+    c = 0.5 * (np.asarray(bb[0], dtype=float) + np.asarray(bb[1], dtype=float))
+    R = joints.align_rotation(d, DOWN_DIR)
+    transform_selection(doc, R, c - R @ c, items=item)
+    drop_to_bed(doc, item)
+    return True
+
+
+def orient_for_printing(doc: Document, items, limit_deg):
+    """Orient for Printing: turn the given groups so each stands on the face that needs the
+    least support, like the auto-orient of a slicer.
+
+    Every group turns about the centre of its own bounding box until that face points
+    straight down and is dropped on the bed afterwards; a group that already stands the right
+    way round is only dropped on the bed. The caller takes the checkpoint, so one undo brings
+    the old places back. Returns (groups turned, groups that already stood right, groups
+    skipped); see `orient_direction` for the groups that are skipped."""
+    turned = unchanged = skipped = 0
+    seen = set()
+    for k, _ctx, i in items:
+        g = doc.group(i) if k == "g" else None
+        if g is None or g.id in seen:
+            continue
+        seen.add(g.id)
+        d = orient_direction(g, limit_deg)
+        if d is None:
+            skipped += 1
+        elif orient_group(doc, g.id, d):
+            turned += 1
+        else:
+            unchanged += 1
+    return turned, unchanged, skipped
+
+
 def mirror(doc: Document, items, axis):
     bb = selection_bbox(doc, items)
     if bb is None:

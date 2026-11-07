@@ -180,7 +180,8 @@ def test_only_the_groups_of_the_items_are_counted_once():
 
 def test_the_action_is_in_the_print_tools_menu_after_the_chamfer(win):
     labels = [clean(a.text()) for a in win.print_tools_menu.actions() if not a.isSeparator()]
-    assert labels[-2:] == ["Elephant Foot Chamfer", "Mouse Ears"]
+    i = labels.index("Mouse Ears")
+    assert labels[i - 1] == "Elephant Foot Chamfer"
 
 
 def test_the_action_adds_ears_to_the_selected_group(win, monkeypatch):

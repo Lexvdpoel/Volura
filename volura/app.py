@@ -3034,6 +3034,11 @@ class MainWindow(QMainWindow):
                               lambda checked=False: self.mouse_ears_dialog(), None, None, False,
                               tr("Thin discs on the bed under the sharp bottom corners of a "
                                  "part, so those corners do not lift while printing"))
+        self.a_orient_print = A(tr("Orient for Printing"),
+                                lambda checked=False: self.orient_for_printing(), None, None,
+                                False,
+                                tr("Turn every part so that it stands on the face that needs "
+                                   "the least support, like the auto-orient of a slicer"))
 
         self.a_prefs = A(tr("&Preferences"), self.preferences)
         self.a_model_info = A(tr("&Model Info"), lambda checked=False: self.model_info())
@@ -3221,7 +3226,7 @@ class MainWindow(QMainWindow):
                                           self.a_screw_hole, self.a_clearance_test, None,
                                           self.a_cutplane, self.a_cut_join, None,
                                           self.a_fillet, self.a_chamfer, self.a_elephant,
-                                          self.a_mouse_ears))
+                                          self.a_mouse_ears, self.a_orient_print))
         self.fill(m, (self.tool_actions["select"], self.tool_actions["eraser"], self.tool_actions["paint"],
                       None,
                       self.tool_actions["move"], self.tool_actions["rotate"], self.tool_actions["scale"],
@@ -5652,6 +5657,59 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Volura", str(exc))    # nothing changed, so no undo
 
         background.run(self, work, text=tr("Adding mouse ears…"),
+                       on_done=done, on_error=failed)
+
+    # ------------------------------------------------------------ orient for printing
+
+    def orient_for_printing(self):
+        """Tools > Print Tools > Orient for Printing: turn the selected groups so that each
+        stands on the face that needs the least support, like the auto-orient of a slicer."""
+        gids = list(dict.fromkeys(i for k, _ctx, i in self._target_items()
+                                  if k == "g" and self.doc.group(i) is not None))
+        if not gids:
+            return
+        limit = float(self.settings.overhang_limit)
+
+        def work(report):
+            # looking for the best face of every part is the slow part: seconds for a big
+            # model, so it happens here and the window keeps responding
+            out, skipped = [], 0
+            for n, gid in enumerate(gids):
+                report(n / len(gids), tr("Looking for the best way to print…"))
+                d = ops.orient_direction(self.doc.group(gid), limit)
+                if d is None:
+                    skipped += 1
+                else:
+                    out.append((gid, d))
+            return out, skipped
+
+        def done(result):
+            out, skipped = result
+            if not out:
+                # nothing to turn and nothing to drop: no undo step either
+                self.hint.setText(tr("None of these parts can be turned: locked or not a "
+                                     "closed volume."))
+                return
+            self.doc.checkpoint()         # one undo brings all the old places back
+            turned = unchanged = 0
+            for gid, d in out:
+                if ops.orient_group(self.doc, gid, d):
+                    turned += 1
+                else:
+                    unchanged += 1
+            self.doc.notify()
+            msg = tr("Turned {n} parts to need the least support.").format(n=turned)
+            if unchanged:
+                msg += " " + tr("{n} parts were already the right way round.").format(n=unchanged)
+            if skipped:
+                msg += " " + tr("{n} parts were skipped: locked or not a closed volume.") \
+                    .format(n=skipped)
+            self.hint.setText(msg)
+
+        def failed(exc):
+            QMessageBox.warning(self, "Volura", str(exc))    # nothing moved, so no undo
+
+        background.run(self, work, text=tr("Orienting for printing…"),
                        on_done=done, on_error=failed)
 
     def _maybe_suggest_scale_up(self, groups):
