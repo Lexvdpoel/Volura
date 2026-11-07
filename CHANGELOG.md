@@ -3,6 +3,20 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.10 — 2026-11-07
+
+### New
+- **Screw Hole** (Tools > Print Tools): draw a circle where the screw goes, select it and
+  get a printable hole for a metric screw from M2 up to M8: straight, with a counterbore for
+  a socket head or a 90° countersink for a flat head. The clearance (0.2 mm by default) is
+  added to every diameter, because printed holes come out smaller than drawn.
+- **Elephant Foot Chamfer** (Tools > Print Tools): a small chamfer along the bottom edges of
+  the selected parts, so the squashed first layer of the print no longer sticks out.
+
+### Improved
+- Volura starts faster: the update check and some file-format code are only loaded when
+  they are needed.
+
 ## 0.2.9 — 2026-11-07
 
 ### New
