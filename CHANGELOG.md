@@ -3,6 +3,17 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.13 — 2026-11-07
+
+### New
+- **Living Hinge** (worksheet, View > Living Hinge…): select a rectangle and it is filled
+  with staggered slits, so plywood or MDF cut on a laser bends there. Slit length, bridge,
+  column spacing, edge margin and direction are adjustable.
+
+### Fixed
+- A rare crash when a background job (export, import, print tools) ended at the same
+  moment as its worker thread.
+
 ## 0.2.12 — 2026-11-07
 
 ### New
