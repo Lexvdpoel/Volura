@@ -62,6 +62,17 @@ class Face:
         return f
 
 
+def _face(loops, normal, color=None):
+    """A ``Face`` whose loops are already a tuple of tuples of vertex ids.
+
+    ``Face.__init__`` rebuilds the loops, so that a caller can hand it lists or
+    numpy indices; ``from_manifold`` makes the loops of a whole mesh in one go and
+    gives the faces what it made, instead of walking every id a second time."""
+    f = Face((), normal, color)
+    f.loops = loops
+    return f
+
+
 def _ekey(a, b):
     return (a, b) if a < b else (b, a)
 
@@ -108,16 +119,19 @@ def _cell_groups(C, payload):
     """(cell, rows) for the cells of C: every row of `payload` under its own cell.
 
     The rows of a cell keep the order they came in, which is the order the
-    incremental inserts of ``vertex`` and ``_einsert`` would have made."""
+    incremental inserts of ``vertex`` and ``_einsert`` would have made. Everything is
+    laid out in one go before the first cell is handed out, so a cell is a slice of
+    the rows instead of a small loop of its own."""
     if not len(C):
         return
     o = np.lexsort((C[:, 2], C[:, 1], C[:, 0]))
     Cs = C[o]
     cut = (np.flatnonzero((Cs[1:, 0] != Cs[:-1, 0]) | (Cs[1:, 1] != Cs[:-1, 1]) |
                           (Cs[1:, 2] != Cs[:-1, 2])) + 1).tolist()
-    rows = o.tolist()
+    rows = [payload[i] for i in o.tolist()]
+    cells = list(map(tuple, Cs.tolist()))
     for s, e in zip([0] + cut, cut + [len(rows)]):
-        yield (int(Cs[s, 0]), int(Cs[s, 1]), int(Cs[s, 2])), [payload[i] for i in rows[s:e]]
+        yield cells[s], rows[s:e]
 
 
 def _edge_cells(lo, hi, size, cap):
@@ -529,9 +543,9 @@ class Entities:
         first = np.asarray(starts, dtype=np.int64)
         last = first + np.asarray(lens, dtype=np.int64) - 1
         nxt[last] = L[first]                      # close every loop
-        FID = np.repeat(np.asarray(fids, dtype=np.int64), np.asarray(lens, dtype=np.int64))
         pos = {f: i for i, f in enumerate(self.F)}
-        FPOS = np.fromiter((pos[f] for f in FID.tolist()), np.int64, len(FID))
+        FPOS = np.repeat(np.fromiter((pos[f] for f in fids), np.int64, len(fids)),
+                         np.asarray(lens, dtype=np.int64))     # the face of a loop point
         nv = max(int(L.max()), int(ab.max())) + 1
         lo = np.minimum(L, nxt)
         hi = np.maximum(L, nxt)
@@ -548,9 +562,10 @@ class Entities:
         both = np.unique(eids[pair] * nf + FPOS[hit])       # one entry per (edge, face)
         e2 = both // nf
         cut = (np.flatnonzero(e2[1:] != e2[:-1]) + 1).tolist()
-        fs = np.asarray(list(self.F), dtype=np.int64)[(both % nf).tolist()]
+        fa = np.asarray(list(self.F), dtype=np.int64)
+        e2, fs = e2.tolist(), fa[both % nf].tolist()
         for s, e in zip([0] + cut, cut + [len(e2)]):
-            self.e2f[int(e2[s])] = set(fs[s:e].tolist())
+            self.e2f[e2[s]] = set(fs[s:e])
 
     def _clear_caches(self):
         """Drop everything that is derived from the geometry.
@@ -2149,17 +2164,19 @@ class Entities:
         index_loops = md.region_index_loops()
         progress(0.2)
         nr = len(index_loops)
-        seq, vreg = [], []
-        for rid, loops in enumerate(index_loops):
-            for loop in loops:
-                seq.extend(loop)
-                vreg.extend([rid] * len(loop))
-        if not seq:
-            return ents
         # the mesh vertices in the order the loops walk them: the order in which
-        # vertex() would have created them
-        L = np.asarray(seq, dtype=np.int64)
-        VREG = np.asarray(vreg, dtype=np.int64)
+        # vertex() would have created them. Every loop of every region is one run of
+        # that array, so a loop is described by where it starts and how long it is.
+        nloops = sum(len(loops) for loops in index_loops)
+        lens = np.fromiter((len(loop) for loops in index_loops for loop in loops),
+                           np.int64, nloops)
+        L = np.fromiter((v for loops in index_loops for loop in loops for v in loop),
+                        np.int64, int(lens.sum()))
+        if not len(L):
+            return ents
+        lreg = np.repeat(np.arange(nr, dtype=np.int64),
+                         np.fromiter((len(loops) for loops in index_loops), np.int64, nr))
+        VREG = np.repeat(lreg, lens)                 # the region of every loop point
         uniq, at_v = np.unique(L, return_index=True)
         first = np.argsort(at_v, kind="stable")
         order = uniq[first]
@@ -2171,39 +2188,41 @@ class Entities:
         mesh_slot[order] = slot
 
         progress(0.25)
-        face_loops, face_normal, face_region = [], [], []
-        seq2, starts, lens, ford, rord = [], [], [], [], []
-        for rid, loops in enumerate(index_loops):
-            vl = []
-            for loop in loops:
-                w = mesh_slot[loop].tolist()
-                w = [v for i, v in enumerate(w) if v != w[i - 1]]
-                if len(w) >= 3:
-                    vl.append(w)
-            if vl:
-                face_loops.append(vl)
-                face_normal.append(md.normals[md.region_tris[rid][0]])
-                face_region.append(rid)
-                for l in vl:
-                    starts.append(len(seq2))
-                    lens.append(len(l))
-                    ford.append(len(face_loops) - 1)
-                    rord.append(rid)
-                    seq2.extend(l)
-        nf = len(face_loops)
-        rof = np.asarray(face_region, dtype=np.int64)
+        # the loops of the merged vertices: a point that joined the point before it is
+        # dropped (the first one too, when it repeats the point that closes the loop),
+        # and what is left of a loop has to still be one
+        S = mesh_slot[L]
+        lrow = np.repeat(np.arange(nloops, dtype=np.int64), lens)   # the loop of a point
+        lstart = np.repeat(np.cumsum(lens) - lens, lens)            # where its loop starts
+        lend = np.repeat(lens, lens)                                # ... and how long it is
+        row = np.arange(len(S))
+        prev = np.where(row > lstart, row - 1, lstart + lend - 1)   # the point before it,
+        keep = S != S[prev]                                         # the last one for the first
+        llen = np.bincount(lrow[keep], minlength=nloops)             # points left in a loop
+        rows = np.flatnonzero(llen >= 3)
+        Lv = S[keep & (llen[lrow] >= 3)]
+        lens2 = llen[rows]
+        starts2 = np.cumsum(lens2) - lens2
+        rs = lreg[rows]                              # the region of every loop that is left
+        if len(rows):
+            newface = np.empty(len(rs), dtype=bool)  # a region opens a face at its first loop
+            newface[0] = True
+            newface[1:] = rs[1:] != rs[:-1]
+            ford = np.cumsum(newface) - 1            # the face of every loop
+            rof = rs[newface]                        # the region of every face
+        else:
+            newface = ford = rof = np.zeros(0, dtype=np.int64)
+        nf = len(rof)
         cf = np.zeros(nr, dtype=np.int64)
         if nf:
             cf[rof] = 1
-        Lv = FR = RR = A = B = None
+        FR = RR = A = B = None
         at = inverse = None
         if nf:
-            Lv = np.asarray(seq2, dtype=np.int64)
             nxt = np.roll(Lv, -1)
-            firsts = np.asarray(starts, dtype=np.int64)
-            nxt[firsts + np.asarray(lens, dtype=np.int64) - 1] = Lv[firsts]
-            FR = np.repeat(np.asarray(ford, dtype=np.int64), np.asarray(lens, dtype=np.int64))
-            RR = np.repeat(np.asarray(rord, dtype=np.int64), np.asarray(lens, dtype=np.int64))
+            nxt[starts2 + lens2 - 1] = Lv[starts2]   # close every loop
+            FR = np.repeat(ford, lens2)
+            RR = np.repeat(rs, lens2)
             ok = Lv != nxt                           # _add_edge_raw makes nothing of a == b
             A, B, FR, RR = Lv[ok], nxt[ok], FR[ok], RR[ok]
             key = np.minimum(A, B) * (int(Lv.max()) + 1) + np.maximum(A, B)
@@ -2220,7 +2239,7 @@ class Entities:
         vid[1:] = 1 + before[freg_v[vrows]] + np.arange(len(vrows)) -             (cumv[freg_v[vrows]] - cv[freg_v[vrows]])
         progress(0.45)
         block = md.verts[order[vrows]].copy()
-        ents.V = {int(vid[s]): block[i] for i, s in enumerate(slot[vrows])}
+        ents.V = dict(zip(vid[slot[vrows]].tolist(), list(block)))
 
         if nf:
             rank = np.argsort(at, kind="stable")     # the order in which the edges appear
@@ -2230,16 +2249,21 @@ class Entities:
             eids = 1 + before[freg_e[rank]] + cv[freg_e[rank]] +                 np.arange(len(rank)) - (cume[freg_e[rank]] - ce[freg_e[rank]])
             eid = np.empty(len(rank), dtype=np.int64)
             eid[rank] = eids
-            ents.E = {int(eids[j]): (int(vid[A[erows[j]]]), int(vid[B[erows[j]]]))
-                      for j in range(len(erows))}
+            ents.E = dict(zip(eids.tolist(),
+                              zip(vid[A[erows]].tolist(), vid[B[erows]].tolist())))
             face_id = 1 + before[rof] + cv[rof] + ce[rof]
             progress(0.55)
-            for k in range(nf):
-                loops = [tuple(vid[l].tolist()) if isinstance(l, np.ndarray)
-                         else tuple(int(vid[v]) for v in l) for l in face_loops[k]]
-                ents.F[int(face_id[k])] = Face(loops, face_normal[k], color)
+            normal = md.normals[np.fromiter((md.region_tris[rid][0] for rid in rof.tolist()),
+                                            np.int64, nf)]
+            pts = vid[Lv].tolist()                   # the vertex of every loop point
+            loop_id = [tuple(pts[s:e]) for s, e in zip(starts2.tolist(),
+                                                       np.cumsum(lens2).tolist())]
+            frow = np.flatnonzero(newface).tolist()  # where the loops of a face start
+            fend = frow[1:] + [len(loop_id)]
+            for k, s, e, fid in zip(range(nf), frow, fend, face_id.tolist()):
+                ents.F[fid] = _face(tuple(loop_id[s:e]), normal[k], color)
             ents.next_id = int(1 + len(vrows) + len(erows) + nf)
-            ents.soft = _fold_edges(eid[inverse], FR, nf, np.array(face_normal))
+            ents.soft = _fold_edges(eid[inverse], FR, nf, normal)
         else:
             ents.next_id = int(1 + len(vrows))
         progress(0.65)
