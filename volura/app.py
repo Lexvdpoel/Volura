@@ -2972,7 +2972,7 @@ class MainWindow(QMainWindow):
         self.a_screw_hole = A(tr("Screw Hole…"),
                               lambda checked=False: self.screw_hole_dialog(), None, None, False,
                               tr("A printable hole for a metric screw: straight, with a "
-                                 "counterbore or a countersunk head"))
+                                 "counterbore, a countersunk head or a nut pocket"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -5970,7 +5970,8 @@ class MainWindow(QMainWindow):
     # (label, threads.SCREW_HOLE_KINDS identifier)
     SCREW_HOLE_KINDS = [(tr("Through"), "through"),
                         (tr("Counterbore"), "counterbore"),
-                        (tr("Countersunk"), "countersink")]
+                        (tr("Countersunk"), "countersink"),
+                        (tr("Nut pocket"), "nutpocket")]
 
     def _screw_hole_target(self):
         """(ents, group, center, axis, length) of the selected circular face, or None.

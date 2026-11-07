@@ -6,9 +6,11 @@ head) and ISO 10642 (countersunk head, 90°). Every diameter grows with the clea
 because a printed hole comes out smaller than drawn. So an M3 through hole with the
 default clearance of 0.2 mm has Ø 3.4 + 0.2 = 3.6 mm, and a block of 20 × 20 × 10 mm
 loses pi * 1.8² * 10 = 101.8 mm³. A counterbore adds a cylinder of the head Ø + clearance
-to the depth of the head + 0.2 mm; a countersink adds a 90° cone that ends in the hole.
+to the depth of the head + 0.2 mm; a countersink adds a 90° cone that ends in the hole; a
+nut pocket adds a hexagonal prism of the nut (`threads.HEX_NUTS`: width across flats and
+height, ISO 4032), so a hex nut lies in the pocket while the screw goes through the hole.
 
-These tests (Qt offscreen) check the volumes of the three kinds on a block with a circle
+These tests (Qt offscreen) check the volumes of the four kinds on a block with a circle
 drawn on top, that the hole goes through, the openings in the top and bottom face, the
 error of a face that is not a circle, and one undo for the whole operation.
 
@@ -107,6 +109,29 @@ def opening(ents, z):
     return None
 
 
+def hexagon_opening(ents, z):
+    """The width across flats of the hexagonal hole in the horizontal face at height `z`.
+
+    The loop can carry extra points where the drawn circle crossed a side, so the centre is
+    the middle of the loop and the width twice the closest distance from it to a side."""
+    for fid in ents.F:
+        if abs(float(ents.F[fid].normal[2])) < 0.999:
+            continue
+        pts = np.vstack(ents.face_points(fid))
+        if np.any(np.abs(pts[:, 2] - z) > 1e-6):
+            continue
+        for loop in ents.face_points(fid):
+            P = np.asarray(loop, dtype=float)
+            if len(P) < 6 or threads.circle_loop(P)[0] is not None:
+                continue
+            c = (P.max(axis=0) + P.min(axis=0)) / 2.0
+            d = np.roll(P, -1, axis=0) - P
+            n = np.stack([-d[:, 1], d[:, 0], np.zeros(len(P))], axis=1)
+            dist = np.abs(np.sum((P - c) * n, axis=1)) / np.linalg.norm(n, axis=1)
+            return 2.0 * float(np.min(dist))
+    return None
+
+
 def pump_until(predicate, timeout_ms=15000):
     """Spin the event loop until `predicate()` holds or the time is up; returns its value."""
     deadline = time.monotonic() + timeout_ms / 1000.0
@@ -172,6 +197,25 @@ def test_a_countersink_takes_less_than_a_counterbore_and_more_than_a_through_hol
     g.ents = Entities.from_manifold(res)
     assert opening(g.ents, BLOCK[2]) == pytest.approx(3.45, abs=0.02)
     assert opening(g.ents, 0.0) == pytest.approx(1.8, abs=0.02)
+
+
+def test_a_nut_pocket_holds_a_hex_nut_and_the_screw_goes_through():
+    doc = Document()
+    g = block(doc)
+    fid = draw_circle(g)
+    through = BLOCK_VOLUME - cut(g, fid, "M3", "through").volume()
+    counterbore = BLOCK_VOLUME - cut(g, fid, "M3", "counterbore").volume()
+    res = cut(g, fid, "M3", "nutpocket")
+    lost = BLOCK_VOLUME - res.volume()
+    # the hole plus the pocket around it up to the nut height + 0.2 mm, a hexagon here
+    hexagon = math.sqrt(3.0) / 2.0 * 5.7 ** 2
+    assert lost == pytest.approx(math.pi * 1.8 ** 2 * 10.0
+                                 + (hexagon - math.pi * 1.8 ** 2) * 2.6, rel=0.01)
+    assert through < lost < counterbore, (through, lost, counterbore)
+    g.ents = Entities.from_manifold(res)
+    flats = hexagon_opening(g.ents, BLOCK[2])
+    assert flats == pytest.approx(5.7, abs=0.02), "the nut does not fit in the pocket"
+    assert opening(g.ents, 0.0) == pytest.approx(1.8, abs=0.02), "the screw cannot go through"
 
 
 def test_the_clearance_is_added_to_every_diameter():
@@ -265,6 +309,21 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
     assert seen["start"] == ("M5", "Countersunk", pytest.approx(0.45))
     assert (win.settings.screw_hole_size, win.settings.screw_hole_kind) == ("M6", "counterbore")
     assert win.settings.screw_hole_clearance == pytest.approx(0.5)
+
+
+def test_the_dialog_offers_the_nut_pocket_and_remembers_it(win, monkeypatch):
+    seen = {}
+
+    def accept(dlg):
+        kinds = dlg.findChildren(QComboBox)[1]
+        seen["items"] = [kinds.itemText(i) for i in range(kinds.count())]
+        kinds.setCurrentIndex(kinds.count() - 1)
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", accept)
+    win.screw_hole_dialog()
+    assert seen["items"] == ["Through", "Counterbore", "Countersunk", "Nut pocket"]
+    assert win.settings.screw_hole_kind == "nutpocket"
 
 
 def test_the_action_is_in_the_print_tools_menu_after_the_threads(win):

@@ -164,7 +164,12 @@ SCREW_HOLES = {
     "M4": (4.5, 7.0, 4.0, 9.0), "M5": (5.5, 8.5, 5.0, 11.2), "M6": (6.6, 10.0, 6.0, 13.4),
     "M8": (9.0, 13.0, 8.0, 17.9)}
 
-SCREW_HOLE_KINDS = ("through", "counterbore", "countersink")
+# size: (width across flats, nut height) in mm, hex nuts ISO 4032
+HEX_NUTS = {
+    "M2": (4.0, 1.6), "M2.5": (5.0, 2.0), "M3": (5.5, 2.4), "M4": (7.0, 3.2),
+    "M5": (8.0, 4.7), "M6": (10.0, 5.2), "M8": (13.0, 6.8)}
+
+SCREW_HOLE_KINDS = ("through", "counterbore", "countersink", "nutpocket")
 
 DEFAULT_HOLE_CLEARANCE = 0.2   # mm on every diameter of a hole: printed holes come out smaller
 COUNTERBORE_ROOM = 0.2         # mm the counterbore goes deeper than the head, so it sits low
@@ -176,8 +181,10 @@ def screw_hole(manifold, center, axis, length, size, kind, clearance=DEFAULT_HOL
 
     ``kind`` is "through" (a straight clearance hole), "counterbore" (a cylinder of the
     socket head Ø + clearance, ``head height`` + 0.2 mm deep from the face, for a socket
-    head screw) or "countersink" (a 90° cone from the countersunk head Ø + clearance at
-    the face down to the hole, for a flat head screw). The hole goes through the whole
+    head screw), "countersink" (a 90° cone from the countersunk head Ø + clearance at
+    the face down to the hole, for a flat head screw) or "nutpocket" (a hexagonal pocket of
+    the nut size + clearance, ``nut height`` + 0.2 mm deep from the face, that holds a hex
+    nut while the screw goes through the rest). The hole goes through the whole
     ``length``, past the face and out at the back, so the cut leaves no skin behind.
     ``clearance`` (mm) is added to every diameter, because printed holes come out smaller.
     """
@@ -206,6 +213,14 @@ def screw_hole(manifold, center, axis, length, size, kind, clearance=DEFAULT_HOL
         head = mf.Manifold.cylinder(r_head - r_hole + margin, r_head + margin, r_hole,
                                     segments).translate((0.0, 0.0, -margin))
         cutter = cutter + head
+    elif kind == "nutpocket":
+        # the nut of the same size, held by its flats: a hexagon whose corners stand
+        # (s + clearance) / sqrt(3) from the axis is that wide between the parallel sides
+        s, nut_h = HEX_NUTS[size]
+        pocket = mf.Manifold.extrude(
+            mf.CrossSection([circle_points((s + clearance) / math.sqrt(3.0), 6)]),
+            nut_h + COUNTERBORE_ROOM + margin).translate((0.0, 0.0, -margin))
+        cutter = cutter + pocket
     return manifold - _place(cutter, center, axis)
 
 
