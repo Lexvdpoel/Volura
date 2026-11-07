@@ -155,6 +155,60 @@ def nut(major_d, pitch, height, outer_d=None, clearance=DEFAULT_CLEARANCE, hex=T
     return body - hole
 
 
+# ------------------------------------------------------------------ screw holes
+
+# size: (clearance hole Ø, socket head Ø, head height, countersunk head Ø) in mm:
+# clearance holes ISO 273 medium, socket heads ISO 4762, countersunk heads ISO 10642 (90°)
+SCREW_HOLES = {
+    "M2": (2.4, 3.8, 2.0, 4.4), "M2.5": (2.9, 4.5, 2.5, 5.5), "M3": (3.4, 5.5, 3.0, 6.7),
+    "M4": (4.5, 7.0, 4.0, 9.0), "M5": (5.5, 8.5, 5.0, 11.2), "M6": (6.6, 10.0, 6.0, 13.4),
+    "M8": (9.0, 13.0, 8.0, 17.9)}
+
+SCREW_HOLE_KINDS = ("through", "counterbore", "countersink")
+
+DEFAULT_HOLE_CLEARANCE = 0.2   # mm on every diameter of a hole: printed holes come out smaller
+COUNTERBORE_ROOM = 0.2         # mm the counterbore goes deeper than the head, so it sits low
+
+
+def screw_hole(manifold, center, axis, length, size, kind, clearance=DEFAULT_HOLE_CLEARANCE,
+               segments=64):
+    """A printable hole for a metric screw, cut along (center, axis) into the solid.
+
+    ``kind`` is "through" (a straight clearance hole), "counterbore" (a cylinder of the
+    socket head Ø + clearance, ``head height`` + 0.2 mm deep from the face, for a socket
+    head screw) or "countersink" (a 90° cone from the countersunk head Ø + clearance at
+    the face down to the hole, for a flat head screw). The hole goes through the whole
+    ``length``, past the face and out at the back, so the cut leaves no skin behind.
+    ``clearance`` (mm) is added to every diameter, because printed holes come out smaller.
+    """
+    if size not in SCREW_HOLES:
+        raise ValueError(tr("unknown screw size {size}").format(size=size))
+    if kind not in SCREW_HOLE_KINDS:
+        raise ValueError(tr("unknown screw hole kind {kind}").format(kind=kind))
+    length = float(length)
+    if length <= 0:
+        raise ValueError(tr("the depth of a screw hole must be greater than 0"))
+    hole_d, head_d, head_h, cs_head_d = SCREW_HOLES[size]
+    segments = max(12, int(segments))
+    margin = max(0.5, 0.02 * length)      # mm past both faces, so no skin is left
+    r_hole = (hole_d + clearance) / 2.0
+    cutter = mf.Manifold.cylinder(length + 2.0 * margin, r_hole, r_hole, segments) \
+        .translate((0.0, 0.0, -margin))
+    if kind == "counterbore":
+        depth = head_h + COUNTERBORE_ROOM + margin
+        head = mf.Manifold.cylinder(depth, (head_d + clearance) / 2.0,
+                                    (head_d + clearance) / 2.0, segments)
+        cutter = cutter + head.translate((0.0, 0.0, -margin))
+    elif kind == "countersink":
+        # 90° included angle: the radius falls 1 mm per mm of depth, so the cone that ends
+        # in the hole Ø is exactly as deep below the face as its radius is wide
+        r_head = (cs_head_d + clearance) / 2.0
+        head = mf.Manifold.cylinder(r_head - r_hole + margin, r_head + margin, r_hole,
+                                    segments).translate((0.0, 0.0, -margin))
+        cutter = cutter + head
+    return manifold - _place(cutter, center, axis)
+
+
 # ------------------------------------------------- selection -> thread context
 
 def circle_loop(points, min_points=12):

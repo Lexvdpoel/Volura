@@ -247,6 +247,18 @@ class Settings:
         except (TypeError, ValueError):
             self.elephant_foot_size = ops.ELEPHANT_FOOT_SIZE
         self.elephant_foot_size = max(0.1, min(2.0, self.elephant_foot_size))
+        self.screw_hole_size = str(self.q.value("screw_hole_size", "M3"))
+        if self.screw_hole_size not in threads.SCREW_HOLES:
+            self.screw_hole_size = "M3"
+        self.screw_hole_kind = str(self.q.value("screw_hole_kind", "through"))
+        if self.screw_hole_kind not in threads.SCREW_HOLE_KINDS:
+            self.screw_hole_kind = "through"
+        try:
+            self.screw_hole_clearance = float(self.q.value("screw_hole_clearance",
+                                                           threads.DEFAULT_HOLE_CLEARANCE))
+        except (TypeError, ValueError):
+            self.screw_hole_clearance = threads.DEFAULT_HOLE_CLEARANCE
+        self.screw_hole_clearance = max(0.0, min(1.0, self.screw_hole_clearance))
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
@@ -282,6 +294,9 @@ class Settings:
         self.q.setValue("filament_diameter", self.filament_diameter)
         self.q.setValue("filament_price", self.filament_price)
         self.q.setValue("elephant_foot_size", self.elephant_foot_size)
+        self.q.setValue("screw_hole_size", self.screw_hole_size)
+        self.q.setValue("screw_hole_kind", self.screw_hole_kind)
+        self.q.setValue("screw_hole_clearance", self.screw_hole_clearance)
         self.q.setValue("recent", self.recent[:8])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
@@ -2954,6 +2969,10 @@ class MainWindow(QMainWindow):
                                lambda checked=False: self.thread_dialog("bolt"), None, "bolt")
         self.a_thread_nut = A(tr("New Nut or Sleeve..."),
                               lambda checked=False: self.thread_dialog("nut"), None, "nut")
+        self.a_screw_hole = A(tr("Screw Hole…"),
+                              lambda checked=False: self.screw_hole_dialog(), None, None, False,
+                              tr("A printable hole for a metric screw: straight, with a "
+                                 "counterbore or a countersunk head"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -3150,7 +3169,8 @@ class MainWindow(QMainWindow):
         self.fill(solids, (self.a_intersect, self.a_union, self.a_subtract, self.a_trim, self.a_split))
         self.print_tools_menu = QMenu(tr("P&rint Tools"), m)
         self.fill(self.print_tools_menu, (self.a_thread, self.a_thread_ext, self.a_thread_int,
-                                          self.a_thread_bolt, self.a_thread_nut, None,
+                                          self.a_thread_bolt, self.a_thread_nut,
+                                          self.a_screw_hole, None,
                                           self.a_cutplane, self.a_cut_join, None,
                                           self.a_fillet, self.a_chamfer, self.a_elephant))
         self.fill(m, (self.tool_actions["select"], self.tool_actions["eraser"], self.tool_actions["paint"],
@@ -5945,6 +5965,100 @@ class MainWindow(QMainWindow):
         doc.notify()
         self.view.set_status((tr("{label} placed with a matching part.") if mate
                               else tr("{label} placed.")).format(label=label))
+
+    # ------------------------------------------------------------ screw hole
+    # (label, threads.SCREW_HOLE_KINDS identifier)
+    SCREW_HOLE_KINDS = [(tr("Through"), "through"),
+                        (tr("Counterbore"), "counterbore"),
+                        (tr("Countersunk"), "countersink")]
+
+    def _screw_hole_target(self):
+        """(ents, group, center, axis, length) of the selected circular face, or None.
+
+        The size of the circle does not matter, only its centre and the direction of the
+        face: the user can draw any circle where the screw has to go."""
+        doc = self.doc
+        for k, ctx, i in list(doc.selection):
+            if k != "f":
+                continue
+            ents, g = doc.ents(ctx), doc.group(ctx)
+            if ents is None or g is None:
+                continue
+            tc = threads.face_thread_context(ents, i, "outer")
+            if tc is not None:
+                return (ents, g) + tc[:2] + tc[3:]
+        return None
+
+    def screw_hole_dialog(self):
+        """Tools > Print Tools > Screw Hole…: a printable hole for a metric screw on the
+        circle that is selected on a part: straight, or with room for the head."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Screw Hole"))
+        form = QFormLayout(dlg)
+        size_cb = QComboBox()
+        for size in sorted(threads.SCREW_HOLES, key=lambda s: float(s[1:])):
+            size_cb.addItem(size)
+        size_cb.setCurrentText(self.settings.screw_hole_size)
+        kind_cb = QComboBox()
+        for label, _ in self.SCREW_HOLE_KINDS:
+            kind_cb.addItem(label)
+        kind_cb.setCurrentIndex(next((i for i, (_, k) in enumerate(self.SCREW_HOLE_KINDS)
+                                      if k == self.settings.screw_hole_kind), 0))
+        clr_sp = self._spin(0.0, 1.0, self.settings.screw_hole_clearance, 2, " mm", 0.05)
+        form.addRow(tr("Screw size"), size_cb)
+        form.addRow(tr("Kind"), kind_cb)
+        form.addRow(tr("Clearance"), clr_sp)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        size = size_cb.currentText()
+        label, kind = self.SCREW_HOLE_KINDS[kind_cb.currentIndex()]
+        clearance = clr_sp.value()
+        self.settings.screw_hole_size = size
+        self.settings.screw_hole_kind = kind
+        self.settings.screw_hole_clearance = float(clearance)
+        self.settings.save()
+        self._apply_screw_hole(size, kind, label, clearance)
+
+    def _apply_screw_hole(self, size, kind, label, clearance):
+        doc = self.doc
+        t = self._screw_hole_target()
+        if t is None:
+            self.view.set_status(tr("First select the circle you drew where the screw goes."))
+            return
+        ents, g, center, axis, depth = t
+        if g.locked:
+            self.warn_locked()
+            return
+
+        def work(report):
+            # cutting the hole in a big part is the slow part: seconds, so it happens here
+            # and the window keeps responding
+            report(0.1, tr("Cutting the hole…"))
+            m = ents.to_manifold()
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("This part is not a closed volume."))
+            res = threads.screw_hole(m, center, axis, depth, size, kind, clearance=clearance,
+                                     segments=int(self.settings.circle_segments))
+            if res.status() != mf.Error.NoError or res.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            return res
+
+        def done(res):
+            doc.checkpoint()              # one undo brings the part back as it was
+            g.ents = Entities.from_manifold(res)
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("{size} {kind} hole cut in {name}.").format(
+                size=size, kind=label.lower(), name=g.name))
+
+        def failed(exc):
+            self.view.set_status(tr("Screw hole failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Cutting the hole…"), on_done=done, on_error=failed)
 
     # ------------------------------------------------------------ cut & join
     # (label, joints.KINDS identifier; the identifiers stay Dutch)

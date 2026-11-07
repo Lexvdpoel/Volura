@@ -51,6 +51,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   0, 90, 180 or 270 degrees and stand on the bed, 5 mm from the edge and from each other
 - **Lay Flat on This Face** (right-click a face of a group): turn that part about its own centre until
   the face you clicked lies on the print bed, like "place on face" of a slicer
+- **Screw Hole** (Tools > Print Tools): turn a circle you drew on a part into a printable hole
+  for a metric screw (M2 up to M8): straight, with a counterbore for a socket head or a 90°
+  countersink for a flat head; the clearance (0.2 mm by default) is added to every diameter,
+  because a printed hole comes out smaller than drawn
 - **Elephant Foot Chamfer** (Tools > Print Tools): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is
