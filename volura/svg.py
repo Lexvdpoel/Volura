@@ -15,7 +15,6 @@ import math
 import os
 import re
 import xml.etree.ElementTree as ET
-from xml.sax.saxutils import escape
 
 import numpy as np
 
@@ -668,6 +667,7 @@ def _safe_id(name):
 
 
 def _attr(value):
+    from xml.sax.saxutils import escape   # xml.sax is heavy: only the writer needs it
     return escape(str(value), {'"': "&quot;"})
 
 

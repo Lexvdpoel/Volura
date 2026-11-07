@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from . import (__version__, background, boxgen, cam, dxf, errors, fileio, i18n, joints, nesting,
-               ops, sheet3d, svg, spacemouse, theme, threads, updater, vector_export, vector_import,
+               ops, sheet3d, svg, spacemouse, theme, threads, vector_export, vector_import,
                workers)
 from .brep import Entities
 from .inference import GeoCache
@@ -6143,6 +6143,7 @@ class MainWindow(QMainWindow):
 
     def check_for_updates(self, automatic=False):
         """Help > Check for Updates…: fetch the newest release from GitHub."""
+        from . import updater       # network code: only here, not at startup
         if not automatic:
             self.hint.setText(tr("Looking for a newer version…"))
         self._update_bridge = run_in_background(
@@ -6151,6 +6152,7 @@ class MainWindow(QMainWindow):
         return self._update_bridge
 
     def on_update_result(self, release, error, automatic=False):
+        from . import updater       # network code: only here, not at startup
         if error is not None or release is None:
             if not automatic:
                 self.hint.setText("")
@@ -6173,6 +6175,7 @@ class MainWindow(QMainWindow):
 
     def offer_update(self, release):
         """Ask whether the new version should go on now; the installer does the rest."""
+        from . import updater       # network code: only here, not at startup
         box = QMessageBox(self)
         box.setWindowTitle(tr("New Version of Volura"))
         box.setIcon(QMessageBox.Information)
@@ -6203,6 +6206,7 @@ class MainWindow(QMainWindow):
 
     def install_update(self, release):
         """Save the model, download the installer and let it replace Volura."""
+        from . import updater       # network code: only here, not at startup
         if not self.confirm_discard():
             return None
         dlg = QProgressDialog(tr("Downloading Volura {version}…").format(version=release.version),

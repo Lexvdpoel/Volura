@@ -8,7 +8,6 @@ import struct
 import tempfile
 import zipfile
 from dataclasses import dataclass
-from xml.sax.saxutils import escape
 
 import numpy as np
 import manifold3d as mf
@@ -494,6 +493,7 @@ def export_3mf(path, part_list, materials, name="Volura"):
     parts = print_parts(part_list)
     if not parts:
         raise ValueError(tr("There is nothing to export."))
+    from xml.sax.saxutils import escape   # xml.sax is heavy: only this writer needs it
     names = {c.lower(): n for n, c in materials}
     tri_colors = [triangle_colors(m) for _, m in parts]
     present = {color.lower() for color, _ in parts}
