@@ -1267,6 +1267,14 @@ def print_parts(part_list):
     return out
 
 
+def _boxes_apart(bb_a, bb_b):
+    """Whether two ``Manifold`` bounding boxes lie apart on some axis: parts whose boxes
+    are separated cannot share a drop of volume, so their intersection is empty."""
+    alo, ahi = np.array(bb_a[:3]), np.array(bb_a[3:])
+    blo, bhi = np.array(bb_b[:3]), np.array(bb_b[3:])
+    return bool(np.any(alo > bhi) or np.any(blo > ahi))
+
+
 def check_parts(part_list, bed=None, overhang_limit=None):
     """The messages of a print check; `overhang_limit` (degrees) adds what needs support."""
     msgs = []
@@ -1314,13 +1322,15 @@ def check_parts(part_list, bed=None, overhang_limit=None):
                                          "{best:.1f} cm².").format(best=best / 100.0)
                 msgs.append(("info", text))
     valid = [p for p in part_list if p.manifold is not None]
+    boxes = [p.manifold.bounding_box() for p in valid]
     if valid:
-        zmin = min(p.manifold.bounding_box()[2] for p in valid)
+        zmin = min(bb[2] for bb in boxes)
         if zmin > 1e-4:
             msgs.append(("waarschuwing", tr("The model floats {z:.2f} mm above the bed.").format(z=zmin)))
     for i, a in enumerate(valid):
-        for b in valid[i + 1:]:
-            if a.color == b.color:
+        for j in range(i + 1, len(valid)):
+            b = valid[j]
+            if a.color == b.color or _boxes_apart(boxes[i], boxes[j]):
                 continue
             ov = (a.manifold ^ b.manifold).volume()
             if ov > 1e-6:

@@ -318,27 +318,73 @@ def _loop_triangles(verts, ls, normal):
         return np.zeros((0, 3), dtype=np.int64)
 
 
+def _triangle_rows(loops):
+    """The faces that are one loop of three vertices, as ``(rows, faces)``: their three
+    vertex rows and the row each has in `loops`. Such a face has only one triangulation."""
+    rows, faces = [], []
+    for i, ls in enumerate(loops):
+        if len(ls) == 1 and len(ls[0]) == 3:
+            rows.append(ls[0])
+            faces.append(i)
+    if not rows:
+        return np.zeros((0, 3), dtype=np.int64), np.zeros(0, dtype=np.int64)
+    return np.asarray(rows, dtype=np.int64), np.asarray(faces, dtype=np.int64)
+
+
+def _triangles_direct(verts, rows, normals):
+    """Which of the triangle `rows` ``_triangle`` takes directly, decided for all of them
+    at once: the same cross product test on the same doubles, only without a call and a
+    small array per face."""
+    pa, pb, pc = verts[rows[:, 0]], verts[rows[:, 1]], verts[rows[:, 2]]
+    ux, uy, uz = pb[:, 0] - pa[:, 0], pb[:, 1] - pa[:, 1], pb[:, 2] - pa[:, 2]
+    vx, vy, vz = pc[:, 0] - pa[:, 0], pc[:, 1] - pa[:, 1], pc[:, 2] - pa[:, 2]
+    cx, cy, cz = uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx
+    nn = cx * cx + cy * cy + cz * cz
+    sliver = 1e-24 * ((ux * ux + uy * uy + uz * uz) * (vx * vx + vy * vy + vz * vz))
+    return (nn > 0.0) & (nn > sliver) & \
+           (cx * normals[:, 0] + cy * normals[:, 1] + cz * normals[:, 2] > 0.0)
+
+
 def triangulate_payload(payload):
     """``(tris, tags)`` for a :func:`mesh_payload`: the triangles of every face.
 
     The same walk as ``to_manifold`` - a plane per face, its loops to local
     coordinates, ``manifold3d.triangulate``, corners back to rows of ``verts`` -
-    so the result is identical whether it runs here or in a worker."""
+    so the result is identical whether it runs here or in a worker.
+
+    The faces that are a single triangle (nearly every face of an imported mesh) are
+    collected in one go instead of one ``_triangle`` call each, which is what made a
+    group of 200k faces take seconds here; the faces that need ear clipping still walk
+    ``_loop_triangles`` one by one."""
     verts, loops, normals, tags = payload
-    tris = []
-    out = [] if tags is not None else None
+    rows, faces = _triangle_rows(loops)
+    if len(rows):
+        keep = _triangles_direct(verts, rows, normals[faces])
+        rows, faces = rows[keep], faces[keep]
+    counts = np.zeros(len(loops), dtype=np.int64)
+    counts[faces] = 1
+    done = set(faces.tolist())
+    rest = []
     for i, ls in enumerate(loops):
+        if i in done:
+            continue
         ids = [v for loop in ls for v in loop]
         if not ids:
             continue
         t = _loop_triangles(verts, ls, normals[i])
-        for a, b, c in t:
-            tris.append((ids[a], ids[b], ids[c]))
-            if out is not None:
-                out.append(int(tags[i]))
-    if not tris:
-        return np.zeros((0, 3), dtype=np.int64), (np.zeros(0, dtype=np.uint64) if out is not None else None)
-    return np.asarray(tris, dtype=np.int64), (np.asarray(out, dtype=np.uint64) if out is not None else None)
+        if len(t):
+            rest.append((i, np.asarray(ids, dtype=np.int64)[t]))
+            counts[i] = len(t)
+    at = np.zeros(len(loops) + 1, dtype=np.int64)
+    np.cumsum(counts, out=at[1:])
+    tris = np.zeros((int(at[-1]), 3), dtype=np.int64)
+    if len(faces):
+        tris[at[faces]] = rows
+    for i, t in rest:
+        tris[at[i]:at[i] + len(t)] = t
+    if tags is None:
+        return tris, None
+    return tris, np.repeat(tags, counts)
 
 
 def manifold_from_tris(verts, tris, tags):
