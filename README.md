@@ -56,6 +56,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   countersink for a flat head or a hexagonal pocket that holds a nut; a hole that runs
   sideways can get a 45° teardrop roof so it prints without support; the clearance (0.2 mm by
   default) is added to every diameter, because a printed hole comes out smaller than drawn
+- **Clearance Test** (Tools > Print Tools): a small test print that shows which clearance your
+  printer likes: a plate with a row of holes that grow by a step, each with its clearance in
+  raised letters, and a loose pin next to it; print it, try the pin in every hole and use the
+  clearance of the hole it fits best in Screw Hole, threads and Cut and Join
 - **Elephant Foot Chamfer** (Tools > Print Tools): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

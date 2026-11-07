@@ -271,6 +271,26 @@ class Settings:
             self.screw_hole_clearance = threads.DEFAULT_HOLE_CLEARANCE
         self.screw_hole_clearance = max(0.0, min(1.0, self.screw_hole_clearance))
         self.screw_hole_teardrop = self._bool("screw_hole_teardrop", False)
+        try:
+            self.clearance_test_pin = float(self.q.value("clearance_test_pin", 5.0))
+        except (TypeError, ValueError):
+            self.clearance_test_pin = 5.0
+        self.clearance_test_pin = max(2.0, min(20.0, self.clearance_test_pin))
+        try:
+            self.clearance_test_first = float(self.q.value("clearance_test_first", 0.0))
+        except (TypeError, ValueError):
+            self.clearance_test_first = 0.0
+        self.clearance_test_first = max(0.0, min(1.0, self.clearance_test_first))
+        try:
+            self.clearance_test_step = float(self.q.value("clearance_test_step", 0.1))
+        except (TypeError, ValueError):
+            self.clearance_test_step = 0.1
+        self.clearance_test_step = max(0.05, min(0.5, self.clearance_test_step))
+        try:
+            self.clearance_test_count = int(float(self.q.value("clearance_test_count", 6)))
+        except (TypeError, ValueError):
+            self.clearance_test_count = 6
+        self.clearance_test_count = max(2, min(10, self.clearance_test_count))
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
@@ -312,6 +332,10 @@ class Settings:
         self.q.setValue("screw_hole_kind", self.screw_hole_kind)
         self.q.setValue("screw_hole_clearance", self.screw_hole_clearance)
         self.q.setValue("screw_hole_teardrop", self.screw_hole_teardrop)
+        self.q.setValue("clearance_test_pin", self.clearance_test_pin)
+        self.q.setValue("clearance_test_first", self.clearance_test_first)
+        self.q.setValue("clearance_test_step", self.clearance_test_step)
+        self.q.setValue("clearance_test_count", self.clearance_test_count)
         self.q.setValue("recent", self.recent[:8])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
@@ -2988,6 +3012,11 @@ class MainWindow(QMainWindow):
                               lambda checked=False: self.screw_hole_dialog(), None, None, False,
                               tr("A printable hole for a metric screw: straight, with a "
                                  "counterbore, a countersunk head or a nut pocket"))
+        self.a_clearance_test = A(tr("Clearance Test…"),
+                                  lambda checked=False: self.clearance_test_dialog(), None, None,
+                                  False,
+                                  tr("A small test print that shows which clearance fits your "
+                                     "printer: a row of holes with a loose pin"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -3189,7 +3218,7 @@ class MainWindow(QMainWindow):
         self.print_tools_menu = QMenu(tr("P&rint Tools"), m)
         self.fill(self.print_tools_menu, (self.a_thread, self.a_thread_ext, self.a_thread_int,
                                           self.a_thread_bolt, self.a_thread_nut,
-                                          self.a_screw_hole, None,
+                                          self.a_screw_hole, self.a_clearance_test, None,
                                           self.a_cutplane, self.a_cut_join, None,
                                           self.a_fillet, self.a_chamfer, self.a_elephant,
                                           self.a_mouse_ears))
@@ -6155,6 +6184,78 @@ class MainWindow(QMainWindow):
             self.view.set_status(tr("Screw hole failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Cutting the hole…"), on_done=done, on_error=failed)
+
+    # ------------------------------------------------------------ clearance test
+
+    def clearance_test_dialog(self):
+        """Tools > Print Tools > Clearance Test…: a plate with a row of holes that grow by a
+        step and a loose pin, so the user learns which clearance the printer likes."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Clearance Test"))
+        form = QFormLayout(dlg)
+        pin_sp = self._spin(2.0, 20.0, self.settings.clearance_test_pin, 1, " mm", 0.5)
+        first_sp = self._spin(0.0, 1.0, self.settings.clearance_test_first, 2, " mm", 0.05)
+        step_sp = self._spin(0.05, 0.5, self.settings.clearance_test_step, 2, " mm", 0.05)
+        count_sp = QSpinBox()
+        count_sp.setRange(2, 10)
+        count_sp.setValue(self.settings.clearance_test_count)
+        form.addRow(tr("Pin diameter"), pin_sp)
+        form.addRow(tr("First clearance"), first_sp)
+        form.addRow(tr("Step"), step_sp)
+        form.addRow(tr("Number of holes"), count_sp)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        pin_d, first = float(pin_sp.value()), float(first_sp.value())
+        step, count = float(step_sp.value()), int(count_sp.value())
+        self.settings.clearance_test_pin = pin_d
+        self.settings.clearance_test_first = first
+        self.settings.clearance_test_step = step
+        self.settings.clearance_test_count = count
+        self.settings.save()
+        self._apply_clearance_test(pin_d, first, step, count)
+
+    def _apply_clearance_test(self, pin_d, first, step, count):
+        doc = self.doc
+        # a clearance never grows past 2 mm, so the step is made smaller when the row would
+        step = min(step, (2.0 - first) / max(1, count - 1))
+        clearances = tuple(first + i * step for i in range(count))
+        bb = doc.model_bbox()
+        x0 = 0.0 if bb is None else float(bb[1][0]) + 10.0   # mm to the right of the model
+        segments = int(self.settings.circle_segments)
+
+        def work(report):
+            # the letters of the labels are the slow part of a plate with many holes, so it
+            # happens here and the window keeps responding
+            report(0.1, tr("Building the clearance test…"))
+            plate, pin = threads.clearance_test(pin_d=pin_d, clearances=clearances,
+                                                segments=segments)
+            for m in (plate, pin):
+                if m.status() != mf.Error.NoError or m.is_empty():
+                    raise ValueError(tr("the result is not a valid volume"))
+            # the plate is drawn around its first hole: move the test to the free spot on the bed
+            dx = x0 - float(np.asarray(plate.bounding_box())[0])
+            return plate.translate((dx, 0.0, 0.0)), pin.translate((dx, 0.0, 0.0))
+
+        def done(result):
+            plate, pin = result
+            doc.checkpoint()                # one undo takes the plate and the pin away
+            color = self.settings.current_color
+            new = [ops.group_from_manifold(doc, plate, color, tr("Clearance test")),
+                   ops.group_from_manifold(doc, pin, color, tr("Clearance test pin"))]
+            doc.set_selection([("g", g.id, g.id) for g in new])
+            doc.notify()
+            self.view.set_status(tr("Print it and use the clearance of the hole the pin "
+                                    "fits best."))
+
+        def failed(exc):
+            self.view.set_status(tr("Clearance test failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the clearance test…"),
+                       on_done=done, on_error=failed)
 
     # ------------------------------------------------------------ cut & join
     # (label, joints.KINDS identifier; the identifiers stay Dutch)

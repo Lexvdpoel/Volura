@@ -251,6 +251,88 @@ def screw_hole(manifold, center, axis, length, size, kind, clearance=DEFAULT_HOL
     return manifold - _place(cutter, center, axis)
 
 
+# ------------------------------------------------------------- clearance test
+
+CLEARANCE_TEST_THICKNESS = 4.0   # mm how thick the plate of a clearance test is
+CLEARANCE_TEST_LABEL = 0.6       # mm how high the clearance stands above the plate
+CLEARANCE_TEST_ROOM = 1.0        # mm between a hole and the letters that name it
+CLEARANCE_TEST_CHAMFER = 0.4     # mm how the top edge of the pin is bevelled, so it enters easily
+
+
+def _clearance_label(text, family, height, max_width):
+    """The outlines of `text`, centred on the origin and at most `max_width` mm wide.
+
+    Empty when there are no fonts or when the text yields nothing: a plate without labels is
+    not an error, the row of holes works just as well.
+    """
+    from . import fonts           # Qt: only here, this core is Qt-free
+    try:
+        loops = fonts.text_loops(text, family, height) if fonts.has_fonts() else []
+    except Exception:
+        return []
+    if not loops:
+        return []
+    allp = np.concatenate([np.asarray(L, dtype=float) for L in loops])
+    wide = float(allp[:, 0].max() - allp[:, 0].min())
+    s = min(1.0, max_width / wide) if wide > 1e-9 else 1.0
+    c = (allp.min(axis=0) + allp.max(axis=0)) / 2.0
+    return [np.ascontiguousarray((np.asarray(L, dtype=float) - c) * s) for L in loops]
+
+
+def clearance_test(pin_d=5.0, clearances=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5),
+                   thickness=CLEARANCE_TEST_THICKNESS, label_height=3.0, segments=64,
+                   family=None):
+    """A plate with a row of holes and a loose pin: what clearance does this printer like?
+
+    Returns ``(plate, pin)`` as two manifolds in one frame, so the caller can move them
+    together. The plate lies on z = 0 and is ``thickness`` mm high, with a hole of
+    Ø pin_d + c for every clearance in ``clearances``: a row along X, ``pin_d + 6`` mm from
+    centre to centre and 5 mm from the edge. Under every hole, on the top face, stands its
+    clearance in letters of 0.6 mm, centred on the hole and inside the plate, which is that
+    much deeper at the front. The pin is a cylinder of Ø pin_d and ``thickness`` + 4 mm high
+    with a 0.4 mm chamfer on top, standing on the bed 5 mm behind the plate in +Y.
+
+    With the clearances from small to large the holes grow from left to right, so the user
+    prints the plate once, tries the pin in every hole and reads the clearance off the hole
+    in which it fits best: that is the clearance to use in Screw Hole, threads and Cut and
+    Join. Without fonts the plate simply has no labels, and the row still works.
+    """
+    pin_d = float(pin_d)
+    if not 2.0 <= pin_d <= 20.0:
+        raise ValueError(tr("the pin of a clearance test must be 2 to 20 mm wide"))
+    clrs = [float(c) for c in clearances]
+    if len(clrs) < 2:
+        raise ValueError(tr("a clearance test needs at least two holes"))
+    if any(not 0.0 <= c <= 2.0 for c in clrs):
+        raise ValueError(tr("the clearance of a clearance test must be 0 to 2 mm"))
+    thickness, label_height = float(thickness), float(label_height)
+    segments = max(12, int(segments))
+    spacing = pin_d + 6.0
+    radii = [0.5 * (pin_d + c) for c in clrs]
+    xs = [i * spacing for i in range(len(clrs))]
+    # 5 mm of plate all around the holes, and as much more in front of them for the letters
+    back, front = max(radii) + 5.0, max(radii) + 5.0 + CLEARANCE_TEST_ROOM + label_height
+    lo, hi = -radii[0] - 5.0, xs[-1] + radii[-1] + 5.0
+    plate = mf.Manifold.cube([hi - lo, back + front, thickness]).translate((lo, -front, 0.0))
+    margin = 0.5                      # mm past both faces, so the hole leaves no skin behind
+    for x, r in zip(xs, radii):
+        hole = mf.Manifold.cylinder(thickness + 2.0 * margin, r, r, segments)
+        plate = plate - hole.translate((x, 0.0, -margin))
+    for x, c, r in zip(xs, clrs, radii):
+        loops = _clearance_label(f"{round(c, 2):g}", family, label_height, spacing - 2.0)
+        if loops:
+            lab = mf.Manifold.extrude(mf.CrossSection(loops, mf.FillRule.NonZero),
+                                      CLEARANCE_TEST_LABEL)
+            plate = plate + lab.translate((x, -(r + CLEARANCE_TEST_ROOM
+                                               + 0.5 * label_height), thickness))
+    r, h = 0.5 * pin_d, thickness + 4.0
+    body = mf.Manifold.cylinder(h - CLEARANCE_TEST_CHAMFER, r, r, segments)
+    top = mf.Manifold.cylinder(CLEARANCE_TEST_CHAMFER, r, r - CLEARANCE_TEST_CHAMFER, segments)
+    pin = (body + top.translate((0.0, 0.0, h - CLEARANCE_TEST_CHAMFER))
+           ).translate((0.0, back + 5.0 + r, 0.0))
+    return plate, pin
+
+
 # ------------------------------------------------- selection -> thread context
 
 def circle_loop(points, min_points=12):
