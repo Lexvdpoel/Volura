@@ -3,6 +3,17 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.14 — 2026-11-07
+
+### New
+- **Fit Test** (worksheet, View > Fit Test…): a comb of slots that grow by a step, each
+  with its offset engraved under it. Cut it from the sheet you use, push an offcut into
+  every slot and use the offset of the slot that holds it best.
+
+### Website
+- The feature overview now also shows the print tools of the last versions (elephant foot
+  chamfer, mouse ears, lay flat, arrange on bed), the test prints and the living hinge.
+
 ## 0.2.13 — 2026-11-07
 
 ### New
