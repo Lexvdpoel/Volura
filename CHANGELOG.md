@@ -3,6 +3,14 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.18 — 2026-11-07
+
+### Improved
+- Big meshes are faster to work with: importing a mesh of 200,000 triangles turns it into
+  faces about a quarter faster, and Entity Info, export and Print Check triangulate such a
+  part about eight times faster.
+- Print Check only checks two parts for overlap when they can touch at all.
+
 ## 0.2.17 — 2026-11-07
 
 ### Fixed
