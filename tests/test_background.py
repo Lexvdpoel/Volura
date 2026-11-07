@@ -9,7 +9,9 @@ error or a cancel back to the GUI thread. These tests (Qt offscreen) check that:
 * an error in the task is shown with the same message as the synchronous route;
 * cancelling leaves no half-written file behind;
 * the document is not changed by a background task, and the window is marked
-  busy for the duration of the job (so the canvas and the SpaceMouse stay still).
+  busy for the duration of the job (so the canvas and the SpaceMouse stay still);
+* a flood of short jobs all come back with the right outcome, also when the caller
+  drops the job (the runnable must outlive the pool thread that ran it).
 """
 import hashlib
 import os
@@ -335,6 +337,37 @@ def test_a_finished_job_is_not_kept_by_the_window(win):
     assert job.result == 7
     assert job.parent() is None
     assert job not in win.findChildren(background.BackgroundJob)
+
+
+def test_two_hundred_short_jobs_all_deliver_their_outcome(win):
+    """Hammer the hand-over between the pool thread and the GUI thread.
+
+    A runnable the pool deletes on its own thread while Python still uses it (or still
+    has one of its signals on the way) takes the process down with an access violation,
+    so Python owns the runnables. 200 jobs that return at once do that hand-over 200
+    times, half of them with the caller dropping the job right away as the app does."""
+    done, errors, kept = [], [], []
+    for i in range(200):
+        def task(report, i=i):
+            if i % 5 == 4:
+                raise ValueError(i)
+            return i
+
+        job = background.run(win, task, text="Working…", show_dialog=False,
+                             on_done=done.append, on_error=errors.append)
+        if i % 2 == 0:
+            kept.append((i, job))         # half of them: the caller keeps the job
+    assert pump_until(lambda: len(done) + len(errors) == 200, 20000), "jobs never came back"
+    assert sorted(done) == [i for i in range(200) if i % 5 != 4]
+    assert sorted(int(str(e)) for e in errors) == [i for i in range(200) if i % 5 == 4]
+    for i, job in kept:
+        assert job.done and not job.was_cancelled
+        assert job.result == (None if i % 5 == 4 else i)
+        assert job.error is None or i % 5 == 4
+    again = background.run(win, lambda report: "still works", text="Working…",
+                           show_dialog=False, wait=True)
+    assert again.result == "still works", "the pool stopped taking jobs"
+    assert not win._busy
 
 
 def test_the_gil_switches_quickly_only_while_a_job_runs(win):

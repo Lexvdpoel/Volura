@@ -40,6 +40,12 @@ PROGRESS_DELAY_MS = 300
 #: jobs that are still running, so Python keeps them (and their signals) alive
 _ACTIVE: set["BackgroundJob"] = set()
 
+#: runnables that ran, kept until the pool thread that ran them is surely done (see _retire)
+_RETIRED: list["_Worker"] = []
+
+#: how many finished runnables to keep before the oldest one goes
+RETIRED_MAX = 16
+
 #: the user input that could change the model while a job reads it
 _INPUT = {QEvent.MouseButtonPress, QEvent.MouseButtonRelease, QEvent.MouseButtonDblClick,
           QEvent.MouseMove, QEvent.Wheel, QEvent.KeyPress, QEvent.KeyRelease,
@@ -119,7 +125,9 @@ class _Worker(QRunnable):
         self.fn = fn
         self.signals = _TaskSignals()
         self.cancel_event = threading.Event()
-        self.setAutoDelete(True)
+        # not the pool: it would delete the runnable on its own thread, while Python still
+        # holds it and its signals object, whose last signal may still be on its way
+        self.setAutoDelete(False)
 
     def report(self, fraction=None, text=None):
         """The progress callback handed to the task; raises on cancel."""
@@ -142,6 +150,22 @@ class _Worker(QRunnable):
                 self.signals.cancelled.emit()
             else:
                 self.signals.finished.emit(result)
+
+
+def _retire(worker):
+    """Keep a runnable that ran, and let the oldest ones go.
+
+    The last signal of a task reaches the GUI thread while its pool thread may still be
+    just past ``run()``, inside QThreadPool, where it touches the runnable once more; a
+    runnable deleted then takes the whole process down (Windows: access violation, in a
+    pooled thread with no Python frame). So the job hands its runnable here instead of
+    letting its own end delete it, and a runnable only goes when ``RETIRED_MAX`` newer
+    ones finished behind it, which is long after that thread moved on.
+    """
+    worker.fn = None                      # what the task captured goes right away
+    _RETIRED.append(worker)
+    if len(_RETIRED) > RETIRED_MAX:
+        del _RETIRED[:len(_RETIRED) - RETIRED_MAX]
 
 
 class BackgroundJob(QObject):
@@ -273,6 +297,7 @@ class BackgroundJob(QObject):
             self._dialog.deleteLater()
             self._dialog = None
         _ACTIVE.discard(self)
+        _retire(self._worker)             # the pool thread is not finished with it yet
         _quick_gil_switch()
         self._set_busy()
         # the window no longer keeps the job (and its result) alive: only whoever holds it
