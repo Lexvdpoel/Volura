@@ -247,6 +247,17 @@ class Settings:
         except (TypeError, ValueError):
             self.elephant_foot_size = ops.ELEPHANT_FOOT_SIZE
         self.elephant_foot_size = max(0.1, min(2.0, self.elephant_foot_size))
+        try:
+            self.mouse_ear_diameter = float(self.q.value("mouse_ear_diameter",
+                                                         ops.MOUSE_EAR_DIAMETER))
+        except (TypeError, ValueError):
+            self.mouse_ear_diameter = ops.MOUSE_EAR_DIAMETER
+        self.mouse_ear_diameter = max(5.0, min(30.0, self.mouse_ear_diameter))
+        try:
+            self.mouse_ear_height = float(self.q.value("mouse_ear_height", ops.MOUSE_EAR_HEIGHT))
+        except (TypeError, ValueError):
+            self.mouse_ear_height = ops.MOUSE_EAR_HEIGHT
+        self.mouse_ear_height = max(0.1, min(2.0, self.mouse_ear_height))
         self.screw_hole_size = str(self.q.value("screw_hole_size", "M3"))
         if self.screw_hole_size not in threads.SCREW_HOLES:
             self.screw_hole_size = "M3"
@@ -295,6 +306,8 @@ class Settings:
         self.q.setValue("filament_diameter", self.filament_diameter)
         self.q.setValue("filament_price", self.filament_price)
         self.q.setValue("elephant_foot_size", self.elephant_foot_size)
+        self.q.setValue("mouse_ear_diameter", self.mouse_ear_diameter)
+        self.q.setValue("mouse_ear_height", self.mouse_ear_height)
         self.q.setValue("screw_hole_size", self.screw_hole_size)
         self.q.setValue("screw_hole_kind", self.screw_hole_kind)
         self.q.setValue("screw_hole_clearance", self.screw_hole_clearance)
@@ -2988,6 +3001,10 @@ class MainWindow(QMainWindow):
                             lambda checked=False: self.elephant_foot_chamfer(), None, None, False,
                             tr("A small chamfer along the bottom edges, so the first printed "
                                "layer does not stick out"))
+        self.a_mouse_ears = A(tr("Mouse Ears…"),
+                              lambda checked=False: self.mouse_ears_dialog(), None, None, False,
+                              tr("Thin discs on the bed under the sharp bottom corners of a "
+                                 "part, so those corners do not lift while printing"))
 
         self.a_prefs = A(tr("&Preferences"), self.preferences)
         self.a_model_info = A(tr("&Model Info"), lambda checked=False: self.model_info())
@@ -3174,7 +3191,8 @@ class MainWindow(QMainWindow):
                                           self.a_thread_bolt, self.a_thread_nut,
                                           self.a_screw_hole, None,
                                           self.a_cutplane, self.a_cut_join, None,
-                                          self.a_fillet, self.a_chamfer, self.a_elephant))
+                                          self.a_fillet, self.a_chamfer, self.a_elephant,
+                                          self.a_mouse_ears))
         self.fill(m, (self.tool_actions["select"], self.tool_actions["eraser"], self.tool_actions["paint"],
                       None,
                       self.tool_actions["move"], self.tool_actions["rotate"], self.tool_actions["scale"],
@@ -5537,6 +5555,74 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Volura", str(exc))    # nothing changed, so no undo
 
         background.run(self, work, text=tr("Chamfering the bottom edges…"),
+                       on_done=done, on_error=failed)
+
+    # ------------------------------------------------------------ mouse ears
+
+    def mouse_ears_dialog(self):
+        """Tools > Print Tools > Mouse Ears…: thin discs on the bed under the sharp bottom
+        corners of the selected groups, so those corners do not lift (warp) while printing."""
+        gids = list(dict.fromkeys(i for k, _ctx, i in self._target_items()
+                                  if k == "g" and self.doc.group(i) is not None))
+        if not gids:
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Mouse Ears"))
+        form = QFormLayout(dlg)
+        dia_sp = self._spin(5.0, 30.0, self.settings.mouse_ear_diameter, 1, " mm", 0.5)
+        hgt_sp = self._spin(0.1, 2.0, self.settings.mouse_ear_height, 2, " mm", 0.1)
+        form.addRow(tr("Diameter"), dia_sp)
+        form.addRow(tr("Height"), hgt_sp)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        diameter, height = float(dia_sp.value()), float(hgt_sp.value())
+        self.settings.mouse_ear_diameter = diameter
+        self.settings.mouse_ear_height = height
+        self.settings.save()
+        self._run_mouse_ears(gids, diameter, height)
+
+    def _run_mouse_ears(self, gids, diameter, height):
+        """The background run of Mouse Ears, one undo step for all the parts together."""
+        segments = int(self.settings.circle_segments)
+
+        def work(report):
+            # the boolean of every part is the slow part: seconds for a big model, so it
+            # happens here and the window keeps responding
+            out, skipped = [], 0
+            for n, gid in enumerate(gids):
+                report(n / len(gids), tr("Adding mouse ears…"))
+                g = self.doc.group(gid)
+                new = ops.mouse_ears_part(g, diameter, height, segments=segments)
+                if new is None:
+                    skipped += 1
+                else:
+                    out.append((g, new))
+            return out, skipped
+
+        def done(result):
+            out, skipped = result
+            if not out:
+                # nothing changed: no undo step either
+                self.hint.setText(tr("None of these parts has a sharp bottom corner."))
+                return
+            self.doc.checkpoint()         # one undo brings all the old shapes back
+            for g, new in out:
+                g.ents = new
+            self.doc.notify()
+            msg = tr("Added mouse ears to {n} parts.").format(n=len(out))
+            if skipped:
+                msg += " " + tr("{n} parts were skipped: no sharp bottom corners, or not a "
+                                "closed volume.").format(n=skipped)
+            self.hint.setText(msg)
+
+        def failed(exc):
+            QMessageBox.warning(self, "Volura", str(exc))    # nothing changed, so no undo
+
+        background.run(self, work, text=tr("Adding mouse ears…"),
                        on_done=done, on_error=failed)
 
     def _maybe_suggest_scale_up(self, groups):

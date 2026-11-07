@@ -660,6 +660,100 @@ def elephant_foot(doc: Document, items, size, segments=64):
     return changed, skipped
 
 
+# The defaults of Tools > Print Tools > Mouse Ears: thin round discs on the bed under the
+# sharp bottom corners of a part, so those corners do not lift (warp) off the bed while
+# printing - a classic trick for ABS and ASA and for large flat parts. The discs are cut off
+# after printing. A hull corner is "sharp" when its interior angle is at most this many
+# degrees: a box has four corners of 90° and gets an ear on each, a cylinder's hull corners
+# are nearly flat and get none.
+MOUSE_EAR_DIAMETER = 10.0
+MOUSE_EAR_HEIGHT = 0.4
+MOUSE_EAR_MAX_ANGLE = 100.0
+
+
+def _sharp_hull_corners(hull, max_angle):
+    """The corners of a convex hull whose interior angle is at most `max_angle` degrees.
+    `hull_2d` repeats the point where its two chains meet, so consecutive duplicates go
+    first; a corner between two identical points has no angle and would otherwise be lost."""
+    limit = math.radians(max_angle)
+    pts = [p for i, p in enumerate(hull) if not np.array_equal(p, hull[i - 1])]
+    sharp = []
+    for i, cur in enumerate(pts):
+        a, b = pts[i - 1] - cur, pts[(i + 1) % len(pts)] - cur
+        na, nb = float(np.linalg.norm(a)), float(np.linalg.norm(b))
+        if na < 1e-9 or nb < 1e-9:
+            continue
+        if math.acos(float(np.clip(np.dot(a, b) / (na * nb), -1.0, 1.0))) <= limit:
+            sharp.append(cur)
+    return sharp
+
+
+def mouse_ears_part(g: Group, diameter, height, max_angle=MOUSE_EAR_MAX_ANGLE, segments=48):
+    """The geometry of `g` with a thin disc under every sharp bottom corner, or None when
+    there is nothing to add.
+
+    Reads the group and changes nothing, so it can run in a background task, as
+    `elephant_foot_chamfer` does. The vertices at the lowest z of the group (within
+    `BOTTOM_TOL`) are put on their 2D convex hull; every hull corner sharper than `max_angle`
+    degrees gets a cylinder of `diameter` and `height` standing on that z, and all of them are
+    unioned with the part. None for a locked group, one that is not a closed volume, one that
+    does not stand flat on its bottom (fewer than three bottom vertices), one without sharp
+    corners and one whose union does not come out right."""
+    if g.locked:
+        return None
+    bb = g.ents.bbox()
+    if bb is None or not g.ents.V:
+        return None
+    z = float(bb[0][2])
+    bottom = np.array([p for p in g.ents.V.values() if abs(float(p[2]) - z) <= BOTTOM_TOL],
+                      dtype=float)
+    if len(bottom) < 3:
+        return None
+    hull = hull_2d(bottom[:, :2])
+    if len(hull) < 3:
+        return None
+    corners = _sharp_hull_corners(hull, max_angle)
+    if not corners:
+        return None
+    try:
+        man = g.ents.to_manifold()
+    except Exception:
+        return None
+    if man.is_empty() or man.status() != mf.Error.NoError:
+        return None
+    r = float(diameter) / 2.0
+    ears = [mf.Manifold.cylinder(float(height), r, r, int(segments)).translate((c[0], c[1], z))
+            for c in corners]
+    res = union_all([man] + ears)
+    if res.is_empty() or res.status() != mf.Error.NoError:
+        return None
+    return Entities.from_manifold(res)
+
+
+def mouse_ears(doc: Document, items, diameter, height, segments=48):
+    """Mouse Ears: a thin disc on the bed under the sharp bottom corners of the given groups.
+
+    A sharp corner of a flat bottom lifts off the bed while printing (warping), most of all
+    with ABS and ASA and on large flat parts; a thin disc under each corner holds it down and
+    is cut off after printing. Every group keeps its name and color, only its geometry
+    changes; the caller takes the checkpoint, so one undo brings the old shape back. Returns
+    (groups with ears, groups skipped); see `mouse_ears_part` for the groups that are skipped."""
+    changed = skipped = 0
+    seen = set()
+    for k, _ctx, i in items:
+        g = doc.group(i) if k == "g" else None
+        if g is None or g.id in seen:
+            continue
+        seen.add(g.id)
+        new = mouse_ears_part(g, diameter, height, segments=segments)
+        if new is None:
+            skipped += 1
+        else:
+            g.ents = new
+            changed += 1
+    return changed, skipped
+
+
 def mirror(doc: Document, items, axis):
     bb = selection_bbox(doc, items)
     if bb is None:

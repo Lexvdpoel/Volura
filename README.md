@@ -60,6 +60,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is
   remembered, and parts that stand on a point or a tilted edge are left alone
+- **Mouse Ears** (Tools > Print Tools): thin round discs on the bed under the sharp bottom corners
+  of the selected groups (or all visible ones), so those corners do not lift (warp) while printing -
+  a classic trick for ABS and ASA and for large flat parts; a corner is sharp when its angle is at
+  most 100°, so a box gets an ear on each corner and a cylinder gets none, and the discs are cut off
+  after printing
 - **Overhang view** (View > Face Style > Overhangs): marks every face that hangs over more steeply
   than the limit (45° from the vertical by default, under *Window > Preferences > Drawing*) in a
   warning colour, so you see at a glance what needs support; faces that lie on the print bed are
