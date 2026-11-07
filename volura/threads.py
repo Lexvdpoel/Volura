@@ -105,17 +105,19 @@ def thread_solid(major_d, pitch, length, internal=False, clearance=0.0, starts=1
     return man
 
 
-def _place(man, center, axis):
-    """Transform a solid lying along +Z from 0 to (center, axis)."""
+def _rotation(axis):
+    """The rotation that takes +Z to ``axis``, the one _place uses."""
     a = normalize(np.asarray(axis, dtype=float))
-    center = np.asarray(center, dtype=float)
     z = np.array([0.0, 0.0, 1.0])
     w = np.cross(z, a)
     if np.linalg.norm(w) < 1e-12:
-        M3 = np.eye(3) if float(z @ a) > 0 else np.diag([1.0, -1.0, -1.0])
-    else:
-        M3 = rotation_matrix(w, math.atan2(float(np.linalg.norm(w)), float(z @ a)))
-    return man.transform(affine(M3, center))
+        return np.eye(3) if float(z @ a) > 0 else np.diag([1.0, -1.0, -1.0])
+    return rotation_matrix(w, math.atan2(float(np.linalg.norm(w)), float(z @ a)))
+
+
+def _place(man, center, axis):
+    """Transform a solid lying along +Z from 0 to (center, axis)."""
+    return man.transform(affine(_rotation(axis), np.asarray(center, dtype=float)))
 
 
 def external_on(manifold, center, axis, radius, length, pitch=1.5, clearance=0.0,
@@ -175,8 +177,23 @@ DEFAULT_HOLE_CLEARANCE = 0.2   # mm on every diameter of a hole: printed holes c
 COUNTERBORE_ROOM = 0.2         # mm the counterbore goes deeper than the head, so it sits low
 
 
+def _teardrop_loop(radius, up, segments):
+    """The outline of a teardrop hole: a circle with a 45° roof towards ``up``.
+
+    The roof is made of the two tangents from the point at ``radius`` * sqrt(2) in the
+    direction of ``up``; they touch the circle at 45° left and right of it, so the top of
+    the hole is a point. A loop in the xy-plane of a solid that runs along +Z.
+    """
+    a = math.atan2(float(up[1]), float(up[0]))
+    # three quarters of the circle, from one tangent point round the bottom to the other
+    ang = np.linspace(a + 0.25 * math.pi, a + 1.75 * math.pi, max(3, round(0.75 * segments)) + 1)
+    pts = np.column_stack([np.cos(ang), np.sin(ang)]) * radius
+    tip = np.array([math.cos(a), math.sin(a)]) * radius * math.sqrt(2.0)
+    return np.vstack([pts, tip])
+
+
 def screw_hole(manifold, center, axis, length, size, kind, clearance=DEFAULT_HOLE_CLEARANCE,
-               segments=64):
+               segments=64, teardrop=False):
     """A printable hole for a metric screw, cut along (center, axis) into the solid.
 
     ``kind`` is "through" (a straight clearance hole), "counterbore" (a cylinder of the
@@ -187,6 +204,9 @@ def screw_hole(manifold, center, axis, length, size, kind, clearance=DEFAULT_HOL
     nut while the screw goes through the rest). The hole goes through the whole
     ``length``, past the face and out at the back, so the cut leaves no skin behind.
     ``clearance`` (mm) is added to every diameter, because printed holes come out smaller.
+    ``teardrop`` gives the straight hole a 45° roof that points up in the model, so a hole
+    that runs sideways prints without support under its top; a hole that is more vertical
+    than that needs no roof, and the room for the head always stays round.
     """
     if size not in SCREW_HOLES:
         raise ValueError(tr("unknown screw size {size}").format(size=size))
@@ -199,8 +219,15 @@ def screw_hole(manifold, center, axis, length, size, kind, clearance=DEFAULT_HOL
     segments = max(12, int(segments))
     margin = max(0.5, 0.02 * length)      # mm past both faces, so no skin is left
     r_hole = (hole_d + clearance) / 2.0
-    cutter = mf.Manifold.cylinder(length + 2.0 * margin, r_hole, r_hole, segments) \
-        .translate((0.0, 0.0, -margin))
+    if teardrop and abs(float(normalize(np.asarray(axis, dtype=float))[2])) < 0.5:
+        # the roof has to point up in the model, so the profile turns with the hole: this is
+        # the direction in its own plane that _place later maps onto world +Z
+        up = (_rotation(axis).T @ np.array([0.0, 0.0, 1.0]))[:2]
+        hole = mf.Manifold.extrude(mf.CrossSection([_teardrop_loop(r_hole, up, segments)]),
+                                   length + 2.0 * margin)
+    else:
+        hole = mf.Manifold.cylinder(length + 2.0 * margin, r_hole, r_hole, segments)
+    cutter = hole.translate((0.0, 0.0, -margin))
     if kind == "counterbore":
         depth = head_h + COUNTERBORE_ROOM + margin
         head = mf.Manifold.cylinder(depth, (head_d + clearance) / 2.0,

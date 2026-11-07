@@ -9,10 +9,12 @@ loses pi * 1.8² * 10 = 101.8 mm³. A counterbore adds a cylinder of the head Ø
 to the depth of the head + 0.2 mm; a countersink adds a 90° cone that ends in the hole; a
 nut pocket adds a hexagonal prism of the nut (`threads.HEX_NUTS`: width across flats and
 height, ISO 4032), so a hex nut lies in the pocket while the screw goes through the hole.
+A teardrop puts a 45° roof on a hole that runs sideways, so it prints without support.
 
 These tests (Qt offscreen) check the volumes of the four kinds on a block with a circle
 drawn on top, that the hole goes through, the openings in the top and bottom face, the
-error of a face that is not a circle, and one undo for the whole operation.
+roof of a sideways hole, the error of a face that is not a circle, and one undo for the
+whole operation.
 
 Run with:  python -m pytest tests/test_screw_hole.py
 """
@@ -27,7 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import manifold3d as mf  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
-from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QDoubleSpinBox  # noqa: E402
+from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox  # noqa: E402
 
 from volura import app as app_module, ops, threads  # noqa: E402
 from volura.brep import Entities  # noqa: E402
@@ -74,24 +76,44 @@ def block(doc, name="block", color="#cccccc"):
     return ops.group_from_manifold(doc, mf.Manifold.cube(BLOCK), color, name)
 
 
-def draw_circle(g, radius=3.0):
-    """A circle drawn in the middle of the top face, as the Circle tool makes it.
+def draw_circle(g, radius=3.0, center=None, normal=None):
+    """A circle drawn on a face, as the Circle tool makes it; by default in the middle of
+    the top face, but `center` and `normal` put it on any face.
 
     Returns the id of the round face; the circle's own size never matters for the hole,
     only its centre and the direction of the face."""
-    g.ents.add_shape(Plane((BLOCK[0] / 2, BLOCK[1] / 2, BLOCK[2]), (0, 0, 1)),
-                     [circle_points(radius, 48)])
+    if center is None:
+        center = (BLOCK[0] / 2, BLOCK[1] / 2, BLOCK[2])
+    if normal is None:
+        normal = (0, 0, 1)
+    g.ents.add_shape(Plane(center, normal), [circle_points(radius, 48)])
     for fid in list(g.ents.F):
         if threads.face_thread_context(g.ents, fid, "outer") is not None:
             return fid
     raise AssertionError("the circle did not become a circular face")
 
 
-def cut(g, fid, size, kind, clearance=0.2):
+def cut(g, fid, size, kind, clearance=0.2, teardrop=False):
     """The block with the hole, as `screw_hole` puts it in from the drawn circle."""
     center, axis, _radius, length = threads.face_thread_context(g.ents, fid, "outer")
     return threads.screw_hole(g.ents.to_manifold(), center, axis, length, size, kind,
-                              clearance=clearance)
+                              clearance=clearance, teardrop=teardrop)
+
+
+def hole_top(ents, x):
+    """The highest point of the hole in the side face at x = `x`, or None."""
+    for fid in ents.F:
+        if abs(float(ents.F[fid].normal[0])) < 0.999:
+            continue
+        pts = np.vstack(ents.face_points(fid))
+        if np.any(np.abs(pts[:, 0] - x) > 1e-6):
+            continue
+        for loop in ents.face_points(fid):
+            P = np.asarray(loop, dtype=float)
+            if len(P) < 12:
+                continue
+            return float(P[:, 2].max())
+    return None
 
 
 def opening(ents, z):
@@ -218,6 +240,41 @@ def test_a_nut_pocket_holds_a_hex_nut_and_the_screw_goes_through():
     assert opening(g.ents, 0.0) == pytest.approx(1.8, abs=0.02), "the screw cannot go through"
 
 
+def test_a_sideways_teardrop_hole_gets_a_roof_of_45_degrees():
+    doc = Document()
+    g = block(doc)
+    fid = draw_circle(g, center=(BLOCK[0], BLOCK[1] / 2, BLOCK[2] / 2), normal=(1, 0, 0))
+    r = 1.8
+    res = cut(g, fid, "M3", "through", teardrop=True)
+    # the circle plus the roof: the square of r on its corner, minus the quarter of the
+    # circle that lies inside it, over the whole width of the block
+    area = math.pi * r ** 2 + r ** 2 - math.pi * r ** 2 / 4.0
+    assert BLOCK_VOLUME - res.volume() == pytest.approx(area * BLOCK[0], rel=0.01)
+    g.ents = Entities.from_manifold(res)
+    top = hole_top(g.ents, BLOCK[0])
+    assert top == pytest.approx(BLOCK[2] / 2 + r * math.sqrt(2.0), abs=0.02), "no roof"
+
+
+def test_a_sideways_hole_without_teardrop_stays_round():
+    doc = Document()
+    g = block(doc)
+    fid = draw_circle(g, center=(BLOCK[0], BLOCK[1] / 2, BLOCK[2] / 2), normal=(1, 0, 0))
+    res = cut(g, fid, "M3", "through")
+    assert BLOCK_VOLUME - res.volume() == pytest.approx(math.pi * 1.8 ** 2 * BLOCK[0],
+                                                        rel=0.01)
+    g.ents = Entities.from_manifold(res)
+    assert hole_top(g.ents, BLOCK[0]) == pytest.approx(BLOCK[2] / 2 + 1.8, abs=0.02)
+
+
+def test_an_upright_hole_needs_no_roof():
+    doc = Document()
+    g = block(doc)
+    fid = draw_circle(g)
+    straight = BLOCK_VOLUME - cut(g, fid, "M3", "through").volume()
+    roofed = BLOCK_VOLUME - cut(g, fid, "M3", "through", teardrop=True).volume()
+    assert roofed == pytest.approx(straight, rel=1e-9)
+
+
 def test_the_clearance_is_added_to_every_diameter():
     doc = Document()
     g = block(doc)
@@ -251,6 +308,17 @@ def test_the_action_cuts_the_hole_and_keeps_the_name_and_color(win):
     assert g.name == "my part" and g.color == "#d23b3b"
     assert opening(g.ents, BLOCK[2]) == pytest.approx(2.85, abs=0.02)
     assert pump_until(lambda: "M3" in win.hint.text()), win.hint.text()
+
+
+def test_the_action_gives_a_sideways_hole_its_roof(win):
+    g = block(win.doc)
+    fid = draw_circle(g, center=(BLOCK[0], BLOCK[1] / 2, BLOCK[2] / 2), normal=(1, 0, 0))
+    select_circle(win, g, fid)
+    win._apply_screw_hole("M3", "through", "through", 0.2, teardrop=True)
+    # a round M3 hole takes 203 mm³ out of the block, the teardrop 217 mm³
+    assert pump_until(lambda: g.ents.to_manifold().volume() < BLOCK_VOLUME - 210), "no roof"
+    assert hole_top(g.ents, BLOCK[0]) == pytest.approx(BLOCK[2] / 2 + 1.8 * math.sqrt(2.0),
+                                                       abs=0.02)
 
 
 def test_the_action_is_one_undo_step(win):
@@ -324,6 +392,25 @@ def test_the_dialog_offers_the_nut_pocket_and_remembers_it(win, monkeypatch):
     win.screw_hole_dialog()
     assert seen["items"] == ["Through", "Counterbore", "Countersunk", "Nut pocket"]
     assert win.settings.screw_hole_kind == "nutpocket"
+
+
+def test_the_dialog_remembers_the_teardrop(win, monkeypatch):
+    seen = []
+
+    def accept(dlg):
+        box = dlg.findChild(QCheckBox)
+        seen.append((box.isChecked(), box.toolTip()))
+        box.setChecked(not box.isChecked())
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", accept)
+    win.settings.screw_hole_teardrop = False
+    win.screw_hole_dialog()
+    assert seen[0][0] is False and seen[0][1], seen[0]
+    assert win.settings.screw_hole_teardrop is True
+    win.screw_hole_dialog()
+    assert seen[1][0] is True, "the box does not come back checked"
+    assert win.settings.screw_hole_teardrop is False
 
 
 def test_the_action_is_in_the_print_tools_menu_after_the_threads(win):

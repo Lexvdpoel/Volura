@@ -259,6 +259,7 @@ class Settings:
         except (TypeError, ValueError):
             self.screw_hole_clearance = threads.DEFAULT_HOLE_CLEARANCE
         self.screw_hole_clearance = max(0.0, min(1.0, self.screw_hole_clearance))
+        self.screw_hole_teardrop = self._bool("screw_hole_teardrop", False)
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
@@ -297,6 +298,7 @@ class Settings:
         self.q.setValue("screw_hole_size", self.screw_hole_size)
         self.q.setValue("screw_hole_kind", self.screw_hole_kind)
         self.q.setValue("screw_hole_clearance", self.screw_hole_clearance)
+        self.q.setValue("screw_hole_teardrop", self.screw_hole_teardrop)
         self.q.setValue("recent", self.recent[:8])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
@@ -6006,8 +6008,12 @@ class MainWindow(QMainWindow):
         kind_cb.setCurrentIndex(next((i for i, (_, k) in enumerate(self.SCREW_HOLE_KINDS)
                                       if k == self.settings.screw_hole_kind), 0))
         clr_sp = self._spin(0.0, 1.0, self.settings.screw_hole_clearance, 2, " mm", 0.05)
+        tear_cb = QCheckBox(tr("Teardrop for sideways holes"))
+        tear_cb.setToolTip(tr("A 45° roof on a horizontal hole, so it prints without support"))
+        tear_cb.setChecked(self.settings.screw_hole_teardrop)
         form.addRow(tr("Screw size"), size_cb)
         form.addRow(tr("Kind"), kind_cb)
+        form.addRow("", tear_cb)
         form.addRow(tr("Clearance"), clr_sp)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(dlg.accept)
@@ -6018,13 +6024,15 @@ class MainWindow(QMainWindow):
         size = size_cb.currentText()
         label, kind = self.SCREW_HOLE_KINDS[kind_cb.currentIndex()]
         clearance = clr_sp.value()
+        teardrop = bool(tear_cb.isChecked())
         self.settings.screw_hole_size = size
         self.settings.screw_hole_kind = kind
         self.settings.screw_hole_clearance = float(clearance)
+        self.settings.screw_hole_teardrop = teardrop
         self.settings.save()
-        self._apply_screw_hole(size, kind, label, clearance)
+        self._apply_screw_hole(size, kind, label, clearance, teardrop=teardrop)
 
-    def _apply_screw_hole(self, size, kind, label, clearance):
+    def _apply_screw_hole(self, size, kind, label, clearance, teardrop=False):
         doc = self.doc
         t = self._screw_hole_target()
         if t is None:
@@ -6043,7 +6051,8 @@ class MainWindow(QMainWindow):
             if m.status() != mf.Error.NoError or m.is_empty():
                 raise ValueError(tr("This part is not a closed volume."))
             res = threads.screw_hole(m, center, axis, depth, size, kind, clearance=clearance,
-                                     segments=int(self.settings.circle_segments))
+                                     segments=int(self.settings.circle_segments),
+                                     teardrop=teardrop)
             if res.status() != mf.Error.NoError or res.is_empty():
                 raise ValueError(tr("the result is not a valid volume"))
             return res
