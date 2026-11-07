@@ -241,6 +241,12 @@ class Settings:
         except (TypeError, ValueError):
             self.filament_price = 20.0
         self.filament_price = max(0.0, min(100000.0, self.filament_price))
+        try:
+            self.elephant_foot_size = float(self.q.value("elephant_foot_size",
+                                                         ops.ELEPHANT_FOOT_SIZE))
+        except (TypeError, ValueError):
+            self.elephant_foot_size = ops.ELEPHANT_FOOT_SIZE
+        self.elephant_foot_size = max(0.1, min(2.0, self.elephant_foot_size))
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
@@ -275,6 +281,7 @@ class Settings:
         self.q.setValue("filament_density", self.filament_density)
         self.q.setValue("filament_diameter", self.filament_diameter)
         self.q.setValue("filament_price", self.filament_price)
+        self.q.setValue("elephant_foot_size", self.elephant_foot_size)
         self.q.setValue("recent", self.recent[:8])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
@@ -2956,6 +2963,10 @@ class MainWindow(QMainWindow):
         self.a_fillet.setToolTip(tr("Click edges and type a radius: a convex or concave rounding"))
         self.a_chamfer = self.tool_act(tr("Chamfer"), "chamfer", None, "chamfer")
         self.a_chamfer.setToolTip(tr("Click edges and type a distance: a bevel along the edge"))
+        self.a_elephant = A(tr("Elephant Foot Chamfer…"),
+                            lambda checked=False: self.elephant_foot_chamfer(), None, None, False,
+                            tr("A small chamfer along the bottom edges, so the first printed "
+                               "layer does not stick out"))
 
         self.a_prefs = A(tr("&Preferences"), self.preferences)
         self.a_model_info = A(tr("&Model Info"), lambda checked=False: self.model_info())
@@ -3141,7 +3152,7 @@ class MainWindow(QMainWindow):
         self.fill(self.print_tools_menu, (self.a_thread, self.a_thread_ext, self.a_thread_int,
                                           self.a_thread_bolt, self.a_thread_nut, None,
                                           self.a_cutplane, self.a_cut_join, None,
-                                          self.a_fillet, self.a_chamfer))
+                                          self.a_fillet, self.a_chamfer, self.a_elephant))
         self.fill(m, (self.tool_actions["select"], self.tool_actions["eraser"], self.tool_actions["paint"],
                       None,
                       self.tool_actions["move"], self.tool_actions["rotate"], self.tool_actions["scale"],
@@ -5451,6 +5462,60 @@ class MainWindow(QMainWindow):
             return None
         return background.run(self, work, text=tr("Simplifying…"),
                               on_done=done, on_error=self._failed)
+
+    # ------------------------------------------------------------ elephant foot chamfer
+
+    def elephant_foot_chamfer(self):
+        """Tools > Print Tools > Elephant Foot Chamfer: a small chamfer along the bottom
+        edges of the selected groups, so the squashed first layer does not stick out."""
+        gids = list(dict.fromkeys(i for k, _ctx, i in self._target_items()
+                                  if k == "g" and self.doc.group(i) is not None))
+        if not gids:
+            return
+        size, ok = QInputDialog.getDouble(self, tr("Elephant Foot Chamfer"),
+                                          tr("Chamfer of the bottom edges (mm):"),
+                                          self.settings.elephant_foot_size, 0.1, 2.0, 2)
+        if not ok:
+            return
+        self.settings.elephant_foot_size = float(size)
+        self.settings.save()
+        segments = int(self.settings.circle_segments)
+
+        def work(report):
+            # cutting the chamfer of every part is the slow part: seconds for a big model,
+            # so it happens here and the window keeps responding
+            out, skipped = [], 0
+            for n, gid in enumerate(gids):
+                report(n / len(gids), tr("Chamfering the bottom edges…"))
+                g = self.doc.group(gid)
+                new = ops.elephant_foot_chamfer(g, size, segments)
+                if new is None:
+                    skipped += 1
+                else:
+                    out.append((g, new))
+            return out, skipped
+
+        def done(result):
+            out, skipped = result
+            if not out:
+                # nothing changed: no undo step either
+                self.hint.setText(tr("None of these parts has bottom edges to chamfer."))
+                return
+            self.doc.checkpoint()         # one undo brings all the old shapes back
+            for g, new in out:
+                g.ents = new
+            self.doc.notify()
+            msg = tr("Chamfered the bottom edges of {n} parts.").format(n=len(out))
+            if skipped:
+                msg += " " + tr("{n} parts were skipped: no bottom edges, or the size is "
+                                "too large.").format(n=skipped)
+            self.hint.setText(msg)
+
+        def failed(exc):
+            QMessageBox.warning(self, "Volura", str(exc))    # nothing changed, so no undo
+
+        background.run(self, work, text=tr("Chamfering the bottom edges…"),
+                       on_done=done, on_error=failed)
 
     def _maybe_suggest_scale_up(self, groups):
         """After an import that came in tiny: ask whether the file was in other units and

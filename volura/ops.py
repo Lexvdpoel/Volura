@@ -13,7 +13,7 @@ from .geom import (Plane, default_u, extrude_cs, manifold_from_mesh, mesh_arrays
 from .i18n import tr, tr_noop
 from .model import ROOT, Document, Group
 from .vector2d import VPath, polygon_area
-from . import joints, nesting, workers
+from . import fillet, joints, nesting, workers
 
 DEFAULT_COLOR = "#f2f2f2"
 
@@ -574,6 +574,90 @@ def arrange_on_bed(doc: Document, items, bed, gap=BED_GAP, margin=BED_MARGIN):
         transform_selection(doc, M3, t, items=sel)
         drop_to_bed(doc, sel)
     return max(0, len(wanted) - len(moves))
+
+
+# The default chamfer of Tools > Print Tools > Elephant Foot Chamfer. The first layer of a
+# print is squashed a little wider than the rest of the part, so it sticks out: an
+# "elephant's foot". A chamfer of a few tenths of a millimetre along the bottom edges makes
+# room for that squashed layer.
+ELEPHANT_FOOT_SIZE = 0.4
+BOTTOM_TOL = 0.01           # mm: both ends of a bottom edge lie within this of the lowest z
+DOWN_NORMAL = -0.999        # the normal of a face that points straight down
+
+
+def bottom_edges(ents: Entities):
+    """The ids of the edges along the bottom of a part: both end points at the lowest z of
+    the part and the edge belonging to a face that points straight down. A part that only
+    touches the bed with a vertex or with a tilted edge has no bottom edges."""
+    bb = ents.bbox()
+    if bb is None:
+        return []
+    z = float(bb[0][2])
+    eids = set()
+    for f in ents.F.values():
+        if float(f.normal[2]) > DOWN_NORMAL:
+            continue
+        for eid in ents.face_edges(f):
+            p0, p1 = ents.edge_points(eid)
+            if abs(float(p0[2]) - z) <= BOTTOM_TOL and abs(float(p1[2]) - z) <= BOTTOM_TOL:
+                eids.add(eid)
+    return sorted(eids)
+
+
+def elephant_foot_chamfer(g: Group, size, segments=64):
+    """The geometry of `g` with its bottom edges chamfered by `size` mm, or None when there
+    is nothing to chamfer.
+
+    Reads the group and changes nothing, so it can run in a background task, as `simplified`
+    does. None for a locked group, one that is not a closed volume, one without bottom edges
+    (see `bottom_edges`) and one that is too small for the size: a `ValueError` of the
+    chamfer leaves the group as it is."""
+    if g.locked:
+        return None
+    eids = bottom_edges(g.ents)
+    if not eids:
+        return None
+    ok, _bad = fillet.edge_data(g.ents, eids)
+    if not ok:
+        return None
+    try:
+        man = g.ents.to_manifold()
+    except Exception:
+        return None
+    if man.is_empty() or man.status() != mf.Error.NoError:
+        return None
+    edges = [(p0, p1, n1, n2) for (_eid, p0, p1, n1, n2) in ok]
+    try:
+        res = fillet.apply(man, edges, float(size), "chamfer", int(segments))
+    except ValueError:                      # the size is too large for this volume
+        return None
+    if res.is_empty() or res.status() != mf.Error.NoError:
+        return None
+    return Entities.from_manifold(res)
+
+
+def elephant_foot(doc: Document, items, size, segments=64):
+    """Elephant Foot Chamfer: a small chamfer along the bottom edges of the given groups.
+
+    The first printed layer is squashed wider than the rest of the part; the chamfer takes
+    the same amount off the bottom, so the foot of the print does not stick out. Every group
+    keeps its name and color, only its geometry changes; the caller takes the checkpoint, so
+    one undo brings the old shape back. Returns (groups chamfered, groups skipped); see
+    `elephant_foot_chamfer` for the groups that are skipped."""
+    changed = skipped = 0
+    seen = set()
+    for k, _ctx, i in items:
+        g = doc.group(i) if k == "g" else None
+        if g is None or g.id in seen:
+            continue
+        seen.add(g.id)
+        new = elephant_foot_chamfer(g, size, segments)
+        if new is None:
+            skipped += 1
+        else:
+            g.ents = new
+            changed += 1
+    return changed, skipped
 
 
 def mirror(doc: Document, items, axis):

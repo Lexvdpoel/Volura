@@ -51,6 +51,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   0, 90, 180 or 270 degrees and stand on the bed, 5 mm from the edge and from each other
 - **Lay Flat on This Face** (right-click a face of a group): turn that part about its own centre until
   the face you clicked lies on the print bed, like "place on face" of a slicer
+- **Elephant Foot Chamfer** (Tools > Print Tools): a small chamfer along the bottom edges of the
+  selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
+  the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is
+  remembered, and parts that stand on a point or a tilted edge are left alone
 - **Overhang view** (View > Face Style > Overhangs): marks every face that hangs over more steeply
   than the limit (45° from the vertical by default, under *Window > Preferences > Drawing*) in a
   warning colour, so you see at a glance what needs support; faces that lie on the print bed are
