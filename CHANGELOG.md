@@ -3,6 +3,21 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.25 — 2026-11-08
+
+### New
+- **Overhang Test** (Tools > Print Tools > Overhang Test…): a small calibration print with a
+  row of fins that lean further over from left to right, each with its angle in raised
+  letters. Print it once and read the largest angle your printer still prints cleanly
+  without support.
+- **Dogbone Corners** (worksheet, View > Dogbone Corners…): for milling, a round relief of
+  the cutter diameter in every inside corner of the material, so a square tab fits into a
+  milled square slot. Holes and outer contours are told apart by how they lie in each
+  other on the layer.
+
+### Website
+- The feature overview describes the Overhang Test; the manual describes both.
+
 ## 0.2.24 — 2026-11-08
 
 ### New
