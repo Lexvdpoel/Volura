@@ -42,6 +42,10 @@ have to stay in step with each other — so it lives in this file too.
 A **fit test** (`fit_test`) is the third classic cut: a comb of slots of `t + offset`
 wide, cut from the sheet that is on the table, so the user learns which offset gives a
 good press fit. Again a row of cuts that have to stay in step, so it lives here too.
+
+A **vent pattern** (`vent_pattern`) is a field of holes in one closed contour: a grille
+or a speaker cover. Here the grid is a plane instead of a row, but the work is the same —
+cuts that stay in step with each other and that never touch the edge of the panel.
 """
 from __future__ import annotations
 
@@ -51,8 +55,9 @@ from dataclasses import dataclass, field
 import numpy as np
 import manifold3d as mf
 
+from . import cam
 from .i18n import tr
-from .vector2d import DEFAULT_LAYERS, Drawing, VPath
+from .vector2d import DEFAULT_LAYERS, TOL, Drawing, VPath, arc_points
 
 MALE = "male"
 FEMALE = "female"
@@ -593,6 +598,134 @@ def living_hinge(x0, y0, x1, y1, slit=15.0, gap=3.0, pitch=2.0, margin=3.0,
                                     dtype=float))
             j += 1
     return out
+
+
+# --------------------------------------------------------------------------
+#  vent pattern
+# --------------------------------------------------------------------------
+
+#: the corners of a hexagon whose centre-to-corner distance is 1, counter-clockwise: the
+#: flats face up and down and to both sides, which is how a honeycomb stands
+_HEX = np.array([[math.cos(k * math.pi / 3.0), math.sin(k * math.pi / 3.0)]
+                 for k in range(6)], dtype=float)
+
+#: the shapes of the holes of a vent pattern
+VENT_SHAPES = ("hex", "round")
+
+
+def _inside_points(loops, q) -> np.ndarray:
+    """Which points of `q` (m, 2) lie in the area enclosed by `loops`?
+
+    The loops are the edge of that area and the holes in it, so a point lies inside when a
+    ray from it to the left crosses them an odd number of times. The points go in chunks,
+    so a big panel does not build one huge table of every point against every edge.
+    """
+    q = np.asarray(q, dtype=float)
+    inside = np.zeros(len(q), dtype=bool)
+    for p in loops:
+        a = np.asarray(p, dtype=float)
+        b = np.roll(a, -1, axis=0)
+        dy = np.where(b[:, 1] == a[:, 1], 1.0, b[:, 1] - a[:, 1])
+        step = max(1, 4_000_000 // max(1, len(a)))
+        for k in range(0, len(q), step):
+            y = q[k:k + step, 1, None]
+            band = (a[:, 1] > y) != (b[:, 1] > y)
+            x = a[:, 0] + (y - a[:, 1]) * (b[:, 0] - a[:, 0]) / dy
+            inside[k:k + step] ^= np.count_nonzero(band & (x < q[k:k + step, 0, None]),
+                                                   axis=1) % 2 == 1
+    return inside
+
+
+def _edge_distances(loops, q) -> np.ndarray:
+    """The distance from every point of `q` (m, 2) to the nearest edge of `loops`."""
+    q = np.asarray(q, dtype=float)
+    out = np.full(len(q), np.inf)
+    for p in loops:
+        a = np.asarray(p, dtype=float)
+        d = np.roll(a, -1, axis=0) - a
+        L2 = np.maximum(np.sum(d * d, axis=1), 1e-30)
+        step = max(1, 2_000_000 // max(1, len(a)))
+        for k in range(0, len(q), step):
+            w = q[k:k + step, None, :] - a[None, :, :]
+            t = np.clip(np.einsum("mnj,nj->mn", w, d) / L2, 0.0, 1.0)
+            r = w - t[:, :, None] * d[None, :, :]
+            out[k:k + step] = np.minimum(out[k:k + step],
+                                         np.sqrt(np.einsum("mnj,mnj->mn", r, r)).min(axis=1))
+    return out
+
+
+def vent_pattern(outline, shape="hex", size=6.0, web=2.0, margin=3.0) -> list[np.ndarray]:
+    """The holes of a grille or a speaker cover, filling the closed contour `outline`.
+
+    `outline` is a closed contour (n, 2) of any shape: the laser cuts these holes out of
+    the panel that the contour encloses. `shape` is "hex" — regular hexagons of `size`
+    millimetres across the flats, standing in a honeycomb — or "round": circles of `size`
+    millimetres diameter. Both stand on the same triangular grid, a step `size + web` from
+    the next hole, so the web of material between two neighbours is `web` wide everywhere.
+    Hexagons face each other with a flat on that grid, which is why a honeycomb is the
+    tightest way to fill a panel with holes.
+
+    The grid is centred on the bounding box of the contour, so the pattern of a rectangle
+    or a circle is symmetric on every side. A hole only stays when it lies entirely inside
+    the contour shrunk by `margin`: that material along the edge keeps the grille in the
+    panel and leaves no half holes against the edge. A contour that is too small or too
+    narrow holds no hole at all, and then the answer is an empty list.
+    """
+    loop = np.asarray(outline, dtype=float)
+    if len(loop) > 1 and np.array_equal(loop[0], loop[-1]):
+        loop = loop[:-1]                  # an imported contour often ends on its start
+    if len(loop) < 3:
+        return []
+    shape = str(shape or "hex").strip().lower()
+    if shape not in VENT_SHAPES:
+        raise ValueError(tr("That shape of hole is unknown."))
+    size, web = float(size), float(web)
+    margin = max(0.0, float(margin))
+    if size <= 0.0:
+        raise ValueError(tr("The holes must be wider than zero."))
+    if web <= 0.0:
+        raise ValueError(tr("The material between the holes must be wider than zero."))
+    if shape == "hex":
+        unit = (size / math.sqrt(3.0)) * _HEX      # half a flat is size / 2, so this is the corner
+    else:
+        # the same flattening as a drawn circle (sheettools.circle_loop, which needs Qt)
+        unit = arc_points(np.zeros(2), 0.5 * size, 0.0, 2.0 * math.pi, TOL / 4.0)[:-1]
+    room = cam.offset_loop(loop, -margin)
+    if not room:
+        return []
+    allp = np.concatenate(room)
+    lo, hi = allp.min(axis=0), allp.max(axis=0)
+    c = 0.5 * (loop.min(axis=0) + loop.max(axis=0))
+    d = size + web
+    col = 0.5 * math.sqrt(3.0) * d                 # the columns of the honeycomb
+    rx, ry = float(unit[:, 0].max()), float(unit[:, 1].max())
+    centres = []
+    for j in range(int(math.ceil((lo[0] - c[0] - rx) / col)),
+                   int(math.floor((hi[0] - c[0] + rx) / col)) + 1):
+        y = c[1] + 0.5 * j * d                     # every column stands half a step higher
+        i = np.arange(int(math.ceil((lo[1] - y - ry) / d)),
+                      int(math.floor((hi[1] - y + ry) / d)) + 1)
+        centres.append(np.column_stack([np.full(len(i), c[0] + j * col), y + i * d]))
+    if not centres:
+        return []
+    centres = np.concatenate(centres)
+    # The centre decides most holes at once: one whose centre lies deeper in the room than
+    # its corners reach is in; one whose centre lies outside, or nearer to the edge than
+    # its flats, is out. Only the holes in between, along the edge, are tested corner by
+    # corner.
+    gap = 1e-9
+    reach = float(np.max(np.hypot(unit[:, 0], unit[:, 1])))
+    flat = 0.5 * size * (1.0 if shape == "hex" else math.cos(math.pi / len(unit)))
+    deep = _edge_distances(room, centres)
+    deep[~_inside_points(room, centres)] = -1.0
+    keep = deep >= reach - gap
+    for h in np.flatnonzero(~keep & (deep >= flat - gap)):
+        hole = centres[h] + unit
+        ins = _inside_points(room, hole)
+        # a corner exactly on the edge of the margin counts as inside: the edge comes from
+        # an offset, and a hole may stand with its flat right on it
+        keep[h] = bool(np.all(ins | (_edge_distances(room, hole) <= gap)))
+    return [np.ascontiguousarray(centres[h] + unit) for h in np.flatnonzero(keep)]
 
 
 # --------------------------------------------------------------------------
