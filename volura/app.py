@@ -371,6 +371,11 @@ class Settings:
             self.gear_backlash = 0.1
         self.gear_backlash = max(0.0, min(1.0, self.gear_backlash))
         try:
+            self.gear_thickness = float(self.q.value("gear_thickness", 8.0))
+        except (TypeError, ValueError):
+            self.gear_thickness = 8.0
+        self.gear_thickness = max(1.0, min(100.0, self.gear_thickness))
+        try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
             self.tab_count = 4
@@ -443,6 +448,7 @@ class Settings:
         self.q.setValue("gear_angle", self.gear_angle)
         self.q.setValue("gear_bore", self.gear_bore)
         self.q.setValue("gear_backlash", self.gear_backlash)
+        self.q.setValue("gear_thickness", self.gear_thickness)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
@@ -2158,7 +2164,7 @@ class FitTestDialog(QDialog):
 
 
 class SpurGearDialog(QDialog):
-    """The "Spur Gear…" dialog: an involute gear wheel for the worksheet.
+    """The "Spur Gear…" dialog: an involute gear wheel for the worksheet or the model.
 
     The teeth and the module together say how big the wheel is, the pressure angle how
     steep the flanks stand and the backlash how much play two wheels have against each
@@ -2166,11 +2172,15 @@ class SpurGearDialog(QDialog):
     starts where the user left them (Settings) and remembers the new ones. Under the
     fields the wheel stands in figures, because that is what the user checks it against:
     the place in the box and the distance to the other axle.
+
+    With `solid` the wheel is not cut from a sheet but printed, so the dialog also asks
+    how thick the wheel has to be.
     """
 
-    def __init__(self, win):
+    def __init__(self, win, solid=False):
         super().__init__(win)
         s = win.settings
+        self.solid = bool(solid)
         self.setWindowTitle(tr("Spur Gear"))
         lay = QFormLayout(self)
 
@@ -2199,12 +2209,17 @@ class SpurGearDialog(QDialog):
         self.backlash = spin(0.0, 1.0, s.gear_backlash, 0.05)
         self.backlash.setToolTip(tr("The play of a pair of wheels on the pitch circle, so "
                                     "the flanks do not press on each other"))
+        if self.solid:
+            self.thickness = spin(1.0, 100.0, s.gear_thickness, 0.5)
+            self.thickness.setToolTip(tr("How thick the printed wheel is"))
         self.info = QLabel()
         lay.addRow(tr("Teeth"), self.teeth)
         lay.addRow(tr("Module"), self.module)
         lay.addRow(tr("Pressure angle"), self.angle)
         lay.addRow(tr("Bore"), self.bore)
         lay.addRow(tr("Backlash"), self.backlash)
+        if self.solid:
+            lay.addRow(tr("Thickness"), self.thickness)
         lay.addRow(self.info)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
@@ -2220,9 +2235,12 @@ class SpurGearDialog(QDialog):
                           .format(d=f"{d:.2f}", o=f"{d + 2.0 * m:.2f}"))
 
     def options(self) -> dict:
-        return {"teeth": int(self.teeth.value()), "module": round(self.module.value(), 6),
-                "angle": round(self.angle.value(), 6), "bore": round(self.bore.value(), 6),
-                "backlash": round(self.backlash.value(), 6)}
+        o = {"teeth": int(self.teeth.value()), "module": round(self.module.value(), 6),
+             "angle": round(self.angle.value(), 6), "bore": round(self.bore.value(), 6),
+             "backlash": round(self.backlash.value(), 6)}
+        if self.solid:
+            o["thickness"] = round(self.thickness.value(), 6)
+        return o
 
 
 class HoldingTabsDialog(QDialog):
@@ -3546,6 +3564,12 @@ class MainWindow(QMainWindow):
                              lambda checked=False: self.spur_gear_dialog(), None, None, False,
                              tr("Add an involute spur gear to the worksheet, with the teeth, "
                                 "the module and the bore you choose"))
+        self.a_spur_gear_3d = A(tr("Spur Gear…"),
+                                lambda checked=False: self.spur_gear_dialog(solid=True), None,
+                                None, False,
+                                tr("Add a printable involute spur gear to the model, with "
+                                   "the teeth, the module, the bore and the thickness you "
+                                   "choose"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, None,
@@ -3638,7 +3662,8 @@ class MainWindow(QMainWindow):
         self.print_tools_menu = QMenu(tr("P&rint Tools"), m)
         self.fill(self.print_tools_menu, (self.a_thread, self.a_thread_ext, self.a_thread_int,
                                           self.a_thread_bolt, self.a_thread_nut,
-                                          self.a_screw_hole, self.a_clearance_test, None,
+                                          self.a_screw_hole, self.a_clearance_test,
+                                          self.a_spur_gear_3d, None,
                                           self.a_cutplane, self.a_cut_join, None,
                                           self.a_fillet, self.a_chamfer, self.a_elephant,
                                           self.a_mouse_ears, self.a_orient_print))
@@ -4162,9 +4187,9 @@ class MainWindow(QMainWindow):
         return added
 
     # ------------------------------------------------------------ spur gear
-    def spur_gear_dialog(self):
-        """View > Spur Gear…: an involute gear wheel on the worksheet."""
-        dlg = SpurGearDialog(self)
+    def spur_gear_dialog(self, solid=False):
+        """View > Spur Gear…: the wheel on the worksheet; Print Tools: a printable wheel."""
+        dlg = SpurGearDialog(self, solid=solid)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
             return None
@@ -4174,8 +4199,11 @@ class MainWindow(QMainWindow):
         self.settings.gear_angle = float(options["angle"])
         self.settings.gear_bore = float(options["bore"])
         self.settings.gear_backlash = float(options["backlash"])
+        if solid:
+            self.settings.gear_thickness = float(options["thickness"])
         self.settings.save()
-        made = self.make_spur_gear_sheet(options)
+        made = (self.make_spur_gear_model(options) if solid
+                else self.make_spur_gear_sheet(options))
         self.setFocus()
         return made
 
@@ -4213,6 +4241,53 @@ class MainWindow(QMainWindow):
         self.hint.setText(tr("Spur gear with {n} teeth added (pitch diameter {d} mm).")
                           .format(n=teeth, d=f"{gears.pitch_diameter(teeth, module):.2f}"))
         return added
+
+    def make_spur_gear_model(self, options):
+        """The wheel as a printed part in the model: one undo step, standing on the bed.
+
+        A wheel of many teeth is a contour of tens of thousands of points, so the section
+        and the extrusion run in the background, like the clearance test, and the window
+        keeps responding. The wheel stands on the bed and takes the middle of the free
+        bed, or the free place 10 mm to the right of what is already in the model.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        teeth, module = int(options["teeth"]), float(options["module"])
+        thickness = float(options["thickness"])
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the spur gear…"))
+            loops = gears.spur_gear(teeth, module=module, pressure_angle=options["angle"],
+                                    bore=options["bore"], backlash=options["backlash"])
+            # the outline runs counter-clockwise and the bore clockwise: EvenOdd makes the
+            # bore a hole, whatever the way round the two loops are
+            sec = mf.CrossSection([np.ascontiguousarray(np.asarray(q, dtype=float))
+                                   for q in loops], mf.FillRule.EvenOdd)
+            m = mf.Manifold.extrude(sec, thickness)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the wheel away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Spur Gear"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Spur gear with {n} teeth added (pitch diameter {d} mm, "
+                                    "{t} mm thick).")
+                                 .format(n=teeth, d=f"{gears.pitch_diameter(teeth, module):.2f}",
+                                         t=f"{thickness:.2f}"))
+
+        def failed(exc):
+            self.view.set_status(tr("Spur gear failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the spur gear…"), on_done=done,
+                       on_error=failed)
 
     # ------------------------------------------------------------ holding tabs
     def holding_tabs_dialog(self):

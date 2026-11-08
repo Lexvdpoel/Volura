@@ -124,7 +124,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
   of circles, for a ventilation grille or a speaker cover, with the web and the edge margin
   you choose
 - **Spur gear**: an involute gear for the laser or the printer, from the number of teeth,
-  the module and the pressure angle, with a bore and the backlash you choose
+  the module and the pressure angle, with a bore and the backlash you choose; in the 3D
+  model (Tools > Print Tools) the same wheel comes out as a printable part of the
+  thickness you choose
 - **Fit test**: a small comb of slots that shows which offset gives a good press fit for
   the sheet you cut, with that offset engraved under every slot
 - **Holding tabs**: leave a few small uncut bridges in the selected closed contours, so a

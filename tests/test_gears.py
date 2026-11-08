@@ -9,16 +9,20 @@ curve, and every tooth is thinned by the backlash, half on each flank, so a pair
 has the play it needs. Two wheels of the same module at their centre distance
 (`gears.center_distance`) then run along each other without pressing.
 
+The same contours also make a wheel to print: extruded over its thickness, standing on the
+bed, with the bore a hole through it.
+
 These tests (Qt offscreen) measure the circles of the wheel, count its teeth, let a pair
 of wheels run against each other, check the refused input and the place in the interface
 (View menu and sheet toolbar next to Fit Test, the wheel on the cut layer in one undo
-step).
+step, and the printed wheel in Print Tools next to the clearance test).
 
 Run with:  python -m pytest tests/test_gears.py
 """
 import math
 import os
 import sys
+import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -36,10 +40,21 @@ _app = QApplication.instance() or QApplication(sys.argv[:1])
 
 TOL = 0.02
 OPTIONS = {"teeth": 20, "module": 2.0, "angle": 20.0, "bore": 5.0, "backlash": 0.1}
+THICKNESS = 8.0
+SOLID = dict(OPTIONS, thickness=THICKNESS)
 
 
 def clean(text):
     return text.replace("&", "").replace("…", "").replace("...", "").strip()
+
+
+def pump_until(predicate, timeout_ms=15000):
+    """Spin the event loop until `predicate()` holds or the time is up; returns its value."""
+    deadline = time.monotonic() + timeout_ms / 1000.0
+    while not predicate() and time.monotonic() < deadline:
+        _app.processEvents()
+        time.sleep(0.005)
+    return predicate()
 
 
 def area(loop):
@@ -262,6 +277,92 @@ def test_the_spur_gear_follows_the_fit_test_in_the_view_menu(win):
 def test_the_spur_gear_follows_the_fit_test_on_the_sheet_toolbar(win):
     labels = [clean(a.text()) for a in win.tb_sheet.actions() if not a.isSeparator()]
     assert labels.index("Spur Gear") == labels.index("Fit Test") + 1
+
+
+# ---------------------------------------------------------------- the printed wheel
+
+def test_the_printed_wheel_is_the_section_extruded(win):
+    outer, bore = gears.spur_gear(20, module=2.0, bore=5.0)
+    win.make_spur_gear_model(SOLID)
+    assert pump_until(lambda: len(win.doc.groups) == 1), "no wheel in the model"
+    g = win.doc.groups[0]
+    assert g.name == "Spur Gear"
+    m = g.ents.to_manifold()
+    assert m.status() == mf.Error.NoError and not m.is_empty()
+    assert m.volume() == pytest.approx(section(outer, bore).area() * THICKNESS, rel=1e-6)
+    assert m.genus() == 1, "the bore must be a hole through the wheel"
+
+
+def test_the_printed_wheel_stands_on_the_bed(win):
+    win.make_spur_gear_model(SOLID)
+    assert pump_until(lambda: len(win.doc.groups) == 1), "no wheel in the model"
+    g = win.doc.groups[0]
+    assert pump_until(lambda: g.bbox() is not None)
+    lo, hi = np.asarray(g.bbox(), dtype=float)
+    assert lo[2] == pytest.approx(0.0), "the wheel does not stand on the bed"
+    assert hi[2] == pytest.approx(THICKNESS)
+    bx, by, _bz = win.settings.bed_size
+    assert 0.5 * (lo[0] + hi[0]) == pytest.approx(0.5 * bx), "the wheel is not centred on the bed"
+    assert 0.5 * (lo[1] + hi[1]) == pytest.approx(0.5 * by)
+    assert pump_until(lambda: "thick" in win.hint.text()), win.hint.text()
+    assert win.hint.text() == ("Spur gear with 20 teeth added (pitch diameter 40.00 mm, "
+                               "8.00 mm thick).")
+
+
+def test_one_undo_takes_the_printed_wheel_away(win):
+    steps = len(win.doc.undo_stack)
+    win.make_spur_gear_model(SOLID)
+    assert pump_until(lambda: len(win.doc.groups) == 1), "no wheel in the model"
+    assert len(win.doc.undo_stack) == steps + 1, "the wheel is not one undo step"
+    win.undo()
+    assert win.doc.groups == []
+
+
+def test_a_bore_that_eats_the_printed_wheel_is_a_clear_text(win):
+    win.make_spur_gear_model(dict(SOLID, bore=39.0))
+    assert pump_until(lambda: "bore" in win.hint.text()), win.hint.text()
+    assert win.doc.groups == []
+
+
+def test_the_printed_gear_follows_the_clearance_test_in_print_tools(win):
+    labels = [clean(a.text()) for a in win.print_tools_menu.actions() if not a.isSeparator()]
+    assert labels.index("Spur Gear") == labels.index("Clearance Test") + 1
+
+
+def test_the_print_dialog_starts_at_the_last_thickness_and_remembers_it(win, monkeypatch):
+    seen = {}
+
+    def fill(dlg):
+        spins = dlg.findChildren(QDoubleSpinBox)
+        seen["start"] = [round(sp.value(), 2) for sp in spins]
+        spins[-1].setValue(12.0)
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", fill)
+    win.settings.gear_module, win.settings.gear_angle = 1.0, 14.5
+    win.settings.gear_bore, win.settings.gear_backlash = 4.0, 0.05
+    win.settings.gear_thickness = 6.0
+    win.spur_gear_dialog(solid=True)
+    assert seen["start"] == [1.0, 14.5, 4.0, 0.05, 6.0]
+    assert pump_until(lambda: len(win.doc.groups) == 1), "no wheel in the model"
+    lo, hi = np.asarray(win.doc.groups[0].bbox(), dtype=float)
+    assert hi[2] - lo[2] == pytest.approx(12.0), "the wheel is not as thick as asked"
+    assert win.settings.gear_thickness == pytest.approx(12.0)
+    assert app_module.Settings().gear_thickness == pytest.approx(12.0)
+
+
+def test_the_worksheet_dialog_asks_no_thickness(win, monkeypatch):
+    seen = {}
+
+    def fill(dlg):
+        seen["spins"] = len(dlg.findChildren(QDoubleSpinBox))
+        seen["options"] = dlg.options()
+        return QDialog.Rejected
+
+    monkeypatch.setattr(app_module.QDialog, "exec", fill)
+    win.spur_gear_dialog()
+    assert seen["spins"] == 4, "the worksheet dialog has no thickness to ask"
+    assert "thickness" not in seen["options"]
 
 
 if __name__ == "__main__":
