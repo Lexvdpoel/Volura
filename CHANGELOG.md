@@ -3,6 +3,15 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.19 — 2026-11-08
+
+### New
+- **Holding Tabs** (worksheet, View > Holding Tabs…): leave a number of small, evenly
+  spread uncut bridges in the selected closed contours on a cutting layer, so a part stays
+  in the sheet until the laser or mill is done; snap it out afterwards. Set the number of
+  tabs per contour and their width. By default only the outer contours get tabs, since
+  the scrap of a hole falls out on its own.
+
 ## 0.2.18 — 2026-11-07
 
 ### Improved
