@@ -3515,6 +3515,10 @@ class MainWindow(QMainWindow):
                                    lambda checked=False: self.sheet_view.duplicate_dialog(), None,
                                    "duplicate", False,
                                    tr("Place copies of the selection at a fixed spacing"))
+        self.a_sheet_duplicate_circle = A(
+            tr("Duplicate in a Circle…"),
+            lambda checked=False: self.sheet_view.duplicate_circle_dialog(), None, "duplicate",
+            False, tr("Place copies of the selection around a centre"))
         self.a_sheet_grid = A(tr("Snap to Grid"), self.set_sheet_grid_snap, None, "grid",
                               checkable=True, tip=tr("Pull the cursor to grid intersections"))
         self.a_sheet_grid.setChecked(True)
@@ -3736,7 +3740,8 @@ class MainWindow(QMainWindow):
                       self.a_sheet_union, self.a_sheet_subtract, self.a_sheet_intersect,
                       self.a_sheet_join, self.a_sheet_split, None,
                       self.a_mirror_h, self.a_mirror_v, self.a_sheet_align,
-                      self.a_sheet_distribute, self.a_sheet_duplicate, None,
+                      self.a_sheet_distribute, self.a_sheet_duplicate,
+                      self.a_sheet_duplicate_circle, None,
                       self.a_sheet_grid, self.a_sheet_round, self.a_sheet_to_layer,
                       None, self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint,
                       self.a_hinge, self.a_vent_pattern, self.a_fit_test, self.a_spur_gear,

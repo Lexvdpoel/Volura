@@ -113,6 +113,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **2D worksheet** next to the 3D model (Ctrl+Shift+2 or the 3D | 2D switch at the bottom right), saved
   in the same file: lines, rectangles, circles, arcs, polygons and text; offset, union, subtract,
   align and distribute
+- **Duplicates in a row, a grid or a circle**: copies at a fixed spacing, or spread over an
+  arc around the centre of the selection, the origin or a point, turning along or not
 - **SVG and DXF** import and export; place a drawing on a face and extrude it
 - **Operation layers** in the LightBurn colors: cut, engrave, raster, mill outside/inside, pocket and
   drill, with kerf and tool compensation and dogbones or T-bones

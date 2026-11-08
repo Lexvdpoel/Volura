@@ -134,6 +134,21 @@ def rotation(center, angle) -> np.ndarray:
                      [0.0, 0.0, 1.0]])
 
 
+def polar_angles(count, total=360.0) -> list[float]:
+    """The angles of a circular array, in degrees; copy 0 is the original itself.
+
+    Over the full circle copy k stands at `k * 360 / count`, so the last copy comes
+    just before the first again. Over a smaller angle the step is `total / (count - 1)`,
+    so an arc of 90° with four copies ends with a copy on 90°.
+    """
+    count = int(count)
+    if count < 2:
+        raise ValueError("a circle needs at least two copies")
+    total = float(total)
+    step = count if abs(total - 360.0) <= 1e-9 else count - 1
+    return [k * total / step for k in range(count)]
+
+
 def scaling(center, factor) -> np.ndarray:
     k = float(factor)
     cx, cy = float(center[0]), float(center[1])

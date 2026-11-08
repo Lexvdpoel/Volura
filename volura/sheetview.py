@@ -16,15 +16,15 @@ import math
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
-                               QMenu, QSpinBox, QWidget)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
+                               QFormLayout, QHBoxLayout, QLabel, QMenu, QSpinBox, QWidget)
 
 from . import errors, nesting, theme
 from .sheettools import (ALIGN_LABELS, MEASURE_LABEL, PICK_PX, SHEET_TOOLS, align_deltas,
                          boolean_loops, copy_of, distribute_deltas, grid_offsets,
                          joined_paths, mirror_matrix, next_src, path_distance, path_in_rect,
-                         path_touches_rect, paths_bbox, split_into_segments, translation,
-                         transformed_points)
+                         path_touches_rect, paths_bbox, polar_angles, rotation,
+                         split_into_segments, translation, transformed_points)
 from .i18n import tr
 from .sheetsnap import SnapEngine, grid_step
 from .vector2d import (DEFAULT_LAYERS, SHEET_SPACING, OP_LABELS, Layer, VPath, _transform_meta,
@@ -610,6 +610,42 @@ class SheetView(QWidget):
         self.set_status(tr("{n} copies placed").format(n=len(fresh)))
         return fresh
 
+    def duplicate_circle(self, count=6, total=360.0, center=None, rotate=True) -> list:
+        """Duplicate in a circle: copies around a centre, turned along the circle or not."""
+        sel = self.selected_paths()
+        if not sel:
+            self.set_status(tr("First select what you want to duplicate."))
+            return []
+        try:
+            angles = polar_angles(count, total)
+        except ValueError:
+            self.set_status(tr("A circle needs at least two copies."))
+            return []
+        center = self.selection_center() if center is None else np.asarray(center, dtype=float)
+        fresh: list = []
+
+        def change():
+            src = next_src(self.doc.sheet.paths)
+            for a in angles[1:]:
+                turn = rotation(center, math.radians(a))
+                for p in sel:
+                    M = turn
+                    if not rotate:      # the copies only travel along the circle
+                        box = paths_bbox([p])
+                        c = np.array([0.5 * (box[0] + box[2]), 0.5 * (box[1] + box[3])])
+                        M = translation(transformed_points(c[None, :], turn)[0] - c)
+                    lin, off = M[:2, :2], M[:2, 2]
+                    q = copy_of(p)
+                    q.pts = transformed_points(q.pts, M)
+                    q.meta = _transform_meta(p.meta, lin, off)
+                    q.src = src
+                    self.doc.sheet.paths.append(q)
+                    fresh.append(q)
+        self.edit(change)
+        self.set_selection(list(sel) + fresh)
+        self.set_status(tr("{n} copies placed").format(n=len(fresh)))
+        return fresh
+
     # ------------------------------------------------------------ auto arrange
     def arrange_source(self) -> list:
         """The paths that take part: the selection, or everything visible when nothing is chosen."""
@@ -707,6 +743,7 @@ class SheetView(QWidget):
             act.triggered.connect(lambda checked=False, n=name: self.move_to_layer(n))
         menu.addSeparator()
         menu.addAction(tr("Duplicate in Row or Grid…"), self.duplicate_dialog)
+        menu.addAction(tr("Duplicate in a Circle…"), self.duplicate_circle_dialog)
         menu.addAction(tr("Delete"), self.delete_selected)
         menu.addAction(tr("Select All"), self.select_all)
         menu.addSeparator()
@@ -729,6 +766,14 @@ class SheetView(QWidget):
         if dlg.exec() == QDialog.Accepted:
             c, r, dx, dy = dlg.values()
             self.duplicate_grid(c, r, dx, dy)
+        self.setFocus()
+
+    def duplicate_circle_dialog(self):
+        """Dialog 'Duplicate in a circle' (count, angle and centre)."""
+        dlg = DuplicateCircleSheetDialog(self)
+        if dlg.exec() == QDialog.Accepted:
+            n, a, center, rot = dlg.values()
+            self.duplicate_circle(n, a, center, rot)
         self.setFocus()
 
     # ------------------------------------------------------------ painting
@@ -1111,3 +1156,73 @@ class DuplicateSheetDialog(QDialog):
     def values(self):
         return (int(self.cols.value()), int(self.rows.value()),
                 float(self.dx.value()), float(self.dy.value()))
+
+
+class DuplicateCircleSheetDialog(QDialog):
+    """Duplicate in a circle: how many copies, over what angle, around which centre."""
+
+    def __init__(self, view: SheetView, parent=None):
+        super().__init__(parent or view)
+        self.setWindowTitle(tr("Duplicate in a Circle"))
+        center = view.selection_center()
+        lay = QFormLayout(self)
+        self.copies = QSpinBox()
+        self.copies.setRange(2, 360)
+        self.copies.setValue(6)
+        self.copies.setToolTip(tr("Number of copies in the circle, the original included"))
+        self.angle = QDoubleSpinBox()
+        self.angle.setRange(1.0, 360.0)
+        self.angle.setDecimals(1)
+        self.angle.setSuffix("°")
+        self.angle.setValue(360.0)
+        self.angle.setToolTip(tr("The angle of the arc the copies stand on"))
+        self.centre = QComboBox()
+        self.centre.addItems([tr("Centre of the selection"), tr("Origin"), tr("Point")])
+        self.centre.currentIndexChanged.connect(self._centre_changed)
+        self.px = QDoubleSpinBox()
+        self.py = QDoubleSpinBox()
+        for spin in (self.px, self.py):
+            spin.setRange(-10000.0, 10000.0)
+            spin.setDecimals(2)
+            spin.setSuffix(" mm")
+            spin.setEnabled(False)
+        if center is not None:
+            self.px.setValue(float(center[0]))
+            self.py.setValue(float(center[1]))
+        spot = QWidget()
+        row = QHBoxLayout(spot)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(QLabel(tr("X")))
+        row.addWidget(self.px)
+        row.addWidget(QLabel(tr("Y")))
+        row.addWidget(self.py)
+        self.rotate = QCheckBox(tr("Rotate the copies"))
+        self.rotate.setChecked(True)
+        self.rotate.setToolTip(tr("Turn the copies as they go around the circle"))
+        lay.addRow(tr("Copies"), self.copies)
+        lay.addRow(tr("Angle"), self.angle)
+        lay.addRow(tr("Centre"), self.centre)
+        lay.addRow(spot)
+        lay.addRow("", self.rotate)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        lay.addRow(buttons)
+
+    def _centre_changed(self, index):
+        """The X and Y of the centre only matter for 'Point'."""
+        on = index == self.centre.count() - 1
+        self.px.setEnabled(on)
+        self.py.setEnabled(on)
+
+    def values(self):
+        """Count, angle, the centre or None for the centre of the selection, and rotate."""
+        mode = self.centre.currentIndex()
+        if mode == 0:
+            center = None
+        elif mode == 1:
+            center = (0.0, 0.0)
+        else:
+            center = (float(self.px.value()), float(self.py.value()))
+        return (int(self.copies.value()), float(self.angle.value()), center,
+                bool(self.rotate.isChecked()))
