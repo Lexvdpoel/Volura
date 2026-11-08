@@ -3,6 +3,22 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.24 — 2026-11-08
+
+### New
+- **Round Corners** (worksheet, View > Round Corners…): a radius of your choice in the
+  sharp corners of the selected paths, open or closed, so a cut panel has no sharp edges
+  left. A corner whose segments are too short for the radius is rounded as far as they
+  allow; the ends of an open line stay where they are.
+
+### Improved
+- **Project Box** can screw its lid on: pick a screw size (M2 to M4) and the box gets a
+  post with a blind pilot hole in every inside corner and the lid a clearance hole above
+  it; the lip of the lid steps around the posts, so it still slides in.
+
+### Website
+- The manual describes the screw posts and Round Corners, the feature overview the screw posts.
+
 ## 0.2.23 — 2026-11-08
 
 ### New
