@@ -10,10 +10,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest  # noqa: E402
 from PySide6.QtGui import QKeySequence  # noqa: E402
-from PySide6.QtCore import QSettings  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
+
+from volura.settings import qsettings  # noqa: E402
 
 STYLE_KEYS = ("face_style", "back_edges", "show_hidden", "hide_rest", "xray")
 STYLES = {"a_wireframe": "wireframe", "a_hidden_lines": "hiddenline",
@@ -22,7 +23,7 @@ STYLES = {"a_wireframe": "wireframe", "a_hidden_lines": "hiddenline",
 
 @pytest.fixture(scope="module")
 def win():
-    q = QSettings("Volura", "Volura")
+    q = qsettings()
     saved = {k: q.value(k) for k in STYLE_KEYS}
     from volura.app import MainWindow
     w = MainWindow()

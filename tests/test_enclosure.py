@@ -30,11 +30,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import manifold3d as mf  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
-from PySide6.QtCore import QCoreApplication, QSettings  # noqa: E402
+from PySide6.QtCore import QCoreApplication  # noqa: E402
 from PySide6.QtWidgets import QApplication, QDialog, QDoubleSpinBox  # noqa: E402
 
 import volura.app as app_module  # noqa: E402
 from volura import enclosure  # noqa: E402
+from volura.settings import qsettings  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
 
@@ -281,7 +282,7 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
 
 def test_the_clearance_starts_at_the_one_of_the_screw_holes():
     """Without a clearance of its own the box takes the one this printer already proved."""
-    q = QSettings("Volura", "Volura")
+    q = qsettings()
     saved = {k: q.value(k) for k in ("box3d_clearance", "screw_hole_clearance")}
     try:
         q.remove("box3d_clearance")

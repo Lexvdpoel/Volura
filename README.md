@@ -240,6 +240,10 @@ QT_QPA_PLATFORM=offscreen python -m pytest -q tests    # Windows: $env:QT_QPA_PL
 The tests need no display. `tests/test_portability.py` keeps the code platform independent: it
 imports every module in `volura/` and allows no `os.startfile` and no paths with a drive letter.
 
+A test run never changes the settings of the user: `tests/conftest.py` sets the environment
+variable `VOLURA_SETTINGS_FILE`, and with it Volura reads and writes that ini file instead of the
+registry. `python -m pytest -q tests/test_settings_isolation.py` checks that.
+
 ## Keyboard shortcuts
 
 The complete list is in the program itself, under **Window > Preferences > Shortcuts**; there you

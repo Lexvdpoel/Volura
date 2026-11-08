@@ -16,6 +16,7 @@ import os
 import sys
 
 from .i18n import tr
+from .settings import qsettings
 from .splash import Splash, no_splash
 
 
@@ -33,14 +34,14 @@ def main(argv=None):
     if sys.platform.startswith("linux") and os.environ.get("WAYLAND_DISPLAY") \
             and not os.environ.get("QT_QPA_PLATFORM"):
         os.environ["QT_QPA_PLATFORM"] = "xcb"  # PyOpenGL needs GLX
-    from PySide6.QtCore import QSettings, Qt
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
     QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     app = QApplication(argv)
     app.setApplicationName("Volura")
     app.setOrganizationName("Volura")
     from . import theme
-    theme.apply(str(QSettings("Volura", "Volura").value("theme", theme.SYSTEM)), app)
+    theme.apply(str(qsettings().value("theme", theme.SYSTEM)), app)
     splash = None if quiet or no_splash() else Splash()   # no_splash() again: now Qt knows the platform
     if splash is not None:
         splash.show()

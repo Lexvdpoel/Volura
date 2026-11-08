@@ -11,7 +11,7 @@ from dataclasses import replace
 
 import numpy as np
 import manifold3d as mf
-from PySide6.QtCore import (QObject, QPointF, QRectF, QSettings, QSize, Qt, QTimer, QUrl,
+from PySide6.QtCore import (QObject, QPointF, QRectF, QSize, Qt, QTimer, QUrl,
                             QVariantAnimation, Signal)
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QFont, QIcon, QKeySequence, QPainter,
                            QPainterPath, QPen, QPixmap, QDesktopServices)
@@ -36,6 +36,7 @@ from .geom import Plane
 from .i18n import tr, tr_noop
 from .icons import icon
 from .model import ROOT, LOCKED_MSG, Document
+from .settings import qsettings
 from .sheetview import SheetView
 from .tools import TOOL_CLASSES, fmt_deg, format_length, parse_length, set_length_precision
 from .tray import TRAY_WIDTH, Tray
@@ -186,7 +187,7 @@ PANELS = (PANEL_INFO, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT_CHECK, PANEL_
 
 class Settings:
     def __init__(self):
-        self.q = QSettings("Volura", "Volura")
+        self.q = qsettings()
         self.bed_size = tuple(float(v) for v in self.q.value("bed_size", [256, 256, 256]))
         self.show_grid = self._bool("show_grid", True)
         self.show_axes = self._bool("show_axes", True)
@@ -1478,11 +1479,6 @@ SHOW_WELCOME_KEY = "show_welcome"
 # of the settings keys (shown translated)
 OTHER_COMMANDS = tr_noop("Other")
 SOURCE_TEXT = "source_text"   # QAction property: the English text, when tr() can't tell
-
-
-def qsettings():
-    """The application settings, the same store as Settings.q."""
-    return QSettings("Volura", "Volura")
 
 
 def clean_text(text):
@@ -8057,7 +8053,7 @@ def main(argv=None):
     app.setApplicationName("Volura")
     app.setOrganizationName("Volura")
     app.setWindowIcon(icon("app"))
-    theme.apply(str(QSettings("Volura", "Volura").value("theme", theme.SYSTEM)), app)
+    theme.apply(str(qsettings().value("theme", theme.SYSTEM)), app)
     sys.excepthook = excepthook
     win = MainWindow()
     win.show()

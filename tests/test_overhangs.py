@@ -14,7 +14,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest  # noqa: E402
-from PySide6.QtCore import QSettings  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -23,6 +22,7 @@ from volura import ops, theme  # noqa: E402
 from volura.brep import Entities  # noqa: E402
 from volura.geom import Plane  # noqa: E402
 from volura.inference import GeoCache  # noqa: E402
+from volura.settings import qsettings  # noqa: E402
 
 SETTING_KEYS = ("show_overhangs", "overhang_limit")
 HINT = "Overhangs: {n} faces need support (over {limit}°)"
@@ -73,7 +73,7 @@ def underside(slope_deg):
 
 @pytest.fixture()
 def win():
-    q = QSettings("Volura", "Volura")
+    q = qsettings()
     saved = {k: q.value(k) for k in SETTING_KEYS}
     from volura.app import MainWindow
     w = MainWindow()

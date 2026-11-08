@@ -13,7 +13,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
-from PySide6.QtCore import QSettings  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -21,6 +20,7 @@ _app = QApplication.instance() or QApplication(sys.argv[:1])
 from volura import fileio, ops  # noqa: E402
 from volura.geom import Plane  # noqa: E402
 from volura.model import ROOT, Document  # noqa: E402
+from volura.settings import qsettings  # noqa: E402
 
 GROUND = Plane((0, 0, 0), (0, 0, 1))
 LOCKED = "This group is locked."
@@ -447,7 +447,7 @@ def test_locked_group_survives_undo_of_another_change(win):
 # ------------------------------------------------------------------- settings
 
 def test_show_hidden_setting_is_stored():
-    q = QSettings("Volura", "Volura")
+    q = qsettings()
     saved = q.value("show_hidden")
     try:
         from volura.app import Settings

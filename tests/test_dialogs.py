@@ -9,12 +9,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest  # noqa: E402
-from PySide6.QtCore import QSettings  # noqa: E402
 from PySide6.QtGui import QKeySequence  # noqa: E402
 from PySide6.QtWidgets import QLabel, QPushButton, QApplication  # noqa: E402
 
 import volura.app as app_module  # noqa: E402
 from volura import tools  # noqa: E402
+from volura.settings import qsettings  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
 
@@ -22,7 +22,7 @@ KEYS = ("length_snap", "length_precision", "circle_segments", "bed_size", "show_
 
 
 def settings():
-    return QSettings("Volura", "Volura")
+    return qsettings()
 
 
 def shortcut_keys():

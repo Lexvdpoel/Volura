@@ -15,11 +15,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import math  # noqa: E402
 import pytest  # noqa: E402
-from PySide6.QtCore import QSettings  # noqa: E402
 from PySide6.QtWidgets import QApplication, QLabel  # noqa: E402
 
 import volura.app as app_module  # noqa: E402
 from volura import ops  # noqa: E402
+from volura.settings import qsettings  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
 
@@ -32,7 +32,7 @@ def win(monkeypatch, tmp_path):
     settings of the user intact, whatever a test writes to QSettings."""
     monkeypatch.setattr(app_module.errors, "log_dir", lambda: str(tmp_path))
     monkeypatch.setattr(app_module, "autosave_path", lambda: str(tmp_path / "autosave.volura"))
-    q = QSettings("Volura", "Volura")
+    q = qsettings()
     saved = {k: q.value(k) for k in FILAMENT_KEYS}
     w = app_module.MainWindow()
     w.doc.dirty = False

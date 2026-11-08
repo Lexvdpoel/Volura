@@ -28,11 +28,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import manifold3d as mf  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
-from PySide6.QtCore import QSettings  # noqa: E402
 from PySide6.QtWidgets import QApplication, QDialog, QDoubleSpinBox, QSpinBox  # noqa: E402
 
 from volura import app as app_module, fonts, ops, threads  # noqa: E402
 from volura.brep import Entities  # noqa: E402
+from volura.settings import qsettings  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
 
@@ -287,7 +287,7 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
 
 
 def test_the_settings_clamp_what_they_read():
-    q = QSettings("Volura", "Volura")
+    q = qsettings()
     keys = ("clearance_test_pin", "clearance_test_first", "clearance_test_step",
             "clearance_test_count")
     saved = {k: q.value(k) for k in keys}

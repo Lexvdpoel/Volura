@@ -67,8 +67,8 @@ def system_language() -> str:
 def saved_choice() -> str:
     """Preferences > General > Language: "system" or a language code."""
     try:
-        from PySide6.QtCore import QSettings
-        value = str(QSettings("Volura", "Volura").value(SETTINGS_KEY, SYSTEM) or SYSTEM)
+        from .settings import qsettings
+        value = str(qsettings().value(SETTINGS_KEY, SYSTEM) or SYSTEM)
     except Exception:
         value = SYSTEM
     return value if value == SYSTEM or value in dict(LANGUAGES) else SYSTEM
