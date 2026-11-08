@@ -138,6 +138,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Holding tabs**: leave a few small uncut bridges in the selected closed contours, so a
   part stays in the sheet until the job is done; by default only the outer contours, since
   the scrap of a hole falls out on its own
+- **Job estimate**: how many metres of contour each layer cuts, how often the laser pierces
+  and how long the whole job takes, with the rapid moves between the paths along
 - **Model and worksheet together**: right-click a face or sheet > *Laser / Mill* puts it on a layer of
   the worksheet; *Parts to 3D Model* places everything that is cut as a sheet with the sheet thickness
   in 3D

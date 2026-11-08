@@ -241,6 +241,13 @@ SVG = {
                 f'stroke-width="1.5" stroke-linejoin="round"/>'
                 f'<rect x="10" y="2.5" width="6" height="5" rx="1" fill="#6b7685" {S(w=1.2)}/>'
                 f'<path d="M13 7.5 L13 15" {N} stroke="#d23b3b" stroke-width="1.6"/>',
+    # job estimate: a contour on the sheet with the clock of the time it takes
+    "job_estimate": f'<rect x="2.5" y="4" width="19" height="16" rx="1" fill="#eef2f7" {S()}/>'
+                    f'<path d="M5 7.5 L11.5 7.5 L11.5 13 L5 13 Z" {N} stroke="#d23b3b" '
+                    f'stroke-width="1.4" stroke-dasharray="2 1.6" stroke-linejoin="round"/>'
+                    f'<circle cx="16.5" cy="15.5" r="5.4" fill="#fff" {S(w=1.3)}/>'
+                    f'<path d="M16.5 12 L16.5 15.5 L18.8 17" {N} stroke="#2f6fd6" '
+                    f'stroke-width="1.5" stroke-linecap="round"/>',
     "app": '<rect x="1" y="1" width="22" height="22" rx="5" fill="#1f3b63"/>'
            '<path d="M12 4 L20 8.5 L12 13 L4 8.5 Z" fill="#f2c230"/>'
            '<path d="M4 8.5 L12 13 L12 21 L4 16.5 Z" fill="#d23b3b"/>'

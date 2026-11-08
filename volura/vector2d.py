@@ -861,3 +861,75 @@ def join_open_paths(paths, tol=0.01):
         out.append(VPath(np.asarray(pts, dtype=float).reshape(-1, 2), closed, p.layer,
                          p.filled, p.rule, p.src, meta))
     return out
+
+
+# --------------------------------------------------------------------------
+#  what a job takes
+# --------------------------------------------------------------------------
+
+def path_length(pts, closed=False) -> float:
+    """The length of a polyline in millimetres; a closed one includes the run back to the start."""
+    p = _arr(pts)
+    if len(p) < 2:
+        return 0.0
+    q = np.vstack([p, p[:1]]) if closed else p
+    return float(np.sum(np.hypot(*np.diff(q, axis=0).T)))
+
+
+#: Rapid moves between the paths, in mm/s, and the time a pierce costs, in seconds.
+DEFAULT_TRAVEL_SPEED = 150.0
+
+
+def job_estimate(drawing, travel_speed=DEFAULT_TRAVEL_SPEED, pierce_time=0.0) -> dict:
+    """What the laser takes for a drawing: per layer the length cut and the time.
+
+    Only the layers the beam actually follows are timed: the visible ones with a laser
+    operation other than "raster", since the time of a raster fill depends on the line
+    spacing and not on the layer. A raster layer and the mill layers (a mill has its own
+    export) come back by name under "skipped", without a time; a hidden layer goes to no
+    machine at all and is not mentioned either.
+
+    A layer runs `passes` times over its own paths, so its length counts that often, and
+    with `pierce_time` every path costs a pierce per pass. Between the paths the head
+    moves in rapid at `travel_speed` mm/s: from the origin to the start of the first path
+    and from the end of every path to the start of the next, in the order of the drawing.
+
+    {"layers": [{"layer", "length", "pierces", "passes", "speed", "time"}...],
+     "travel", "travel_time", "total", "skipped"}
+    A speed of zero or less gives no estimate for that layer ("time" None), and then
+    "total" is None as well instead of a total that quietly leaves a layer out.
+    """
+    drawing = drawing if isinstance(drawing, Drawing) else Drawing(paths=list(drawing))
+    rows: dict[str, dict] = {}
+    skipped: list[str] = []
+    for name, lay in drawing.layers.items():
+        if not getattr(lay, "visible", True) or not any(p.layer == name for p in drawing.paths):
+            continue
+        if lay.op == "raster" or lay.op in MILL_OPS:
+            skipped.append(name)
+            continue
+        if lay.op not in LASER_OPS:
+            continue                      # "none": for information only, never exported
+        rows[name] = {"layer": name, "length": 0.0, "pierces": 0,
+                      "passes": int(layer_param(lay, "passes")),
+                      "speed": float(layer_param(lay, "speed") or 0.0), "time": None}
+    travel = 0.0
+    pos = np.zeros(2)                     # the head starts at the origin
+    for p in drawing.paths:
+        row = rows.get(p.layer)
+        if row is None or len(p.pts) < 2:
+            continue
+        pts = _arr(p.pts)
+        travel += float(np.hypot(*(pts[0] - pos)))
+        pos = pts[0] if p.closed else pts[-1]   # a closed contour ends where it began
+        row["length"] += path_length(pts, p.closed)
+        row["pierces"] += 1
+    for row in rows.values():
+        if row["speed"] > 0.0:
+            row["time"] = (row["length"] * row["passes"] / row["speed"]
+                           + row["pierces"] * row["passes"] * float(pierce_time))
+    travel_time = travel / float(travel_speed) if float(travel_speed) > 0.0 else None
+    parts = [row["time"] for row in rows.values()] + [travel_time]
+    return {"layers": list(rows.values()), "travel": travel, "travel_time": travel_time,
+            "total": None if any(t is None for t in parts) else float(sum(parts)),
+            "skipped": skipped}

@@ -42,7 +42,7 @@ from .tools import TOOL_CLASSES, fmt_deg, format_length, parse_length, set_lengt
 from .tray import TRAY_WIDTH, Tray
 from .vector2d import (CORNER_LABELS, CORNER_STYLES, SHEET_SPACING, Drawing, LASER_OPS,
                        LASER_PARAMS, MILL_OPS, MILL_PARAMS, OP_LABELS, OPS, PARAM_LABELS,
-                       VPath, _transform_meta, default_layer_names, layer_param)
+                       VPath, _transform_meta, default_layer_names, job_estimate, layer_param)
 from .viewport import (FACE_STYLES, HIDDENLINE, MONOCHROME, SHADED, WIREFRAME, Viewport)
 
 PRINTERS = [
@@ -1575,6 +1575,15 @@ def note(text):
     return label
 
 
+def fmt_time(seconds) -> str:
+    """A duration as m:ss, and as h:mm:ss from an hour onwards; a dash when there is no estimate."""
+    if seconds is None:
+        return "—"
+    h, rest = divmod(int(round(float(seconds))), 3600)
+    m, s = divmod(rest, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
 class VectorPreview(QWidget):
     """A small preview of a 2D drawing (millimetres, Y up) for the export dialog."""
 
@@ -2411,6 +2420,70 @@ class HoldingTabsDialog(QDialog):
     def options(self) -> dict:
         return {"count": int(self.count.value()), "width": round(self.width.value(), 6),
                 "outer_only": bool(self.outer_only.isChecked())}
+
+
+class JobEstimateDialog(QDialog):
+    """The "Job Estimate…" dialog: what the worksheet takes on the laser.
+
+    Read-only. One row per layer that the beam follows, with the length of its paths, the
+    number of pierces, the passes and the speed, and below them the rapid moves between the
+    paths and the total. Times stand as m:ss, and as h:mm:ss from an hour onwards. A layer
+    without a usable speed gets a dash instead of a time, and a raster or mill layer is only
+    named under the table, since its time does not follow from the layer.
+    """
+
+    WIDTHS = (120, 70, 60, 55, 80, 60)
+
+    def __init__(self, estimate, parent=None):
+        super().__init__(parent)
+        self.estimate = estimate
+        self.setWindowTitle(tr("Job Estimate"))
+        lay = QVBoxLayout(self)
+        rows = list(estimate["layers"])
+        self.table = QTableWidget(len(rows) + 2, 6)
+        self.table.setHorizontalHeaderLabels(
+            [tr("Layer"), tr("Length (m)"), tr("Pierces"), tr("Passes"),
+             tr("Speed (mm/s)"), tr("Time")])
+        self.table.verticalHeader().setVisible(False)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setSelectionMode(QAbstractItemView.NoSelection)
+        self.table.setFocusPolicy(Qt.NoFocus)
+        for col, width in enumerate(self.WIDTHS):
+            self.table.setColumnWidth(col, width)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        for r, row in enumerate(rows):
+            self._cell(r, 0, row["layer"])
+            self._cell(r, 1, f'{row["length"] / 1000.0:.3f}')
+            self._cell(r, 2, row["pierces"])
+            self._cell(r, 3, f'{row["passes"]}×')
+            self._cell(r, 4, f'{row["speed"]:g}')
+            self._cell(r, 5, fmt_time(row["time"]))
+        self._cell(len(rows), 0, tr("Travel"))
+        self._cell(len(rows), 1, f'{estimate["travel"] / 1000.0:.3f}')
+        self._cell(len(rows), 5, fmt_time(estimate["travel_time"]))
+        self._cell(len(rows) + 1, 0, tr("Total"))
+        self._cell(len(rows) + 1, 5, fmt_time(estimate["total"]))
+        bold = self.table.item(len(rows) + 1, 0)
+        font = QFont()
+        font.setBold(True)
+        bold.setFont(font)
+        lay.addWidget(self.table)
+        if estimate["skipped"]:
+            lay.addWidget(note(tr("Not included: {names}.").format(
+                names=", ".join(estimate["skipped"]))))
+        row = QHBoxLayout()
+        row.addStretch(1)
+        b = QPushButton(tr("Close"))
+        b.clicked.connect(self.accept)
+        row.addWidget(b)
+        lay.addLayout(row)
+
+    def _cell(self, r, c, text):
+        """One read-only cell of the table; the numbers line up on the right."""
+        it = QTableWidgetItem(str(text))
+        if c:
+            it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.table.setItem(r, c, it)
 
 
 class SimplifyDialog(QDialog):
@@ -3582,6 +3655,11 @@ class MainWindow(QMainWindow):
         self.a_to_laser = A(tr("To &Laser or Mill…"), self.send_selection_to_sheet, None, "to_laser",
                             False, tr("Put the selected faces or plates on a layer of the worksheet "
                                       "to cut, engrave or mill them"))
+        self.a_job_estimate = A(tr("Job Estimate…"),
+                                lambda checked=False: self.job_estimate_dialog(), None,
+                                "job_estimate", False,
+                                tr("How long the laser takes for the worksheet and how many "
+                                   "metres it cuts"))
         self.a_sheet_to_model = A(tr("Parts to &3D Model"), self.sheet_to_model, None, "to_model",
                                   False, tr("Put what is cut into the 3D model as plates with the "
                                             "sheet thickness"))
@@ -3745,7 +3823,7 @@ class MainWindow(QMainWindow):
         self.fill(cut_faces, (self.a_cut_face_model, self.a_cut_face_sel))
         self.fill(m, (self.a_undo, self.a_redo, None,
                       self.a_cut, self.a_copy, self.a_paste, self.a_paste_loc, self.a_to_sheet,
-                      self.a_to_laser, self.a_delete,
+                      self.a_to_laser, self.a_job_estimate, self.a_delete,
                       self.a_erase_guides, None,
                       self.a_sel_all, self.a_sel_none, None,
                       self.a_hide, unhide, None,
@@ -3874,7 +3952,8 @@ class MainWindow(QMainWindow):
                       self.a_sheet_grid, self.a_sheet_round, self.a_sheet_to_layer,
                       None, self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint,
                       self.a_hinge, self.a_vent_pattern, self.a_fit_test, self.a_spur_gear,
-                      self.a_holding_tabs, self.a_sheet_to_model, None, self.a_extents):
+                      self.a_holding_tabs, self.a_sheet_to_model, self.a_job_estimate, None,
+                      self.a_extents):
                 bar.addSeparator() if a is None else bar.addAction(a)
             self._add_dropdown(bar, self.a_sheet_align,
                                tuple(self.sheet_align_actions.values()))
@@ -3932,6 +4011,16 @@ class MainWindow(QMainWindow):
                                      "layer with the arrow.").format(name=name))
                 return False
         return self.sheet_view.move_to_layer(name)
+
+    def job_estimate_dialog(self):
+        """Edit > Job Estimate…: what the worksheet takes on the laser, per layer."""
+        sheet = self.doc.sheet
+        if not sheet.paths:
+            self.hint.setText(tr("The worksheet is empty."))
+            self.setFocus()
+            return None
+        JobEstimateDialog(job_estimate(sheet), self).exec()
+        self.setFocus()
 
     def open_layers_panel(self):
         """Window > Default Tray > Layers: color, operation and settings per layer."""
