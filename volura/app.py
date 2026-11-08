@@ -437,6 +437,11 @@ class Settings:
             self.tab_width = 1.0
         self.tab_width = max(0.2, min(20.0, self.tab_width))
         self.tab_outer_only = self._bool("tab_outer_only", True)
+        try:
+            self.corner_radius = float(self.q.value("corner_radius", 2.0))
+        except (TypeError, ValueError):
+            self.corner_radius = 2.0
+        self.corner_radius = max(0.1, min(100.0, self.corner_radius))
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
@@ -513,6 +518,7 @@ class Settings:
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
+        self.q.setValue("corner_radius", self.corner_radius)
         self.q.setValue("recent", self.recent[:8])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
@@ -2498,6 +2504,40 @@ class HoldingTabsDialog(QDialog):
                 "outer_only": bool(self.outer_only.isChecked())}
 
 
+class RoundCornersDialog(QDialog):
+    """The "Round Corners…" dialog: the radius that takes the sharp corners out of a panel.
+
+    A panel that comes off the laser or the mill with its corners still sharp cuts into
+    your hand and chips whatever it rubs against. One radius is not one radius everywhere:
+    a corner of which the two segments are shorter than the radius needs is rounded as far
+    as they let it, and a corner without room stays sharp. Where the sheet is milled the
+    radius is that of the cutter, so the dialog starts where the user left it (Settings)
+    and remembers the new radius.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Round Corners"))
+        lay = QFormLayout(self)
+        self.radius = QDoubleSpinBox()
+        self.radius.setRange(0.1, 100.0)
+        self.radius.setDecimals(2)
+        self.radius.setSingleStep(0.1)
+        self.radius.setSuffix(" mm")
+        self.radius.setValue(float(s.corner_radius))
+        self.radius.setToolTip(tr("Radius of the arc in every corner, as far as the "
+                                  "segments next to it allow"))
+        lay.addRow(tr("Radius"), self.radius)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"radius": round(self.radius.value(), 6)}
+
+
 class JobEstimateDialog(QDialog):
     """The "Job Estimate…" dialog: what the worksheet takes on the laser.
 
@@ -3865,6 +3905,12 @@ class MainWindow(QMainWindow):
                                 False,
                                 tr("Leave small uncut bridges in the selected closed contours, "
                                    "so a part stays in the sheet until the job is done"))
+        # ---- round corners
+        self.a_round_corners = A(tr("Round &Corners…"),
+                                 lambda checked=False: self.round_corners_dialog(), None, None,
+                                 False,
+                                 tr("Round the sharp corners of the selected paths with a "
+                                    "radius, so a cut panel has no sharp edges left"))
 
     def sheet_tool_act(self, label, name, tip=None):
         """Button for a 2D tool; the key works on the worksheet (M, Q, S, Space)."""
@@ -3920,7 +3966,7 @@ class MainWindow(QMainWindow):
         self.fill(m, (self.a_toolbars, self.a_sheet, None,
                       self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint, self.a_hinge,
                       self.a_vent_pattern, self.a_fit_test, self.a_spur_gear,
-                      self.a_holding_tabs, self.a_sheet_to_model, None,
+                      self.a_holding_tabs, self.a_round_corners, self.a_sheet_to_model, None,
                       self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid, None,
                       edge_style, face_style, comp_edit))
 
@@ -4030,7 +4076,8 @@ class MainWindow(QMainWindow):
                       self.a_sheet_grid, self.a_sheet_round, self.a_sheet_to_layer,
                       None, self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint,
                       self.a_hinge, self.a_vent_pattern, self.a_fit_test, self.a_spur_gear,
-                      self.a_holding_tabs, self.a_sheet_to_model, self.a_job_estimate, None,
+                      self.a_holding_tabs, self.a_round_corners, self.a_sheet_to_model,
+                      self.a_job_estimate, None,
                       self.a_extents):
                 bar.addSeparator() if a is None else bar.addAction(a)
             self._add_dropdown(bar, self.a_sheet_align,
@@ -4754,6 +4801,93 @@ class MainWindow(QMainWindow):
         self.sheet_view.set_selection(fresh)
         self.sheet_view._refresh_outside(announce=False)
         self.hint.setText(" ".join(notes))
+        return fresh
+
+    # ------------------------------------------------------------ round corners
+    def round_corners_dialog(self):
+        """View > Round Corners…: a radius in the sharp corners of the selected paths."""
+        if not self.sheet_view.selected_paths():
+            self.hint.setText(tr("Select the paths to round first."))
+            self.setFocus()
+            return None
+        dlg = RoundCornersDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.corner_radius = float(options["radius"])
+        self.settings.save()
+        made = self.apply_round_corners(options)
+        self.setFocus()
+        return made
+
+    #: from this many points on, the corners are rounded off the GUI thread
+    BACKGROUND_ROUND_POINTS = 2000
+
+    def apply_round_corners(self, options):
+        """The rounded copy of every selected path that has a corner: one undo step.
+
+        Open and closed paths both count, and the two end points of an open path stay where
+        they are. Each path is replaced by its copy on the same layer with the same source
+        number, so a part still moves and nests as one. A path whose corners are all blunter
+        than the arc needs is left alone, and when nothing changes there is no undo step.
+
+        A contour from an import easily has tens of thousands of points, so from
+        `BACKGROUND_ROUND_POINTS` on the copies are made in the background, like the placing
+        of a big drawing on the sheet.
+        """
+        sel = self.sheet_view.selected_paths()
+        self.set_mode("2d")
+        sheet = self.doc.sheet
+        radius = float(options["radius"])
+
+        def work(report):
+            out = {}
+            for i, p in enumerate(sel):
+                if i:
+                    report(i / len(sel))
+                out[id(p)] = sheettools.round_corners(p.pts, radius, closed=p.closed)
+            return out
+
+        if sum(len(p.pts) for p in sel) >= self.BACKGROUND_ROUND_POINTS:
+            job = background.run(self, work, text=tr("Rounding the corners…"), wait=True)
+            if job.was_cancelled:
+                self.hint.setText(tr("Rounding the corners was cancelled."))
+                return None
+            if job.error is not None:
+                QMessageBox.critical(self, tr("Round Corners Failed"), str(job.error))
+                return None
+            copies = job.result
+        else:
+            copies = work(lambda *args: None)
+        replacements, rounded, blunt = {}, 0, 0
+        for p in sel:
+            pts = copies[id(p)]
+            if np.array_equal(pts, np.asarray(p.pts, dtype=float)):
+                blunt += 1
+                continue
+            replacements[id(p)] = pts
+            rounded += 1
+        if not rounded:
+            self.hint.setText(tr("{n} paths have no corners to round.").format(n=blunt)
+                              if blunt else tr("Nothing to round."))
+            return None
+        self.doc.checkpoint()
+        live = set(replacements)
+        keep, fresh = [], []
+        for p in sheet.paths:
+            if id(p) not in live:
+                keep.append(p)
+                continue
+            q = VPath(np.asarray(replacements[id(p)], dtype=float), p.closed, p.layer, p.filled,
+                      p.rule, p.src, {})
+            keep.append(q)
+            fresh.append(q)
+        sheet.paths = keep
+        self.doc.notify()
+        self.sheet_view.set_selection(fresh)
+        self.sheet_view._refresh_outside(announce=False)
+        self.hint.setText(tr("{n} paths rounded.").format(n=rounded))
         return fresh
 
     def ask_sheet_text(self):

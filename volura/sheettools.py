@@ -1761,6 +1761,84 @@ def holding_tabs(pts, count, width, skip_short=None) -> list[np.ndarray]:
     return pieces
 
 
+def round_corners(pts, radius, closed=True, min_angle=10.0, tol=CURVE_TOL) -> np.ndarray:
+    """The same polyline with a tangent arc of `radius` in every sharp corner.
+
+    A panel that comes off the laser or the mill is nicer to hold and safer to touch
+    when its corners are not sharp. Every vertex where the direction turns by more than
+    `min_angle` degrees gets an arc that is tangent to both of its segments, whether the
+    corner sticks out of the material or bites into it; the arc is flattened with `tol`
+    like the other curves on the worksheet.
+
+    The radius of a corner is limited so that its tangent points never pass the middle of
+    the segment next to them: two corners on a short edge share that edge and may not
+    overlap. A corner of which little enough is left (`radius` below 1e-6 after the limit)
+    stays sharp, and so does a path without corners at all. The two end points of an open
+    path stay as they are; a closed path rounds every vertex, the start point along with
+    it. Points on top of each other and a contour that closes itself by repeating its
+    first point are straightened out first, so a path from an import behaves.
+    """
+    pts = np.asarray(pts, dtype=float).reshape(-1, 2)
+    radius = float(radius)
+    if radius <= 0.0:
+        return pts.copy()
+    keep = [pts[0]] if len(pts) else []
+    for p in pts[1:]:
+        if float(np.hypot(*(p - keep[-1]))) > 1e-9:
+            keep.append(p)
+    pts = np.asarray(keep, dtype=float).reshape(-1, 2)
+    if closed and len(pts) > 1 and float(np.hypot(*(pts[0] - pts[-1]))) <= 1e-9:
+        pts = pts[:-1]
+    n = len(pts)
+    if n < 3:
+        return pts.copy()
+
+    def unit(v):
+        L = float(np.hypot(*v))
+        return v / L if L > 1e-12 else None
+
+    def ang(q):
+        return math.atan2(float(q[1]), float(q[0]))
+
+    turn = math.radians(max(0.0, float(min_angle)))
+    arcs = {}
+    for i in range(n):
+        if not closed and (i == 0 or i == n - 1):
+            continue                          # the ends of an open path stay as they are
+        a, v, b = pts[i - 1], pts[i], pts[(i + 1) % n]
+        u, w = unit(a - v), unit(b - v)
+        if u is None or w is None:
+            continue
+        beta = math.acos(float(np.clip(float(u @ w), -1.0, 1.0)))
+        bis = unit(u + w)
+        if bis is None or math.pi - beta <= turn:
+            continue                          # too straight to see an arc in it
+        r = min(radius, 0.5 * min(float(np.hypot(*(a - v))),
+                                  float(np.hypot(*(b - v)))) * math.tan(0.5 * beta))
+        if r < 1e-6:
+            continue                          # no room for a corner worth the name
+        t = r / math.tan(0.5 * beta)          # from the vertex to both tangent points
+        c = v + (r / math.sin(0.5 * beta)) * bis
+        t1, t2 = v + t * u, v + t * w
+        arcs[i] = arc_points(c, r, ang(t1 - c),
+                             ang(t1 - c) + arc_span(ang(t1 - c), ang(v - c), ang(t2 - c)),
+                             tol)
+
+    out = []
+
+    def emit(q):
+        if out and float(np.hypot(*(q - out[-1]))) <= 1e-9:
+            return                            # the two corners of an edge can meet exactly
+        out.append(np.asarray(q, dtype=float))
+
+    for i in range(n):
+        for q in arcs.get(i, (pts[i],)):
+            emit(q)
+    while len(out) > 1 and float(np.hypot(*(out[0] - out[-1]))) <= 1e-9:
+        out.pop()
+    return np.ascontiguousarray(np.asarray(out, dtype=float).reshape(-1, 2), dtype=float)
+
+
 def joined_paths(paths) -> list[VPath]:
     """Join open segments into polylines and shapes."""
     return join_open_paths(paths)

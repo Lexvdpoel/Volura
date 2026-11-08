@@ -140,6 +140,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Holding tabs**: leave a few small uncut bridges in the selected closed contours, so a
   part stays in the sheet until the job is done; by default only the outer contours, since
   the scrap of a hole falls out on its own
+- **Round corners**: put a radius in the sharp corners of the selected paths, open or
+  closed, so a cut panel has no sharp edges left to cut into your hand; a corner whose
+  segments are too short for the radius is rounded as far as they allow
 - **Job estimate**: how many metres of contour each layer cuts, how often the laser pierces
   and how long the whole job takes, with the rapid moves between the paths along
 - **G-code for a GRBL laser**: File > Export > *G-code for a GRBL Laser* writes the laser
