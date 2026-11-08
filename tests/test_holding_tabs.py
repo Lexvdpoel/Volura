@@ -8,7 +8,9 @@ positions. When there is no room for the tabs the contour comes back closed as i
 
 In the window (Qt offscreen) a closed contour on a cutting layer is replaced by its open
 pieces in one undo step, keeping its layer and source number; open paths and engravings are
-skipped, and nothing selected or nothing to change leaves the undo stack untouched.
+skipped, and nothing selected or nothing to change leaves the undo stack untouched. By
+default only the outer contours get tabs ("Outer contours only"): the scrap of a hole falls
+out on its own, so a hole is left closed and counted in a separate note.
 
 Run with:  python -m pytest tests/test_holding_tabs.py
 """
@@ -21,10 +23,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 from PySide6.QtCore import QCoreApplication  # noqa: E402
-from PySide6.QtWidgets import QApplication, QDialog, QDoubleSpinBox, QSpinBox  # noqa: E402
+from PySide6.QtWidgets import (QApplication, QCheckBox, QDialog, QDoubleSpinBox,  # noqa: E402
+                               QSpinBox)
 
 import volura.app as app_module  # noqa: E402
-from volura.sheettools import holding_tabs  # noqa: E402
+from volura.sheettools import circle_loop, holding_tabs  # noqa: E402
 from volura.vector2d import next_src  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -92,6 +95,28 @@ def test_a_short_contour_can_be_left_alone():
     pieces = holding_tabs(RECT, 4, 1.0, skip_short=100.0)
     assert len(pieces) == 1 and np.array_equal(pieces[0], RECT)
     assert len(holding_tabs(RECT, 4, 1.0, skip_short=10.0)) == 4
+
+
+def test_a_repeated_last_point_gives_the_same_pieces():
+    closed = np.vstack([RECT, RECT[:1]])          # imports often close a contour by hand
+    plain = holding_tabs(RECT, 4, 1.0)
+    same = holding_tabs(closed, 4, 1.0)
+    assert len(same) == len(plain)
+    for q, r in zip(same, plain):
+        assert np.allclose(q, r)
+
+
+def test_a_zero_length_segment_neither_raises_nor_loses_length():
+    pinched = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 0.0], [10.0, 5.0], [0.0, 5.0]])
+    pieces = holding_tabs(pinched, 4, 1.0)
+    assert total_length(pieces) == pytest.approx(perimeter(pinched) - 4 * 1.0, abs=1e-9)
+
+
+def test_a_circle_gets_its_tabs_evenly():
+    loop = circle_loop((0.0, 0.0), 20.0, segments=64)
+    pieces = holding_tabs(loop, 4, 1.0)
+    assert len(pieces) == 4
+    assert total_length(pieces) == pytest.approx(perimeter(loop) - 4 * 1.0, abs=1e-9)
 
 
 # ------------------------------------------------------------------ in the window
@@ -196,3 +221,74 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
     assert seen["start"] == (6, 2.5)
     assert win.settings.tab_count == 3
     assert win.settings.tab_width == pytest.approx(1.5)
+
+
+# --------------------------------------------------------- outer contours only
+
+def test_a_hole_is_left_without_tabs_by_default(win, monkeypatch):
+    accept_dialog(monkeypatch)
+    win.settings.tab_count, win.settings.tab_width = 4, 1.0
+    win.settings.tab_outer_only = True
+    outer = contour(win, [[0, 0], [60, 0], [60, 40], [0, 40]])
+    hole = contour(win, [[20, 15], [40, 15], [40, 25], [20, 25]])
+    made = win.holding_tabs_dialog()
+    assert made is not None and len(made) == 4, "only the outer contour is cut into pieces"
+    assert all(q.layer == outer.layer for q in made)
+    assert hole in win.doc.sheet.paths and hole.closed, "the hole keeps its shape"
+    assert "1 holes were left without tabs." in win.hint.text()
+
+
+def test_turning_outer_contours_off_tabs_the_hole_too(win, monkeypatch):
+    accept_dialog(monkeypatch)
+    win.settings.tab_count, win.settings.tab_width = 4, 1.0
+    win.settings.tab_outer_only = False
+    contour(win, [[0, 0], [60, 0], [60, 40], [0, 40]])
+    hole = contour(win, [[20, 15], [40, 15], [40, 25], [20, 25]])
+    made = win.holding_tabs_dialog()
+    assert made is not None and len(made) == 8, "outer and hole both get four pieces"
+    assert hole not in win.doc.sheet.paths, "the hole is cut into pieces too"
+    assert "holes were left without tabs" not in win.hint.text()
+
+
+def test_a_hole_is_a_hole_even_when_its_outer_is_not_selected(win, monkeypatch):
+    accept_dialog(monkeypatch)
+    win.settings.tab_count, win.settings.tab_width = 4, 1.0
+    win.settings.tab_outer_only = True
+    contour(win, [[0, 0], [60, 0], [60, 40], [0, 40]])
+    hole = contour(win, [[20, 15], [40, 15], [40, 25], [20, 25]])
+    win.sheet_view.clear_selection()
+    win.sheet_view.add_to_selection([hole])
+    steps = len(win.doc.undo_stack)
+    assert win.holding_tabs_dialog() is None, "the only thing selected is a hole"
+    assert len(win.doc.undo_stack) == steps, "nothing changed, so no undo step"
+    assert hole in win.doc.sheet.paths and hole.closed
+    assert win.hint.text() == "1 holes were left without tabs."
+
+
+def test_apply_holding_tabs_treats_a_missing_option_as_outer_only(win):
+    win.settings.tab_count, win.settings.tab_width = 4, 1.0
+    contour(win, [[0, 0], [60, 0], [60, 40], [0, 40]])
+    hole = contour(win, [[20, 15], [40, 15], [40, 25], [20, 25]])
+    made = win.apply_holding_tabs({"count": 4, "width": 1.0})
+    assert made is not None and len(made) == 4, "no outer_only key behaves as on"
+    assert hole in win.doc.sheet.paths and hole.closed
+    assert "1 holes were left without tabs." in win.hint.text()
+
+
+def test_the_outer_contours_option_starts_checked_and_is_remembered(win, monkeypatch):
+    win.settings.tab_count, win.settings.tab_width = 4, 1.0
+    win.settings.tab_outer_only = True
+    contour(win, [[0, 0], [60, 0], [60, 40], [0, 40]])
+    seen = {}
+
+    def fill(dlg):
+        seen["start"] = dlg.findChild(QCheckBox).isChecked()
+        seen["options"] = dlg.options()
+        dlg.findChild(QCheckBox).setChecked(False)
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", fill)
+    win.holding_tabs_dialog()
+    assert seen["start"] is True
+    assert seen["options"]["outer_only"] is True
+    assert win.settings.tab_outer_only is False

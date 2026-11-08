@@ -337,6 +337,7 @@ class Settings:
         except (TypeError, ValueError):
             self.tab_width = 1.0
         self.tab_width = max(0.2, min(20.0, self.tab_width))
+        self.tab_outer_only = self._bool("tab_outer_only", True)
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
@@ -392,6 +393,7 @@ class Settings:
         self.q.setValue("fit_test_count", self.fit_test_count)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
+        self.q.setValue("tab_outer_only", self.tab_outer_only)
         self.q.setValue("recent", self.recent[:8])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
@@ -2058,6 +2060,9 @@ class HoldingTabsDialog(QDialog):
     spread, that you snap off afterwards. How many and how wide depends on the machine and
     the material, so the dialog starts where the user left them (Settings) and remembers
     the new ones; one millimetre is about the width of a laser beam, a few for a mill.
+
+    The scrap of a hole has nowhere to hang, so it falls out on its own: by default only
+    the outer contours get tabs and the holes are left alone ("Outer contours only").
     """
 
     def __init__(self, win):
@@ -2077,15 +2082,20 @@ class HoldingTabsDialog(QDialog):
         self.width.setValue(float(s.tab_width))
         self.width.setToolTip(tr("Width of one tab: about the laser beam for a laser, a few "
                                  "millimetres for a mill"))
+        self.outer_only = QCheckBox(tr("Outer contours only"))
+        self.outer_only.setToolTip(tr("Leave the holes alone: their scrap falls out of the sheet"))
+        self.outer_only.setChecked(bool(s.tab_outer_only))
         lay.addRow(tr("Tabs per contour"), self.count)
         lay.addRow(tr("Tab width"), self.width)
+        lay.addRow("", self.outer_only)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         lay.addRow(bb)
 
     def options(self) -> dict:
-        return {"count": int(self.count.value()), "width": round(self.width.value(), 6)}
+        return {"count": int(self.count.value()), "width": round(self.width.value(), 6),
+                "outer_only": bool(self.outer_only.isChecked())}
 
 
 class SimplifyDialog(QDialog):
@@ -3918,6 +3928,7 @@ class MainWindow(QMainWindow):
         options = dlg.options()
         self.settings.tab_count = int(options["count"])
         self.settings.tab_width = float(options["width"])
+        self.settings.tab_outer_only = bool(options["outer_only"])
         self.settings.save()
         made = self.apply_holding_tabs(options)
         self.setFocus()
@@ -3930,17 +3941,35 @@ class MainWindow(QMainWindow):
         or Drill); open lines and engravings are skipped and counted. Each contour is
         replaced by its open pieces on the same layer with the same source number, so a
         part and its tabs still move and nest together.
+
+        With `outer_only` (the default) a hole is left without tabs: its scrap has nothing
+        to hold on to and falls out on its own. Whether a contour is a hole comes from its
+        nesting depth over all the closed paths of its own layer on the sheet, not only the
+        selection, so a hole counts as a hole even when its outer contour is not selected.
         """
         sel = self.sheet_view.selected_paths()
         self.set_mode("2d")
         sheet = self.doc.sheet
         count, width = int(options["count"]), float(options["width"])
-        replacements, tabbed, too_small, skipped = {}, 0, 0, 0
+        outer_only = bool(options.get("outer_only", True))
+        depths = {}
+        if outer_only:
+            by_layer = {}
+            for p in sheet.paths:
+                if p.closed and len(p.pts) >= 3:
+                    by_layer.setdefault(p.layer, []).append(p)
+            for group in by_layer.values():
+                for p, d in zip(group, cam.nesting_depth(group)):
+                    depths[id(p)] = d
+        replacements, tabbed, too_small, skipped, holes = {}, 0, 0, 0, 0
         for p in sel:
             lay = sheet.layers.get(p.layer)
             op = getattr(lay, "op", "cut") if lay is not None else "cut"
             if not (p.closed and len(p.pts) >= 3 and op in sheet3d.THROUGH_OPS):
                 skipped += 1
+                continue
+            if outer_only and depths.get(id(p), 0) % 2:
+                holes += 1
                 continue
             pieces = sheettools.holding_tabs(p.pts, count, width)
             if len(pieces) == 1 and np.array_equal(pieces[0], np.asarray(p.pts, float)):
@@ -3951,6 +3980,8 @@ class MainWindow(QMainWindow):
         notes = []
         if tabbed:
             notes.append(tr("{n} contours got {k} tabs each.").format(n=tabbed, k=count))
+        if holes:
+            notes.append(tr("{n} holes were left without tabs.").format(n=holes))
         if skipped:
             notes.append(tr("{n} paths were skipped (open or not a cutting layer).")
                          .format(n=skipped))
