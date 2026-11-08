@@ -3,6 +3,20 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.22 — 2026-11-08
+
+### New
+- **Project Box** (Tools > Print Tools > Project Box…): a printable enclosure from the inside
+  length, width and height your electronics need, with wall, floor and corner radius, and
+  a lid whose lip slides into the box with the clearance you choose. The box and the lid
+  land side by side on the bed, the lid already upside down, so neither needs support.
+- **Duplicate in a Circle** (worksheet, right-click menu or sheet toolbar): copies of the
+  selection spread over a full circle or an arc, around the centre of the selection, the
+  origin or a point you type, turning along with the circle or keeping their orientation.
+
+### Website
+- The feature overview and the manual describe the project box and the circular duplicate.
+
 ## 0.2.21 — 2026-11-08
 
 ### New
