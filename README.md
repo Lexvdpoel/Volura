@@ -147,6 +147,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Round corners**: put a radius in the sharp corners of the selected paths, open or
   closed, so a cut panel has no sharp edges left to cut into your hand; a corner whose
   segments are too short for the radius is rounded as far as they allow
+- **Dogbone corners**: for a milled part, a round relief of the cutter diameter in every
+  inside corner of the material, so a square tab fits into a milled square slot; holes and
+  outer contours are told apart by their nesting on the layer
 - **Job estimate**: how many metres of contour each layer cuts, how often the laser pierces
   and how long the whole job takes, with the rapid moves between the paths along
 - **G-code for a GRBL laser**: File > Export > *G-code for a GRBL Laser* writes the laser

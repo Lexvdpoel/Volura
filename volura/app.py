@@ -457,6 +457,12 @@ class Settings:
         except (TypeError, ValueError):
             self.corner_radius = 2.0
         self.corner_radius = max(0.1, min(100.0, self.corner_radius))
+        try:
+            # the default is the 1/8 inch end mill that is on most desktop mills
+            self.dogbone_tool_d = float(self.q.value("dogbone_tool_d", 3.175))
+        except (TypeError, ValueError):
+            self.dogbone_tool_d = 3.175
+        self.dogbone_tool_d = max(0.5, min(25.0, self.dogbone_tool_d))
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
@@ -537,6 +543,7 @@ class Settings:
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
         self.q.setValue("corner_radius", self.corner_radius)
+        self.q.setValue("dogbone_tool_d", self.dogbone_tool_d)
         self.q.setValue("recent", self.recent[:8])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
@@ -2556,6 +2563,40 @@ class RoundCornersDialog(QDialog):
         return {"radius": round(self.radius.value(), 6)}
 
 
+class DogboneCornersDialog(QDialog):
+    """The "Dogbone Corners…" dialog: the diameter of the mill whose corners must be cleared.
+
+    A round cutter cannot mill a sharp inside corner: it leaves a fillet of its own radius
+    standing there, so a square tab does not fit into a milled square slot. The relief that
+    clears the corner is a circle of the cutter itself, so the only number here is the
+    diameter of the cutter that will run the job. Where the sheet is milled that is the
+    diameter in the tool table, so the dialog starts where the user left it (Settings) and
+    remembers the new one.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Dogbone Corners"))
+        lay = QFormLayout(self)
+        self.tool = QDoubleSpinBox()
+        self.tool.setRange(0.5, 25.0)
+        self.tool.setDecimals(3)
+        self.tool.setSingleStep(0.5)
+        self.tool.setSuffix(" mm")
+        self.tool.setValue(float(s.dogbone_tool_d))
+        self.tool.setToolTip(tr("Diameter of the round cutter: it leaves a fillet of half "
+                                "this diameter in every inside corner"))
+        lay.addRow(tr("Cutter diameter"), self.tool)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"tool_d": round(self.tool.value(), 6)}
+
+
 class JobEstimateDialog(QDialog):
     """The "Job Estimate…" dialog: what the worksheet takes on the laser.
 
@@ -3934,6 +3975,13 @@ class MainWindow(QMainWindow):
                                  False,
                                  tr("Round the sharp corners of the selected paths with a "
                                     "radius, so a cut panel has no sharp edges left"))
+        # ---- dogbone corners
+        self.a_dogbone_corners = A(tr("&Dogbone Corners…"),
+                                   lambda checked=False: self.dogbone_corners_dialog(),
+                                   None, None, False,
+                                   tr("Cut a round relief in every inside corner of the "
+                                      "selected closed contours, so a round mill leaves no "
+                                      "fillet in the corner"))
 
     def sheet_tool_act(self, label, name, tip=None):
         """Button for a 2D tool; the key works on the worksheet (M, Q, S, Space)."""
@@ -3989,7 +4037,8 @@ class MainWindow(QMainWindow):
         self.fill(m, (self.a_toolbars, self.a_sheet, None,
                       self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint, self.a_hinge,
                       self.a_vent_pattern, self.a_fit_test, self.a_spur_gear,
-                      self.a_holding_tabs, self.a_round_corners, self.a_sheet_to_model, None,
+                      self.a_holding_tabs, self.a_round_corners, self.a_dogbone_corners,
+                      self.a_sheet_to_model, None,
                       self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid, None,
                       edge_style, face_style, comp_edit))
 
@@ -4100,7 +4149,8 @@ class MainWindow(QMainWindow):
                       self.a_sheet_grid, self.a_sheet_round, self.a_sheet_to_layer,
                       None, self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint,
                       self.a_hinge, self.a_vent_pattern, self.a_fit_test, self.a_spur_gear,
-                      self.a_holding_tabs, self.a_round_corners, self.a_sheet_to_model,
+                      self.a_holding_tabs, self.a_round_corners, self.a_dogbone_corners,
+                      self.a_sheet_to_model,
                       self.a_job_estimate, None,
                       self.a_extents):
                 bar.addSeparator() if a is None else bar.addAction(a)
@@ -4912,6 +4962,118 @@ class MainWindow(QMainWindow):
         self.sheet_view.set_selection(fresh)
         self.sheet_view._refresh_outside(announce=False)
         self.hint.setText(tr("{n} paths rounded.").format(n=rounded))
+        return fresh
+
+    # ------------------------------------------------------------ dogbone corners
+    def dogbone_corners_dialog(self):
+        """View > Dogbone Corners…: a relief in every inside corner the mill cannot reach."""
+        if not self.sheet_view.selected_paths():
+            self.hint.setText(tr("Select the closed contours for the dogbones first."))
+            self.setFocus()
+            return None
+        dlg = DogboneCornersDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.dogbone_tool_d = float(options["tool_d"])
+        self.settings.save()
+        made = self.apply_dogbone_corners(options)
+        self.setFocus()
+        return made
+
+    #: from this many points on, the reliefs are cut off the GUI thread
+    BACKGROUND_DOGBONE_POINTS = 2000
+
+    def apply_dogbone_corners(self, options):
+        """The relieved copy of every selected closed contour: one undo step.
+
+        A round cutter leaves a fillet of its own radius in every inside corner of the
+        material, so a square tab does not fit into a milled square slot; the relief that
+        clears such a corner is a circle of the cutter. Only closed contours count and each
+        is replaced by its copy on the same layer with the same source number, so a part
+        still moves and nests as one.
+
+        Whether the material lies inside a contour comes from its nesting depth over all the
+        closed paths of its own layer on the sheet, exactly as the holding tabs find their
+        holes: an even depth is an outer boundary of a part (a reflex vertex is an inside
+        corner), an odd depth a hole or slot (there a convex vertex is one). A contour
+        without inside corners is left alone, and when nothing changes there is no undo step.
+
+        A contour from an import easily has tens of thousands of points, so from
+        `BACKGROUND_DOGBONE_POINTS` on the copies are made in the background, like rounding
+        the corners of the same selection.
+        """
+        sel = [p for p in self.sheet_view.selected_paths() if p.closed and len(p.pts) >= 3]
+        skipped = len(self.sheet_view.selected_paths()) - len(sel)
+        self.set_mode("2d")
+        sheet = self.doc.sheet
+        tool_d = float(options["tool_d"])
+        depths = {}
+        by_layer = {}
+        for p in sheet.paths:
+            if p.closed and len(p.pts) >= 3:
+                by_layer.setdefault(p.layer, []).append(p)
+        for group in by_layer.values():
+            for p, d in zip(group, cam.nesting_depth(group)):
+                depths[id(p)] = d
+
+        def work(report):
+            out = {}
+            for i, p in enumerate(sel):
+                if i:
+                    report(i / len(sel))
+                inside = depths.get(id(p), 0) % 2 == 0
+                pts = sheettools.dogbone_corners(p.pts, tool_d, material_inside=inside)
+                out[id(p)] = (pts, len(sheettools.dogbone_spots(p.pts, tool_d,
+                                                                material_inside=inside)))
+            return out
+
+        if sum(len(p.pts) for p in sel) >= self.BACKGROUND_DOGBONE_POINTS:
+            job = background.run(self, work, text=tr("Cutting the dogbones…"), wait=True)
+            if job.was_cancelled:
+                self.hint.setText(tr("Cutting the dogbones was cancelled."))
+                return None
+            if job.error is not None:
+                QMessageBox.critical(self, tr("Dogbone Corners Failed"), str(job.error))
+                return None
+            copies = job.result
+        else:
+            copies = work(lambda *args: None)
+        replacements, corners, plain = {}, 0, 0
+        for p in sel:
+            pts, made = copies[id(p)]
+            if not made:
+                plain += 1
+                continue
+            replacements[id(p)] = pts
+            corners += made
+        notes = []
+        if corners:
+            notes.append(tr("{n} inside corners got a dogbone.").format(n=corners))
+        elif plain:
+            notes.append(tr("{n} contours have no inside corners.").format(n=plain))
+        if skipped:
+            notes.append(tr("{n} paths were skipped (not a closed contour).").format(n=skipped))
+        if not corners:
+            self.hint.setText(" ".join(notes) if notes else tr("Nothing to dogbone."))
+            return None
+        self.doc.checkpoint()
+        live = set(replacements)
+        keep, fresh = [], []
+        for p in sheet.paths:
+            if id(p) not in live:
+                keep.append(p)
+                continue
+            q = VPath(np.asarray(replacements[id(p)], dtype=float), p.closed, p.layer, p.filled,
+                      p.rule, p.src, {})
+            keep.append(q)
+            fresh.append(q)
+        sheet.paths = keep
+        self.doc.notify()
+        self.sheet_view.set_selection(fresh)
+        self.sheet_view._refresh_outside(announce=False)
+        self.hint.setText(" ".join(notes))
         return fresh
 
     def ask_sheet_text(self):

@@ -1839,6 +1839,118 @@ def round_corners(pts, radius, closed=True, min_angle=10.0, tol=CURVE_TOL) -> np
     return np.ascontiguousarray(np.asarray(out, dtype=float).reshape(-1, 2), dtype=float)
 
 
+def _dogbone_reliefs(pts, tool_d, material_inside, min_angle,
+                     tol=CURVE_TOL) -> tuple[np.ndarray, dict]:
+    """The relief circles of the inside corners: (the clean contour, {vertex: (centre, arc)}).
+
+    Which vertices get a relief is told by the orientation of the contour (its signed
+    area) and by `material_inside`: with the material inside the contour (an outer
+    boundary of a part) an inside corner of the material is a reflex vertex, with the
+    material outside it (a hole or a slot cut out of the part) it is a convex vertex. The
+    bisector of the two edges that points away from the material points into the waste:
+    the centre of the relief circle stands one cutter radius along it, so the circle
+    passes through the corner and bites into the material on both sides of it.
+    """
+    pts = np.asarray(pts, dtype=float).reshape(-1, 2)
+    tool_d = float(tool_d)
+    if tool_d <= 0.0:
+        return pts.copy(), {}
+    keep = [pts[0]] if len(pts) else []
+    for p in pts[1:]:
+        if float(np.hypot(*(p - keep[-1]))) > 1e-9:
+            keep.append(p)
+    pts = np.asarray(keep, dtype=float).reshape(-1, 2)
+    if len(pts) > 1 and float(np.hypot(*(pts[0] - pts[-1]))) <= 1e-9:
+        pts = pts[:-1]                          # imports often close a contour by hand
+    n = len(pts)
+    if n < 3:
+        return pts, {}
+
+    def unit(v):
+        L = float(np.hypot(*v))
+        return v / L if L > 1e-12 else None
+
+    def ang(q):
+        return math.atan2(float(q[1]), float(q[0]))
+
+    r = 0.5 * tool_d
+    turn = math.radians(max(0.0, float(min_angle)))
+    orient = 1.0 if float(polygon_area(pts)) > 0.0 else -1.0
+    want = 1.0 if material_inside else -1.0     # reflex for a part, convex for a hole
+    reliefs: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+    for i in range(n):
+        a, v, b = pts[i - 1], pts[i], pts[(i + 1) % n]
+        u, w = unit(a - v), unit(b - v)
+        if u is None or w is None:
+            continue
+        if want * orient * float(u[0] * w[1] - u[1] * w[0]) <= 0.0:
+            continue                            # the cutter reaches into this corner
+        beta = math.acos(float(np.clip(float(u @ w), -1.0, 1.0)))
+        bis = unit(u + w)
+        if bis is None or math.pi - beta <= turn:
+            continue                            # too straight for the cutter to leave a corner
+        chord = 2.0 * r * math.cos(0.5 * beta)  # from the vertex to both crossings
+        if chord > min(float(np.hypot(*(a - v))), float(np.hypot(*(b - v)))):
+            continue                            # no room for the relief on the edge next to it
+        c = v + r * bis
+        q1, q2 = v + chord * u, v + chord * w
+        a0, am = ang(q1 - c), ang(v - c)
+        span = arc_span(a0, am, ang(q2 - c))
+        # the two halves of the arc are mirror images, so half the span is the corner point
+        arc = np.vstack([arc_points(c, r, a0, a0 + 0.5 * span, tol),
+                         arc_points(c, r, a0 + 0.5 * span, a0 + span, tol)[1:]])
+        reliefs[i] = (c, arc)
+    return pts, reliefs
+
+
+def dogbone_spots(pts, tool_d, material_inside=True, min_angle=30.0) -> list[np.ndarray]:
+    """The centres of the relief circles of a closed contour, one per inside corner."""
+    if float(tool_d) <= 0.0:
+        return []
+    _, reliefs = _dogbone_reliefs(pts, tool_d, material_inside, min_angle)
+    return [c for c, _ in reliefs.values()]
+
+
+def dogbone_corners(pts, tool_d, material_inside=True, min_angle=30.0,
+                    tol=CURVE_TOL) -> np.ndarray:
+    """The same closed contour with a round relief in every inside corner of the material.
+
+    A round cutter cannot mill a sharp inside corner: it rolls along the two edges and
+    leaves a fillet of its own radius standing in the corner, so a square tab does not fit
+    into a milled square slot. A dogbone is the relief that clears such a corner: a circle
+    of the cutter diameter through the corner point, with its centre one cutter radius away
+    from it along the bisector of the two edges, in the direction of the waste. Where the
+    circle crosses the two edges the straight run of the contour ends; between those points
+    the arc of the circle that bites into the material takes the place of the corner, and
+    the corner point itself lies on that arc. The arc is flattened with `tol` like the
+    other curves on the worksheet.
+
+    With the material inside the contour (`material_inside`, the outer boundary of a part)
+    an inside corner is a reflex vertex of the contour; with the material outside it
+    (`material_inside=False`, a hole or a slot cut out of the part) it is a convex vertex.
+    Which way the contour runs comes from its signed area, so both directions give the same
+    contour back. Only a corner where the direction turns by more than `min_angle` degrees
+    gets a relief, and a corner of which one of the two edges next to it is shorter than
+    the chord the circle needs stays sharp. A cutter without a diameter (`tool_d` <= 0)
+    cuts nothing; points on top of each other and a contour that closes itself by repeating
+    its first point are straightened out first, so a path from an import behaves.
+    """
+    pts, reliefs = _dogbone_reliefs(pts, tool_d, material_inside, min_angle, tol)
+    out = []
+
+    def emit(q):
+        if out and float(np.hypot(*(q - out[-1]))) <= 1e-9:
+            return                            # the two corners of an edge can meet exactly
+        out.append(np.asarray(q, dtype=float))
+
+    for i in range(len(pts)):
+        for q in (pts[i],) if i not in reliefs else reliefs[i][1]:
+            emit(q)
+    while len(out) > 1 and float(np.hypot(*(out[0] - out[-1]))) <= 1e-9:
+        out.pop()
+    return np.ascontiguousarray(np.asarray(out, dtype=float).reshape(-1, 2), dtype=float)
+
+
 def joined_paths(paths) -> list[VPath]:
     """Join open segments into polylines and shapes."""
     return join_open_paths(paths)
