@@ -25,8 +25,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
                                QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
-from . import (__version__, background, boxgen, cam, dxf, errors, fileio, gears, i18n,
-               joints, nesting, ops, sheet3d, sheettools, svg, spacemouse, theme, threads,
+from . import (__version__, background, boxgen, cam, dxf, enclosure, errors, fileio, gears,
+               i18n, joints, nesting, ops, sheet3d, sheettools, svg, spacemouse, theme, threads,
                vector_export, vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
@@ -376,6 +376,53 @@ class Settings:
             self.gear_thickness = 8.0
         self.gear_thickness = max(1.0, min(100.0, self.gear_thickness))
         try:
+            self.box3d_length = float(self.q.value("box3d_length", 80.0))
+        except (TypeError, ValueError):
+            self.box3d_length = 80.0
+        self.box3d_length = max(1.0, min(500.0, self.box3d_length))
+        try:
+            self.box3d_width = float(self.q.value("box3d_width", 50.0))
+        except (TypeError, ValueError):
+            self.box3d_width = 50.0
+        self.box3d_width = max(1.0, min(500.0, self.box3d_width))
+        try:
+            self.box3d_height = float(self.q.value("box3d_height", 30.0))
+        except (TypeError, ValueError):
+            self.box3d_height = 30.0
+        self.box3d_height = max(1.0, min(500.0, self.box3d_height))
+        try:
+            self.box3d_wall = float(self.q.value("box3d_wall", 2.0))
+        except (TypeError, ValueError):
+            self.box3d_wall = 2.0
+        self.box3d_wall = max(enclosure.WALL_MIN, min(20.0, self.box3d_wall))
+        try:
+            self.box3d_floor = float(self.q.value("box3d_floor", 2.0))
+        except (TypeError, ValueError):
+            self.box3d_floor = 2.0
+        self.box3d_floor = max(enclosure.FLOOR_MIN, min(20.0, self.box3d_floor))
+        try:
+            self.box3d_radius = float(self.q.value("box3d_radius", 3.0))
+        except (TypeError, ValueError):
+            self.box3d_radius = 3.0
+        self.box3d_radius = max(0.0, min(100.0, self.box3d_radius))
+        try:
+            self.box3d_lid = float(self.q.value("box3d_lid", 2.0))
+        except (TypeError, ValueError):
+            self.box3d_lid = 2.0
+        self.box3d_lid = max(enclosure.LID_MIN, min(20.0, self.box3d_lid))
+        try:
+            self.box3d_lip = float(self.q.value("box3d_lip", 3.0))
+        except (TypeError, ValueError):
+            self.box3d_lip = 3.0
+        self.box3d_lip = max(0.0, min(50.0, self.box3d_lip))
+        try:
+            # the clearance of the screw holes is the clearance this printer already proved
+            self.box3d_clearance = float(self.q.value("box3d_clearance",
+                                                      self.screw_hole_clearance))
+        except (TypeError, ValueError):
+            self.box3d_clearance = self.screw_hole_clearance
+        self.box3d_clearance = max(0.0, min(enclosure.CLEARANCE_MAX, self.box3d_clearance))
+        try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
             self.tab_count = 4
@@ -449,6 +496,15 @@ class Settings:
         self.q.setValue("gear_bore", self.gear_bore)
         self.q.setValue("gear_backlash", self.gear_backlash)
         self.q.setValue("gear_thickness", self.gear_thickness)
+        self.q.setValue("box3d_length", self.box3d_length)
+        self.q.setValue("box3d_width", self.box3d_width)
+        self.q.setValue("box3d_height", self.box3d_height)
+        self.q.setValue("box3d_wall", self.box3d_wall)
+        self.q.setValue("box3d_floor", self.box3d_floor)
+        self.q.setValue("box3d_radius", self.box3d_radius)
+        self.q.setValue("box3d_lid", self.box3d_lid)
+        self.q.setValue("box3d_lip", self.box3d_lip)
+        self.q.setValue("box3d_clearance", self.box3d_clearance)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
@@ -2243,6 +2299,77 @@ class SpurGearDialog(QDialog):
         return o
 
 
+class ProjectBoxDialog(QDialog):
+    """The "Project Box…" dialog: an enclosure with a lid that slides into it.
+
+    The user fills in the **inside** of the box, because that is what has to fit: the
+    electronics. The wall, the floor and the lid are the plastic around it and the clearance
+    is the room the lip of the lid needs to slide into the box, which every printer likes a
+    little differently, so the dialog starts at the clearance of the screw holes, the one
+    this printer already proved. The other values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Project Box"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.length = spin(1.0, 500.0, s.box3d_length)
+        self.length.setToolTip(tr("The inside length: what has to fit in the box"))
+        self.width = spin(1.0, 500.0, s.box3d_width)
+        self.width.setToolTip(tr("The inside width: what has to fit in the box"))
+        self.height = spin(1.0, 500.0, s.box3d_height)
+        self.height.setToolTip(tr("The inside height, from the floor to the open top"))
+        self.wall = spin(enclosure.WALL_MIN, 20.0, s.box3d_wall, 0.2)
+        self.wall.setToolTip(tr("The thickness of the sides and of the lip of the lid"))
+        self.floor = spin(enclosure.FLOOR_MIN, 20.0, s.box3d_floor, 0.2)
+        self.floor.setToolTip(tr("The thickness of the bottom"))
+        self.radius = spin(0.0, 100.0, s.box3d_radius)
+        self.radius.setToolTip(tr("The rounding of the vertical corners; the inside is one "
+                                  "wall thinner"))
+        self.lid = spin(enclosure.LID_MIN, 20.0, s.box3d_lid, 0.2)
+        self.lid.setToolTip(tr("The thickness of the lid"))
+        self.lip = spin(0.0, 50.0, s.box3d_lip)
+        self.lip.setToolTip(tr("How deep the lid slides into the box"))
+        self.clearance = spin(0.0, enclosure.CLEARANCE_MAX, s.box3d_clearance, 0.05)
+        self.clearance.setToolTip(tr("The room between the lip and the wall, so the lid "
+                                     "slides in"))
+        lay.addRow(tr("Inside length"), self.length)
+        lay.addRow(tr("Inside width"), self.width)
+        lay.addRow(tr("Inside height"), self.height)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Floor"), self.floor)
+        lay.addRow(tr("Corner radius"), self.radius)
+        lay.addRow(tr("Lid"), self.lid)
+        lay.addRow(tr("Lip"), self.lip)
+        lay.addRow(tr("Clearance"), self.clearance)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"length": round(self.length.value(), 6),
+                "width": round(self.width.value(), 6),
+                "height": round(self.height.value(), 6),
+                "wall": round(self.wall.value(), 6),
+                "floor": round(self.floor.value(), 6),
+                "radius": round(self.radius.value(), 6),
+                "lid": round(self.lid.value(), 6),
+                "lip": round(self.lip.value(), 6),
+                "clearance": round(self.clearance.value(), 6)}
+
+
 class HoldingTabsDialog(QDialog):
     """The "Holding Tabs…" dialog: the small bridges that keep a part in the sheet.
 
@@ -3574,6 +3701,12 @@ class MainWindow(QMainWindow):
                                 tr("Add a printable involute spur gear to the model, with "
                                    "the teeth, the module, the bore and the thickness you "
                                    "choose"))
+        # ---- project box
+        self.a_project_box = A(tr("Project Box…"),
+                               lambda checked=False: self.project_box_dialog(), None, None,
+                               False,
+                               tr("Add a printed enclosure to the model: a box with the "
+                                  "inside size you choose and a lid that slides into it"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, None,
@@ -3666,8 +3799,8 @@ class MainWindow(QMainWindow):
         self.print_tools_menu = QMenu(tr("P&rint Tools"), m)
         self.fill(self.print_tools_menu, (self.a_thread, self.a_thread_ext, self.a_thread_int,
                                           self.a_thread_bolt, self.a_thread_nut,
-                                          self.a_screw_hole, self.a_clearance_test,
-                                          self.a_spur_gear_3d, None,
+                                           self.a_screw_hole, self.a_clearance_test,
+                                           self.a_spur_gear_3d, self.a_project_box, None,
                                           self.a_cutplane, self.a_cut_join, None,
                                           self.a_fillet, self.a_chamfer, self.a_elephant,
                                           self.a_mouse_ears, self.a_orient_print))
@@ -4292,6 +4425,75 @@ class MainWindow(QMainWindow):
             self.view.set_status(tr("Spur gear failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the spur gear…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ project box
+    def project_box_dialog(self):
+        """Tools > Print Tools > Project Box…: an enclosure with a lid that fits into it."""
+        dlg = ProjectBoxDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.box3d_length = float(options["length"])
+        self.settings.box3d_width = float(options["width"])
+        self.settings.box3d_height = float(options["height"])
+        self.settings.box3d_wall = float(options["wall"])
+        self.settings.box3d_floor = float(options["floor"])
+        self.settings.box3d_radius = float(options["radius"])
+        self.settings.box3d_lid = float(options["lid"])
+        self.settings.box3d_lip = float(options["lip"])
+        self.settings.box3d_clearance = float(options["clearance"])
+        self.settings.save()
+        made = self.make_project_box_model(options)
+        self.setFocus()
+        return made
+
+    def make_project_box_model(self, options):
+        """The box and its lid as printed parts: one undo step, side by side on the bed.
+
+        The two rounded contours and the booleans that make them run in the background, like
+        the spur gear, so the window keeps responding on a big box. The pair takes the free
+        place on the bed with the lid 10 mm to the right of the base; the lid is already
+        flipped, so its flat top lies on the bed and its lip stands up in the air and
+        neither part needs support.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: float(options[k]) for k in ("length", "width", "height", "wall", "floor",
+                                               "radius", "lid", "lip", "clearance")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+        gap = 10.0                                  # mm of bed between the two parts
+        wide = size["length"] + 2.0 * size["wall"]  # the base and the lid are equally wide
+        span = 2.0 * wide + gap
+
+        def work(report):
+            report(0.1, tr("Building the project box…"))
+            base, lid = enclosure.project_box(**size)
+            for m in (base, lid):
+                if m.status() != mf.Error.NoError or m.is_empty():
+                    raise ValueError(tr("the result is not a valid volume"))
+            # both parts are centred on the origin: put the pair in the free place on the bed
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + gap + 0.5 * span
+            return (base.translate((x - 0.5 * span + 0.5 * wide, 0.5 * by, 0.0)),
+                    lid.translate((x + 0.5 * span - 0.5 * wide, 0.5 * by, 0.0)))
+
+        def done(parts):
+            doc.checkpoint()                # one undo takes the box and the lid away
+            color = self.settings.current_color
+            new = [ops.group_from_manifold(doc, parts[0], color, tr("Box")),
+                   ops.group_from_manifold(doc, parts[1], color, tr("Lid"))]
+            doc.set_selection([("g", g.id, g.id) for g in new])
+            doc.notify()
+            self.view.set_status(tr("Project box {l} × {w} × {h} mm added (inside).")
+                                 .format(l=f"{size['length']:g}", w=f"{size['width']:g}",
+                                         h=f"{size['height']:g}"))
+
+        def failed(exc):
+            self.view.set_status(tr("Project box failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the project box…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ holding tabs

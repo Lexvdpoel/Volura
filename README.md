@@ -62,6 +62,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   printer likes: a plate with a row of holes that grow by a step, each with its clearance in
   raised letters, and a loose pin next to it; print it, try the pin in every hole and use the
   clearance of the hole it fits best in Screw Hole, threads and Cut and Join
+- **Project Box** (Tools > Print Tools): an enclosure with a lid that fits into it: enter the
+  inside length, width and height that your electronics need, with the wall, the floor, the
+  rounding of the corners and the clearance between the lip of the lid and the wall; base and
+  lid land side by side on the bed, the lid flipped over so both print without support
 - **Elephant Foot Chamfer** (Tools > Print Tools): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is
