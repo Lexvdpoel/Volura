@@ -62,6 +62,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   printer likes: a plate with a row of holes that grow by a step, each with its clearance in
   raised letters, and a loose pin next to it; print it, try the pin in every hole and use the
   clearance of the hole it fits best in Screw Hole, threads and Cut and Join
+- **Overhang Test** (Tools > Print Tools): a small test print that shows up to which angle your
+  printer prints an overhang without support: a plate with a row of fins that lean further over
+  from left to right, each with its angle in raised letters; print it and read the largest angle
+  that still came out clean
 - **Project Box** (Tools > Print Tools): an enclosure with a lid that fits into it: enter the
   inside length, width and height that your electronics need, with the wall, the floor, the
   rounding of the corners and the clearance between the lip of the lid and the wall. With a

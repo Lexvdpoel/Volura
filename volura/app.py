@@ -293,6 +293,21 @@ class Settings:
             self.clearance_test_count = 6
         self.clearance_test_count = max(2, min(10, self.clearance_test_count))
         try:
+            self.overhang_test_first = float(self.q.value("overhang_test_first", 30.0))
+        except (TypeError, ValueError):
+            self.overhang_test_first = 30.0
+        self.overhang_test_first = max(0.0, min(85.0, self.overhang_test_first))
+        try:
+            self.overhang_test_step = float(self.q.value("overhang_test_step", 10.0))
+        except (TypeError, ValueError):
+            self.overhang_test_step = 10.0
+        self.overhang_test_step = max(1.0, min(45.0, self.overhang_test_step))
+        try:
+            self.overhang_test_count = int(float(self.q.value("overhang_test_count", 6)))
+        except (TypeError, ValueError):
+            self.overhang_test_count = 6
+        self.overhang_test_count = max(1, min(10, self.overhang_test_count))
+        try:
             self.hinge_slit = float(self.q.value("hinge_slit", 15.0))
         except (TypeError, ValueError):
             self.hinge_slit = 15.0
@@ -487,6 +502,9 @@ class Settings:
         self.q.setValue("clearance_test_first", self.clearance_test_first)
         self.q.setValue("clearance_test_step", self.clearance_test_step)
         self.q.setValue("clearance_test_count", self.clearance_test_count)
+        self.q.setValue("overhang_test_first", self.overhang_test_first)
+        self.q.setValue("overhang_test_step", self.overhang_test_step)
+        self.q.setValue("overhang_test_count", self.overhang_test_count)
         self.q.setValue("hinge_slit", self.hinge_slit)
         self.q.setValue("hinge_gap", self.hinge_gap)
         self.q.setValue("hinge_pitch", self.hinge_pitch)
@@ -3735,6 +3753,11 @@ class MainWindow(QMainWindow):
                                   False,
                                   tr("A small test print that shows which clearance fits your "
                                      "printer: a row of holes with a loose pin"))
+        self.a_overhang_test = A(tr("Overhang Test…"),
+                                 lambda checked=False: self.overhang_test_dialog(), None, None,
+                                 False,
+                                 tr("A small test print that shows up to which angle your "
+                                    "printer prints an overhang without support"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -3998,6 +4021,7 @@ class MainWindow(QMainWindow):
         self.fill(self.print_tools_menu, (self.a_thread, self.a_thread_ext, self.a_thread_int,
                                           self.a_thread_bolt, self.a_thread_nut,
                                            self.a_screw_hole, self.a_clearance_test,
+                                           self.a_overhang_test,
                                            self.a_spur_gear_3d, self.a_project_box, None,
                                           self.a_cutplane, self.a_cut_join, None,
                                           self.a_fillet, self.a_chamfer, self.a_elephant,
@@ -7697,6 +7721,70 @@ class MainWindow(QMainWindow):
             self.view.set_status(tr("Clearance test failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the clearance test…"),
+                       on_done=done, on_error=failed)
+
+    # -------------------------------------------------------------- overhang test
+
+    def overhang_test_dialog(self):
+        """Tools > Print Tools > Overhang Test…: a plate of fins that lean further over, so the
+        user learns up to which angle the printer prints an overhang without support."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Overhang Test"))
+        form = QFormLayout(dlg)
+        first_sp = self._spin(0.0, 85.0, self.settings.overhang_test_first, 0, " °", 5.0)
+        step_sp = self._spin(1.0, 45.0, self.settings.overhang_test_step, 0, " °", 5.0)
+        count_sp = QSpinBox()
+        count_sp.setRange(1, 10)
+        count_sp.setValue(self.settings.overhang_test_count)
+        form.addRow(tr("First angle"), first_sp)
+        form.addRow(tr("Step"), step_sp)
+        form.addRow(tr("Number of fins"), count_sp)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        first, step = float(first_sp.value()), float(step_sp.value())
+        count = int(count_sp.value())
+        self.settings.overhang_test_first = first
+        self.settings.overhang_test_step = step
+        self.settings.overhang_test_count = count
+        self.settings.save()
+        self._apply_overhang_test(first, step, count)
+
+    def _apply_overhang_test(self, first, step, count):
+        doc = self.doc
+        # an overhang never leans past 85 degrees, so the step is made smaller when the row would
+        step = min(step, (85.0 - first) / max(1, count - 1))
+        angles = tuple(first + i * step for i in range(count))
+        bb = doc.model_bbox()
+        x0 = 0.0 if bb is None else float(bb[1][0]) + 10.0   # mm to the right of the model
+
+        def work(report):
+            # the letters of the labels are the slow part of a plate with many fins, so it
+            # happens here and the window keeps responding
+            report(0.1, tr("Building the overhang test…"))
+            plate = threads.overhang_test(angles=angles)
+            if plate.status() != mf.Error.NoError or plate.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            # the plate is drawn around its first fin: move the test to the free spot on the bed
+            dx = x0 - float(np.asarray(plate.bounding_box())[0])
+            return plate.translate((dx, 0.0, 0.0))
+
+        def done(result):
+            doc.checkpoint()                # one undo takes the plate away again
+            new = ops.group_from_manifold(doc, result, self.settings.current_color,
+                                          tr("Overhang test"))
+            doc.set_selection([("g", new.id, new.id)])
+            doc.notify()
+            self.view.set_status(tr("Print it and read the largest angle that still came out "
+                                    "clean."))
+
+        def failed(exc):
+            self.view.set_status(tr("Overhang test failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the overhang test…"),
                        on_done=done, on_error=failed)
 
     # ------------------------------------------------------------ cut & join

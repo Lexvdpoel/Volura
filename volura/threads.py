@@ -258,6 +258,11 @@ CLEARANCE_TEST_LABEL = 0.6       # mm how high the clearance stands above the pl
 CLEARANCE_TEST_ROOM = 1.0        # mm between a hole and the letters that name it
 CLEARANCE_TEST_CHAMFER = 0.4     # mm how the top edge of the pin is bevelled, so it enters easily
 
+OVERHANG_TEST_PLATE = 4.0        # mm how thick the plate of an overhang test is
+OVERHANG_TEST_LABEL = 0.6        # mm how high the angle stands above the plate
+OVERHANG_TEST_ROOM = 1.0         # mm between a fin and the letters that name it
+OVERHANG_TEST_POST = 12.0        # mm how tall the post of a fin stands above the plate
+
 
 def _clearance_label(text, family, height, max_width):
     """The outlines of `text`, centred on the origin and at most `max_width` mm wide.
@@ -331,6 +336,67 @@ def clearance_test(pin_d=5.0, clearances=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5),
     pin = (body + top.translate((0.0, 0.0, h - CLEARANCE_TEST_CHAMFER))
            ).translate((0.0, back + 5.0 + r, 0.0))
     return plate, pin
+
+
+# ------------------------------------------------------------------ overhang test
+
+def _overhang_fin(x, ang, width, length, wall, plate, height):
+    """One fin: a post of ``wall`` on the plate with a slab of ``wall`` leaning out at ``ang``.
+
+    The slab stands on the top of the post and leans up and out, so its underside is the
+    overhang and nothing supports it there. ``ang`` is from the vertical: 0 keeps the slab a
+    straight wall, 90 lays it flat as a bridge. Its inner ``wall`` sinks into the post, so the
+    two boxes fuse into one solid for every angle.
+    """
+    post = mf.Manifold.cube([wall, width, height]).translate((x, -0.5 * width, plate))
+    c, s = math.cos(ang), math.sin(ang)
+    R = np.array([[s, 0.0, -c], [0.0, 1.0, 0.0], [c, 0.0, s]])   # local x -> (sin, 0, cos)
+    slab = mf.Manifold.cube([length + wall, width, wall]).translate((-wall, -0.5 * width, -wall))
+    slab = slab.transform(affine(R, np.array([x + 0.5 * wall, 0.0, plate + height - 0.5 * wall])))
+    return post + slab
+
+
+def overhang_test(angles=(30, 40, 50, 60, 70), width=10.0, length=10.0, wall=2.0,
+                  plate=OVERHANG_TEST_PLATE, height=OVERHANG_TEST_POST, label_height=3.0,
+                  family=None):
+    """A plate with a row of leaning fins: up to which angle does this printer print an overhang?
+
+    The plate lies on z = 0 and is ``plate`` mm high, and carries a row of ``len(angles)`` fins
+    along X, ``wall + length + 6`` mm from post to post. Every fin is a post of ``wall`` from
+    which a slab of ``wall`` leans out at its angle measured from the vertical, ``length`` mm
+    out and ``width`` mm deep, so 0 degrees is a straight wall and 90 a flat bridge; the
+    underside of the slab is the overhang and nothing holds it up there. In front of every fin
+    its angle stands on the plate in raised letters of ``label_height`` mm, the way a clearance
+    test names its holes. With the angles from small to large the fins lean further over from
+    left to right, so the user prints the plate once and reads the biggest angle that still came
+    out clean: that is the overhang limit to keep under. Without fonts the plate simply has no
+    labels, and the row still works.
+    """
+    angs = [float(a) for a in angles]
+    if not 1 <= len(angs) <= 10:
+        raise ValueError(tr("an overhang test needs 1 to 10 angles"))
+    if any(not 0.0 <= a <= 85.0 for a in angs):
+        raise ValueError(tr("the angle of an overhang test must be 0 to 85 degrees"))
+    width, length, wall = float(width), float(length), float(wall)
+    if not (width > 0.0 and length > 0.0 and wall > 0.0):
+        raise ValueError(tr("the width, length and wall of an overhang test must be positive"))
+    plate, height, label_height = float(plate), float(height), float(label_height)
+    spacing = wall + length + 6.0
+    xs = [i * spacing for i in range(len(angs))]
+    # the fin reaches about length + 1.5 wall past its post, and the letters stand as deep in front
+    lo, hi = -0.5 * wall - 5.0, xs[-1] + length + 1.5 * wall + 5.0
+    back, front = 0.5 * width + 5.0, 0.5 * width + OVERHANG_TEST_ROOM + label_height + 5.0
+    solid = mf.Manifold.cube([hi - lo, back + front, plate]).translate((lo, -front, 0.0))
+    for x, a in zip(xs, angs):
+        solid = solid + _overhang_fin(x, math.radians(a), width, length, wall, plate, height)
+    for x, a in zip(xs, angs):
+        loops = _clearance_label(f"{round(a):g}", family, label_height, spacing - 2.0)
+        if loops:
+            lab = mf.Manifold.extrude(mf.CrossSection(loops, mf.FillRule.NonZero),
+                                      OVERHANG_TEST_LABEL)
+            solid = solid + lab.translate((x + 0.5 * wall, -(0.5 * width + OVERHANG_TEST_ROOM
+                                                               + 0.5 * label_height), plate))
+    return solid
 
 
 # ------------------------------------------------- selection -> thread context

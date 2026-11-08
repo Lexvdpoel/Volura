@@ -324,9 +324,10 @@ def test_a_bore_that_eats_the_printed_wheel_is_a_clear_text(win):
     assert win.doc.groups == []
 
 
-def test_the_printed_gear_follows_the_clearance_test_in_print_tools(win):
+def test_the_printed_gear_follows_the_test_prints_in_print_tools(win):
     labels = [clean(a.text()) for a in win.print_tools_menu.actions() if not a.isSeparator()]
-    assert labels.index("Spur Gear") == labels.index("Clearance Test") + 1
+    assert labels.index("Overhang Test") == labels.index("Clearance Test") + 1
+    assert labels.index("Spur Gear") == labels.index("Overhang Test") + 1
 
 
 def test_the_print_dialog_starts_at_the_last_thickness_and_remembers_it(win, monkeypatch):
