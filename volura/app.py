@@ -26,8 +26,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from . import (__version__, background, boxgen, cam, dxf, enclosure, errors, fileio, gcode,
-               gears, i18n, joints, nesting, ops, sheet3d, sheettools, svg, spacemouse, theme,
-               threads, vector_export, vector_import, workers)
+               gears, i18n, joints, knob, nesting, ops, sheet3d, sheettools, svg, spacemouse,
+               theme, threads, vector_export, vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -442,6 +442,47 @@ class Settings:
         if self.box3d_screws not in enclosure.SCREW_SIZES:
             self.box3d_screws = ""
         try:
+            self.knob_diameter = float(self.q.value("knob_diameter", 30.0))
+        except (TypeError, ValueError):
+            self.knob_diameter = 30.0
+        self.knob_diameter = max(knob.DIAMETER_MIN, min(knob.DIAMETER_MAX, self.knob_diameter))
+        try:
+            self.knob_height = float(self.q.value("knob_height", 12.0))
+        except (TypeError, ValueError):
+            self.knob_height = 12.0
+        self.knob_height = max(knob.HEIGHT_MIN, min(knob.HEIGHT_MAX, self.knob_height))
+        self.knob_grip = str(self.q.value("knob_grip", "knurl"))
+        if self.knob_grip not in knob.KNOB_GRIPS:
+            self.knob_grip = "knurl"
+        try:
+            self.knob_lobes = int(float(self.q.value("knob_lobes", 6)))
+        except (TypeError, ValueError):
+            self.knob_lobes = 6
+        self.knob_lobes = max(knob.LOBES_MIN, min(knob.LOBES_MAX, self.knob_lobes))
+        self.knob_kind = str(self.q.value("knob_kind", "nut"))
+        if self.knob_kind not in knob.KNOB_KINDS:
+            self.knob_kind = "nut"
+        self.knob_bore = str(self.q.value("knob_bore", "M4"))
+        if self.knob_bore not in threads.SCREW_HOLES:
+            self.knob_bore = "M4"
+        try:
+            # the clearance of the screw holes is the clearance this printer already proved
+            self.knob_clearance = float(self.q.value("knob_clearance",
+                                                     self.screw_hole_clearance))
+        except (TypeError, ValueError):
+            self.knob_clearance = self.screw_hole_clearance
+        self.knob_clearance = max(0.0, min(knob.CLEARANCE_MAX, self.knob_clearance))
+        try:
+            self.knob_shaft_d = float(self.q.value("knob_shaft_d", 6.0))
+        except (TypeError, ValueError):
+            self.knob_shaft_d = 6.0
+        self.knob_shaft_d = max(0.5, min(50.0, self.knob_shaft_d))
+        try:
+            self.knob_flat = float(self.q.value("knob_flat", 0.5))
+        except (TypeError, ValueError):
+            self.knob_flat = 0.5
+        self.knob_flat = max(0.0, min(10.0, self.knob_flat))
+        try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
             self.tab_count = 4
@@ -539,6 +580,15 @@ class Settings:
         self.q.setValue("box3d_lip", self.box3d_lip)
         self.q.setValue("box3d_clearance", self.box3d_clearance)
         self.q.setValue("box3d_screws", self.box3d_screws)
+        self.q.setValue("knob_diameter", self.knob_diameter)
+        self.q.setValue("knob_height", self.knob_height)
+        self.q.setValue("knob_grip", self.knob_grip)
+        self.q.setValue("knob_lobes", self.knob_lobes)
+        self.q.setValue("knob_kind", self.knob_kind)
+        self.q.setValue("knob_bore", self.knob_bore)
+        self.q.setValue("knob_clearance", self.knob_clearance)
+        self.q.setValue("knob_shaft_d", self.knob_shaft_d)
+        self.q.setValue("knob_flat", self.knob_flat)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
@@ -2482,6 +2532,99 @@ class ProjectBoxDialog(QDialog):
                 "screws": str(self.screws.currentData() or "")}
 
 
+class KnobDialog(QDialog):
+    """The "Knob…" dialog: a printable thumb knob that turns on a bolt or a shaft.
+
+    The knob is the round part you turn with two fingers, so the dialog starts with what the
+    hand has to fit around: the diameter and the height. The grip is the rim you hold: ribs
+    stay grippy with oily fingers, lobes are easier to print than fine ribs and still turn
+    under a thumb, and a smooth rim is a plain cylinder. The mount says what the knob turns
+    on: a hexagonal pocket for a nut, a counterbore for the head of a socket head bolt, or a
+    blind D hole for the shaft of a potentiometer, whose flat keeps the knob from spinning on
+    the axle. The clearance is added to every diameter, because a printed hole comes out
+    smaller than drawn, so the dialog starts at the clearance of the screw holes, the one
+    this printer already proved. The other values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Knob"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.diameter = spin(knob.DIAMETER_MIN, knob.DIAMETER_MAX, s.knob_diameter)
+        self.diameter.setToolTip(tr("Across the highest points of the rim: what the hand "
+                                    "wraps around"))
+        self.height = spin(knob.HEIGHT_MIN, knob.HEIGHT_MAX, s.knob_height)
+        self.height.setToolTip(tr("How thick the knob is; a knob of 4 mm is already hard to "
+                                  "hold"))
+        self.grip = QComboBox()
+        for label, key in ((tr("Knurled"), "knurl"), (tr("Lobed"), "lobes"),
+                           (tr("Smooth"), "smooth")):
+            self.grip.addItem(label, key)
+        self.grip.setCurrentIndex(max(0, self.grip.findData(s.knob_grip)))
+        self.grip.setToolTip(tr("Straight ribs stay grippy with oily fingers, lobes print "
+                                "easier and a smooth rim is plain"))
+        self.lobes = QSpinBox()
+        self.lobes.setRange(knob.LOBES_MIN, knob.LOBES_MAX)
+        self.lobes.setValue(s.knob_lobes)
+        self.lobes.setToolTip(tr("Number of lobes of a lobed rim"))
+        self.mount = QComboBox()
+        for label, key in ((tr("Nut"), "nut"), (tr("Bolt head"), "head"),
+                           (tr("D-shaft"), "shaft")):
+            self.mount.addItem(label, key)
+        self.mount.setCurrentIndex(max(0, self.mount.findData(s.knob_kind)))
+        self.mount.setToolTip(tr("A pocket for a nut, a counterbore for the head of a bolt, "
+                                 "or a blind hole for a shaft"))
+        self.size = QComboBox()
+        for size in sorted(threads.SCREW_HOLES, key=lambda m: float(m[1:])):
+            self.size.addItem(size, size)
+        self.size.setCurrentIndex(max(0, self.size.findData(s.knob_bore)))
+        self.size.setToolTip(tr("The thread of the bolt the knob screws onto, which sets the "
+                                "hole and the pocket"))
+        self.shaft_d = spin(0.5, 50.0, s.knob_shaft_d)
+        self.shaft_d.setToolTip(tr("The diameter of the shaft the knob is pushed on"))
+        self.flat = spin(0.0, 10.0, s.knob_flat, 0.1)
+        self.flat.setToolTip(tr("How much of the shaft hole is cut away, so the knob cannot "
+                                "spin on the axle"))
+        self.clearance = spin(0.0, knob.CLEARANCE_MAX, s.knob_clearance, 0.05)
+        self.clearance.setToolTip(tr("The room on every diameter, because a printed hole "
+                                     "comes out smaller than drawn"))
+        lay.addRow(tr("Diameter"), self.diameter)
+        lay.addRow(tr("Height"), self.height)
+        lay.addRow(tr("Grip"), self.grip)
+        lay.addRow(tr("Lobes"), self.lobes)
+        lay.addRow(tr("Mount"), self.mount)
+        lay.addRow(tr("Size"), self.size)
+        lay.addRow(tr("Shaft diameter"), self.shaft_d)
+        lay.addRow(tr("Flat"), self.flat)
+        lay.addRow(tr("Clearance"), self.clearance)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"diameter": round(self.diameter.value(), 6),
+                "height": round(self.height.value(), 6),
+                "grip": str(self.grip.currentData()),
+                "lobes": int(self.lobes.value()),
+                "kind": str(self.mount.currentData()),
+                "bore": str(self.size.currentData()),
+                "shaft_d": round(self.shaft_d.value(), 6),
+                "flat": round(self.flat.value(), 6),
+                "clearance": round(self.clearance.value(), 6)}
+
+
 class HoldingTabsDialog(QDialog):
     """The "Holding Tabs…" dialog: the small bridges that keep a part in the sheet.
 
@@ -3963,6 +4106,11 @@ class MainWindow(QMainWindow):
                                False,
                                tr("Add a printed enclosure to the model: a box with the "
                                   "inside size you choose and a lid that slides into it"))
+        # ---- knob
+        self.a_knob = A(tr("Knob…"),
+                        lambda checked=False: self.knob_dialog(), None, None, False,
+                        tr("Add a printable thumb knob to the model, with the grip you choose "
+                           "and a mount for a nut, a bolt head or a shaft"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, None,
@@ -4071,7 +4219,8 @@ class MainWindow(QMainWindow):
                                           self.a_thread_bolt, self.a_thread_nut,
                                            self.a_screw_hole, self.a_clearance_test,
                                            self.a_overhang_test,
-                                           self.a_spur_gear_3d, self.a_project_box, None,
+                                           self.a_spur_gear_3d, self.a_project_box,
+                                           self.a_knob, None,
                                           self.a_cutplane, self.a_cut_join, None,
                                           self.a_fillet, self.a_chamfer, self.a_elephant,
                                           self.a_mouse_ears, self.a_orient_print))
@@ -4780,6 +4929,68 @@ class MainWindow(QMainWindow):
             self.view.set_status(tr("Project box failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the project box…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ knob
+    def knob_dialog(self):
+        """Tools > Print Tools > Knob…: a thumb knob that turns on a bolt or a shaft."""
+        dlg = KnobDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.knob_diameter = float(options["diameter"])
+        self.settings.knob_height = float(options["height"])
+        self.settings.knob_grip = str(options["grip"])
+        self.settings.knob_lobes = int(options["lobes"])
+        self.settings.knob_kind = str(options["kind"])
+        self.settings.knob_bore = str(options["bore"])
+        self.settings.knob_shaft_d = float(options["shaft_d"])
+        self.settings.knob_flat = float(options["flat"])
+        self.settings.knob_clearance = float(options["clearance"])
+        self.settings.save()
+        made = self.make_knob_model(options)
+        self.setFocus()
+        return made
+
+    def make_knob_model(self, options):
+        """The knob as a printed part: one undo step, standing on the bed next to the model.
+
+        The rim is a contour of hundreds of points and the pocket is a boolean, so the knob
+        is built in the background, like the spur gear, and the window keeps responding. The
+        knob stands on the bed in the middle of the free bed, or on the free place 10 mm to
+        the right of what is already in the model, so a second knob does not land in the
+        first one.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("diameter", "height", "grip", "lobes", "kind",
+                                        "bore", "shaft_d", "flat", "clearance")}
+        diameter = float(options["diameter"])
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the knob…"))
+            m = knob.knob(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the knob away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Knob"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Knob of {d} mm added.").format(d=f"{diameter:g}"))
+
+        def failed(exc):
+            self.view.set_status(tr("Knob failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the knob…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ holding tabs

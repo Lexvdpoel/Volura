@@ -72,6 +72,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
   screw size the base also gets a post in every corner with a pilot hole and the lid a
   clearance hole above it, so the lid screws on. Base and lid land side by side on the bed,
   the lid flipped over so both print without support
+- **Knob** (Tools > Print Tools): a printable thumb knob that turns on a bolt or a shaft: the
+  diameter and the height, the grip of the rim (knurled ribs, rounded lobes or smooth) and the
+  mount (a hexagonal pocket for a nut, a counterbore for the head of a socket head bolt, or a
+  blind D hole for the shaft of a potentiometer), with the screw size and the clearance that
+  printing needs. It stands on the bed to the right of your model as one undo step
 - **Elephant Foot Chamfer** (Tools > Print Tools): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is
