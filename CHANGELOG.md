@@ -3,6 +3,25 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.23 — 2026-11-08
+
+### New
+- **G-code for a GRBL laser** (worksheet, File > Export > G-code for a GRBL Laser): hobby
+  diode lasers get the job straight from Volura, with the same layer choice and kerf
+  compensation as the SVG and DXF export. Set the highest S value of your controller and
+  whether the power follows the speed (M4). Holes and islands are cut before the part
+  around them, so nothing drops out early, and the head goes to the nearest path next.
+  A layer without a speed gets a clear message instead of a file the laser refuses.
+- **Job Estimate** (worksheet): per laser layer the metres cut, the number of pierces, the
+  passes and the time, plus the travel between the paths and the total, before you send
+  the job to the laser.
+
+### Improved
+- The test suite keeps its settings in a temporary file and never touches your own.
+
+### Website
+- The feature overview and the manual describe the job estimate and the G-code export.
+
 ## 0.2.22 — 2026-11-08
 
 ### New
