@@ -62,6 +62,10 @@ def win(monkeypatch, tmp_path):
     monkeypatch.setattr(app_module.errors, "log_dir", lambda: str(tmp_path))
     from volura.app import MainWindow
     w = MainWindow()
+    # start from the defaults, whatever an earlier, interrupted run left in the settings
+    w.settings.hinge_slit, w.settings.hinge_gap = 15.0, 3.0
+    w.settings.hinge_pitch, w.settings.hinge_margin = 2.0, 3.0
+    w.settings.hinge_vertical = True
     w.doc.dirty = False
     QCoreApplication.processEvents()            # handle the deferred initial view now
     w.resize(900, 600)
