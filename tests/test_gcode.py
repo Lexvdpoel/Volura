@@ -249,3 +249,36 @@ def test_an_empty_worksheet_is_an_error():
 def test_a_drawing_without_paths_is_an_error():
     with pytest.raises(ValueError, match="nothing on the worksheet"):
         grbl_laser([])
+
+
+# ------------------------------------------------------------------ a layer without a feed
+
+def test_a_layer_without_speed_is_an_error_that_names_the_layer():
+    d = sheet("Cut", rect(10, 10))
+    d.layers["Cut"].params["speed"] = 0.0
+    with pytest.raises(ValueError, match=r"layer Cut has no speed"):
+        grbl_laser(d)
+
+
+def test_a_layer_with_a_negative_speed_is_an_error_too():
+    d = sheet("Engrave", rect(10, 10))
+    d.layers["Engrave"].params["speed"] = -5.0
+    with pytest.raises(ValueError, match=r"layer Engrave has no speed"):
+        grbl_laser(d)
+
+
+def test_a_layer_without_passes_is_an_error_that_names_the_layer():
+    d = sheet("Cut", rect(10, 10))
+    d.layers["Cut"].params["passes"] = 0
+    with pytest.raises(ValueError, match=r"layer Cut has no passes"):
+        grbl_laser(d)
+
+
+def test_a_layer_the_beam_never_follows_may_stay_without_speed():
+    """Only a layer that is cut needs a feed, so a silent layer is no error."""
+    d = Drawing.new_sheet()
+    d.add_path(rect(10, 10), closed=True, layer="Cut")
+    for name in ("Mill outside", "Pocket", "Guides", "Raster"):
+        d.layers[name].params["speed"] = 0.0
+        d.layers[name].params["passes"] = 0
+    grbl_laser(d)

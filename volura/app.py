@@ -25,9 +25,9 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
                                QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
-from . import (__version__, background, boxgen, cam, dxf, enclosure, errors, fileio, gears,
-               i18n, joints, nesting, ops, sheet3d, sheettools, svg, spacemouse, theme, threads,
-               vector_export, vector_import, workers)
+from . import (__version__, background, boxgen, cam, dxf, enclosure, errors, fileio, gcode,
+               gears, i18n, joints, nesting, ops, sheet3d, sheettools, svg, spacemouse, theme,
+               threads, vector_export, vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -1712,6 +1712,33 @@ class VectorExportDialog(QDialog):
         self.preview.set_drawing(self.win.vector_export_drawing(self.options()))
 
 
+#: what the worksheet can be written as, and the file filter of each of those kinds
+SHEET_EXPORT_KINDS = ("svg", "dxf", "gcode")
+EXPORT_FILTERS = {"svg": "SVG (*.svg)", "dxf": "DXF (*.dxf)",
+                  "gcode": "G-code (*.gcode *.nc *.gc)"}
+#: the S word maximum and M4 of the G-code export: keys of the machine, not of the drawing
+GCODE_S_MAX_KEY = "gcode_s_max"
+GCODE_DYNAMIC_KEY = "gcode_dynamic"
+GCODE_S_MAX_DEFAULT = 1000         # $30 of a modern 32-bit board, 255 on an old 8-bit one
+
+
+def sheet_export_kind(kind) -> str:
+    """The kind of a worksheet export: "svg", "dxf" or "gcode"; anything else is SVG."""
+    kind = str(kind).lower()
+    return kind if kind in SHEET_EXPORT_KINDS else "svg"
+
+
+def gcode_export_defaults() -> dict:
+    """The S maximum and M4 choice of the last G-code export, as the dialog starts them."""
+    q = qsettings()
+    try:
+        s_max = int(q.value(GCODE_S_MAX_KEY, GCODE_S_MAX_DEFAULT))
+    except (TypeError, ValueError):
+        s_max = GCODE_S_MAX_DEFAULT
+    return {"s_max": min(100000, max(1, s_max)),
+            "dynamic": q.value(GCODE_DYNAMIC_KEY, True) in (True, "true", "1", 1)}
+
+
 class SheetExportDialog(QDialog):
     """The "Export for Laser/Mill" dialog: which layers may go and which compensation.
 
@@ -1721,12 +1748,17 @@ class SheetExportDialog(QDialog):
     because laser software often does that compensation itself. With "a separate file
     per layer" every layer gets its own file, as some cutting software likes. The
     preview shows what will be written.
+
+    For G-code the dialog also asks what the machine understands of the power: the
+    highest S word (`$30`) and whether the beam follows the feed (M4) or burns at a fixed
+    power (M3). Both come back next time, since they belong to the machine and not to the
+    drawing.
     """
 
     def __init__(self, win, kind="svg"):
         super().__init__(win)
         self.win = win
-        self.kind = "dxf" if str(kind).lower() == "dxf" else "svg"
+        self.kind = sheet_export_kind(kind)
         self._busy = False
         self.setWindowTitle(tr("Export for Laser/Mill"))
         self.resize(430, 520)
@@ -1747,6 +1779,23 @@ class SheetExportDialog(QDialog):
         lay.addWidget(self.compensate)
         lay.addWidget(self.per_layer)
         lay.addWidget(self.per_sheet)
+        self.s_max = self.dynamic = None
+        if self.kind == "gcode":
+            power = QHBoxLayout()
+            power.addWidget(QLabel(tr("Max power (S)")))
+            self.s_max = QSpinBox()
+            self.s_max.setRange(1, 100000)
+            self.s_max.setToolTip(tr("The highest S word the controller understands ($30)"))
+            self.dynamic = QCheckBox(tr("Dynamic power (M4)"))
+            self.dynamic.setToolTip(tr("The beam gives way where the head slows down in a "
+                                       "corner, so it burns less there"))
+            defaults = gcode_export_defaults()
+            self.s_max.setValue(int(defaults["s_max"]))
+            self.dynamic.setChecked(bool(defaults["dynamic"]))
+            power.addWidget(self.s_max)
+            power.addStretch(1)
+            lay.addLayout(power)
+            lay.addWidget(self.dynamic)
         self.warning = QLabel("")
         self.warning.setWordWrap(True)
         self.warning.setStyleSheet(f"color: {theme.color('invalid')};")
@@ -1785,8 +1834,20 @@ class SheetExportDialog(QDialog):
             it = self.list.item(i)
             if it.checkState() == Qt.Checked:
                 names.append(str(it.data(Qt.UserRole)))
-        return {"layers": names, "compensate": self.compensate.isChecked(),
-                "per_layer": self.per_layer.isChecked(), "per_sheet": self.per_sheet.isChecked()}
+        out = {"layers": names, "compensate": self.compensate.isChecked(),
+               "per_layer": self.per_layer.isChecked(), "per_sheet": self.per_sheet.isChecked()}
+        if self.kind == "gcode":
+            out["s_max"] = int(self.s_max.value())
+            out["dynamic"] = self.dynamic.isChecked()
+        return out
+
+    def accept(self):
+        if self.kind == "gcode":
+            q = qsettings()
+            q.setValue(GCODE_S_MAX_KEY, int(self.s_max.value()))
+            q.setValue(GCODE_DYNAMIC_KEY, bool(self.dynamic.isChecked()))
+            q.sync()
+        super().accept()
 
     def refresh(self, *_):
         if self._busy:
@@ -3472,6 +3533,8 @@ class MainWindow(QMainWindow):
         self.a_exp_obj = A(tr("3D Model with &Colors (OBJ)…"), self.export_obj)
         self.a_exp_svg2d = A(tr("2D Vector (&SVG)…"), lambda checked=False: self.export_vector("svg"))
         self.a_exp_dxf2d = A(tr("2D Vector (&DXF)…"), lambda checked=False: self.export_vector("dxf"))
+        self.a_exp_gcode = A(tr("G-code for a GRBL Laser (.gcode)…"),
+                             lambda checked=False: self.export_sheet("gcode"))
         self.a_print_setup = A(tr("Printer Set&up…"), lambda checked=False: self.print_setup())
         self.a_check = A(tr("Print &Check"), self.print_check, "F5", "check")
         self.a_print = A(tr("&Print"), self.export_3mf, "Ctrl+P", "3mf")
@@ -3801,7 +3864,7 @@ class MainWindow(QMainWindow):
         m = mb.addMenu(tr("&File"))
         export = QMenu(tr("&Export"), m)
         for a in (self.a_exp_stl, self.a_exp_3mf, self.a_exp_colors, self.a_exp_obj, None,
-                  self.a_exp_svg2d, self.a_exp_dxf2d):
+                  self.a_exp_svg2d, self.a_exp_dxf2d, self.a_exp_gcode):
             if a is None:
                 export.addSeparator()
             else:
@@ -5810,8 +5873,12 @@ class MainWindow(QMainWindow):
         `path` the default choices are used. Raster layers go out filled, the rest as
         hairlines, and the operation and settings of every layer go into the SVG so
         Volura finds them again when reading it.
+
+        `kind` "gcode" writes the same drawing as G-code for a GRBL laser
+        (`volura/gcode.py`), with the S maximum and M4 of the dialog, and says in the
+        status bar how long that job takes according to the job estimate.
         """
-        kind = "dxf" if str(kind).lower() == "dxf" else "svg"
+        kind = sheet_export_kind(kind)
         if options is None:
             options = (self.sheet_export_options(kind) if path is None
                        else self.default_sheet_export_options())
@@ -5838,13 +5905,15 @@ class MainWindow(QMainWindow):
         if path is None:
             path, _ = QFileDialog.getSaveFileName(
                 self, tr("Export for Laser/Mill"), self.export_name("." + kind),
-                "SVG (*.svg)" if kind == "svg" else "DXF (*.dxf)")
+                EXPORT_FILTERS[kind])
             if not path:
                 return None
             if not os.path.splitext(path)[1]:
                 path += "." + kind
         filled = [n for n in names
                   if drawing.layers.get(n) is not None and drawing.layers[n].op == "raster"]
+        s_max = int(options.get("s_max") or GCODE_S_MAX_DEFAULT)
+        dynamic = bool(options.get("dynamic", True))
         per_sheet = bool(options.get("per_sheet")) and bool(self.doc.sheet.sheet_w) \
             and bool(self.doc.sheet.sheet_h)
         files = []
@@ -5858,34 +5927,50 @@ class MainWindow(QMainWindow):
                         for nm in names:
                             one = self.layer_file_name(target, nm, kind)
                             self._write_vector(sub, one, kind, [nm],
-                                               [nm] if nm in filled else [])
+                                               [nm] if nm in filled else [],
+                                               s_max=s_max, dynamic=dynamic)
                             files.append(one)
                     else:
-                        self._write_vector(sub, target, kind, names, filled)
+                        self._write_vector(sub, target, kind, names, filled,
+                                           s_max=s_max, dynamic=dynamic)
                         files.append(target)
             elif options.get("per_layer"):
                 for n in names:
                     one = self.layer_file_name(path, n, kind)
-                    self._write_vector(drawing, one, kind, [n], [n] if n in filled else [])
+                    self._write_vector(drawing, one, kind, [n], [n] if n in filled else [],
+                                       s_max=s_max, dynamic=dynamic)
                     files.append(one)
             else:
-                self._write_vector(drawing, path, kind, names, filled)
+                self._write_vector(drawing, path, kind, names, filled,
+                                   s_max=s_max, dynamic=dynamic)
                 files.append(path)
         except Exception as e:
             QMessageBox.critical(self, tr("Export Failed"), str(e))
             return None
         where = (files[0] if len(files) == 1
                  else tr("{n} files ({first})").format(n=len(files), first=files[0]))
-        message = (tr("{n} outlines exported to {where} with kerf/cutter compensation")
-                   if options.get("compensate") else tr("{n} outlines exported to {where}"))
-        self.hint.setText(message.format(n=len(drawing.paths), where=where))
+        if kind == "gcode":
+            message = (tr("{n} outlines exported to {where} with kerf/cutter compensation, "
+                          "estimated time {time}") if options.get("compensate")
+                       else tr("{n} outlines exported to {where}, estimated time {time}"))
+        else:
+            message = (tr("{n} outlines exported to {where} with kerf/cutter compensation")
+                       if options.get("compensate") else tr("{n} outlines exported to {where}"))
+        self.hint.setText(message.format(n=len(drawing.paths), where=where,
+                                         time=(fmt_time(job_estimate(drawing)["total"])
+                                               if kind == "gcode" else None)))
         return files[0]
 
     @staticmethod
-    def _write_vector(drawing, path, kind, layers, fill_layers=()):
-        """Write one drawing to an SVG or DXF file, with the chosen layers."""
+    def _write_vector(drawing, path, kind, layers, fill_layers=(),
+                      s_max=GCODE_S_MAX_DEFAULT, dynamic=True):
+        """Write one drawing to an SVG, DXF or G-code file, with the chosen layers."""
         if kind == "dxf":
             dxf.write_dxf(drawing, path, layers=layers)
+        elif kind == "gcode":
+            text = gcode.grbl_laser(drawing, s_max=s_max, dynamic=dynamic)
+            with open(path, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(text)
         else:
             svg.write_svg(drawing, path, layers=layers, fill_layers=fill_layers)
 

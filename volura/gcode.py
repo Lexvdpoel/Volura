@@ -63,6 +63,19 @@ def _laser_layers(drawing) -> list:
     return out
 
 
+def _passes(lay) -> int:
+    """How often the beam runs over the paths of a layer.
+
+    `vector2d.layer_param` rounds an unusable setting up to one pass, because a machine
+    cannot run a layer zero times; the export looks at the layer as it stands, so a layer
+    that says "0 passes" is something the user fixes and not a silent extra pass.
+    """
+    try:
+        return int(float(dict(lay.params or {}).get("passes")))
+    except (TypeError, ValueError):
+        return int(layer_param(lay, "passes"))
+
+
 def _entry(path, pos) -> tuple[np.ndarray, float]:
     """The points of `path` as the head runs them when it comes from `pos`, and that distance.
 
@@ -130,6 +143,10 @@ def grbl_laser(drawing, s_max=1000, dynamic=True, travel_speed=None) -> str:
     power). Between the paths the head travels at `travel_speed` mm/s, the same rapid as
     `vector2d.job_estimate` counts. A worksheet without a laser layer with paths gives a
     ValueError, since G-code that does nothing is not a result.
+
+    A layer that is cut must say how fast: a speed of zero or less would write `F0`, which
+    GRBL refuses, and no pass at all would cut nothing, so both give a ValueError that
+    names the layer instead of G-code the machine throws away.
     """
     drawing = drawing if isinstance(drawing, Drawing) else Drawing(paths=list(drawing))
     travel_speed = DEFAULT_TRAVEL_SPEED if travel_speed is None else float(travel_speed)
@@ -141,8 +158,15 @@ def grbl_laser(drawing, s_max=1000, dynamic=True, travel_speed=None) -> str:
     for lay, paths in layers:
         if not paths:
             continue
-        passes = int(layer_param(lay, "passes"))
-        feed = float(layer_param(lay, "speed") or 0.0) * 60.0
+        passes = _passes(lay)
+        speed = float(layer_param(lay, "speed") or 0.0)
+        if speed <= 0.0:
+            raise ValueError(tr("The layer {layer} has no speed; set one in the layer "
+                                "settings.").format(layer=lay.name))
+        if passes < 1:
+            raise ValueError(tr("The layer {layer} has no passes; set at least one in the "
+                                "layer settings.").format(layer=lay.name))
+        feed = speed * 60.0
         power = round(float(layer_param(lay, "power") or 0.0) * float(s_max) / 100.0)
         ordered = cut_order(paths)
         for k in range(1, passes + 1):

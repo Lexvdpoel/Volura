@@ -140,6 +140,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
   the scrap of a hole falls out on its own
 - **Job estimate**: how many metres of contour each layer cuts, how often the laser pierces
   and how long the whole job takes, with the rapid moves between the paths along
+- **G-code for a GRBL laser**: File > Export > *G-code for a GRBL Laser* writes the laser
+  layers as plain G-code for the machine, with the S maximum and M3 or M4 of the controller
+  and the time of the job in the status bar
 - **Model and worksheet together**: right-click a face or sheet > *Laser / Mill* puts it on a layer of
   the worksheet; *Parts to 3D Model* places everything that is cut as a sheet with the sheet thickness
   in 3D

@@ -1374,4 +1374,13 @@ TRANSLATIONS = {
     'The lip may not be negative.': 'De opstaande rand mag niet negatief zijn.',
     'The lip must be lower than the inside height.': 'De opstaande rand moet lager zijn dan de binnenhoogte.',
     'The corner radius may not be negative.': 'De hoekradius mag niet negatief zijn.',
+    'G-code for a GRBL Laser (.gcode)…': 'G-code voor een GRBL-laser (.gcode)…',
+    'Max power (S)': 'Max. vermogen (S)',
+    'Dynamic power (M4)': 'Dynamisch vermogen (M4)',
+    'The highest S word the controller understands ($30)': 'Het hoogste S-woord dat de controller begrijpt ($30)',
+    'The beam gives way where the head slows down in a corner, so it burns less there': 'De straal geeft mee waar de kop in een hoek langzamer gaat, zodat het daar minder brandt',
+    'The layer {layer} has no speed; set one in the layer settings.': 'De laag {layer} heeft geen snelheid; stel er een in bij de laaginstellingen.',
+    'The layer {layer} has no passes; set at least one in the layer settings.': 'De laag {layer} heeft geen passes; stel er minstens één in bij de laaginstellingen.',
+    '{n} outlines exported to {where}, estimated time {time}': '{n} contouren geëxporteerd naar {where}, geschatte tijd {time}',
+    '{n} outlines exported to {where} with kerf/cutter compensation, estimated time {time}': '{n} contouren geëxporteerd naar {where} met kerf-/freescorrectie, geschatte tijd {time}',
 }
