@@ -25,9 +25,9 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
                                QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
-from . import (__version__, background, boxgen, cam, dxf, errors, fileio, i18n, joints, nesting,
-               ops, sheet3d, sheettools, svg, spacemouse, theme, threads, vector_export,
-               vector_import, workers)
+from . import (__version__, background, boxgen, cam, dxf, errors, fileio, gears, i18n,
+               joints, nesting, ops, sheet3d, sheettools, svg, spacemouse, theme, threads,
+               vector_export, vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -346,6 +346,31 @@ class Settings:
             self.fit_test_count = 5
         self.fit_test_count = max(2, min(10, self.fit_test_count))
         try:
+            self.gear_teeth = int(float(self.q.value("gear_teeth", 20)))
+        except (TypeError, ValueError):
+            self.gear_teeth = 20
+        self.gear_teeth = max(gears.TEETH_MIN, min(gears.TEETH_MAX, self.gear_teeth))
+        try:
+            self.gear_module = float(self.q.value("gear_module", 2.0))
+        except (TypeError, ValueError):
+            self.gear_module = 2.0
+        self.gear_module = max(gears.MODULE_MIN, min(gears.MODULE_MAX, self.gear_module))
+        try:
+            self.gear_angle = float(self.q.value("gear_angle", 20.0))
+        except (TypeError, ValueError):
+            self.gear_angle = 20.0
+        self.gear_angle = max(gears.ANGLE_MIN, min(gears.ANGLE_MAX, self.gear_angle))
+        try:
+            self.gear_bore = float(self.q.value("gear_bore", 5.0))
+        except (TypeError, ValueError):
+            self.gear_bore = 5.0
+        self.gear_bore = max(0.0, self.gear_bore)
+        try:
+            self.gear_backlash = float(self.q.value("gear_backlash", 0.1))
+        except (TypeError, ValueError):
+            self.gear_backlash = 0.1
+        self.gear_backlash = max(0.0, min(1.0, self.gear_backlash))
+        try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
             self.tab_count = 4
@@ -413,6 +438,11 @@ class Settings:
         self.q.setValue("fit_test_first", self.fit_test_first)
         self.q.setValue("fit_test_step", self.fit_test_step)
         self.q.setValue("fit_test_count", self.fit_test_count)
+        self.q.setValue("gear_teeth", self.gear_teeth)
+        self.q.setValue("gear_module", self.gear_module)
+        self.q.setValue("gear_angle", self.gear_angle)
+        self.q.setValue("gear_bore", self.gear_bore)
+        self.q.setValue("gear_backlash", self.gear_backlash)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
@@ -2127,6 +2157,74 @@ class FitTestDialog(QDialog):
                 "step": round(self.step.value(), 6), "count": int(self.count.value())}
 
 
+class SpurGearDialog(QDialog):
+    """The "Spur Gear…" dialog: an involute gear wheel for the worksheet.
+
+    The teeth and the module together say how big the wheel is, the pressure angle how
+    steep the flanks stand and the backlash how much play two wheels have against each
+    other; those values come from the axle, the pinion and the material, so the dialog
+    starts where the user left them (Settings) and remembers the new ones. Under the
+    fields the wheel stands in figures, because that is what the user checks it against:
+    the place in the box and the distance to the other axle.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Spur Gear"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5, suffix=" mm"):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(suffix)
+            sp.setValue(float(value))
+            sp.valueChanged.connect(self._measure)
+            return sp
+
+        self.teeth = QSpinBox()
+        self.teeth.setRange(gears.TEETH_MIN, gears.TEETH_MAX)
+        self.teeth.setValue(s.gear_teeth)
+        self.teeth.setToolTip(tr("Number of teeth on the wheel"))
+        self.teeth.valueChanged.connect(self._measure)
+        self.module = spin(gears.MODULE_MIN, gears.MODULE_MAX, s.gear_module, 0.5)
+        self.module.setToolTip(tr("The pitch diameter per tooth: two wheels of the same "
+                                  "module run against each other"))
+        self.angle = spin(gears.ANGLE_MIN, gears.ANGLE_MAX, s.gear_angle, 0.5, "°")
+        self.angle.setToolTip(tr("How steep the flanks stand; 20 degrees is the usual choice"))
+        self.bore = spin(0.0, 200.0, s.gear_bore, 1.0)
+        self.bore.setToolTip(tr("Diameter of the hole for the axle; zero leaves a solid wheel"))
+        self.backlash = spin(0.0, 1.0, s.gear_backlash, 0.05)
+        self.backlash.setToolTip(tr("The play of a pair of wheels on the pitch circle, so "
+                                    "the flanks do not press on each other"))
+        self.info = QLabel()
+        lay.addRow(tr("Teeth"), self.teeth)
+        lay.addRow(tr("Module"), self.module)
+        lay.addRow(tr("Pressure angle"), self.angle)
+        lay.addRow(tr("Bore"), self.bore)
+        lay.addRow(tr("Backlash"), self.backlash)
+        lay.addRow(self.info)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._measure()
+
+    def _measure(self):
+        """The pitch and the outside diameter of the wheel as it stands in the fields."""
+        m = float(self.module.value())
+        d = gears.pitch_diameter(int(self.teeth.value()), m)
+        self.info.setText(tr("<i>Pitch diameter {d} mm, outside diameter {o} mm</i>")
+                          .format(d=f"{d:.2f}", o=f"{d + 2.0 * m:.2f}"))
+
+    def options(self) -> dict:
+        return {"teeth": int(self.teeth.value()), "module": round(self.module.value(), 6),
+                "angle": round(self.angle.value(), 6), "bore": round(self.bore.value(), 6),
+                "backlash": round(self.backlash.value(), 6)}
+
+
 class HoldingTabsDialog(QDialog):
     """The "Holding Tabs…" dialog: the small bridges that keep a part in the sheet.
 
@@ -3441,8 +3539,13 @@ class MainWindow(QMainWindow):
         # ---- fit test
         self.a_fit_test = A(tr("Fit Test…"),
                             lambda checked=False: self.fit_test_dialog(), None, None, False,
-                            tr("A comb of slots that shows which offset gives a good press "
-                               "fit for the sheet you are cutting"))
+                             tr("A comb of slots that shows which offset gives a good press "
+                                "fit for the sheet you are cutting"))
+        # ---- spur gear
+        self.a_spur_gear = A(tr("Spur Gear…"),
+                             lambda checked=False: self.spur_gear_dialog(), None, None, False,
+                             tr("Add an involute spur gear to the worksheet, with the teeth, "
+                                "the module and the bore you choose"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, None,
@@ -3503,8 +3606,8 @@ class MainWindow(QMainWindow):
         self.fill(comp_edit, (self.a_hide_rest,))
         self.fill(m, (self.a_toolbars, self.a_sheet, None,
                       self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint, self.a_hinge,
-                      self.a_vent_pattern, self.a_fit_test, self.a_holding_tabs,
-                      self.a_sheet_to_model, None,
+                      self.a_vent_pattern, self.a_fit_test, self.a_spur_gear,
+                      self.a_holding_tabs, self.a_sheet_to_model, None,
                       self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid, None,
                       edge_style, face_style, comp_edit))
 
@@ -3611,8 +3714,8 @@ class MainWindow(QMainWindow):
                       self.a_sheet_distribute, self.a_sheet_duplicate, None,
                       self.a_sheet_grid, self.a_sheet_round, self.a_sheet_to_layer,
                       None, self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint,
-                      self.a_hinge, self.a_vent_pattern, self.a_fit_test, self.a_holding_tabs,
-                      self.a_sheet_to_model, None, self.a_extents):
+                      self.a_hinge, self.a_vent_pattern, self.a_fit_test, self.a_spur_gear,
+                      self.a_holding_tabs, self.a_sheet_to_model, None, self.a_extents):
                 bar.addSeparator() if a is None else bar.addAction(a)
             self._add_dropdown(bar, self.a_sheet_align,
                                tuple(self.sheet_align_actions.values()))
@@ -4056,6 +4159,59 @@ class MainWindow(QMainWindow):
         self.sheet_view._refresh_outside(announce=False)
         self.hint.setText(tr("Cut it and use the slot that holds the sheet best: its offset "
                              "goes into the kerf or the finger width."))
+        return added
+
+    # ------------------------------------------------------------ spur gear
+    def spur_gear_dialog(self):
+        """View > Spur Gear…: an involute gear wheel on the worksheet."""
+        dlg = SpurGearDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.gear_teeth = int(options["teeth"])
+        self.settings.gear_module = float(options["module"])
+        self.settings.gear_angle = float(options["angle"])
+        self.settings.gear_bore = float(options["bore"])
+        self.settings.gear_backlash = float(options["backlash"])
+        self.settings.save()
+        made = self.make_spur_gear_sheet(options)
+        self.setFocus()
+        return made
+
+    def make_spur_gear_sheet(self, options):
+        """The wheel on the cut layer: one undo step, next to what is already on the sheet.
+
+        A gear is a part like any other, so it takes the free place to the right of the
+        drawing, one gap further on, and moves and nests with its own source number.
+        """
+        self.set_mode("2d")
+        sheet = self.doc.sheet
+        teeth, module = int(options["teeth"]), float(options["module"])
+        try:
+            loops = gears.spur_gear(teeth, module=module, pressure_angle=options["angle"],
+                                    bore=options["bore"], backlash=options["backlash"])
+        except Exception as e:                      # the generator must never crash
+            return self._box_failure(e, "the spur gear", tr("The spur gear failed: {error}"))
+        layer = sheet.default_layer("cut") or default_layer_names("cut")[0]
+        low = np.vstack(loops).min(axis=0)          # the wheel starts in the corner (0, 0)
+        drawing = Drawing()
+        for loop in loops:
+            drawing.add_path(np.asarray(loop) - low, closed=True, layer=layer, filled=True,
+                             src=1)
+        b = sheet.bounds()
+        if b is not None:
+            dx = float(b[2]) + max(0.0, float(sheet.sheet_gap or 0.0))
+            drawing = drawing.transformed(np.array([[1.0, 0.0, dx], [0.0, 1.0, float(b[1])],
+                                                    [0.0, 0.0, 1.0]]))
+        self.doc.checkpoint()
+        added = sheet.merge(drawing)
+        self.doc.notify()
+        self.sheet_view.set_selection(added)
+        self.sheet_view.zoom_extents()
+        self.sheet_view._refresh_outside(announce=False)
+        self.hint.setText(tr("Spur gear with {n} teeth added (pitch diameter {d} mm).")
+                          .format(n=teeth, d=f"{gears.pitch_diameter(teeth, module):.2f}"))
         return added
 
     # ------------------------------------------------------------ holding tabs
