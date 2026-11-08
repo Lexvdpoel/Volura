@@ -3,6 +3,18 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.20 — 2026-11-08
+
+### New
+- **Vent Pattern** (worksheet, View > Vent Pattern…): fill one selected closed contour of
+  any shape with the holes of a ventilation grille or a speaker cover — a honeycomb of
+  hexagons or a field of circles. Set the hole size, the web of material between two holes
+  and the margin along the edge; only whole holes are cut, on the cut layer, and they move
+  and nest with the panel they are cut in.
+
+### Website
+- The feature overview mentions holding tabs, the Print Check advice and the vent pattern.
+
 ## 0.2.19 — 2026-11-08
 
 ### New
