@@ -26,8 +26,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from . import (__version__, background, boxgen, cam, dxf, errors, fileio, i18n, joints, nesting,
-               ops, sheet3d, svg, spacemouse, theme, threads, vector_export, vector_import,
-               workers)
+               ops, sheet3d, sheettools, svg, spacemouse, theme, threads, vector_export,
+               vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -327,6 +327,16 @@ class Settings:
         except (TypeError, ValueError):
             self.fit_test_count = 5
         self.fit_test_count = max(2, min(10, self.fit_test_count))
+        try:
+            self.tab_count = int(float(self.q.value("tab_count", 4)))
+        except (TypeError, ValueError):
+            self.tab_count = 4
+        self.tab_count = max(1, min(20, self.tab_count))
+        try:
+            self.tab_width = float(self.q.value("tab_width", 1.0))
+        except (TypeError, ValueError):
+            self.tab_width = 1.0
+        self.tab_width = max(0.2, min(20.0, self.tab_width))
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
@@ -380,6 +390,8 @@ class Settings:
         self.q.setValue("fit_test_first", self.fit_test_first)
         self.q.setValue("fit_test_step", self.fit_test_step)
         self.q.setValue("fit_test_count", self.fit_test_count)
+        self.q.setValue("tab_count", self.tab_count)
+        self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("recent", self.recent[:8])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
@@ -2037,6 +2049,45 @@ class FitTestDialog(QDialog):
                 "step": round(self.step.value(), 6), "count": int(self.count.value())}
 
 
+class HoldingTabsDialog(QDialog):
+    """The "Holding Tabs…" dialog: the small bridges that keep a part in the sheet.
+
+    A laser or mill that cuts a contour clean through lets the part fall out of the sheet
+    or come loose in the clamp before the job is done: it tips into the beam or rattles
+    under the cutter. Holding tabs are a few gaps left uncut in the contour, evenly
+    spread, that you snap off afterwards. How many and how wide depends on the machine and
+    the material, so the dialog starts where the user left them (Settings) and remembers
+    the new ones; one millimetre is about the width of a laser beam, a few for a mill.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Holding Tabs"))
+        lay = QFormLayout(self)
+        self.count = QSpinBox()
+        self.count.setRange(1, 20)
+        self.count.setValue(s.tab_count)
+        self.count.setToolTip(tr("Number of tabs spread evenly around each contour"))
+        self.width = QDoubleSpinBox()
+        self.width.setRange(0.2, 20.0)
+        self.width.setDecimals(2)
+        self.width.setSingleStep(0.1)
+        self.width.setSuffix(" mm")
+        self.width.setValue(float(s.tab_width))
+        self.width.setToolTip(tr("Width of one tab: about the laser beam for a laser, a few "
+                                 "millimetres for a mill"))
+        lay.addRow(tr("Tabs per contour"), self.count)
+        lay.addRow(tr("Tab width"), self.width)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"count": int(self.count.value()), "width": round(self.width.value(), 6)}
+
+
 class SimplifyDialog(QDialog):
     """Tools > Simplify Model: a quality slider and a live estimate of the result.
 
@@ -3299,6 +3350,12 @@ class MainWindow(QMainWindow):
                             lambda checked=False: self.fit_test_dialog(), None, None, False,
                             tr("A comb of slots that shows which offset gives a good press "
                                "fit for the sheet you are cutting"))
+        # ---- holding tabs
+        self.a_holding_tabs = A(tr("Holding &Tabs…"),
+                                lambda checked=False: self.holding_tabs_dialog(), None, None,
+                                False,
+                                tr("Leave small uncut bridges in the selected closed contours, "
+                                   "so a part stays in the sheet until the job is done"))
 
     def sheet_tool_act(self, label, name, tip=None):
         """Button for a 2D tool; the key works on the worksheet (M, Q, S, Space)."""
@@ -3353,7 +3410,7 @@ class MainWindow(QMainWindow):
         self.fill(comp_edit, (self.a_hide_rest,))
         self.fill(m, (self.a_toolbars, self.a_sheet, None,
                       self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint, self.a_hinge,
-                      self.a_fit_test, self.a_sheet_to_model, None,
+                      self.a_fit_test, self.a_holding_tabs, self.a_sheet_to_model, None,
                       self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid, None,
                       edge_style, face_style, comp_edit))
 
@@ -3460,7 +3517,8 @@ class MainWindow(QMainWindow):
                       self.a_sheet_distribute, self.a_sheet_duplicate, None,
                       self.a_sheet_grid, self.a_sheet_round, self.a_sheet_to_layer,
                       None, self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint,
-                      self.a_hinge, self.a_fit_test, self.a_sheet_to_model, None, self.a_extents):
+                      self.a_hinge, self.a_fit_test, self.a_holding_tabs, self.a_sheet_to_model,
+                      None, self.a_extents):
                 bar.addSeparator() if a is None else bar.addAction(a)
             self._add_dropdown(bar, self.a_sheet_align,
                                tuple(self.sheet_align_actions.values()))
@@ -3845,6 +3903,80 @@ class MainWindow(QMainWindow):
         self.hint.setText(tr("Cut it and use the slot that holds the sheet best: its offset "
                              "goes into the kerf or the finger width."))
         return added
+
+    # ------------------------------------------------------------ holding tabs
+    def holding_tabs_dialog(self):
+        """View > Holding Tabs…: small uncut bridges that keep the parts in the sheet."""
+        if not self.sheet_view.selected_paths():
+            self.hint.setText(tr("Select the closed contours to tab first."))
+            self.setFocus()
+            return None
+        dlg = HoldingTabsDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.tab_count = int(options["count"])
+        self.settings.tab_width = float(options["width"])
+        self.settings.save()
+        made = self.apply_holding_tabs(options)
+        self.setFocus()
+        return made
+
+    def apply_holding_tabs(self, options):
+        """The tabs on the selected closed contours of the cutting layers: one undo step.
+
+        Only the contours that are cut clean through the sheet get tabs (layer Cut, Mill
+        or Drill); open lines and engravings are skipped and counted. Each contour is
+        replaced by its open pieces on the same layer with the same source number, so a
+        part and its tabs still move and nest together.
+        """
+        sel = self.sheet_view.selected_paths()
+        self.set_mode("2d")
+        sheet = self.doc.sheet
+        count, width = int(options["count"]), float(options["width"])
+        replacements, tabbed, too_small, skipped = {}, 0, 0, 0
+        for p in sel:
+            lay = sheet.layers.get(p.layer)
+            op = getattr(lay, "op", "cut") if lay is not None else "cut"
+            if not (p.closed and len(p.pts) >= 3 and op in sheet3d.THROUGH_OPS):
+                skipped += 1
+                continue
+            pieces = sheettools.holding_tabs(p.pts, count, width)
+            if len(pieces) == 1 and np.array_equal(pieces[0], np.asarray(p.pts, float)):
+                too_small += 1
+                continue
+            replacements[id(p)] = pieces
+            tabbed += 1
+        notes = []
+        if tabbed:
+            notes.append(tr("{n} contours got {k} tabs each.").format(n=tabbed, k=count))
+        if skipped:
+            notes.append(tr("{n} paths were skipped (open or not a cutting layer).")
+                         .format(n=skipped))
+        if too_small:
+            notes.append(tr("{n} contours are too small for these tabs.").format(n=too_small))
+        if not tabbed:
+            self.hint.setText(" ".join(notes))
+            return None
+        self.doc.checkpoint()
+        live = set(replacements)
+        keep, fresh = [], []
+        for p in sheet.paths:
+            if id(p) not in live:
+                keep.append(p)
+                continue
+            for piece in replacements[id(p)]:
+                q = VPath(np.asarray(piece, dtype=float), False, p.layer, False, p.rule,
+                          p.src, {})
+                keep.append(q)
+                fresh.append(q)
+        sheet.paths = keep
+        self.doc.notify()
+        self.sheet_view.set_selection(fresh)
+        self.sheet_view._refresh_outside(announce=False)
+        self.hint.setText(" ".join(notes))
+        return fresh
 
     def ask_sheet_text(self):
         """Dialog of the 2D text tool: text, font, height and bold."""

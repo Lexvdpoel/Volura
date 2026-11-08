@@ -1697,6 +1697,55 @@ def split_into_segments(paths) -> list[tuple[np.ndarray, bool]]:
     return out
 
 
+def holding_tabs(pts, count, width, skip_short=None) -> list[np.ndarray]:
+    """The open pieces of a closed contour left with `count` uncut tabs of `width` mm.
+
+    A laser or mill that cuts a contour clean through lets the part fall out of the
+    sheet or come loose in the clamp before the job is done. `count` gaps of `width`
+    millimetres are spread evenly over the length of the contour, the first centred at
+    1/(2*count) of the perimeter so a tab never sits on the start point; what remains is
+    returned as the open pieces to cut, in the direction of the contour. A gap that falls
+    over a corner cuts the two segments exactly at the arc-length positions.
+
+    `skip_short` leaves a contour shorter than that (in millimetres) untouched. When
+    there is no room for the tabs (`count` < 1, `width` <= 0, or `count` * `width` at
+    least half the perimeter) the contour comes back closed as it was, in a list of one;
+    the caller reports that there was nothing to do.
+    """
+    pts = np.asarray(pts, dtype=float).reshape(-1, 2)
+    count, width = int(count), float(width)
+    if len(pts) < 3:
+        return [pts.copy()]
+    segs = list(path_segments(pts, closed=True))
+    lens = np.array([float(np.hypot(*(b - a))) for a, b in segs])
+    total = float(lens.sum())
+    if (count < 1 or width <= 0.0 or total <= 0.0 or count * width >= 0.5 * total
+            or (skip_short is not None and total < float(skip_short))):
+        return [pts.copy()]
+    cum = np.concatenate(([0.0], np.cumsum(lens)))     # arc length of every vertex
+
+    def point_at(s):
+        k = int(np.clip(np.searchsorted(cum, s, side="right") - 1, 0, len(segs) - 1))
+        a, b = segs[k]
+        t = 0.0 if lens[k] <= 1e-12 else (s - cum[k]) / lens[k]
+        return a + min(1.0, max(0.0, t)) * (b - a)
+
+    def piece(s0, s1):
+        """The open polyline along the contour from arc length `s0` to `s1`."""
+        out = [point_at(s0)]
+        out += [pts[k] for k in range(1, len(pts)) if s0 + 1e-9 < cum[k] < s1 - 1e-9]
+        out.append(point_at(s1))
+        return np.asarray(out, dtype=float)
+
+    step, half = total / count, 0.5 * width
+    gap_start = [(i + 0.5) * step - half for i in range(count)]
+    gap_end = [(i + 0.5) * step + half for i in range(count)]
+    pieces = [piece(gap_end[i], gap_start[i + 1]) for i in range(count - 1)]
+    across = np.vstack([piece(gap_end[-1], total), piece(0.0, gap_start[0])[1:]])
+    pieces.insert(0, across)
+    return pieces
+
+
 def joined_paths(paths) -> list[VPath]:
     """Join open segments into polylines and shapes."""
     return join_open_paths(paths)
