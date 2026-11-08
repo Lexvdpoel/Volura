@@ -3,6 +3,19 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.21 — 2026-11-08
+
+### New
+- **Spur Gear**: an involute gear from the number of teeth, the module and the pressure
+  angle, with a bore for the axle and the backlash you choose; the dialog shows the pitch
+  and outside diameter as you type. On the worksheet (View > Spur Gear…) it lands on the
+  cut layer next to the drawing; in the model (Tools > Print Tools > Spur Gear…) it stands
+  on the bed as a printable part of the thickness you enter. Two gears of the same module
+  and pressure angle mesh at half the sum of their pitch diameters.
+
+### Website
+- The feature overview and the manual describe the spur gear.
+
 ## 0.2.20 — 2026-11-08
 
 ### New
