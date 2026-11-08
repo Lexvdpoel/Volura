@@ -892,7 +892,9 @@ def job_estimate(drawing, travel_speed=DEFAULT_TRAVEL_SPEED, pierce_time=0.0) ->
     A layer runs `passes` times over its own paths, so its length counts that often, and
     with `pierce_time` every path costs a pierce per pass. Between the paths the head
     moves in rapid at `travel_speed` mm/s: from the origin to the start of the first path
-    and from the end of every path to the start of the next, in the order of the drawing.
+    and from the end of every path to the start of the next, in the order in which the
+    laser cuts them (`gcode.cut_order`), so the estimate stands for the same job as the
+    G-code of `volura/gcode.py`.
 
     {"layers": [{"layer", "length", "pierces", "passes", "speed", "time"}...],
      "travel", "travel_time", "total", "skipped"}
@@ -915,15 +917,17 @@ def job_estimate(drawing, travel_speed=DEFAULT_TRAVEL_SPEED, pierce_time=0.0) ->
                       "speed": float(layer_param(lay, "speed") or 0.0), "time": None}
     travel = 0.0
     pos = np.zeros(2)                     # the head starts at the origin
-    for p in drawing.paths:
-        row = rows.get(p.layer)
-        if row is None or len(p.pts) < 2:
+    for name, row in rows.items():
+        paths = [p for p in drawing.paths if p.layer == name and len(p.pts) >= 2]
+        if not paths:
             continue
-        pts = _arr(p.pts)
-        travel += float(np.hypot(*(pts[0] - pos)))
-        pos = pts[0] if p.closed else pts[-1]   # a closed contour ends where it began
-        row["length"] += path_length(pts, p.closed)
-        row["pierces"] += 1
+        from .gcode import cut_order      # here, so gcode can build on this module
+        for p in cut_order(paths):
+            pts = _arr(p.pts)
+            travel += float(np.hypot(*(pts[0] - pos)))
+            pos = pts[0] if p.closed else pts[-1]   # a closed contour ends where it began
+            row["length"] += path_length(pts, p.closed)
+            row["pierces"] += 1
     for row in rows.values():
         if row["speed"] > 0.0:
             row["time"] = (row["length"] * row["passes"] / row["speed"]

@@ -1123,6 +1123,7 @@ TRANSLATIONS = {
     'There is no room left for slits in this rectangle.': 'Er is geen ruimte meer voor sneden in deze rechthoek.',
     'There is no selection to rotate.': 'Er is geen selectie om te draaien.',
     'There is no selection to scale.': 'Er is geen selectie om te schalen.',
+    'There is nothing on the worksheet for the laser.': 'Er staat niets op het werkblad voor de laser.',
     'There is nothing on the worksheet to arrange.': 'Er staat niets op het werkblad om te schikken.',
     'There is nothing to arrange.': 'Er is niets om te schikken.',
     'there is nothing to cut from': 'er is niets om van te snijden',
