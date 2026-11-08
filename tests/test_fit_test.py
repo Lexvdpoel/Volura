@@ -251,12 +251,14 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
 
 def test_the_fit_test_follows_the_living_hinge_in_the_view_menu(win):
     labels = menu_labels(win, "View")
-    assert labels.index("Fit Test") == labels.index("Living Hinge") + 1
+    assert labels.index("Vent Pattern") == labels.index("Living Hinge") + 1
+    assert labels.index("Fit Test") == labels.index("Vent Pattern") + 1
 
 
 def test_the_fit_test_follows_the_living_hinge_on_the_sheet_toolbar(win):
     labels = [clean(a.text()) for a in win.tb_sheet.actions() if not a.isSeparator()]
-    assert labels.index("Fit Test") == labels.index("Living Hinge") + 1
+    assert labels.index("Vent Pattern") == labels.index("Living Hinge") + 1
+    assert labels.index("Fit Test") == labels.index("Vent Pattern") + 1
 
 
 if __name__ == "__main__":

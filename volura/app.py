@@ -312,6 +312,24 @@ class Settings:
             self.hinge_margin = 3.0
         self.hinge_margin = max(0.0, min(20.0, self.hinge_margin))
         self.hinge_vertical = self._bool("hinge_vertical", True)
+        self.vent_shape = str(self.q.value("vent_shape", "hex") or "hex").strip().lower()
+        if self.vent_shape not in boxgen.VENT_SHAPES:
+            self.vent_shape = "hex"
+        try:
+            self.vent_size = float(self.q.value("vent_size", 6.0))
+        except (TypeError, ValueError):
+            self.vent_size = 6.0
+        self.vent_size = max(1.0, min(50.0, self.vent_size))
+        try:
+            self.vent_web = float(self.q.value("vent_web", 2.0))
+        except (TypeError, ValueError):
+            self.vent_web = 2.0
+        self.vent_web = max(0.5, min(20.0, self.vent_web))
+        try:
+            self.vent_margin = float(self.q.value("vent_margin", 3.0))
+        except (TypeError, ValueError):
+            self.vent_margin = 3.0
+        self.vent_margin = max(0.0, min(50.0, self.vent_margin))
         try:
             self.fit_test_first = float(self.q.value("fit_test_first", -0.2))
         except (TypeError, ValueError):
@@ -388,6 +406,10 @@ class Settings:
         self.q.setValue("hinge_pitch", self.hinge_pitch)
         self.q.setValue("hinge_margin", self.hinge_margin)
         self.q.setValue("hinge_vertical", self.hinge_vertical)
+        self.q.setValue("vent_shape", self.vent_shape)
+        self.q.setValue("vent_size", self.vent_size)
+        self.q.setValue("vent_web", self.vent_web)
+        self.q.setValue("vent_margin", self.vent_margin)
         self.q.setValue("fit_test_first", self.fit_test_first)
         self.q.setValue("fit_test_step", self.fit_test_step)
         self.q.setValue("fit_test_count", self.fit_test_count)
@@ -2000,6 +2022,60 @@ class LivingHingeDialog(QDialog):
                 "vertical": bool(self.vertical.currentData())}
 
 
+class VentPatternDialog(QDialog):
+    """The "Vent Pattern…" dialog: the holes of a grille or a speaker cover.
+
+    The holes stand on a triangular grid, `web` millimetres of material between two
+    neighbours, and only holes that lie whole inside the contour survive the edge margin.
+    Hexagons pack tightest, circles are the classic speaker cover; the values depend on the
+    project and the machine, so the dialog starts where the user left them (Settings) and
+    remembers the new ones.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Vent Pattern"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.shape = QComboBox()
+        self.shape.addItem(tr("Hexagons"), "hex")
+        self.shape.addItem(tr("Circles"), "round")
+        self.shape.setCurrentIndex(0 if s.vent_shape == "hex" else 1)
+        self.shape.setToolTip(tr("Hexagons pack tightest in the material, circles are the "
+                                 "classic speaker cover"))
+        self.size = spin(1.0, 50.0, s.vent_size, 1.0)
+        self.size.setToolTip(tr("Width of one hole: across the flats for a hexagon, the "
+                                "diameter of a circle"))
+        self.web = spin(0.5, 20.0, s.vent_web, 0.5)
+        self.web.setToolTip(tr("Width of the material between two holes; too thin and it "
+                               "warps or tears out"))
+        self.margin = spin(0.0, 50.0, s.vent_margin, 0.5)
+        self.margin.setToolTip(tr("Material that stays free of holes along the edge, so the "
+                                  "grille keeps its place in the panel"))
+        lay.addRow(tr("Shape"), self.shape)
+        lay.addRow(tr("Hole size"), self.size)
+        lay.addRow(tr("Web"), self.web)
+        lay.addRow(tr("Edge margin"), self.margin)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"shape": str(self.shape.currentData()), "size": round(self.size.value(), 6),
+                "web": round(self.web.value(), 6), "margin": round(self.margin.value(), 6)}
+
+
 class FitTestDialog(QDialog):
     """The "Fit Test…" dialog: the slots of a press-fit test for the sheet in use.
 
@@ -3355,6 +3431,13 @@ class MainWindow(QMainWindow):
                          lambda checked=False: self.living_hinge_dialog(), None, "hinge", False,
                          tr("Fill a rectangle on the worksheet with the slits of a living "
                             "hinge, so the panel bends there"))
+        # ---- vent pattern
+        self.a_vent_pattern = A(tr("Vent Pattern…"),
+                                lambda checked=False: self.vent_pattern_dialog(), None, None,
+                                False,
+                                tr("Fill the selected closed contour on the worksheet with a "
+                                   "pattern of holes, for a ventilation grille or a speaker "
+                                   "cover"))
         # ---- fit test
         self.a_fit_test = A(tr("Fit Test…"),
                             lambda checked=False: self.fit_test_dialog(), None, None, False,
@@ -3420,7 +3503,8 @@ class MainWindow(QMainWindow):
         self.fill(comp_edit, (self.a_hide_rest,))
         self.fill(m, (self.a_toolbars, self.a_sheet, None,
                       self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint, self.a_hinge,
-                      self.a_fit_test, self.a_holding_tabs, self.a_sheet_to_model, None,
+                      self.a_vent_pattern, self.a_fit_test, self.a_holding_tabs,
+                      self.a_sheet_to_model, None,
                       self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid, None,
                       edge_style, face_style, comp_edit))
 
@@ -3527,8 +3611,8 @@ class MainWindow(QMainWindow):
                       self.a_sheet_distribute, self.a_sheet_duplicate, None,
                       self.a_sheet_grid, self.a_sheet_round, self.a_sheet_to_layer,
                       None, self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint,
-                      self.a_hinge, self.a_fit_test, self.a_holding_tabs, self.a_sheet_to_model,
-                      None, self.a_extents):
+                      self.a_hinge, self.a_vent_pattern, self.a_fit_test, self.a_holding_tabs,
+                      self.a_sheet_to_model, None, self.a_extents):
                 bar.addSeparator() if a is None else bar.addAction(a)
             self._add_dropdown(bar, self.a_sheet_align,
                                tuple(self.sheet_align_actions.values()))
@@ -3864,6 +3948,66 @@ class MainWindow(QMainWindow):
         self.sheet_view.set_selection(added)
         self.sheet_view._refresh_outside(announce=False)
         self.hint.setText(tr("{n} slits added: the panel bends there.").format(n=len(added)))
+        return added
+
+    # ------------------------------------------------------------ vent pattern
+    def vent_pattern_dialog(self):
+        """View > Vent Pattern…: the holes of a grille in the selected closed contour."""
+        sel = self.sheet_view.selected_paths()
+        if len(sel) != 1 or not sel[0].closed:
+            self.hint.setText(tr("Select one closed contour on the worksheet first."))
+            self.setFocus()
+            return None
+        dlg = VentPatternDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.vent_shape = str(options["shape"])
+        self.settings.vent_size = float(options["size"])
+        self.settings.vent_web = float(options["web"])
+        self.settings.vent_margin = float(options["margin"])
+        self.settings.save()
+        made = self.apply_vent_pattern(options)
+        self.setFocus()
+        return made
+
+    def apply_vent_pattern(self, options):
+        """The holes on the cut layer of the worksheet: one undo step, all of them selected.
+
+        Every hole gets the source number of the contour, so clicking the panel, moving it
+        and arranging the sheet take the grille along with the panel it is cut in.
+        """
+        sel = self.sheet_view.selected_paths()
+        if len(sel) != 1 or not sel[0].closed:
+            self.hint.setText(tr("Select one closed contour on the worksheet first."))
+            return None
+        outline = sel[0]
+        self.set_mode("2d")
+        sheet = self.doc.sheet
+        try:
+            holes = boxgen.vent_pattern(outline.pts, shape=options["shape"],
+                                        size=options["size"], web=options["web"],
+                                        margin=options["margin"])
+        except Exception as e:                      # the generator must never crash
+            return self._box_failure(e, "the vent pattern",
+                                     tr("The vent pattern failed: {error}"))
+        if not holes:
+            self.hint.setText(tr("No hole fits inside this contour."))
+            return None
+        layer = sheet.default_layer("cut") or default_layer_names("cut")[0]
+        drawing = Drawing()
+        for pts in holes:
+            drawing.add_path(pts, closed=True, layer=layer, src=1)
+        self.doc.checkpoint()
+        added = sheet.merge(drawing)
+        if outline.src:
+            for p in added:
+                p.src = int(outline.src)
+        self.doc.notify()
+        self.sheet_view.set_selection(added)
+        self.sheet_view._refresh_outside(announce=False)
+        self.hint.setText(tr("{n} holes added.").format(n=len(added)))
         return added
 
     # ------------------------------------------------------------ fit test

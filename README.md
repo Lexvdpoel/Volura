@@ -120,6 +120,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Boxes with finger joints**, on the worksheet or as a 3D preview
 - **Living hinges**: fill a selected rectangle with staggered slits, so plywood or MDF
   bends there when it is cut
+- **Vent pattern**: fill a selected closed contour with a honeycomb of hexagons or a field
+  of circles, for a ventilation grille or a speaker cover, with the web and the edge margin
+  you choose
 - **Fit test**: a small comb of slots that shows which offset gives a good press fit for
   the sheet you cut, with that offset engraved under every slot
 - **Holding tabs**: leave a few small uncut bridges in the selected closed contours, so a
