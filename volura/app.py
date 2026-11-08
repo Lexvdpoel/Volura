@@ -423,6 +423,9 @@ class Settings:
         except (TypeError, ValueError):
             self.box3d_clearance = self.screw_hole_clearance
         self.box3d_clearance = max(0.0, min(enclosure.CLEARANCE_MAX, self.box3d_clearance))
+        self.box3d_screws = str(self.q.value("box3d_screws", "") or "").strip()
+        if self.box3d_screws not in enclosure.SCREW_SIZES:
+            self.box3d_screws = ""
         try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
@@ -506,6 +509,7 @@ class Settings:
         self.q.setValue("box3d_lid", self.box3d_lid)
         self.q.setValue("box3d_lip", self.box3d_lip)
         self.q.setValue("box3d_clearance", self.box3d_clearance)
+        self.q.setValue("box3d_screws", self.box3d_screws)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
@@ -2372,7 +2376,9 @@ class ProjectBoxDialog(QDialog):
     electronics. The wall, the floor and the lid are the plastic around it and the clearance
     is the room the lip of the lid needs to slide into the box, which every printer likes a
     little differently, so the dialog starts at the clearance of the screw holes, the one
-    this printer already proved. The other values come from Settings and are remembered.
+    this printer already proved. With a screw size the base also gets a post in every corner
+    with a pilot hole, and the lid a hole above it. The other values come from Settings and
+    are remembered.
     """
 
     def __init__(self, win):
@@ -2410,6 +2416,13 @@ class ProjectBoxDialog(QDialog):
         self.clearance = spin(0.0, enclosure.CLEARANCE_MAX, s.box3d_clearance, 0.05)
         self.clearance.setToolTip(tr("The room between the lip and the wall, so the lid "
                                      "slides in"))
+        self.screws = QComboBox()
+        self.screws.addItem(tr("None"), "")
+        for size in enclosure.SCREW_SIZES:
+            self.screws.addItem(size, size)
+        self.screws.setCurrentIndex(max(0, self.screws.findData(s.box3d_screws)))
+        self.screws.setToolTip(tr("Round posts in the corners with a pilot hole, to screw "
+                                  "the lid on"))
         lay.addRow(tr("Inside length"), self.length)
         lay.addRow(tr("Inside width"), self.width)
         lay.addRow(tr("Inside height"), self.height)
@@ -2419,6 +2432,7 @@ class ProjectBoxDialog(QDialog):
         lay.addRow(tr("Lid"), self.lid)
         lay.addRow(tr("Lip"), self.lip)
         lay.addRow(tr("Clearance"), self.clearance)
+        lay.addRow(tr("Screws"), self.screws)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -2433,7 +2447,8 @@ class ProjectBoxDialog(QDialog):
                 "radius": round(self.radius.value(), 6),
                 "lid": round(self.lid.value(), 6),
                 "lip": round(self.lip.value(), 6),
-                "clearance": round(self.clearance.value(), 6)}
+                "clearance": round(self.clearance.value(), 6),
+                "screws": str(self.screws.currentData() or "")}
 
 
 class HoldingTabsDialog(QDialog):
@@ -4592,6 +4607,7 @@ class MainWindow(QMainWindow):
         self.settings.box3d_lid = float(options["lid"])
         self.settings.box3d_lip = float(options["lip"])
         self.settings.box3d_clearance = float(options["clearance"])
+        self.settings.box3d_screws = str(options.get("screws", "") or "")
         self.settings.save()
         made = self.make_project_box_model(options)
         self.setFocus()
@@ -4610,6 +4626,7 @@ class MainWindow(QMainWindow):
         doc = self.doc
         size = {k: float(options[k]) for k in ("length", "width", "height", "wall", "floor",
                                                "radius", "lid", "lip", "clearance")}
+        screws = str(options.get("screws", "") or "")
         bb = doc.model_bbox()
         bx, by, _bz = self.settings.bed_size
         gap = 10.0                                  # mm of bed between the two parts
@@ -4618,7 +4635,7 @@ class MainWindow(QMainWindow):
 
         def work(report):
             report(0.1, tr("Building the project box…"))
-            base, lid = enclosure.project_box(**size)
+            base, lid = enclosure.project_box(**size, screws=screws)
             for m in (base, lid):
                 if m.status() != mf.Error.NoError or m.is_empty():
                     raise ValueError(tr("the result is not a valid volume"))

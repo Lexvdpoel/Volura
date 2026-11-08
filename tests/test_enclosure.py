@@ -17,6 +17,10 @@ rectangle (`L × W − (4 − π) × r²`), let the lid slide into the base, che
 and the place in the interface (Print Tools next to the spur gear, both parts in one undo
 step, 10 mm apart on the bed, and the dialog that remembers its values).
 
+With a screw size the base also gets a post in every inside corner with a blind pilot hole
+and the lid a clearance hole above it; the lip makes room for the posts, so the lid still
+slides down without touching them.
+
 Run with:  python -m pytest tests/test_enclosure.py
 """
 import math
@@ -31,7 +35,8 @@ import manifold3d as mf  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 from PySide6.QtCore import QCoreApplication  # noqa: E402
-from PySide6.QtWidgets import QApplication, QDialog, QDoubleSpinBox  # noqa: E402
+from PySide6.QtWidgets import (QApplication, QComboBox, QDialog,  # noqa: E402
+                               QDoubleSpinBox)
 
 import volura.app as app_module  # noqa: E402
 from volura import enclosure  # noqa: E402
@@ -206,6 +211,66 @@ def test_impossible_boxes_raise(kw, wrong):
         enclosure.project_box(**box(**kw))
 
 
+# ------------------------------------------------------------------ screw posts
+
+def screw_volume(size, **kw):
+    """The plastic the four posts add to the base, with the pilot holes taken out again."""
+    o = box(**kw)
+    nominal = float(size[1:])
+    post = enclosure.POST_OVER_SCREW * nominal
+    pilot = enclosure.PILOT_OVER_SCREW * nominal
+    h = o["height"] - o["lip"]
+    return 4.0 * (math.pi * (0.5 * post) ** 2 * h
+                  - math.pi * (0.5 * pilot) ** 2 * (h - enclosure.POST_FLOOR))
+
+
+def test_without_a_screw_size_the_box_is_the_plain_one():
+    plain = enclosure.project_box(**BOX)
+    for off in (None, ""):
+        base, lid = enclosure.project_box(**BOX, screws=off)
+        assert base.volume() == plain[0].volume()
+        assert lid.volume() == plain[1].volume()
+
+
+def test_the_posts_stand_in_the_inside_corners():
+    plain = enclosure.project_box(**BOX)[0]
+    base = enclosure.project_box(**BOX, screws="M3")[0]
+    assert base.volume() - plain.volume() == pytest.approx(screw_volume("M3"), rel=0.15)
+    assert base.status() == mf.Error.NoError and base.genus() == 0
+
+
+def test_the_lid_has_a_hole_above_every_post():
+    base, lid = enclosure.project_box(**BOX, screws="M3")
+    assert lid.status() == mf.Error.NoError
+    assert lid.genus() == 4, "a clearance hole through the plate for every post"
+    assert (base ^ fitted(lid, BOX)).volume() < 1e-6, "the lip of the lid runs into a post"
+
+
+def test_the_pilot_hole_stops_short_of_the_floor():
+    o = box()
+    base = enclosure.project_box(**o, screws="M3")[0]
+    floor = base.slice(0.5 * o["floor"])
+    assert floor.area() == pytest.approx(rounded_area(o["length"] + 2 * o["wall"],
+                                                      o["width"] + 2 * o["wall"],
+                                                      o["radius"]), rel=REL), \
+        "the pilot hole goes through the bottom"
+    wall = (rounded_area(o["length"] + 2 * o["wall"], o["width"] + 2 * o["wall"], o["radius"])
+            - rounded_area(o["length"], o["width"], max(0.0, o["radius"] - o["wall"])))
+    post = 0.5 * enclosure.POST_OVER_SCREW * 3.0
+    pilot = 0.5 * enclosure.PILOT_OVER_SCREW * 3.0
+    above = base.slice(o["floor"] + enclosure.POST_FLOOR + 0.5)
+    assert above.area() == pytest.approx(wall + 4.0 * math.pi * (post * post - pilot * pilot),
+                                         rel=REL), "the posts have no pilot hole"
+
+
+@pytest.mark.parametrize("kw, screws, wrong", (
+    ({"width": 15.0}, "M4", "posts"), ({"length": 12.0, "width": 12.0}, "M3", "posts"),
+    ({}, "M9", "screw size")))
+def test_posts_that_cannot_be_built_are_refused(kw, screws, wrong):
+    with pytest.raises(ValueError, match=wrong):
+        enclosure.project_box(**box(**kw), screws=screws)
+
+
 # ------------------------------------------------------------------ in the window
 
 def test_the_box_and_the_lid_are_two_parts_in_one_undo_step(win):
@@ -278,6 +343,26 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
     assert (s.box3d_length, s.box3d_width, s.box3d_wall) == (pytest.approx(100.0),
                                                              pytest.approx(45.0),
                                                              pytest.approx(3.0))
+
+
+def test_the_dialog_starts_at_the_last_screws_and_remembers_the_new_ones(win, monkeypatch):
+    seen = {}
+
+    def fill(dlg):
+        cb = dlg.findChild(QComboBox)
+        seen["start"] = cb.currentData()
+        cb.setCurrentIndex(cb.findData("M3"))
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", fill)
+    win.settings.box3d_screws = "M2"
+    win.project_box_dialog()
+    assert seen["start"] == "M2", "the dialog did not start at the last screw size"
+    assert pump_until(lambda: len(win.doc.groups) == 2), "no box in the model"
+    lid = win.doc.groups[1].ents.to_manifold()
+    assert lid.genus() == 4, "the screw size did not reach the box"
+    assert win.settings.box3d_screws == "M3"
+    assert app_module.Settings().box3d_screws == "M3"
 
 
 def test_the_clearance_starts_at_the_one_of_the_screw_holes():
