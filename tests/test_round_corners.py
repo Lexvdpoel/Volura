@@ -84,9 +84,10 @@ def zigzag(count=200, r_out=40.0, r_in=25.0) -> np.ndarray:
 
 
 def digest(q) -> str:
-    """The fingerprint of a contour: its shape and every point rounded to a nanometre."""
+    """The fingerprint of a contour: its shape and every point rounded to a micrometre (
+    the last digits differ between platforms; + 0.0 turns -0.0 into 0.0)."""
     q = np.ascontiguousarray(np.asarray(q, dtype=float).reshape(-1, 2), dtype=float)
-    return hashlib.sha256(np.round(q, 9).tobytes() + str(q.shape).encode()).hexdigest()[:16]
+    return hashlib.sha256((np.round(q, 6) + 0.0).tobytes() + str(q.shape).encode()).hexdigest()[:16]
 
 
 # ------------------------------------------------------------------ the function
@@ -178,12 +179,12 @@ OPEN = np.array([[0.0, 0.0], [30.0, 0.0], [30.0, 20.0], [60.0, 20.0], [60.0, 45.
 #: the fingerprint of the rounded contour for a few contours; a rewrite of the arithmetic
 #: may not move a single point, so a corner that comes out elsewhere fails here
 PINNED = [
-    ("rectangle", RECT, dict(radius=R), "bb64bd334ff06ec2"),
-    ("L-shape", L, dict(radius=R), "44eecc720ae52332"),
+    ("rectangle", RECT, dict(radius=R), "0909296e0028c825"),
+    ("L-shape", L, dict(radius=R), "e7ada0af48e043dd"),
     ("circle-64", circle_loop((0.0, 0.0), 20.0, segments=64), dict(radius=2.0),
-     "ba5ae35ec447b528"),
-    ("star-200", zigzag(), dict(radius=3.0), "613d643f93297654"),
-    ("open-polyline", OPEN, dict(radius=4.0, closed=False), "4f0a00231b763d2f"),
+     "41671a2d1f1c66d8"),
+    ("star-200", zigzag(), dict(radius=3.0), "e6bd27e3a2691d72"),
+    ("open-polyline", OPEN, dict(radius=4.0, closed=False), "c13827d18d0c3ab0"),
 ]
 
 

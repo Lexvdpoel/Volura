@@ -67,9 +67,10 @@ def zigzag(count=200, r_out=40.0, r_in=25.0) -> np.ndarray:
 
 
 def digest(q) -> str:
-    """The fingerprint of a contour: its shape and every point rounded to a nanometre."""
+    """The fingerprint of a contour: its shape and every point rounded to a micrometre (
+    the last digits differ between platforms; + 0.0 turns -0.0 into 0.0)."""
     q = np.ascontiguousarray(np.asarray(q, dtype=float).reshape(-1, 2), dtype=float)
-    return hashlib.sha256(np.round(q, 9).tobytes() + str(q.shape).encode()).hexdigest()[:16]
+    return hashlib.sha256((np.round(q, 6) + 0.0).tobytes() + str(q.shape).encode()).hexdigest()[:16]
 
 
 # ------------------------------------------------------------------ the function
@@ -151,12 +152,12 @@ def test_a_repeated_closing_point_gives_the_same_contour():
 #: the fingerprint of the relieved contour for a few contours; a rewrite of the arithmetic
 #: may not move a single point, so a relief that comes out elsewhere fails here
 PINNED = [
-    ("hole-rectangle", RECT, dict(material_inside=False), "796638ad66831c21"),
+    ("hole-rectangle", RECT, dict(material_inside=False), "b3a0f9815dc28494"),
     ("hole-rectangle-backwards", RECT[::-1].copy(), dict(material_inside=False),
-     "fd4cf382ef20aeb3"),
-    ("L-part", L, dict(material_inside=True), "3640d5a69e6762f7"),
-    ("star-200", zigzag(), dict(material_inside=True), "9e3259cbecae701c"),
-    ("star-200-as-a-slot", zigzag(), dict(material_inside=False), "e50dde9dc3cc35ea"),
+     "edfed4619dbdde7e"),
+    ("L-part", L, dict(material_inside=True), "b26895d90cd83125"),
+    ("star-200", zigzag(), dict(material_inside=True), "a10691293bd1491d"),
+    ("star-200-as-a-slot", zigzag(), dict(material_inside=False), "5e825d3838906101"),
 ]
 
 
