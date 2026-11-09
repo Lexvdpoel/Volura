@@ -3,6 +3,13 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.28 — 2026-11-09
+
+### Fixed
+- The Linux download of 0.2.27 was missing: two tests compared contours to the last digit,
+  and those digits differ between Windows and Linux. The tests now compare at a micrometre;
+  the program itself is the same as 0.2.27.
+
 ## 0.2.27 — 2026-11-09
 
 ### New
