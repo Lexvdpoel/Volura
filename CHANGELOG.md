@@ -3,6 +3,21 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.29 — 2026-11-09
+
+### New
+- **Cable Clip** (Tools > Print Tools > Cable Clip…): a printable clip that holds a cable
+  or a bundle against a wall or a desk. The cable snaps in through a mouth narrower than
+  the cable, and the foot has a hole for a screw; a whole row prints in one go, lying on
+  its side so it needs no support.
+
+### Improved
+- **Project Box** can have vent slots: up to twenty vertical slots through each long wall,
+  below the lip of the lid and clear of the screw posts.
+
+### Website
+- The manual describes the cable clip and the vent slots.
+
 ## 0.2.28 — 2026-11-09
 
 ### Fixed
