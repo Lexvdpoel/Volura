@@ -87,6 +87,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Label Plate** (Tools > Print Tools): a printable tag for a drawer, a box or a keyring:
   up to four lines of text, raised on the plate or engraved into it, on a plate with rounded
   corners and, if you like, a hole for a ring or a screw
+- **Cable Clip** (Tools > Print Tools): a printable clip that keeps a cable, a hose or a bundle
+  where it belongs: a ring of the cable diameter with a mouth narrower than the cable, so you push
+  the cable in and it stays, on a foot you screw to a wall or under a desk. The clip prints lying
+  on its side, so the ring needs no support. Up to twelve clips print in one row that you break
+  apart afterwards, on the bed to the right of your model as one undo step
 - **Elephant Foot Chamfer** (Tools > Print Tools): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

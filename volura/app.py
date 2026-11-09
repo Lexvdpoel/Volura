@@ -26,9 +26,10 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
                                QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
-from . import (__version__, background, boxgen, cam, dxf, enclosure, errors, fileio, gcode,
-                gears, i18n, joints, knob, label_plate, nesting, ops, sheet3d, sheettools, svg,
-                 spacemouse, standoff, theme, threads, vector_export, vector_import, workers)
+from . import (__version__, background, boxgen, cable_clip, cam, dxf, enclosure, errors, fileio,
+                 gcode, gears, i18n, joints, knob, label_plate, nesting, ops, sheet3d,
+                 sheettools, svg, spacemouse, standoff, theme, threads, vector_export,
+                 vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -560,6 +561,42 @@ class Settings:
             self.label_hole = 0.0
         self.label_hole = max(0.0, min(label_plate.HOLE_MAX, self.label_hole))
         try:
+            self.clip_cable_d = float(self.q.value("clip_cable_d", 6.0))
+        except (TypeError, ValueError):
+            self.clip_cable_d = 6.0
+        self.clip_cable_d = max(cable_clip.CABLE_MIN,
+                                min(cable_clip.CABLE_MAX, self.clip_cable_d))
+        try:
+            self.clip_width = float(self.q.value("clip_width", 8.0))
+        except (TypeError, ValueError):
+            self.clip_width = 8.0
+        self.clip_width = max(cable_clip.WIDTH_MIN,
+                              min(cable_clip.WIDTH_MAX, self.clip_width))
+        try:
+            self.clip_wall = float(self.q.value("clip_wall", 1.6))
+        except (TypeError, ValueError):
+            self.clip_wall = 1.6
+        self.clip_wall = max(cable_clip.WALL_MIN, min(cable_clip.WALL_MAX, self.clip_wall))
+        try:
+            self.clip_opening = float(self.q.value("clip_opening", 0.8))
+        except (TypeError, ValueError):
+            self.clip_opening = 0.8
+        self.clip_opening = max(cable_clip.OPENING_MIN,
+                                min(cable_clip.OPENING_MAX, self.clip_opening))
+        try:
+            self.clip_base = float(self.q.value("clip_base", 3.0))
+        except (TypeError, ValueError):
+            self.clip_base = 3.0
+        self.clip_base = max(cable_clip.BASE_MIN, min(cable_clip.BASE_MAX, self.clip_base))
+        self.clip_bore = str(self.q.value("clip_bore", "M3"))
+        if self.clip_bore not in threads.SCREW_HOLES:
+            self.clip_bore = "M3"
+        try:
+            self.clip_count = int(float(self.q.value("clip_count", 1)))
+        except (TypeError, ValueError):
+            self.clip_count = 1
+        self.clip_count = max(cable_clip.COUNT_MIN, min(cable_clip.COUNT_MAX, self.clip_count))
+        try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
             self.tab_count = 4
@@ -682,6 +719,13 @@ class Settings:
         self.q.setValue("label_margin", self.label_margin)
         self.q.setValue("label_radius", self.label_radius)
         self.q.setValue("label_hole", self.label_hole)
+        self.q.setValue("clip_cable_d", self.clip_cable_d)
+        self.q.setValue("clip_width", self.clip_width)
+        self.q.setValue("clip_wall", self.clip_wall)
+        self.q.setValue("clip_opening", self.clip_opening)
+        self.q.setValue("clip_base", self.clip_base)
+        self.q.setValue("clip_bore", self.clip_bore)
+        self.q.setValue("clip_count", self.clip_count)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
@@ -2885,6 +2929,79 @@ class LabelPlateDialog(QDialog):
                 "hole": round(self.hole.value(), 6)}
 
 
+class CableClipDialog(QDialog):
+    """The "Cable Clip…" dialog: a printable clip that holds a cable against a wall or a desk.
+
+    A clip is made for one cable, so the dialog starts with what it has to hold: the diameter of
+    the cable or the bundle. The width is how high the clip stands, since it prints lying on its
+    side, and the wall is the ring that springs back behind the cable. The opening is the mouth as
+    a percentage of the cable: smaller than the cable, or the cable falls out, and wide enough to
+    snap the cable in without tearing the ring. The foot is the tab that is screwed to the wall and
+    the size is the screw that goes through it. The count puts that many clips in a row, so a run
+    along a desk prints in one go. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Cable clip"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.cable_d = spin(cable_clip.CABLE_MIN, cable_clip.CABLE_MAX, s.clip_cable_d)
+        self.cable_d.setToolTip(tr("Across the cable or the bundle the clip has to hold"))
+        self.width = spin(cable_clip.WIDTH_MIN, cable_clip.WIDTH_MAX, s.clip_width)
+        self.width.setToolTip(tr("How high the clip stands, which is how wide it is: the cable "
+                                 "runs through it like a sleeve"))
+        self.wall = spin(cable_clip.WALL_MIN, cable_clip.WALL_MAX, s.clip_wall, 0.2)
+        self.wall.setToolTip(tr("The ring around the cable, which springs back behind it"))
+        self.opening = spin(100.0 * cable_clip.OPENING_MIN, 100.0 * cable_clip.OPENING_MAX,
+                            100.0 * s.clip_opening, 1.0)
+        self.opening.setDecimals(0)
+        self.opening.setSuffix(" %")
+        self.opening.setToolTip(tr("The mouth as a part of the cable: less than 100 % holds the "
+                                   "cable, more lets it fall out"))
+        self.base = spin(cable_clip.BASE_MIN, cable_clip.BASE_MAX, s.clip_base)
+        self.base.setToolTip(tr("How thick the foot is that the screw goes through"))
+        self.size = QComboBox()
+        for size in sorted(threads.SCREW_HOLES, key=lambda m: float(m[1:])):
+            self.size.addItem(size, size)
+        self.size.setCurrentIndex(max(0, self.size.findData(s.clip_bore)))
+        self.size.setToolTip(tr("The screw that fixes the clip to the wall or the desk"))
+        self.count = QSpinBox()
+        self.count.setRange(cable_clip.COUNT_MIN, cable_clip.COUNT_MAX)
+        self.count.setValue(s.clip_count)
+        self.count.setToolTip(tr("How many clips in a row, so a run of them prints in one go"))
+        lay.addRow(tr("Cable diameter"), self.cable_d)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Opening"), self.opening)
+        lay.addRow(tr("Base"), self.base)
+        lay.addRow(tr("Size"), self.size)
+        lay.addRow(tr("Count"), self.count)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"cable_d": round(self.cable_d.value(), 6),
+                "width": round(self.width.value(), 6),
+                "wall": round(self.wall.value(), 6),
+                "opening": round(self.opening.value() / 100.0, 6),
+                "base": round(self.base.value(), 6),
+                "bore": str(self.size.currentData()),
+                "count": int(self.count.value())}
+
+
 class HoldingTabsDialog(QDialog):
     """The "Holding Tabs…" dialog: the small bridges that keep a part in the sheet.
 
@@ -4383,6 +4500,13 @@ class MainWindow(QMainWindow):
                                False,
                                tr("Add a printable name tag or drawer label to the model: your "
                                   "text raised or engraved on a plate, with a hole to hang it up"))
+        # ---- cable clip
+        self.a_cable_clip = A(tr("Cable Clip…"),
+                              lambda checked=False: self.cable_clip_dialog(), None, None,
+                              False,
+                              tr("Add printable cable clips to the model: a ring that snaps "
+                                 "round a cable and a foot to screw against a wall or under a "
+                                 "desk"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, None,
@@ -4492,8 +4616,8 @@ class MainWindow(QMainWindow):
                                            self.a_screw_hole, self.a_clearance_test,
                                            self.a_overhang_test,
                                            self.a_spur_gear_3d, self.a_project_box,
-                                            self.a_knob, self.a_standoff, self.a_label_plate,
-                                            None,
+                                             self.a_knob, self.a_standoff, self.a_label_plate,
+                                             self.a_cable_clip, None,
                                           self.a_cutplane, self.a_cut_join, None,
                                           self.a_fillet, self.a_chamfer, self.a_elephant,
                                           self.a_mouse_ears, self.a_orient_print))
@@ -5387,6 +5511,66 @@ class MainWindow(QMainWindow):
             self.view.set_status(tr("Label plate failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the label plate…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ cable clip
+    def cable_clip_dialog(self):
+        """Tools > Print Tools > Cable Clip…: a clip that holds a cable against a wall or a desk."""
+        dlg = CableClipDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.clip_cable_d = float(options["cable_d"])
+        self.settings.clip_width = float(options["width"])
+        self.settings.clip_wall = float(options["wall"])
+        self.settings.clip_opening = float(options["opening"])
+        self.settings.clip_base = float(options["base"])
+        self.settings.clip_bore = str(options["bore"])
+        self.settings.clip_count = int(options["count"])
+        self.settings.save()
+        made = self.make_cable_clip_model(options)
+        self.setFocus()
+        return made
+
+    def make_cable_clip_model(self, options):
+        """The cable clips as printed parts: one undo step, on the bed next to the model.
+
+        A row is up to twelve clips and the mouth and the screw hole are booleans, so the row is
+        built in the background, like the standoffs, and the window keeps responding. It stands on
+        the bed in the middle of the free bed, or on the free place 10 mm to the right of what is
+        already in the model, so a second row does not land in the first one.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("cable_d", "width", "wall", "opening", "base", "bore",
+                                        "count")}
+        cable_d, n = float(options["cable_d"]), int(options["count"])
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the cable clips…"))
+            m = cable_clip.cable_clip(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the clips away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Cable clip"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("{n} cable clips for {d} mm cable added.")
+                                 .format(n=n, d=f"{cable_d:g}"))
+
+        def failed(exc):
+            self.view.set_status(tr("Cable clip failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the cable clips…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ holding tabs
