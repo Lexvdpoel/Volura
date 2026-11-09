@@ -112,8 +112,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Model Info** (Window) with the pages Units (length rounding and the number of decimals of the
   Measurements box), Statistics (groups, loose edges and faces, total volume) and Print Bed
 - **Filament** (3D Printing > Printer Setup > Print Bed): the material (PLA, PETG, ABS, ASA, TPU, Nylon
-  or a custom density), the diameter (1.75 or 2.85 mm) and the price per kg; **Entity Info** then
-  shows the weight, length and cost of a selected part as a solid print (with infill it is less).
+  or a custom density), the diameter (1.75 or 2.85 mm), the price per kg and what a slicer prints
+  with: walls of 1.2 mm and 15 % infill by default; **Entity Info** then shows the weight, length and
+  cost of a selected part as a print with those walls and that infill, with the weight of a solid
+  print under it.
   Select several groups and Entity Info also shows the totals of the whole job: the volume,
   weight, filament length and cost of all the closed parts together
 - **Preferences** (Window) with circle segments and a Shortcuts page like in SketchUp: search,

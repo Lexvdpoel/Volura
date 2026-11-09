@@ -1204,6 +1204,20 @@ def filament_use(volume_mm3, density_g_cm3, diameter_mm, price_per_kg):
     return grams, length_mm / 1000.0, grams / 1000.0 * price_per_kg
 
 
+def print_volume(volume_mm3, area_mm2, shell=1.2, infill=0.15):
+    """mm³ of plastic a slicer lays down for a part of `volume_mm3` mm³ and `area_mm2` mm².
+
+    A slicer prints a skin of `shell` mm under the whole surface and fills what is left
+    inside with `infill` of sparse infill, so the skin is at most the volume itself and
+    the infill only a fraction of the rest. A part thinner than twice the skin, or
+    `infill` 1.0, uses the solid volume. An estimate like a slicer's own, without
+    supports or a top surface that is thicker than the walls."""
+    shell = max(0.0, shell)
+    infill = min(1.0, max(0.0, infill))
+    skin = min(volume_mm3, area_mm2 * shell)
+    return skin + infill * max(0.0, volume_mm3 - skin)
+
+
 # Triangulating a group in a worker only pays once it is big enough to beat the
 # cost of pickling its loops over and the triangles back. Measured on the
 # benchmark model (24 groups, 16k faces) ops.parts falls from ~2.0 s to ~0.7 s

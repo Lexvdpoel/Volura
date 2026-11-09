@@ -246,6 +246,16 @@ class Settings:
             self.filament_price = 20.0
         self.filament_price = max(0.0, min(100000.0, self.filament_price))
         try:
+            self.print_shell = float(self.q.value("print_shell", 1.2))
+        except (TypeError, ValueError):
+            self.print_shell = 1.2
+        self.print_shell = max(0.0, min(5.0, self.print_shell))
+        try:
+            self.print_infill = int(self.q.value("print_infill", 15))
+        except (TypeError, ValueError):
+            self.print_infill = 15
+        self.print_infill = max(0, min(100, self.print_infill))
+        try:
             self.elephant_foot_size = float(self.q.value("elephant_foot_size",
                                                          ops.ELEPHANT_FOOT_SIZE))
         except (TypeError, ValueError):
@@ -653,6 +663,8 @@ class Settings:
         self.q.setValue("filament_density", self.filament_density)
         self.q.setValue("filament_diameter", self.filament_diameter)
         self.q.setValue("filament_price", self.filament_price)
+        self.q.setValue("print_shell", self.print_shell)
+        self.q.setValue("print_infill", self.print_infill)
         self.q.setValue("elephant_foot_size", self.elephant_foot_size)
         self.q.setValue("mouse_ear_diameter", self.mouse_ear_diameter)
         self.q.setValue("mouse_ear_height", self.mouse_ear_height)
@@ -1096,7 +1108,7 @@ class EntityInfoPanel(QWidget):
         if problem is None:
             form.addRow(tr("Volume"), QLabel(f"{vol / 1000:.3f} cm³"))
             form.addRow(tr("Surface"), QLabel(f"{area / 100:.2f} cm²"))
-            self._filament_rows(form, vol)
+            self._filament_rows(form, [(vol, area)])
             ok = QLabel(tr("✔ closed volume (solid)"))
             ok.setStyleSheet(f"color: {theme.color('ok')}; font-weight: bold;")
         else:
@@ -1105,13 +1117,25 @@ class EntityInfoPanel(QWidget):
             ok.setWordWrap(True)
         form.addRow(tr("Printable"), ok)
 
-    def _filament_rows(self, form, vol):
-        """The weight and the filament a solid print of `vol` mm³ takes with these settings."""
+    def _filament_rows(self, form, parts):
+        """The weight and the filament a print of ``[(volume, area)]`` parts takes here.
+
+        The rows show what a slicer lays down with the walls and the infill of the
+        Printer Setup page; every part gets its own skin. The weight of a solid print
+        stays under it, small, because that is the most these parts can use."""
         s = self.win.settings
-        grams, metres, cost = ops.filament_use(vol, s.filament_density,
+        vol = sum(v for v, _ in parts)
+        print_vol = sum(ops.print_volume(v, a, s.print_shell, s.print_infill / 100.0)
+                        for v, a in parts)
+        solid = ops.filament_use(vol, s.filament_density, s.filament_diameter, s.filament_price)
+        grams, metres, cost = ops.filament_use(print_vol, s.filament_density,
                                                s.filament_diameter, s.filament_price)
-        form.addRow(tr("Weight"),
-                    QLabel(f"≈ {grams:.1f} g ({tr(s.filament_material)}, {tr('solid')})"))
+        weight = QLabel(f"≈ {grams:.1f} g ({tr(s.filament_material)}, "
+                        f"{tr('{n} % infill').format(n=s.print_infill)})"
+                        f"<br><span style='font-size: small; color:{theme.color('muted')}'>"
+                        f"{tr('solid')}: {solid[0]:.1f} g</span>")
+        weight.setTextFormat(Qt.RichText)
+        form.addRow(tr("Weight"), weight)
         form.addRow(tr("Filament"), QLabel(f"≈ {metres:.2f} m · {cost:.2f}"))
 
     def _totals_form(self, form, groups):
@@ -1126,7 +1150,7 @@ class EntityInfoPanel(QWidget):
         vol = sum(s[0] for s in closed)
         form.addRow(tr("Total volume"), QLabel(f"{vol / 1000:.3f} cm³"))
         if closed:
-            self._filament_rows(form, vol)
+            self._filament_rows(form, [(s[0], s[1]) for s in closed])
         if skipped:
             text = (tr("{n} part is not closed") if skipped == 1
                     else tr("{n} parts are not closed"))
@@ -3549,6 +3573,18 @@ class ModelInfoDialog(PageDialog):
         self.filament_price.setRange(0.0, 100000.0)
         self.filament_price.setDecimals(2)
         self.filament_price.setSuffix(" " + tr("per kg"))
+        self.print_shell = QDoubleSpinBox()
+        self.print_shell.setRange(0.0, 5.0)
+        self.print_shell.setDecimals(2)
+        self.print_shell.setSingleStep(0.2)
+        self.print_shell.setSuffix(" mm")
+        self.print_shell.setToolTip(tr("Thickness of the walls and of the top and bottom "
+                                       "of a print, as your slicer prints them."))
+        self.print_infill = QSpinBox()
+        self.print_infill.setRange(0, 100)
+        self.print_infill.setSuffix(" %")
+        self.print_infill.setToolTip(tr("How much of the inside of a print is filled; the "
+                                        "rest is empty space."))
         s = self.win.settings
         self.filament.setCurrentIndex(max(
             (i for i in range(self.filament.count())
@@ -3557,6 +3593,8 @@ class ModelInfoDialog(PageDialog):
         self.filament_density.setValue(s.filament_density)
         self.filament_diameter.setValue(s.filament_diameter)
         self.filament_price.setValue(s.filament_price)
+        self.print_shell.setValue(s.print_shell)
+        self.print_infill.setValue(s.print_infill)
 
         def pick_material(i):
             density = self.filament.itemData(i)[1]
@@ -3569,9 +3607,11 @@ class ModelInfoDialog(PageDialog):
         inner.addRow(tr("Density"), self.filament_density)
         inner.addRow(tr("Filament diameter"), self.filament_diameter)
         inner.addRow(tr("Price"), self.filament_price)
+        inner.addRow(tr("Walls and top/bottom"), self.print_shell)
+        inner.addRow(tr("Infill"), self.print_infill)
         form.addRow(box)
-        form.addRow(note(tr("Entity Info shows the weight and cost of a selected part as a "
-                            "solid print; with infill it uses less.")))
+        form.addRow(note(tr("Entity Info shows the weight and cost of a selected part with "
+                            "these walls and this infill; a print that is solid uses the most.")))
         self.add_page(page)
 
     def apply(self):
@@ -3584,6 +3624,8 @@ class ModelInfoDialog(PageDialog):
         s.filament_density = density if density is not None else self.filament_density.value()
         s.filament_diameter = self.filament_diameter.value()
         s.filament_price = self.filament_price.value()
+        s.print_shell = self.print_shell.value()
+        s.print_infill = self.print_infill.value()
         s.save()
         set_length_precision(s.length_precision)
         self.win.view.update()
