@@ -597,65 +597,299 @@ volura</code></pre>
 
     <!-- ===================================================== print -->
     <h2 id="print"><span lang="en">3D printing</span><span lang="nl">3D-printen</span></h2>
-    <img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/menu_3d_printing.png" alt="The 3D Printing menu" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/menu_3d_printing.png" alt="Het menu 3D-printen" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px">
-    <p lang="en"><b>Tools &gt; Arrange on Bed</b> (also in the right-click menu) lays the selected groups, or every group when nothing is selected, side by side on the print bed without overlapping, like a slicer: turned 0, 90, 180 or 270 degrees, 5 mm from the edge and from each other. When the parts do not fit on one bed, nothing moves. One undo puts everything back.</p>
-    <p lang="nl"><b>Gereedschap &gt; Schikken op bed</b> (ook in het rechtsklikmenu) zet de geselecteerde groepen, of alle groepen als er niets geselecteerd is, naast elkaar op het printbed zonder dat ze elkaar raken, zoals een slicer: 0, 90, 180 of 270 graden gedraaid, 5 mm van de rand en van elkaar. Passen de onderdelen niet op één bed, dan verschuift er niets. Eén keer ongedaan maken zet alles terug.</p>
-    <p lang="en">Right-click a group for <b>Drop to Bed</b> (<kbd>Ctrl</kbd>+<kbd>B</kbd>), which puts it on the build plate of your printer, and <b>Center on Bed</b>, which also moves it to the middle of the plate. <b>Flip Along</b> mirrors it along the red, green or blue axis.</p>
-    <p lang="nl">Klik met rechts op een groep voor <b>Op bed plaatsen</b> (<kbd>Ctrl</kbd>+<kbd>B</kbd>), dat hem op het printbed van je printer zet, en <b>Centreren op bed</b>, dat hem ook naar het midden van het bed schuift. <b>Spiegelen langs</b> spiegelt hem langs de rode, groene of blauwe as.</p>
-    <p lang="en">Right-click a face of a group (also a face you selected while editing the group) for <b>Lay Flat on This Face</b>: the group turns about its own centre, the shortest way round, until that face lies down, and stands on the print bed afterwards, like "place on face" of a slicer. Handy for a part that is easier to print on another side. One undo turns it back.</p>
-    <p lang="nl">Klik met rechts op een vlak van een groep (ook een vlak dat je selecteerde tijdens het bewerken van de groep) voor <b>Plat leggen op dit vlak</b>: de groep draait om zijn eigen midden, de kortste weg, totdat dat vlak plat ligt en daarna op het printbed staat, zoals "place on face" van een slicer. Handig voor een onderdeel dat op een andere kant makkelijker print. Eén keer ongedaan maken draait hem terug.</p>
+    <p lang="en">Everything here is about the printer: the bed and the filament, what a part must satisfy before it prints, and the small test prints that tell you how your own machine behaves.</p>
+    <p lang="nl">Alles hier gaat over de printer: het bed en het filament, waaraan een onderdeel moet voldoen voordat het print, en de kleine testprints die zeggen hoe jouw machine zich gedraagt.</p>
+    <figure class="shots"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/menu_3d_printing.png" alt="The 3D Printing menu" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/menu_3d_printing.png" alt="Het menu 3D-printen" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"></figure>
+    <h3><span lang="en">Printer setup</span><span lang="nl">Printer instellen</span></h3>
+    <p lang="en">Say which printer you print on and what filament you use, so the bed, the print check and the filament numbers are all yours.</p>
+    <p lang="nl">Zeg op welke printer je print en welk filament je gebruikt, zodat het bed, de printcontrole en de filamentnummers van jou zijn.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Printer Setup…</b>, which opens the Print Bed page of Model Info</p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Printer instellen…</b>, dat de pagina Printbed van Modelinfo opent</p>
+    <ul lang="en">
+      <li><b>Printer</b>: Bambu, Prusa, Creality, Voron or a custom size; the preset fills in the bed X, Y and height Z, and you can change them yourself.</li>
+      <li><b>The bed</b> sets the grid of the drawing area and the limits of the print check.</li>
+      <li><b>Material</b>: PLA, PETG, ABS, ASA, TPU, Nylon or your own density.</li>
+      <li><b>Filament diameter</b> and <b>Price</b> per kg, so the costs of a print are in your money.</li>
+      <li><b>Walls and top/bottom</b>: the thickness of the plastic of a print, as your slicer prints it; <b>Infill</b>: how much of the inside is filled, the rest is empty space.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Printer</b>: Bambu, Prusa, Creality, Voron of een eigen maat; de preset vult bed X, Y en hoogte Z in, en die kun je zelf veranderen.</li>
+      <li><b>Het bed</b> bepaalt het raster van het tekenvlak en de grenzen van de printcontrole.</li>
+      <li><b>Materiaal</b>: PLA, PETG, ABS, ASA, TPU, Nylon of een eigen dichtheid.</li>
+      <li><b>Filamentdiameter</b> en <b>Prijs</b> per kg, zodat de kosten van een print in jouw geld zijn.</li>
+      <li><b>Wanden en boven/onder</b>: de dikte van het plastic van een print, zoals je slicer hem print; <b>Vulling</b>: hoeveel van de binnenkant is gevuld, de rest is lege ruimte.</li>
+    </ul>
+    <p class="note" lang="en"><b>Entity Info</b> shows the weight and the cost of a selected part with these walls and this infill; a print that is solid uses the most.</p>
+    <p class="note" lang="nl"><b>Entiteitsinfo</b> toont het gewicht en de kosten van een geselecteerd onderdeel met deze wanden en deze vulling; een print die massief is, gebruikt het meest.</p>
     <h3><span lang="en">Print check</span><span lang="nl">Printcontrole</span></h3>
-    <img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/overhangs.png" alt="The overhang view marks the faces that need support" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/overhangs.png" alt="De overhangweergave markeert de vlakken die support nodig hebben" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px">
-    <p lang="en"><b>3D Printing &gt; Print Check</b> (<kbd>F5</kbd>, and the Print Check panel in the Default Tray) lists every part and why it is or isn't a valid solid: holes, open edges, double faces or loose geometry. Click a problem to see it in the model, and let Volura repair it. It also counts the support: a part that hangs over more steeply than the overhang limit gets a line with the cm² a printer has to support, and the advice to use <b>Orient for Printing</b> when turning it clearly makes less of that.</p>
-    <p lang="nl"><b>3D-printen &gt; Printcontrole</b> (<kbd>F5</kbd>, en het paneel in het standaardvenster) toont per onderdeel waarom het wel of geen geldig volume is: gaten, open randen, dubbele vlakken of losse geometrie. Klik op een probleem om het in het model te zien, en laat Volura het repareren. Het telt ook de support: een onderdeel dat steiler dan de overhanggrens overhangt, krijgt een regel met het aantal cm² dat support nodig heeft en het advies <b>Oriënteren voor printen</b> te gebruiken als draaien dat duidelijk minder maakt.</p>
+    <p lang="en">Lists every part and why it is or is not a volume you can print, before the job goes to the machine.</p>
+    <p lang="nl">Toont per onderdeel waarom het wel of geen volume is dat je kunt printen, voordat de klus naar de machine gaat.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Print Check</b> (<kbd>F5</kbd>), and the Print Check panel in the Default Tray</p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Printcontrole</b> (<kbd>F5</kbd>), en het paneel Printcontrole in het Standaardvenster</p>
+    <ul lang="en">
+      <li>Holes, open edges, double faces and loose geometry are named per part.</li>
+      <li>Click a problem to see it in the model, and let Volura repair it.</li>
+      <li>It also counts the support: a part that hangs over more steeply than the overhang limit gets a line with the cm² a printer has to support.</li>
+      <li>When turning the part clearly makes less of that, the line advises <b>Orient for Printing</b>.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Gaten, open randen, dubbele vlakken en losse geometrie worden per onderdeel genoemd.</li>
+      <li>Klik op een probleem om het in het model te zien, en laat Volura het repareren.</li>
+      <li>Het telt ook de support: een onderdeel dat steiler dan de overhanggrens overhangt, krijgt een regel met het aantal cm² dat een printer moet ondersteunen.</li>
+      <li>Maakt draaien dat duidelijk minder, dan adviseert die regel <b>Oriënteren voor printen</b>.</li>
+    </ul>
     <h3 id="filament"><span lang="en">Filament use</span><span lang="nl">Filamentverbruik</span></h3>
-    <p lang="en">Select a closed group and <b>Entity Info</b> shows, under its volume, the weight, length and cost of the filament a slicer uses for it: walls over the whole part and sparse infill inside, with the weight of a solid print underneath. Choose the material (PLA, PETG, ABS, ASA, TPU, Nylon or your own density), the filament diameter, the price per kg and the walls and infill under <b>3D Printing &gt; Printer Setup…</b>, on the Print Bed page.</p>
-    <p lang="nl">Selecteer een gesloten groep en <b>Entiteitsinfo</b> toont onder het volume het gewicht, de lengte en de kosten van het filament dat een slicer ervoor gebruikt: wanden over het hele onderdeel en een dunne vulling binnenin, met het gewicht van een massieve print eronder. Kies het materiaal (PLA, PETG, ABS, ASA, TPU, Nylon of een eigen dichtheid), de filamentdiameter, de prijs per kg en de wanden en vulling onder <b>3D-printen &gt; Printer instellen…</b>, op de pagina Printbed.</p>
-    <p lang="en">Select several groups and <b>Entity Info</b> shows the totals of the whole print job: the volume, weight, filament length and cost of all the closed parts together; the parts that are not closed are counted separately.</p>
-    <p lang="nl">Selecteer meerdere groepen en <b>Entiteitsinfo</b> toont de totalen van de hele printklus: het volume, het gewicht, de filamentlengte en de kosten van alle gesloten onderdelen samen; de onderdelen die niet gesloten zijn, staan apart.</p>
-    <h3 id="overhangs"><span lang="en">Overhangs</span><span lang="nl">Overhang</span></h3>
-    <p lang="en"><b>View &gt; Face Style &gt; Overhangs</b> colours every face that hangs over too far to print without support, and the status bar counts them. The limit is 45° from the vertical; change it under <b>Window &gt; Preferences &gt; Drawing</b>. Faces that lie on the print bed (the lowest point of the model) are never marked.</p>
-    <p lang="nl"><b>Beeld &gt; Vlakstijl &gt; Overhang</b> kleurt elk vlak dat te ver overhangt om zonder support te printen, en de statusbalk telt ze. De grens is 45° vanaf de verticaal; wijzig die onder <b>Venster &gt; Voorkeuren &gt; Tekenen</b>. Vlakken die op het printbed liggen (het laagste punt van het model) worden nooit gemarkeerd.</p>
-    <h3><span lang="en">Clearance test</span><span lang="nl">Spelingstest</span></h3>
-    <img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/test_prints.png" alt="The clearance test and the overhang test" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/test_prints.png" alt="De spelingstest en de overhangtest" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px">
-    <p lang="en">A printed hole comes out smaller than you drew it, and how much smaller depends on your printer. <b>3D Printing &gt; Clearance Test…</b> makes a small test print that tells you what to use: a plate with a row of holes that grow by a step from left to right, each with its clearance standing on the plate in raised letters, and a loose pin beside the plate. Print it and try the pin in every hole: the clearance of the hole in which it fits best is the clearance to use in <i>Screw Hole…</i>, in the threads and in <i>Cut and Join</i>. The question asks for the diameter of the pin (5 mm by default), the first clearance, the step and the number of holes, and remembers what you used last. Plate and pin land to the right of your model as one undo step; the pin is a little taller than the plate and has a bevelled top, so it enters every hole by hand.</p>
-    <p lang="nl">Een geprint gat wordt kleiner dan je het tekende, en hoeveel kleiner hangt af van je printer. <b>3D-printen &gt; Spelingstest…</b> maakt een kleine testprint die je vertelt wat je moet gebruiken: een plaat met een rij gaten die met een stap van links naar rechts groter worden, waarvan bij elk gat de speling in verhoogde letters op het plaatje staat, en een losse pen naast de plaat. Print hem en probeer de pen in elk gat: de speling van het gat waarin hij het beste past, is de speling die je gebruikt in <i>Schroefgat…</i>, bij de schroefdraden en in <i>Snijden en verbinden</i>. Je kiest de diameter van de pen (standaard 5 mm), de eerste speling, de stap en het aantal gaten; wat je het laatst invulde wordt onthouden. Plaat en pen komen rechts van je model te staan en zijn samen één stap om ongedaan te maken; de pen is iets hoger dan de plaat en heeft een afgeschuinde kop, zodat hij met de hand in elk gat gaat.</p>
-    <h3><span lang="en">Overhang test</span><span lang="nl">Overhangtest</span></h3>
-    <p lang="en">How far a printer prints an overhang cleanly is different for every machine. <b>3D Printing &gt; Overhang Test…</b> makes a small test print that tells you where your limit lies: a plate with a row of fins that lean further over from left to right, each with its angle standing on the plate in raised letters. Every fin is a post from which a wall leans out, so its underside is an overhang with nothing under it; 0° is a straight wall and 90° a flat bridge. Print it and read the largest angle that still came out clean: that is the overhang to keep under. The question asks for the first angle (30° by default), the step (10°) and the number of fins (6, so 30° up to 80°), and remembers what you used last. The plate lands to the right of your model as one undo step.</p>
-    <p lang="nl">Hoe ver een printer een overhang netjes print, verschilt per machine. <b>3D-printen &gt; Overhangtest…</b> maakt een kleine testprint die je vertelt waar jouw grens ligt: een plaat met een rij vinnen die van links naar rechts steeds verder overhellen, waarvan bij elke vin de hoek in verhoogde letters op het plaatje staat. Elke vin is een zuil waar een wand uit overhelt, zodat zijn onderkant een overhang is met niets eronder; 0° is een rechte wand en 90° een platte brug. Print hem en lees de grootste hoek af die nog netjes lukte: dat is de overhang die je niet overschrijdt. Je kiest de eerste hoek (standaard 30°), de stap (10°) en het aantal vinnen (6, dus 30° tot 80°); wat je het laatst invulde wordt onthouden. Het plaatje komt rechts van je model te staan en is één stap om ongedaan te maken.</p>
-    <h3><span lang="en">Cut and join</span><span lang="nl">Snijden en verbinden</span></h3>
-    <p lang="en">The <b>Cut</b> tool cuts a group on a plane. <b>Cut and Join</b> also adds connections so the halves fit back together: pins, holes for separate pins, or a dovetail, with adjustable size and clearance. Ideal for models that are bigger than your print bed.</p>
-    <p lang="nl">Het gereedschap <b>Snijden</b> knipt een groep op een vlak door. <b>Snijden en verbinden</b> voegt ook verbindingen toe zodat de helften weer in elkaar passen: pennen, gaten voor losse pennen of een zwaluwstaart, met instelbare maat en speling. Ideaal voor modellen die groter zijn dan je printbed.</p>
-    <h3><span lang="en">Elephant foot chamfer</span><span lang="nl">Olifantsvoet-afschuining</span></h3>
-    <p lang="en">The first layer of a print is squashed a little wider than the rest of the part, so it sticks out: an <i>elephant's foot</i>. <b>3D Printing &gt; Elephant Foot Chamfer…</b> puts a small chamfer along the bottom edges of the selected parts, or of all visible parts when nothing is selected, so that squashed layer no longer forms a lip. The question asks for the size, 0.4 mm by default, and remembers what you used last. Parts that stand on a point or on a tilted edge, and parts that are too small for the size, are left alone; one undo brings the bottom back.</p>
-    <p lang="nl">De eerste laag van een print wordt iets breder platgedrukt dan de rest van het onderdeel, waardoor hij uitsteekt: een <i>olifantsvoet</i>. <b>3D-printen &gt; Olifantsvoet-afschuining…</b> zet een kleine afschuining langs de onderkant van de geselecteerde onderdelen, of van alle zichtbare onderdelen als je niets hebt geselecteerd, zodat die platgedrukte laag geen rand meer vormt. Je kiest de maat, standaard 0,4 mm; wat je het laatst invulde wordt onthouden. Onderdelen die op een punt of op een scheve rand staan en onderdelen die te klein zijn voor de maat, blijven zoals ze zijn; één keer ongedaan maken zet de onderkant terug.</p>
-    <h3><span lang="en">Mouse ears</span><span lang="nl">Muizenoren</span></h3>
-    <p lang="en">The corners of a flat part can lift off the bed while printing (<i>warping</i>), most of all with ABS and ASA and on large flat parts. <b>3D Printing &gt; Mouse Ears…</b> puts a thin round disc on the bed under every sharp bottom corner of the selected parts, or of all visible parts when nothing is selected, so those corners stay down. A corner is sharp when its angle is at most 100°, so a box gets a disc under each of its four corners and a cylinder gets none. The question asks for the diameter (10 mm by default) and the height (0.4 mm by default) of the discs, and remembers what you used last. After printing you cut the discs off. Parts that do not stand flat on their bottom, and parts without sharp corners, are left alone; one undo takes the discs away again.</p>
-    <p lang="nl">De hoeken van een plat onderdeel kunnen tijdens het printen van het bed loslaten (<i>kromtrekken</i>), zeker met ABS en ASA en bij grote platte delen. <b>3D-printen &gt; Muizenoren…</b> zet onder elke scherpe hoek aan de onderkant van de geselecteerde onderdelen, of van alle zichtbare onderdelen als je niets hebt geselecteerd, een dunne ronde schijf op het bed, zodat die hoeken naar beneden blijven. Een hoek is scherp als zijn hoek maximaal 100° is, dus een doos krijgt onder elke van zijn vier hoeken een schijf en een cilinder krijgt er geen. Je kiest de diameter (standaard 10 mm) en de hoogte (standaard 0,4 mm) van de schijven; wat je het laatst invulde wordt onthouden. Na het printen knip je de schijven eraf. Onderdelen die niet plat op hun onderkant staan en onderdelen zonder scherpe hoeken blijven zoals ze zijn; één keer ongedaan maken haalt de schijven weer weg.</p>
+    <p lang="en">What a part costs in filament before you print it, so you can compare two designs on plastic instead of on looks.</p>
+    <p lang="nl">Wat een onderdeel aan filament kost voordat je het print, zodat je twee ontwerpen op plastic vergelijkt in plaats van op uiterlijk.</p>
+    <p class="where" lang="en">Where: select one or more groups and look at <b>Entity Info</b>; the numbers stand under <b>3D Printing &gt; Printer Setup…</b>, on the Print Bed page</p>
+    <p class="where" lang="nl">Waar: selecteer één of meer groepen en kijk bij <b>Entiteitsinfo</b>; de getallen staan onder <b>3D-printen &gt; Printer instellen…</b>, op de pagina Printbed</p>
+    <ul lang="en">
+      <li>Under the volume of a closed group: the <b>weight, length and cost</b> of the filament a slicer uses for it.</li>
+      <li>Calculated as walls over the whole part with sparse infill inside, with the weight of a solid print underneath.</li>
+      <li>Several groups give the totals of the whole print job: volume, weight, filament length and cost of all the closed parts together; parts that are not closed are counted separately.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Onder het volume van een gesloten groep: het <b>gewicht, de lengte en de kosten</b> van het filament dat een slicer ervoor gebruikt.</li>
+      <li>Berekend als wanden over het hele onderdeel met een dunne vulling binnenin, met het gewicht van een massieve print eronder.</li>
+      <li>Meerdere groepen geven de totalen van de hele printklus: volume, gewicht, filamentlengte en kosten van alle gesloten onderdelen samen; onderdelen die niet gesloten zijn, staan apart.</li>
+    </ul>
+    <h3 id="overhangs"><span lang="en">Overhang view</span><span lang="nl">Overhangweergave</span></h3>
+    <p lang="en">Colours every face that hangs over too far to print without support, so you see the support before the printer does.</p>
+    <p lang="nl">Kleurt elk vlak dat te ver overhangt om zonder support te printen, zodat je de support ziet vóór de printer.</p>
+    <p class="where" lang="en">Where: <b>View &gt; Face Style &gt; Overhangs</b>; the limit under <b>Window &gt; Preferences &gt; Drawing</b></p>
+    <p class="where" lang="nl">Waar: <b>Beeld &gt; Vlakstijl &gt; Overhang</b>; de grens onder <b>Venster &gt; Voorkeuren &gt; Tekenen</b></p>
+    <ul lang="en">
+      <li>The status bar counts the marked faces.</li>
+      <li>The limit is 45° from the vertical; set it to the angle your own printer reads out of the <a href="#print">overhang test</a>.</li>
+      <li>Faces that lie on the print bed (the lowest point of the model) are never marked.</li>
+    </ul>
+    <ul lang="nl">
+      <li>De statusbalk telt de gemarkeerde vlakken.</li>
+      <li>De grens is 45° vanaf de verticaal; zet hem op de hoek die je eigen printer uit de <a href="#print">overhangtest</a> leest.</li>
+      <li>Vlakken die op het printbed liggen (het laagste punt van het model) worden nooit gemarkeerd.</li>
+    </ul>
+    <figure class="shots"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/overhangs.png" alt="The overhang view marks the faces that need support" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/overhangs.png" alt="De overhangweergave markeert de vlakken die support nodig hebben" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"></figure>
     <h3><span lang="en">Orient for printing</span><span lang="nl">Oriënteren voor printen</span></h3>
-    <p lang="en"><b>3D Printing &gt; Orient for Printing</b> turns the selected parts, or all visible parts when nothing is selected, so that each one stands on the face that needs the least support, like the auto-orient of a slicer. Volura tries the flat sides of the convex hull of every part and stands it on the one with the least overhang, with the limit of <b>View &gt; Face Style &gt; Overhangs</b>; when two ways are equally good, the largest face wins, because that stands the most steadily, and a part that already stands right is only dropped on the bed. Parts that are locked or not closed are left alone, and one undo brings the old places back. Afterwards <b>Arrange on Bed</b> lays the parts side by side; with <b>Lay Flat on This Face</b> you still choose the face yourself.</p>
-    <p lang="nl"><b>3D-printen &gt; Oriënteren voor printen</b> draait de geselecteerde onderdelen, of alle zichtbare onderdelen als je niets hebt geselecteerd, zodat elk op het vlak staat dat de minste support nodig heeft, zoals de auto-orient van een slicer. Volura probeert de platte kanten van de convexe hull van elk onderdeel en zet het op het vlak met de minste overhang, bij de grens van <b>Beeld &gt; Vlakstijl &gt; Overhang</b>; staan twee manieren even goed, dan wint het grootste vlak, want dat staat het stabielst, en een onderdeel dat al goed staat wordt alleen op het bed gezet. Onderdelen die vergrendeld of niet gesloten zijn, blijven zoals ze zijn, en met één keer ongedaan maken staan ze weer waar ze stonden. Daarna zet <b>Schikken op bed</b> de onderdelen naast elkaar; met <b>Plat leggen op dit vlak</b> kies je het vlak zelf.</p>
+    <p lang="en">Turns parts so that each one stands on the face that needs the least support, like the auto-orient of a slicer.</p>
+    <p lang="nl">Draait onderdelen zodat elk op het vlak staat dat de minste support nodig heeft, zoals de auto-orient van een slicer.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Orient for Printing</b>, and <b>Lay Flat on This Face</b> in the right-click menu of a face</p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Oriënteren voor printen</b>, en <b>Plat leggen op dit vlak</b> in het rechtsklikmenu van een vlak</p>
+    <ul lang="en">
+      <li>Works on the selected parts, or on all visible parts when nothing is selected.</li>
+      <li>Volura tries the flat sides of the convex hull of every part and stands it on the one with the least overhang, at the limit of <b>View &gt; Face Style &gt; Overhangs</b>.</li>
+      <li>When two ways are equally good, the largest face wins, because that stands the most steadily.</li>
+      <li>A part that already stands right is only dropped on the bed.</li>
+      <li>With <b>Lay Flat on This Face</b> you choose the face yourself: the group turns about its own centre, the shortest way round, until that face lies down and stands on the print bed, like "place on face" of a slicer.</li>
+      <li>You can also right-click a face you selected while editing the group.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Werkt op de geselecteerde onderdelen, of op alle zichtbare onderdelen als er niets geselecteerd is.</li>
+      <li>Volura probeert de platte kanten van de convexe hull van elk onderdeel en zet het op het vlak met de minste overhang, bij de grens van <b>Beeld &gt; Vlakstijl &gt; Overhang</b>.</li>
+      <li>Staan twee manieren even goed, dan wint het grootste vlak, want dat staat het stabielst.</li>
+      <li>Een onderdeel dat al goed staat, wordt alleen op het bed gezet.</li>
+      <li>Met <b>Plat leggen op dit vlak</b> kies je het vlak zelf: de groep draait om zijn eigen midden, de kortste weg, totdat dat vlak plat ligt en op het printbed staat, zoals "place on face" van een slicer.</li>
+      <li>Je kunt ook rechtsklikken op een vlak dat je selecteerde tijdens het bewerken van de groep.</li>
+    </ul>
+    <p class="note" lang="en">Parts that are locked or not closed are left alone, and one undo brings the old places back. Afterwards <b>Arrange on Bed</b> lays the parts side by side.</p>
+    <p class="note" lang="nl">Onderdelen die vergrendeld of niet gesloten zijn, blijven zoals ze zijn, en met één keer ongedaan maken staan ze weer waar ze stonden. Daarna zet <b>Schikken op bed</b> de onderdelen naast elkaar.</p>
+    <h3><span lang="en">Drop, center and arrange on the bed</span><span lang="nl">Op bed plaatsen, centreren en schikken</span></h3>
+    <p lang="en">Puts the parts where the printer expects them: down on the plate, in the middle, or side by side without overlap.</p>
+    <p lang="nl">Zet de onderdelen waar de printer ze verwacht: naar beneden op het bed, in het midden, of naast elkaar zonder overlap.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Drop to Bed</b> (<kbd>Ctrl</kbd>+<kbd>B</kbd>), <b>Center on Bed</b> and <b>Arrange on Bed</b>, all also in the right-click menu</p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Op bed plaatsen</b> (<kbd>Ctrl</kbd>+<kbd>B</kbd>), <b>Centreren op bed</b> en <b>Schikken op bed</b>, alle drie ook in het rechtsklikmenu</p>
+    <ul lang="en">
+      <li><b>Drop to Bed</b> puts the group on the build plate of your printer; <b>Center on Bed</b> also moves it to the middle of the plate.</li>
+      <li><b>Arrange on Bed</b> lays the selected groups, or every group when nothing is selected, side by side on the bed without overlapping, like a slicer: turned 0, 90, 180 or 270 degrees, 5 mm from the edge and from each other.</li>
+      <li>When the parts do not fit on one bed, nothing moves.</li>
+      <li><b>Flip Along</b> in the same menu mirrors the group along the red, green or blue axis.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Op bed plaatsen</b> zet de groep op het printbed van je printer; <b>Centreren op bed</b> schuift hem ook naar het midden van het bed.</li>
+      <li><b>Schikken op bed</b> zet de geselecteerde groepen, of alle groepen als er niets geselecteerd is, naast elkaar op het bed zonder dat ze elkaar raken, zoals een slicer: 0, 90, 180 of 270 graden gedraaid, 5 mm van de rand en van elkaar.</li>
+      <li>Passen de onderdelen niet op één bed, dan verschuift er niets.</li>
+      <li><b>Spiegelen langs</b> in hetzelfde menu spiegelt de groep langs de rode, groene of blauwe as.</li>
+    </ul>
+    <p class="note" lang="en">One undo puts everything back where it was.</p>
+    <p class="note" lang="nl">Eén keer ongedaan maken zet alles terug waar het was.</p>
+    <h3><span lang="en">Cut</span><span lang="nl">Snijden</span></h3>
+    <p lang="en">Cuts a group through on a plane you place, for a part that is too tall for the bed or that you want to print in two colours.</p>
+    <p lang="nl">Knipt een groep door op een vlak dat je neerzet, voor een onderdeel dat te hoog is voor het bed of dat je in twee kleuren wilt printen.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Cut</b></p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Snijden</b></p>
+    <h3><span lang="en">Cut and join</span><span lang="nl">Snijden en verbinden</span></h3>
+    <p lang="en">Cuts a part in pieces that fit back together, so a model bigger than your print bed still prints as one object.</p>
+    <p lang="nl">Knipt een onderdeel in stukken die weer in elkaar passen, zodat een model groter dan je printbed nog steeds als één object print.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Cut and Join…</b></p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Snijden en verbinden…</b></p>
+    <ul lang="en">
+      <li><b>Pins</b>: a pin in one half goes into a hole in the other.</li>
+      <li><b>Holes for separate pins</b>: both halves get a hole and you press a rod or a dowel in them.</li>
+      <li><b>Dovetail</b>: a row of tails that slide together and cannot come apart sideways.</li>
+      <li>The size of the connection and the clearance are yours; the clearance starts at the one of the screw holes.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Pennen</b>: een pen in de ene helft gaat in een gat in de andere.</li>
+      <li><b>Gaten voor losse pennen</b>: beide helften krijgen een gat en je drukt er een staaf of een houtdraaistift in.</li>
+      <li><b>Zwaluwstaart</b>: een rij verstekken die in elkaar schuiven en zijwaarts niet meer uit elkaar gaan.</li>
+      <li>De maat van de verbinding en de speling zijn van jou; de speling begint bij die van de schroefgaten.</li>
+    </ul>
+    <h3><span lang="en">Elephant foot chamfer</span><span lang="nl">Olifantsvoet-afschuining</span></h3>
+    <p lang="en">The first layer of a print is squashed a little wider than the rest of the part, so it sticks out: an <i>elephant's foot</i>. This takes a chamfer along the bottom edge so that squashed layer no longer forms a lip.</p>
+    <p lang="nl">De eerste laag van een print wordt iets breder platgedrukt dan de rest van het onderdeel, waardoor hij uitsteekt: een <i>olifantsvoet</i>. Dit zet een afschuining langs de onderkant, zodat die platgedrukte laag geen rand meer vormt.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Elephant Foot Chamfer…</b></p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Olifantsvoet-afschuining…</b></p>
+    <ul lang="en">
+      <li>Works on the selected parts, or on all visible parts when nothing is selected.</li>
+      <li>The size is 0.4 mm by default, and what you used last comes back.</li>
+      <li>Parts that stand on a point or on a tilted edge, and parts that are too small for the size, are left alone.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Werkt op de geselecteerde onderdelen, of op alle zichtbare onderdelen als je niets selecteerde.</li>
+      <li>De maat is standaard 0,4 mm, en wat je het laatst gebruikte komt terug.</li>
+      <li>Onderdelen die op een punt of op een scheve rand staan en onderdelen die te klein zijn voor de maat, blijven zoals ze zijn.</li>
+    </ul>
+    <p class="note" lang="en">One undo brings the bottom back.</p>
+    <p class="note" lang="nl">Eén keer ongedaan maken zet de onderkant terug.</p>
+    <h3><span lang="en">Mouse ears</span><span lang="nl">Muizenoren</span></h3>
+    <p lang="en">The corners of a flat part can lift off the bed while printing (<i>warping</i>), most of all with ABS and ASA and on large flat parts; a small disc under each corner keeps it down.</p>
+    <p lang="nl">De hoeken van een plat onderdeel kunnen tijdens het printen van het bed loslaten (<i>kromtrekken</i>), zeker met ABS en ASA en bij grote platte delen; een klein schijfje onder elke hoek houdt hem naar beneden.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Mouse Ears…</b></p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Muizenoren…</b></p>
+    <ul lang="en">
+      <li>Puts a thin round disc on the bed under every sharp bottom corner of the selected parts, or of all visible parts when nothing is selected.</li>
+      <li>A corner is sharp when its angle is at most 100°, so a box gets a disc under each of its four corners and a cylinder gets none.</li>
+      <li>The diameter is 10 mm and the height 0.4 mm by default, and what you used last comes back.</li>
+      <li>Parts that do not stand flat on their bottom, and parts without sharp corners, are left alone.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Zet een dunne ronde schijf op het bed onder elke scherpe hoek aan de onderkant van de geselecteerde onderdelen, of van alle zichtbare onderdelen als je niets selecteerde.</li>
+      <li>Een hoek is scherp als zijn hoek maximaal 100° is, dus een doos krijgt onder elke van zijn vier hoeken een schijf en een cilinder krijgt er geen.</li>
+      <li>De diameter is standaard 10 mm en de hoogte 0,4 mm, en wat je het laatst gebruikte komt terug.</li>
+      <li>Onderdelen die niet plat op hun onderkant staan en onderdelen zonder scherpe hoeken blijven zoals ze zijn.</li>
+    </ul>
+    <p class="note" lang="en">After printing you cut the discs off; one undo takes them away again.</p>
+    <p class="note" lang="nl">Na het printen knip je de schijven eraf; één keer ongedaan maken haalt ze weer weg.</p>
+    <h3><span lang="en">Clearance test</span><span lang="nl">Spelingstest</span></h3>
+    <p lang="en">A printed hole comes out smaller than you drew it, and how much smaller depends on your printer; this test print tells you what to use.</p>
+    <p lang="nl">Een geprint gat wordt kleiner dan je het tekende, en hoeveel kleiner hangt af van je printer; deze testprint zegt wat je moet gebruiken.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Clearance Test…</b></p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Spelingstest…</b></p>
+    <ul lang="en">
+      <li>A plate with a row of holes that grow by a step from left to right, each with its clearance standing on the plate in raised letters, and a loose pin beside the plate.</li>
+      <li>Print it and try the pin in every hole: the clearance of the hole in which it fits best is the clearance to use in <i>Screw Hole…</i>, in the threads and in <i>Cut and Join</i>.</li>
+      <li>You ask for the diameter of the pin (5 mm by default), the first clearance, the step and the number of holes; what you used last comes back.</li>
+      <li>The pin is a little taller than the plate and has a bevelled top, so it enters every hole by hand.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Een plaat met een rij gaten die met een stap van links naar rechts groter worden, waarvan bij elk gat de speling in verhoogde letters op het plaatje staat, en een losse pen naast de plaat.</li>
+      <li>Print hem en probeer de pen in elk gat: de speling van het gat waarin hij het beste past, is de speling die je gebruikt in <i>Schroefgat…</i>, bij de schroefdraden en in <i>Snijden en verbinden</i>.</li>
+      <li>Je vraagt de diameter van de pen (standaard 5 mm), de eerste speling, de stap en het aantal gaten; wat je het laatst gebruikte komt terug.</li>
+      <li>De pen is iets hoger dan de plaat en heeft een afgeschuinde kop, zodat hij met de hand in elk gat gaat.</li>
+    </ul>
+    <p class="note" lang="en">Plate and pin land to the right of your model as one undo step.</p>
+    <p class="note" lang="nl">Plaat en pen komen rechts van je model te staan als één stap om ongedaan te maken.</p>
+    <figure class="shots"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/test_prints.png" alt="The clearance test and the overhang test" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/test_prints.png" alt="De spelingstest en de overhangtest" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"></figure>
+    <h3><span lang="en">Overhang test</span><span lang="nl">Overhangtest</span></h3>
+    <p lang="en">How far a printer prints an overhang cleanly is different for every machine; this test print tells you where your limit lies.</p>
+    <p lang="nl">Hoe ver een printer een overhang netjes print, verschilt per machine; deze testprint zegt waar jouw grens ligt.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Overhang Test…</b></p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Overhangtest…</b></p>
+    <ul lang="en">
+      <li>A plate with a row of fins that lean further over from left to right, each with its angle standing on the plate in raised letters.</li>
+      <li>Every fin is a post from which a wall leans out, so its underside is an overhang with nothing under it; 0° is a straight wall and 90° a flat bridge.</li>
+      <li>Print it and read the largest angle that still came out clean: that is the overhang to keep under, and the angle to fill in under <b>Window &gt; Preferences &gt; Drawing</b>.</li>
+      <li>You ask for the first angle (30° by default), the step (10°) and the number of fins (6, so 30° up to 80°); what you used last comes back.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Een plaat met een rij vinnen die van links naar rechts steeds verder overhellen, waarvan bij elke vin de hoek in verhoogde letters op het plaatje staat.</li>
+      <li>Elke vin is een zuil waar een wand uit overhelt, zodat zijn onderkant een overhang is met niets eronder; 0° is een rechte wand en 90° een platte brug.</li>
+      <li>Print hem en lees de grootste hoek af die nog netjes lukte: dat is de overhang die je niet overschrijdt, en de hoek die je invult onder <b>Venster &gt; Voorkeuren &gt; Tekenen</b>.</li>
+      <li>Je vraagt de eerste hoek (standaard 30°), de stap (10°) en het aantal vinnen (6, dus 30° tot 80°); wat je het laatst gebruikte komt terug.</li>
+    </ul>
+    <p class="note" lang="en">The plate lands to the right of your model as one undo step.</p>
+    <p class="note" lang="nl">Het plaatje komt rechts van je model te staan als één stap om ongedaan te maken.</p>
 
     <!-- ===================================================== import -->
     <h2 id="import"><span lang="en">Importing 3D models</span><span lang="nl">3D-modellen importeren</span></h2>
-    <p lang="en"><b>File &gt; Import…</b> (or <b>File &gt; Open</b>, or dragging a file onto the window) reads STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB and COLLADA (DAE). A progress bar shows how far it is, and a big file can be cancelled. Every closed part becomes a group in its own colour, and all of them together are one undo step.</p>
-    <p lang="nl"><b>Bestand &gt; Importeren…</b> (of <b>Bestand &gt; Openen</b>, of een bestand op het venster slepen) leest STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB en COLLADA (DAE). Een voortgangsbalk toont hoe ver het is, en een groot bestand kun je annuleren. Elk gesloten onderdeel wordt een groep in een eigen kleur, en samen zijn ze één stap om ongedaan te maken.</p>
+    <h3><span lang="en">Importing a model</span><span lang="nl">Een model importeren</span></h3>
+    <p lang="en">Reads a model from another program or a download and puts it on your bed as parts you can edit.</p>
+    <p lang="nl">Leest een model uit een ander programma of een download en zet het op je bed als onderdelen die je kunt bewerken.</p>
+    <p class="where" lang="en">Where: <b>File &gt; Import…</b>, <b>File &gt; Open</b>, or drag the file onto the window</p>
+    <p class="where" lang="nl">Waar: <b>Bestand &gt; Importeren…</b>, <b>Bestand &gt; Openen</b>, of sleep het bestand op het venster</p>
     <ul lang="en">
-      <li><b>Colours</b>: OBJ materials, 3MF colours and the parts and filament colours of PrusaSlicer, Bambu Studio and OrcaSlicer projects (including colour modifiers) are kept.</li>
-      <li><b>Repair</b>: a model that is not closed is repaired where possible. Faces on both sides or the wrong way round, holes, parts that touch along an edge, small knots and the inner walls of SketchUp models are fixed; the status bar says what was done. A model that cannot be repaired reliably is refused, with the reason.</li>
-      <li><b>Units</b>: STL has no unit. When a model comes in smaller than 5 mm, it was probably made in inches, centimetres or metres; Volura asks whether to scale it up. The scaling is an undo step of its own.</li>
-      <li><b>Large models</b>: after importing more than 20,000 triangles Volura offers to <a href="#simplify">simplify</a> the model. Turn the question off with <i>Don't ask again</i>, and back on under <b>Window &gt; Preferences &gt; General</b>.</li>
+      <li><b>Formats</b>: STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB and COLLADA (DAE).</li>
+      <li>A progress bar shows how far it is, and a big file can be cancelled.</li>
+      <li>Every closed part becomes a group in its own colour, and all of them together are one undo step.</li>
     </ul>
     <ul lang="nl">
-      <li><b>Kleuren</b>: OBJ-materialen, 3MF-kleuren en de onderdelen en filamentkleuren van projecten uit PrusaSlicer, Bambu Studio en OrcaSlicer (ook kleurmodifiers) blijven behouden.</li>
-      <li><b>Reparatie</b>: een model dat niet gesloten is wordt waar mogelijk gerepareerd. Vlakken aan beide kanten of verkeerd om, gaten, delen die elkaar langs een rand raken, kleine knopen en de binnenwanden van SketchUp-modellen worden hersteld; de statusbalk zegt wat er is gedaan. Een model dat niet betrouwbaar te repareren is, wordt geweigerd, met de reden.</li>
-      <li><b>Eenheden</b>: STL heeft geen eenheid. Komt een model kleiner dan 5 mm binnen, dan is het waarschijnlijk in inches, centimeters of meters gemaakt; Volura vraagt of je het wilt opschalen. Het opschalen is een eigen stap om ongedaan te maken.</li>
-      <li><b>Grote modellen</b>: na het importeren van meer dan 20.000 driehoeken biedt Volura aan het model te <a href="#simplify">versimpelen</a>. Zet de vraag uit met <i>Niet meer vragen</i>, en weer aan onder <b>Venster &gt; Voorkeuren &gt; Algemeen</b>.</li>
+      <li><b>Formaten</b>: STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB en COLLADA (DAE).</li>
+      <li>Een voortgangsbalk toont hoe ver het is, en een groot bestand kun je annuleren.</li>
+      <li>Elk gesloten onderdeel wordt een groep in een eigen kleur, en samen zijn ze één stap om ongedaan te maken.</li>
     </ul>
-    <p lang="en">SVG and DXF drawings are imported too: see <a href="#laser">Laser and CNC</a>.</p>
-    <p lang="nl">SVG- en DXF-tekeningen importeer je ook: zie <a href="#laser">Laser en frees</a>.</p>
+    <h3><span lang="en">Colours that come along</span><span lang="nl">Kleuren die meekomen</span></h3>
+    <p lang="en">What a file already carries in colours and filaments is kept, so a multicolour print stays the same print.</p>
+    <p lang="nl">Wat een bestand al aan kleuren en filamenten meedraagt, blijft behouden, zodat een meerkleurenprint dezelfde print blijft.</p>
+    <p class="where" lang="en">Where: <b>File &gt; Import…</b>; the colours stand in the <b>Materials</b> panel</p>
+    <p class="where" lang="nl">Waar: <b>Bestand &gt; Importeren…</b>; de kleuren staan bij <b>Materialen</b></p>
+    <ul lang="en">
+      <li>OBJ materials and 3MF colours are kept.</li>
+      <li>So are the parts and the filament colours of PrusaSlicer, Bambu Studio and OrcaSlicer projects, including their colour modifiers.</li>
+    </ul>
+    <ul lang="nl">
+      <li>OBJ-materialen en 3MF-kleuren blijven behouden.</li>
+      <li>Datzelfde geldt voor de onderdelen en de filamentkleuren van projecten uit PrusaSlicer, Bambu Studio en OrcaSlicer, ook hun kleurmodifiers.</li>
+    </ul>
+    <h3><span lang="en">Repairing an import</span><span lang="nl">Een import repareren</span></h3>
+    <p lang="en">A model that is not closed cannot be printed, so Volura fixes what it can while the file comes in.</p>
+    <p lang="nl">Een model dat niet gesloten is, kan niet printen, dus repareert Volura wat het kan terwijl het bestand binnenkomt.</p>
+    <p class="where" lang="en">Where: on <b>File &gt; Import…</b>, and afterwards <b>3D Printing &gt; Print Check</b></p>
+    <p class="where" lang="nl">Waar: bij <b>Bestand &gt; Importeren…</b>, en daarna bij <b>3D-printen &gt; Printcontrole</b></p>
+    <ul lang="en">
+      <li>Repaired where possible: faces on both sides or the wrong way round, holes, parts that touch along an edge, small knots and the inner walls of SketchUp models.</li>
+      <li>The status bar says what was done.</li>
+      <li>A model that cannot be repaired reliably is refused, with the reason.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Waar mogelijk hersteld: vlakken aan beide kanten of verkeerd om, gaten, delen die elkaar langs een rand raken, kleine knopen en de binnenwanden van SketchUp-modellen.</li>
+      <li>De statusbalk zegt wat er is gedaan.</li>
+      <li>Een model dat niet betrouwbaar te repareren is, wordt geweigerd, met de reden.</li>
+    </ul>
+    <h3><span lang="en">Scaling to the right size</span><span lang="nl">Op de goede maat brengen</span></h3>
+    <p lang="en">STL has no unit, so a model that comes in tiny was probably made in another unit than millimetres.</p>
+    <p lang="nl">STL heeft geen eenheid, dus een model dat heel klein binnenkomt, is waarschijnlijk in een andere eenheid dan millimeters gemaakt.</p>
+    <p class="where" lang="en">Where: on <b>File &gt; Import…</b>, when the model is smaller than 5 mm</p>
+    <p class="where" lang="nl">Waar: bij <b>Bestand &gt; Importeren…</b>, als het model kleiner is dan 5 mm</p>
+    <ul lang="en">
+      <li>Volura asks whether to scale it up, because it was probably made in inches, centimetres or metres.</li>
+      <li>The scaling is an undo step of its own.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Volura vraagt of je het wilt opschalen, want het is waarschijnlijk in inches, centimeters of meters gemaakt.</li>
+      <li>Het opschalen is een eigen stap om ongedaan te maken.</li>
+    </ul>
+    <h3><span lang="en">Simplifying a big import</span><span lang="nl">Een grote import vereenvoudigen</span></h3>
+    <p lang="en">A scan with hundreds of thousands of triangles makes Volura slow, so Volura offers to take triangles away after the import.</p>
+    <p lang="nl">Een scan met honderdduizenden driehoeken maakt Volura traag, dus biedt Volura na de import aan om driehoeken weg te halen.</p>
+    <p class="where" lang="en">Where: after importing more than 20,000 triangles; the question comes back on under <b>Window &gt; Preferences &gt; General</b></p>
+    <p class="where" lang="nl">Waar: na het importeren van meer dan 20.000 driehoeken; de vraag staat weer aan onder <b>Venster &gt; Voorkeuren &gt; Algemeen</b></p>
+    <ul lang="en">
+      <li>The offer leads to <a href="#simplify">Simplify Model</a>, which runs in the background.</li>
+      <li>Turn the question off with <i>Don't ask again</i>.</li>
+    </ul>
+    <ul lang="nl">
+      <li>De aanbieding leidt naar <a href="#simplify">Model vereenvoudigen</a>, dat op de achtergrond draait.</li>
+      <li>Zet de vraag uit met <i>Niet meer vragen</i>.</li>
+    </ul>
+    <p class="note" lang="en">SVG and DXF drawings come in through the same menu and land on the worksheet or on a face; see <a href="#laser">Laser and CNC</a>.</p>
+    <p class="note" lang="nl">SVG- en DXF-tekeningen komen via hetzelfde menu binnen en landen op het werkblad of op een vlak; zie <a href="#laser">Laser en frees</a>.</p>
+
     <!-- ===================================================== export -->
     <h2 id="export"><span lang="en">Export and files</span><span lang="nl">Exporteren en bestanden</span></h2>
+    <h3><span lang="en">Export formats</span><span lang="nl">Exportformaten</span></h3>
+    <p lang="en">What Volura writes for the printer, the slicer and every other program that wants your model.</p>
+    <p lang="nl">Wat Volura schrijft voor de printer, de slicer en elk ander programma dat je model wil.</p>
+    <p class="where" lang="en">Where: <b>File &gt; Export</b>; <b>File &gt; Print</b> (<kbd>Ctrl</kbd>+<kbd>P</kbd>) writes the multicolour 3MF straight away</p>
+    <p class="where" lang="nl">Waar: <b>Bestand &gt; Exporteren</b>; <b>Bestand &gt; Printen (3MF)</b> (<kbd>Ctrl</kbd>+<kbd>P</kbd>) schrijft meteen het meerkleuren-3MF</p>
     <div class="tbl"><table>
       <tr><th><span lang="en">Format</span><span lang="nl">Formaat</span></th><th><span lang="en">What you get</span><span lang="nl">Wat je krijgt</span></th></tr>
       <tr><td><b>STL</b></td><td><span lang="en">all (or the selected) parts merged into one watertight object</span><span lang="nl">alle (of de geselecteerde) onderdelen samengevoegd tot één waterdicht object</span></td></tr>
@@ -664,87 +898,369 @@ volura</code></pre>
       <tr><td><b><span lang="en">OBJ with colours</span><span lang="nl">OBJ met kleuren</span></b></td><td><span lang="en">one object per part in its own colour, with a .mtl file next to it; for other 3D programs and renderers</span><span lang="nl">één object per onderdeel in zijn eigen kleur, met een .mtl-bestand ernaast; voor andere 3D-programma's en renderprogramma's</span></td></tr>
       <tr><td><b>.volura</b></td><td><span lang="en">Volura's own file with groups, colours and guides</span><span lang="nl">het eigen bestand van Volura, met groepen, kleuren en hulplijnen</span></td></tr>
     </table></div>
-    <p lang="en">Before exporting, Volura checks that every part is a closed solid and tells you which parts are not. Volura saves a backup of your work automatically and offers to restore it after a crash.</p>
-    <p lang="nl">Voor het exporteren controleert Volura of elk onderdeel een gesloten volume is en zegt welke onderdelen dat niet zijn. Volura bewaart automatisch een reservekopie van je werk en biedt na een crash aan die terug te zetten.</p>
+    <p class="note" lang="en">The order of the filaments is the order of the list under <b>Materials</b>; only the colours you actually use get a number. See <a href="#groups">Groups and colours</a>.</p>
+    <p class="note" lang="nl">De volgorde van de filamenten is de volgorde van de lijst bij <b>Materialen</b>; alleen de kleuren die je echt gebruikt, krijgen een nummer. Zie <a href="#groups">Groepen en kleuren</a>.</p>
+    <h3><span lang="en">Checks and backups</span><span lang="nl">Controles en reservekopieën</span></h3>
+    <p lang="en">Nothing goes to the printer as a broken object, and nothing is lost when Volura or the computer stops.</p>
+    <p lang="nl">Er gaat niets als kapot object naar de printer, en er gaat niets verloren als Volura of de computer stopt.</p>
+    <p class="where" lang="en">Where: on every export, and automatic in the background</p>
+    <p class="where" lang="nl">Waar: bij elke export, en automatisch op de achtergrond</p>
+    <ul lang="en">
+      <li>Before exporting, Volura checks that every part is a closed solid and tells you which parts are not.</li>
+      <li>Volura saves a backup of your work automatically and offers to restore it after a crash.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Voor het exporteren controleert Volura of elk onderdeel een gesloten volume is en zegt welke onderdelen dat niet zijn.</li>
+      <li>Volura bewaart automatisch een reservekopie van je werk en biedt na een crash aan die terug te zetten.</li>
+    </ul>
 
     <!-- ===================================================== laser -->
     <h2 id="laser"><span lang="en">Laser and CNC</span><span lang="nl">Laser en frees</span></h2>
-    <img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/worksheet.png" alt="The 2D worksheet with a finger joint box and a spur gear" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/worksheet.png" alt="Het 2D-werkblad met een doos met vingerlassen en een tandwiel" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/menu_laser.png" alt="The Laser and Mill menu" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/menu_laser.png" alt="Het menu Laser en frees" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/vent_pattern.png" alt="A vent pattern of hexagons in a panel" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/vent_pattern.png" alt="Een gatenrooster van zeshoeken in een paneel" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px">
-    <p lang="en">Next to the 3D model every file has a 2D worksheet for laser cutters and CNC routers. Switch with <b>View &gt; 2D Worksheet</b>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>2</kbd> or the <b>3D | 2D</b> button at the bottom right.</p>
-    <p lang="nl">Naast het 3D-model heeft elk bestand een 2D-werkblad voor lasersnijders en freesmachines. Schakel met <b>Beeld &gt; 2D-werkblad</b>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>2</kbd> of de knop <b>3D | 2D</b> rechtsonder.</p>
+    <p lang="en">Next to the 3D model every file has a 2D worksheet for laser cutters and CNC routers. Switch with <b>View &gt; 2D Worksheet</b>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>2</kbd> or the <b>3D | 2D</b> button at the bottom right. There the tools stand in three columns of toolbars along the left side: <b>2D Worksheet</b> with the drawing tools, <b>2D Editing</b> with what you do to contours, and <b>Laser and Mill</b> with the machine.</p>
+    <p lang="nl">Naast het 3D-model heeft elk bestand een 2D-werkblad voor lasersnijders en freesmachines. Schakel met <b>Beeld &gt; 2D-werkblad</b>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>2</kbd> of de knop <b>3D | 2D</b> rechtsonder. Daar staan de gereedschappen in drie kolommen werkbalken langs de linkerkant: <b>2D-werkblad</b> met de tekengereedschappen, <b>2D-bewerken</b> met wat je met contouren doet en <b>Laser en frees</b> met de machine.</p>
+    <figure class="shots"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/worksheet.png" alt="The 2D worksheet with a finger joint box and a spur gear" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/worksheet.png" alt="Het 2D-werkblad met een doos met vingerlassen en een tandwiel" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/menu_laser.png" alt="The Laser and Mill menu" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/menu_laser.png" alt="Het menu Laser en frees" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"></figure>
+    <h3><span lang="en">The worksheet</span><span lang="nl">Het werkblad</span></h3>
+    <p lang="en">A flat sheet in true size, where you draw the contours that the machine cuts, with the same typing and snapping as in 3D.</p>
+    <p lang="nl">Een platte plaat op ware grootte, waar je de contouren tekent die de machine snijdt, met hetzelfde typen en snappen als in 3D.</p>
+    <p class="where" lang="en">Where: the <b>2D Worksheet</b> and <b>2D Editing</b> toolbars, and the menus <b>Draw</b>, <b>Edit</b> and <b>Tools</b> while you are on the worksheet</p>
+    <p class="where" lang="nl">Waar: de werkbalken <b>2D-werkblad</b> en <b>2D-bewerken</b>, en de menu's <b>Tekenen</b>, <b>Bewerken</b> en <b>Gereedschap</b> als je op het werkblad bent</p>
     <ul lang="en">
-      <li><b>SVG and DXF import</b>: place a vector drawing on a face or the ground and push/pull it, or extrude it straight into a part.</li>
-      <li><b>2D export</b>: selected faces at true size, the top view or a section at any height, as SVG or DXF.</li>
-      <li><b>2D workspace</b>: switch between 3D and 2D with one button. Draw with lines, rectangles, circles, arcs, polygons and text; offset, union, subtract and align.</li>
-      <li><b>Duplicate in a row, grid or circle</b>: select the contours and choose <b>Duplicate in Row or Grid…</b> or <b>Duplicate in a Circle…</b> in the right-click menu or the sheet toolbar. The circle asks how many copies, over what angle and around which centre - the centre of the selection, the origin or a point you type - and whether the copies turn along the circle or keep their own orientation. All copies are one undo step.</li>
-      <li><b>Operation layers</b> for cutting, engraving, raster fill, profiling inside or outside, pocketing and drilling, in the colours that laser software recognises.</li>
-      <li><b>Kerf and tool compensation</b>, with dogbones or T-bones in inside corners for CNC.</li>
-      <li><b>Sheet size and nesting</b>: place parts on the sheet with as little waste as possible, over several sheets if needed.</li>
-      <li><b>Finger-joint boxes</b>: enter the size and material thickness, get the panels on the sheet and a 3D preview of the assembled box.</li>
-      <li><b>Living hinge</b>: select a rectangle on the worksheet and choose <b>Tools &gt; Living Hinge…</b> to fill it with a field of staggered slits, so plywood or MDF bends there; set the slit length, the bridges between them, the spacing, the edge margin and the axis to bend around.</li>
-      <li><b>Vent pattern</b>: select one closed contour on the worksheet and choose <b>Tools &gt; Vent Pattern…</b> to fill it with the holes of a ventilation grille or a speaker cover — a honeycomb of hexagons or a field of circles, with the web between two holes and the margin along the edge you set. Only holes that fit whole inside that margin are cut, on the cut layer and with the source of the contour, so the grille moves and nests with the panel it is cut in.</li>
-      <li><b>Spur gear</b>: <b>Draw &gt; Spur Gear…</b> puts an involute gear on the cut layer, next to what is already on the sheet. Give the number of teeth, the module and the pressure angle, a bore for the axle and the backlash; the dialog shows the pitch diameter and the outside diameter as you type. Two gears with the same module and pressure angle mesh at half the sum of their pitch diameters. For printing choose <b>Draw &gt; Parts &gt; Spur Gear…</b>: the same wheel then stands on the bed as a part of the thickness you enter, with the bore through it.</li>
-      <li><b>Fit test</b>: choose <b>Laser and Mill &gt; Fit Test…</b> and cut the comb of slots that lands on the worksheet from the sheet you are cutting. Every slot is a little wider than the sheet and carries its offset engraved under it; push an offcut of the same sheet into every slot and the offset of the slot that holds it best is the one to use as kerf or finger width.</li>
-      <li><b>Holding tabs</b>: select closed contours on a cutting layer and choose <b>Laser and Mill &gt; Holding Tabs…</b> to leave a few small uncut bridges in each, evenly spread, so a part stays in the sheet until the job is done; snap it out afterwards. Set the number of tabs per contour and their width (about the beam for a laser, a few millimetres for a mill). By default only the outer contours get tabs, since the scrap of a hole falls out on its own.</li>
-      <li><b>Round corners</b>: select the paths and choose <b>Tools &gt; Round Corners…</b> to put a radius of your choice in their sharp corners, so a panel that comes off the laser or the mill no longer cuts into your hand. Open lines and closed contours both work, and the two ends of a line stay where they are. A corner whose two segments are too short for the radius is rounded as far as they allow, and a corner without room stays sharp; the radius comes back next time.</li>
-      <li><b>Dogbone corners</b>: a round cutter cannot mill a sharp inside corner; it leaves a fillet of its own radius there, so a square tab does not fit into a milled square slot. Select the closed contours and choose <b>Laser and Mill &gt; Dogbone Corners…</b> with the diameter of your cutter: every inside corner of the material gets a round relief of that diameter through the corner point, so the cutter clears it. Volura tells holes from outer contours by how they lie in each other on the layer, so a slot gets its reliefs in its own corners and a part in its notches; the diameter comes back next time.</li>
-      <li><b>Job estimate</b>: choose <b>Laser and Mill &gt; Job Estimate…</b> before you send the sheet to the machine and see how many metres of contour each layer cuts, how often the laser pierces, how many passes it runs and how long the whole job takes. The rapid moves between the paths count along, at 150 mm/s. A raster layer is named but not timed, since its time depends on the line spacing, and the mill layers have an export of their own.</li>
-      <li><b>G-code for a GRBL laser</b>: choose <b>File &gt; Export &gt; G-code for a GRBL Laser…</b> and the laser layers go to the machine as plain G-code — millimetres, absolute coordinates, the holes before the outer contour and the nearest path next, with the power of every layer as S word. The dialog asks the highest S word of the controller (<kbd>$30</kbd>: 1000 on a modern board, 255 on an old 8-bit one) and whether the beam follows the feed (<b>M4</b>, so it burns less in a corner) or stays at a fixed power (<b>M3</b>); both come back next time, since they belong to the machine. The status bar ends with how long the job takes, the same estimate as <b>Laser and Mill &gt; Job Estimate…</b></li>
-    </ul>
-    <h3><span lang="en">Model and sheet together</span><span lang="nl">Model en werkblad samen</span></h3>
-    <ul lang="en">
-      <li><b>From 3D to the sheet</b>: select faces or plates (groups) in the model, right-click and choose <b>Laser / Mill</b>, then the layer: Cut, Engrave, Mill outside and so on. Faces arrive at true size, plates as their top view, next to what is already on the sheet. If the sheet has no thickness yet, it takes over the thickness of the plates. Also in <b>Tools &gt; To Laser or Mill…</b>.</li>
-      <li><b>From the sheet to 3D</b>: set the thickness in <b>Laser and Mill &gt; Sheet…</b> (for example 3 mm) and choose <b>Parts to 3D Model</b> in the sheet toolbar, the right-click menu or the View menu. Every part with a closed outline on a cut, mill or drill layer becomes a plate of that thickness at the same position; holes go through, pockets are cut to their depth from the top, engravings stay 2D. Doing it again replaces the earlier parts; with a selection on the sheet only those parts are added.</li>
+      <li><b>Draw</b>: line, freehand, rectangle, rounded rectangle, circle, ellipse, arc, arc from centre, polygon and text.</li>
+      <li><b>Edit</b>: move, rotate, scale, offset, delete, select all and select none.</li>
+      <li><b>Combine</b>: union, subtract and intersect, join and split, mirror horizontally and vertically, <b>Align</b> and <b>Distribute</b>.</li>
+      <li><b>Duplicate in Row or Grid…</b> and <b>Duplicate in a Circle…</b> in <b>Tools</b>, the editing toolbar or the right-click menu. The circle asks how many copies, over what angle and around which centre - the centre of the selection, the origin or a point you type - and whether the copies turn along the circle or keep their own orientation. All copies are one undo step.</li>
+      <li><b>Rounded Corners on Offset</b> on the worksheet toolbar makes the offsets you draw come out with rounded corners instead of sharp ones.</li>
     </ul>
     <ul lang="nl">
-      <li><b>Van 3D naar het werkblad</b>: selecteer vlakken of platen (groepen) in het model, klik met rechts en kies <b>Laseren / frezen</b> en dan de laag: snijden, graveren, frezen enzovoort. Vlakken komen op ware grootte, platen als bovenaanzicht, naast wat er al op het werkblad staat. Heeft het werkblad nog geen dikte, dan neemt het de dikte van de platen over. Ook via <b>Gereedschap &gt; Naar laser of frees…</b>.</li>
-      <li><b>Van het werkblad naar 3D</b>: stel de dikte in bij <b>Laser en frees &gt; Plaat…</b> (bijvoorbeeld 3 mm) en kies <b>Onderdelen naar 3D-model</b> in de werkbalk van het werkblad, het rechtsklikmenu of het menu Beeld. Elk onderdeel met een gesloten rand op een snij-, frees- of boorlaag wordt een plaat met die dikte op dezelfde plek; gaten gaan erdoor, uitkameringen gaan van boven tot hun diepte, gravures blijven 2D. Nog een keer vervangt de vorige onderdelen; met een selectie op het werkblad komen alleen die onderdelen erbij.</li>
+      <li><b>Tekenen</b>: lijn, vrijhand, rechthoek, afgeronde rechthoek, cirkel, ellips, boog, boog vanuit middelpunt, veelhoek en tekst.</li>
+      <li><b>Bewerken</b>: verplaatsen, roteren, schalen, verschuiven, verwijderen, alles en niets selecteren.</li>
+      <li><b>Samenvoegen</b>: samenvoegen, aftrekken en snijden, verbinden en splitsen, horizontaal en verticaal spiegelen, <b>Uitlijnen</b> en <b>Verdelen</b>.</li>
+      <li><b>Dupliceren in rij of raster…</b> en <b>Dupliceren in een cirkel…</b> bij <b>Gereedschap</b>, de bewerkingswerkbalk of het rechtsklikmenu. De cirkel vraagt hoeveel kopieën, over welke hoek en rond welk midden - het midden van de selectie, de oorsprong of een opgegeven punt - en of de kopieën meedraaien of hun eigen richting houden. Alle kopieën zijn samen één stap om ongedaan te maken.</li>
+      <li><b>Afgeronde hoeken bij verschuiving</b> op de werkbalk zorgt dat de verschuivingen die je tekent afgeronde hoeken krijgen in plaats van scherpe.</li>
+    </ul>
+    <h3><span lang="en">Layers and colours</span><span lang="nl">Lagen en kleuren</span></h3>
+    <p lang="en">Every contour stands on a layer that says what the machine does with it, and the colour of the layer is the colour your laser software recognises.</p>
+    <p lang="nl">Elke contour staat op een laag die zegt wat de machine ermee doet, en de kleur van de laag is die welke je lasersoftware herkent.</p>
+    <p class="where" lang="en">Where: <b>View &gt; Worksheet Layers</b>, and <b>Tools &gt; To Layer</b> for the selection</p>
+    <p class="where" lang="nl">Waar: <b>Beeld &gt; Lagen van het werkblad</b>, en <b>Gereedschap &gt; Naar laag</b> voor de selectie</p>
+    <ul lang="en">
+      <li><b>Cut</b>, <b>Engrave</b>, <b>Raster</b>, <b>Mill outside</b>, <b>Mill inside</b>, <b>Pocket</b> and <b>Drill</b>.</li>
+      <li>Per layer the kerf or the tool diameter, so the machine cuts where you drew.</li>
+      <li>For a mill the inside corners get a <b>dogbone</b> or a <b>T-bone</b> relief, because a round cutter cannot leave a sharp corner.</li>
     </ul>
     <ul lang="nl">
-      <li><b>SVG en DXF importeren</b>: een vectortekening op een vlak of de grond plaatsen en duwen/trekken, of direct extruderen tot een onderdeel.</li>
-      <li><b>2D-export</b>: geselecteerde vlakken op ware grootte, het bovenaanzicht of een doorsnede op elke hoogte, als SVG of DXF.</li>
-      <li><b>2D-werkblad</b>: met één knop schakelen tussen 3D en 2D. Tekenen met lijnen, rechthoeken, cirkels, bogen, veelhoeken en tekst; verschuiven, samenvoegen, aftrekken en uitlijnen.</li>
-      <li><b>Dupliceren in een rij, raster of cirkel</b>: selecteer de contouren en kies <b>Dupliceren in rij of raster…</b> of <b>Dupliceren in een cirkel…</b> in het rechtsklikmenu of de werkbalk van het werkblad. De cirkel vraagt hoeveel kopieën, over welke hoek en rond welk midden - het midden van de selectie, de oorsprong of een opgegeven punt - en of de kopieën meedraaien of hun eigen richting houden. Alle kopieën zijn samen één stap om ongedaan te maken.</li>
-      <li><b>Bewerkingslagen</b> voor snijden, graveren, rasteren, buiten of binnen frezen, uitkameren en boren, in de kleuren die lasersoftware herkent.</li>
-      <li><b>Kerf- en freescorrectie</b>, met dogbones of T-bones in binnenhoeken voor frezen.</li>
-      <li><b>Plaatformaat en nesten</b>: onderdelen met zo min mogelijk afval op de plaat zetten, zo nodig over meerdere platen.</li>
-      <li><b>Dozen met vingerlassen</b>: geef de maat en materiaaldikte op en krijg de panelen op de plaat en een 3D-voorbeeld van de gemonteerde doos.</li>
-      <li><b>Buigscharnier</b>: selecteer een rechthoek op het werkblad en kies <b>Gereedschap &gt; Buigscharnier…</b> om hem te vullen met een veld versprongen sneden, zodat multiplex of mdf daar buigt; je stelt snedelengte, de bruggen ertussen, de afstand, de randmarge en de as waar je omheen buigt in.</li>
-      <li><b>Ventilatiepatroon</b>: selecteer één gesloten contour op het werkblad en kies <b>Gereedschap &gt; Gatenrooster…</b> om hem te vullen met de gaten van een ventilatierooster of een luidsprekerafdekking — een honingraat van zeshoeken of een veld cirkels, met de tussenrand tussen twee gaten en de randmarge die je zelf instelt. Alleen gaten die heel binnen die marge passen worden gesneden, op de snijlaag en met de bron van de contour, zodat het rooster meebeweegt en meeschikt met het paneel erin.</li>
-      <li><b>Tandwiel</b>: <b>Tekenen &gt; Tandwiel…</b> zet een evolvent tandwiel op de snijlaag, naast wat al op het werkblad staat. Geef het aantal tanden, de module en de aangrijpingshoek, een asgat en de speling; het venster toont de deelcirkel- en buitendiameter terwijl je typt. Twee tandwielen met dezelfde module en aangrijpingshoek grijpen in elkaar op de helft van de som van hun deelcirkeldiameters. Om te printen kies je <b>Tekenen &gt; Onderdelen &gt; Tandwiel…</b>: dan staat hetzelfde wiel als een onderdeel met de opgegeven dikte op het bed, met het asgat erdoor.</li>
-      <li><b>Passingstest</b>: kies <b>Laser en frees &gt; Passingstest…</b> en snijd de kam met sleuven die op het werkblad komt uit de plaat die je snijdt. Elke sleuf is iets breder dan de plaat en heeft eronder zijn afwijking gegraveerd; duw een afvalstukje van dezelfde plaat in elke sleuf en de afwijking van de sleuf die het beste houdt is die je als kerf of vingerbreedte gebruikt.</li>
-      <li><b>Houdbruggetjes</b>: selecteer gesloten contouren op een snijlaag en kies <b>Laser en frees &gt; Bruggetjes…</b> om in elke contour een paar kleine, gelijk verdeelde bruggetjes ongesneden te laten, zodat een onderdeel in de plaat blijft tot het werk klaar is; daarna breek je het los. Stel het aantal bruggetjes per contour en hun breedte in (bij een laser ongeveer de straal, bij een frees een paar millimeter). Standaard krijgen alleen de buitencontouren bruggetjes, want het afval van een gat valt vanzelf uit de plaat.</li>
-      <li><b>Hoeken afronden</b>: selecteer de paden en kies <b>Gereedschap &gt; Hoeken afronden…</b> om er een straal naar keuze in de scherpe hoeken van te zetten, zodat een paneel dat van de laser of de frees komt niet meer in je hand snijdt. Open lijnen en gesloten contouren werken allebei, en de twee eindpunten van een lijn blijven waar ze zijn. Een hoek waarvan de twee segmenten te kort zijn voor de straal wordt zo ver afgerond als ze toelaten, en een hoek zonder ruimte blijft scherp; de straal komt de volgende keer terug.</li>
-      <li><b>Dogbone-hoeken</b>: een ronde frees kan geen scherpe binnenhoek frezen; hij laat er een afronding van zijn eigen straal staan, zodat een vierkant lipje niet in een gefreesde vierkante sleuf past. Selecteer de gesloten contouren en kies <b>Laser en frees &gt; Dogbone-hoeken…</b> met de diameter van je frees: elke binnenhoek van het materiaal krijgt een ronde uitsparing van die diameter door het hoekpunt, zodat de frees de hoek vrijmaakt. Volura onderscheidt gaten van buitencontouren aan hoe ze op de laag in elkaar liggen, dus een sleuf krijgt de uitsparingen in zijn eigen hoeken en een onderdeel in zijn inkepingen; de diameter komt de volgende keer terug.</li>
-      <li><b>Taakschatting</b>: kies <b>Laser en frees &gt; Tijdsschatting…</b> voordat je de plaat naar de machine stuurt en zie hoeveel meter contour elke laag snijdt, hoe vaak de laser insteekt, hoeveel passes hij maakt en hoe lang het hele werk duurt. De snelle verplaatsingen tussen de paden tellen mee, met 150 mm/s. Een rasterlaag wordt wel genoemd maar niet getimed, want haar tijd hangt van de lijnafstand af, en de freeslagen hebben een eigen export.</li>
-      <li><b>G-code voor een GRBL-laser</b>: kies <b>Bestand &gt; Exporteren &gt; G-code voor een GRBL-laser…</b> en de laserlagen gaan als gewone G-code naar de machine — millimeters, absolute coördinaten, de gaten vóór de buitencontour en het dichtstbijzijnde pad eerst, met het vermogen van elke laag als S-woord. Het venster vraagt het hoogste S-woord van de controller (<kbd>$30</kbd>: 1000 op een moderne kaart, 255 op een oude 8-bit) en of de straal de snelheid volgt (<b>M4</b>, zodat hij in een hoek minder brandt) of vast blijft op één vermogen (<b>M3</b>'); allebei komen volgende keer terug, want ze horen bij de machine. De statusbalk eindigt met hoe lang het werk duurt, dezelfde schatting als <b>Laser en frees &gt; Tijdsschatting…</b></li>
+      <li><b>Snijden</b>, <b>Graveren</b>, <b>Rasteren</b>, <b>Frezen buiten</b>, <b>Frezen binnen</b>, <b>Uitkameren</b> en <b>Boren</b>.</li>
+      <li>Per laag de kerf of de gereedschapsdiameter, zodat de machine snijdt waar je tekende.</li>
+      <li>Voor een frees krijgen de binnenhoeken een <b>dogbone</b>- of <b>T-bone</b>-uitsparing, want een ronde frees kan geen scherpe hoek achterlaten.</li>
+    </ul>
+    <h3><span lang="en">Sheet and auto arrange</span><span lang="nl">Plaat en automatisch schikken</span></h3>
+    <p lang="en">Say how big the plate in the machine is and how thick it is, then let Volura place the parts with as little waste as possible.</p>
+    <p lang="nl">Zeg hoe groot en hoe dik de plaat in de machine is en laat Volura de onderdelen met zo min mogelijk afval plaatsen.</p>
+    <p class="where" lang="en">Where: <b>Laser and Mill &gt; Sheet…</b> and <b>Laser and Mill &gt; Auto Arrange…</b></p>
+    <p class="where" lang="nl">Waar: <b>Laser en frees &gt; Plaat…</b> en <b>Laser en frees &gt; Automatisch schikken…</b></p>
+    <ul lang="en">
+      <li><b>Sheet…</b>: the size (a full sheet of 2440 × 1220 mm, a half sheet of 1220 × 610 mm or your own), the thickness, the margin along the edge, the gap between two parts and the number of sheets.</li>
+      <li>The thickness is what <b>Parts to 3D Model</b> uses when it makes plates of the contours.</li>
+      <li><b>Auto Arrange…</b> nests the parts economically over the sheets and adds new sheets if it does not fit.</li>
+      <li>A part that does not fit on the sheet at all is reported instead of placed halfway.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Plaat…</b>: het formaat (een hele plaat van 2440 × 1220 mm, een halve van 1220 × 610 mm of een eigen maat), de dikte, de marge langs de rand, de afstand tussen twee onderdelen en het aantal platen.</li>
+      <li>De dikte gebruikt <b>Onderdelen naar 3D-model</b> als het platen van de contouren maakt.</li>
+      <li><b>Automatisch schikken…</b> nest de onderdelen zuinig over de platen en voegt nieuwe platen toe als het niet past.</li>
+      <li>Een onderdeel dat helemaal niet op de plaat past, wordt gemeld in plaats van half geplaatst.</li>
+    </ul>
+    <h3><span lang="en">Box with finger joints</span><span lang="nl">Doos met vingerlassen</span></h3>
+    <p lang="en">A box whose walls come off the laser and glue together without screws, because the corners are interlocking fingers.</p>
+    <p lang="nl">Een doos waarvan de wanden van de laser komen en zonder schroeven aan elkaar lijmen, omdat de hoeken in elkaar grijpende vingers zijn.</p>
+    <p class="where" lang="en">Where: <b>Draw &gt; Box with Finger Joints…</b> (on the worksheet), also on the <b>Laser and Mill</b> toolbar</p>
+    <p class="where" lang="nl">Waar: <b>Tekenen &gt; Doos met vingerlassen…</b> (op het werkblad), ook op de werkbalk <b>Laser en frees</b></p>
+    <ul lang="en">
+      <li>Enter the size of the box and the thickness of the material.</li>
+      <li>The panels land on the sheet, ready to cut, with the fingers on the mating walls.</li>
+      <li>A 3D preview shows the assembled box.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Geef de maat van de doos en de dikte van het materiaal op.</li>
+      <li>De panelen komen op de plaat te staan, klaar om te snijden, met de vingers in de wanden waartegen ze komen.</li>
+      <li>Een 3D-voorbeeld toont de gemonteerde doos.</li>
+    </ul>
+    <h3><span lang="en">Spur gear on the sheet</span><span lang="nl">Tandwiel op het werkblad</span></h3>
+    <p lang="en">An involute gear that stays flat in a panel, cut or milled from sheet.</p>
+    <p lang="nl">Een evolvent tandwiel dat plat in een paneel blijft, gesneden of gefreesd uit plaat.</p>
+    <p class="where" lang="en">Where: <b>Draw &gt; Spur Gear…</b> (on the worksheet), also on the <b>Laser and Mill</b> toolbar</p>
+    <p class="where" lang="nl">Waar: <b>Tekenen &gt; Tandwiel…</b> (op het werkblad), ook op de werkbalk <b>Laser en frees</b></p>
+    <ul lang="en">
+      <li>The gear lands on the cut layer, next to what is already on the sheet.</li>
+      <li>Give the number of teeth, the module and the pressure angle, a bore for the axle and the backlash; the dialog shows the pitch diameter and the outside diameter as you type.</li>
+      <li>Two gears with the same module and pressure angle mesh at half the sum of their pitch diameters.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Het wiel komt op de snijlaag, naast wat er al op het werkblad staat.</li>
+      <li>Geef het aantal tanden, de module en de aangrijpingshoek, een asgat en de speling; het venster toont de deelcirkel- en de buitendiameter terwijl je typt.</li>
+      <li>Twee tandwielen met dezelfde module en aangrijpingshoek grijpen in elkaar op de helft van de som van hun deelcirkeldiameters.</li>
+    </ul>
+    <p class="note" lang="en">For a gear you want to print choose <b>Draw &gt; Parts &gt; Spur Gear…</b>: the same wheel then stands on the bed as a part of the thickness you enter, with the bore through it.</p>
+    <p class="note" lang="nl">Voor een tandwiel dat je wilt printen kies je <b>Tekenen &gt; Onderdelen &gt; Tandwiel…</b>: dan staat hetzelfde wiel als een onderdeel met de opgegeven dikte op het bed, met het asgat erdoor.</p>
+    <h3><span lang="en">Living hinge</span><span lang="nl">Buigscharnier</span></h3>
+    <p lang="en">A field of staggered slits that makes plywood or MDF bend where it is normally stiff.</p>
+    <p lang="nl">Een veld versprongen sneden dat multiplex of mdf laat buigen waar het normaal stijf is.</p>
+    <p class="where" lang="en">Where: select a rectangle on the worksheet and choose <b>Tools &gt; Living Hinge…</b></p>
+    <p class="where" lang="nl">Waar: selecteer een rechthoek op het werkblad en kies <b>Gereedschap &gt; Buigscharnier…</b></p>
+    <ul lang="en">
+      <li>The slit length and the bridges between two slits, which are what bends.</li>
+      <li>The spacing between the rows and the margin along the edge that stays whole.</li>
+      <li>The axis to bend around, so the hinge opens the way you want.</li>
+    </ul>
+    <ul lang="nl">
+      <li>De snedelengte en de bruggen tussen twee sneden; dat is wat buigt.</li>
+      <li>De afstand tussen de rijen en de marge langs de rand die heel blijft.</li>
+      <li>De as waar je omheen buigt, zodat het scharnier opent zoals je wilt.</li>
+    </ul>
+    <h3><span lang="en">Vent pattern</span><span lang="nl">Gatenrooster</span></h3>
+    <p lang="en">The holes of a ventilation grille or a speaker cover, filling a contour you already drew.</p>
+    <p lang="nl">De gaten van een ventilatierooster of een luidsprekerafdekking, in een contour die je al tekende.</p>
+    <p class="where" lang="en">Where: select one closed contour on the worksheet and choose <b>Tools &gt; Vent Pattern…</b></p>
+    <p class="where" lang="nl">Waar: selecteer één gesloten contour op het werkblad en kies <b>Gereedschap &gt; Gatenrooster…</b></p>
+    <ul lang="en">
+      <li>A honeycomb of hexagons or a field of circles.</li>
+      <li>The web between two holes and the margin along the edge are yours.</li>
+      <li>Only holes that fit whole inside that margin are cut, on the cut layer and with the source of the contour, so the grille moves and nests with the panel it is cut in.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Een honingraat van zeshoeken of een veld cirkels.</li>
+      <li>De tussenrand tussen twee gaten en de marge langs de rand stel je zelf in.</li>
+      <li>Alleen gaten die heel binnen die marge passen, worden gesneden, op de snijlaag en met de bron van de contour, zodat het rooster meebeweegt en meeschikt met het paneel erin.</li>
+    </ul>
+    <figure class="shots"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/vent_pattern.png" alt="A vent pattern of hexagons in a panel" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/vent_pattern.png" alt="Een gatenrooster van zeshoeken in een paneel" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"></figure>
+    <h3><span lang="en">Round corners</span><span lang="nl">Hoeken afronden</span></h3>
+    <p lang="en">Puts a radius in the sharp corners of a contour, so a panel that comes off the machine no longer cuts into your hand.</p>
+    <p lang="nl">Zet een straal in de scherpe hoeken van een contour, zodat een paneel dat van de machine komt niet meer in je hand snijdt.</p>
+    <p class="where" lang="en">Where: select the paths and choose <b>Tools &gt; Round Corners…</b></p>
+    <p class="where" lang="nl">Waar: selecteer de paden en kies <b>Gereedschap &gt; Hoeken afronden…</b></p>
+    <ul lang="en">
+      <li>Open lines and closed contours both work, and the two ends of a line stay where they are.</li>
+      <li>A corner whose two segments are too short for the radius is rounded as far as they allow; a corner without room stays sharp.</li>
+      <li>The radius comes back next time.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Open lijnen en gesloten contouren werken allebei, en de twee eindpunten van een lijn blijven waar ze zijn.</li>
+      <li>Een hoek waarvan de twee segmenten te kort zijn voor de straal, wordt zo ver afgerond als ze toelaten; een hoek zonder ruimte blijft scherp.</li>
+      <li>De straal komt de volgende keer terug.</li>
+    </ul>
+    <h3><span lang="en">Dogbone corners</span><span lang="nl">Dogbone-hoeken</span></h3>
+    <p lang="en">A round cutter cannot mill a sharp inside corner; it leaves a fillet of its own radius there, so a square tab does not fit into a milled square slot. This clears the corner.</p>
+    <p lang="nl">Een ronde frees kan geen scherpe binnenhoek frezen; hij laat er een afronding van zijn eigen straal staan, zodat een vierkant lipje niet in een gefreesde vierkante sleuf past. Dit maakt de hoek vrij.</p>
+    <p class="where" lang="en">Where: select the closed contours and choose <b>Laser and Mill &gt; Dogbone Corners…</b></p>
+    <p class="where" lang="nl">Waar: selecteer de gesloten contouren en kies <b>Laser en frees &gt; Dogbone-hoeken…</b></p>
+    <ul lang="en">
+      <li>Give the diameter of your cutter: every inside corner of the material gets a round relief of that diameter through the corner point, so the cutter clears it.</li>
+      <li>Volura tells holes from outer contours by how they lie in each other on the layer, so a slot gets its reliefs in its own corners and a part in its notches.</li>
+      <li>The diameter comes back next time.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Geef de diameter van je frees: elke binnenhoek van het materiaal krijgt een ronde uitsparing van die diameter door het hoekpunt, zodat de frees de hoek vrijmaakt.</li>
+      <li>Volura onderscheidt gaten van buitencontouren aan hoe ze op de laag in elkaar liggen, dus een sleuf krijgt de uitsparingen in zijn eigen hoeken en een onderdeel in zijn inkepingen.</li>
+      <li>De diameter komt de volgende keer terug.</li>
+    </ul>
+    <h3><span lang="en">Holding tabs</span><span lang="nl">Bruggetjes</span></h3>
+    <p lang="en">A few small uncut bridges in a contour, so a cut part stays in the sheet until the job is done and does not fall out and burn under the beam.</p>
+    <p lang="nl">Een paar kleine ongesneden bruggetjes in een contour, zodat een gesneden deel in de plaat blijft tot het werk klaar is en er niet uitvalt en onder de straal doorbrandt.</p>
+    <p class="where" lang="en">Where: select closed contours on a cutting layer and choose <b>Laser and Mill &gt; Holding Tabs…</b></p>
+    <p class="where" lang="nl">Waar: selecteer gesloten contouren op een snijlaag en kies <b>Laser en frees &gt; Bruggetjes…</b></p>
+    <ul lang="en">
+      <li>The tabs are evenly spread over each contour; snap the part out afterwards.</li>
+      <li>Set the number of tabs per contour and their width: about the beam for a laser, a few millimetres for a mill.</li>
+      <li>By default only the outer contours get tabs, since the scrap of a hole falls out on its own.</li>
+    </ul>
+    <ul lang="nl">
+      <li>De bruggetjes zitten gelijk verdeeld over elke contour; daarna breek je het onderdeel los.</li>
+      <li>Stel het aantal bruggetjes per contour en hun breedte in: bij een laser ongeveer de straal, bij een frees een paar millimeter.</li>
+      <li>Standaard krijgen alleen de buitencontouren bruggetjes, want het afval van een gat valt vanzelf uit de plaat.</li>
+    </ul>
+    <h3><span lang="en">Fit test</span><span lang="nl">Passingstest</span></h3>
+    <p lang="en">A comb of slots that shows which offset gives a good press fit for the sheet you are cutting, so your finger joints stop being loose or tight.</p>
+    <p lang="nl">Een kam met sleuven die laat zien welke afwijking goed past op de plaat die je snijdt, zodat je vingerlassen niet los meer zitten of te strak.</p>
+    <p class="where" lang="en">Where: <b>Laser and Mill &gt; Fit Test…</b></p>
+    <p class="where" lang="nl">Waar: <b>Laser en frees &gt; Passingstest…</b></p>
+    <ul lang="en">
+      <li>The comb lands on the worksheet; cut it from the sheet you are cutting.</li>
+      <li>Every slot is a little wider than the sheet and carries its offset engraved under it.</li>
+      <li>Push an offcut of the same sheet into every slot: the offset of the slot that holds it best is the one to use as kerf or finger width.</li>
+    </ul>
+    <ul lang="nl">
+      <li>De kam komt op het werkblad; snijd hem uit de plaat die je snijdt.</li>
+      <li>Elke sleuf is iets breder dan de plaat en heeft eronder zijn afwijking gegraveerd.</li>
+      <li>Duw een afvalstukje van dezelfde plaat in elke sleuf: de afwijking van de sleuf die het beste houdt, is die je als kerf of vingerbreedte gebruikt.</li>
+    </ul>
+    <h3><span lang="en">Job estimate</span><span lang="nl">Tijdsschatting</span></h3>
+    <p lang="en">What the job costs in metres of contour, piercings and minutes, before you send the sheet to the machine.</p>
+    <p lang="nl">Wat de klus kost aan meters contour, insteekpunten en minuten, voordat je de plaat naar de machine stuurt.</p>
+    <p class="where" lang="en">Where: <b>Laser and Mill &gt; Job Estimate…</b></p>
+    <p class="where" lang="nl">Waar: <b>Laser en frees &gt; Tijdsschatting…</b></p>
+    <ul lang="en">
+      <li>Per layer: how many metres of contour it cuts, how often the laser pierces, how many passes it runs and how long the layer takes.</li>
+      <li>The rapid moves between the paths count along, at 150 mm/s.</li>
+      <li>A raster layer is named but not timed, since its time depends on the line spacing, and the mill layers have an export of their own.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Per laag: hoeveel meter contour hij snijdt, hoe vaak de laser insteekt, hoeveel passes hij maakt en hoe lang de laag duurt.</li>
+      <li>De snelle verplaatsingen tussen de paden tellen mee, met 150 mm/s.</li>
+      <li>Een rasterlaag wordt wel genoemd maar niet getimed, want haar tijd hangt van de lijnafstand af, en de freeslagen hebben een eigen export.</li>
+    </ul>
+    <h3><span lang="en">Exporting for the machine</span><span lang="nl">Exporteren voor de machine</span></h3>
+    <p lang="en">The worksheet as a drawing for another program, or straight as the code a GRBL laser runs.</p>
+    <p lang="nl">Het werkblad als tekening voor een ander programma, of meteen als de code die een GRBL-laser draait.</p>
+    <p class="where" lang="en">Where: <b>File &gt; Export &gt; 2D Vector (SVG)</b>, <b>2D Vector (DXF)</b> and <b>G-code for a GRBL Laser…</b></p>
+    <p class="where" lang="nl">Waar: <b>Bestand &gt; Exporteren &gt; 2D-vector (SVG)</b>, <b>2D-vector (DXF)</b> en <b>G-code voor een GRBL-laser…</b></p>
+    <ul lang="en">
+      <li><b>SVG and DXF</b>: selected faces at true size, the top view or a section at any height, one colour per layer.</li>
+      <li><b>G-code</b>: the laser layers go to the machine as plain G-code - millimetres, absolute coordinates, the holes before the outer contour and the nearest path next, with the power of every layer as S word.</li>
+      <li>The dialog asks the highest S word of the controller (<kbd>$30</kbd>: 1000 on a modern board, 255 on an old 8-bit one) and whether the beam follows the feed (<b>M4</b>, so it burns less in a corner) or stays at a fixed power (<b>M3</b>); both come back next time, since they belong to the machine.</li>
+      <li>The status bar ends with how long the job takes, the same estimate as <b>Laser and Mill &gt; Job Estimate…</b></li>
+    </ul>
+    <ul lang="nl">
+      <li><b>SVG en DXF</b>: geselecteerde vlakken op ware grootte, het bovenaanzicht of een doorsnede op elke hoogte, één kleur per laag.</li>
+      <li><b>G-code</b>: de laserlagen gaan als gewone G-code naar de machine - millimeters, absolute coördinaten, de gaten vóór de buitencontour en het dichtstbijzijnde pad eerst, met het vermogen van elke laag als S-woord.</li>
+      <li>Het venster vraagt het hoogste S-woord van de controller (<kbd>$30</kbd>: 1000 op een moderne kaart, 255 op een oude 8-bit) en of de straal de snelheid volgt (<b>M4</b>, zodat hij in een hoek minder brandt) of vast blijft op één vermogen (<b>M3</b>); allebei komen volgende keer terug, want ze horen bij de machine.</li>
+      <li>De statusbalk eindigt met hoe lang het werk duurt, dezelfde schatting als <b>Laser en frees &gt; Tijdsschatting…</b></li>
+    </ul>
+    <h3><span lang="en">Importing a drawing</span><span lang="nl">Een tekening importeren</span></h3>
+    <p lang="en">A vector drawing from elsewhere, as geometry you can push into a part.</p>
+    <p lang="nl">Een vectortekening van elders, als geometrie die je tot een onderdeel kunt duwen.</p>
+    <p class="where" lang="en">Where: <b>File &gt; Import…</b></p>
+    <p class="where" lang="nl">Waar: <b>Bestand &gt; Importeren…</b></p>
+    <ul lang="en">
+      <li>SVG and DXF come in on the worksheet, or on a face or the ground in 3D.</li>
+      <li>In 3D you place the drawing and push/pull it, or extrude it straight into a part.</li>
+    </ul>
+    <ul lang="nl">
+      <li>SVG en DXF komen op het werkblad binnen, of in 3D op een vlak of de grond.</li>
+      <li>In 3D plaats je de tekening en duwt of trekt hem, of extrudeert hem direct tot een onderdeel.</li>
+    </ul>
+    <h3><span lang="en">From the model to the sheet</span><span lang="nl">Van het model naar het werkblad</span></h3>
+    <p lang="en">Sends faces and plates of the 3D model to the worksheet, so a part you modelled gets laser-cut edges.</p>
+    <p lang="nl">Stuurt vlakken en platen uit het 3D-model naar het werkblad, zodat een onderdeel dat je modelleert gelaserde randen krijgt.</p>
+    <p class="where" lang="en">Where: right-click the selection and choose <b>Laser / Mill</b> and the layer, or <b>Tools &gt; To Laser or Mill…</b></p>
+    <p class="where" lang="nl">Waar: rechtsklik de selectie en kies <b>Laseren / frezen</b> en de laag, of <b>Gereedschap &gt; Naar laser of frees…</b></p>
+    <ul lang="en">
+      <li>Select faces or plates (groups) in the model, right-click and choose <b>Laser / Mill</b>, then the layer: Cut, Engrave, Mill outside and so on.</li>
+      <li>Faces arrive at true size, plates as their top view, next to what is already on the sheet.</li>
+      <li>If the sheet has no thickness yet, it takes over the thickness of the plates.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Selecteer vlakken of platen (groepen) in het model, klik met rechts en kies <b>Laseren / frezen</b> en dan de laag: snijden, graveren, frezen buiten enzovoort.</li>
+      <li>Vlakken komen op ware grootte, platen als bovenaanzicht, naast wat er al op het werkblad staat.</li>
+      <li>Heeft het werkblad nog geen dikte, dan neemt het de dikte van de platen over.</li>
+    </ul>
+    <h3><span lang="en">From the sheet to 3D</span><span lang="nl">Van het werkblad naar 3D</span></h3>
+    <p lang="en">Makes a plate of every closed contour on the worksheet, so a laser-cut assembly is also a model you can print and check.</p>
+    <p lang="nl">Maakt van elke gesloten contour op het werkblad een plaat, zodat een gelaserde constructie ook een model is dat je kunt printen en controleren.</p>
+    <p class="where" lang="en">Where: <b>Laser and Mill &gt; Parts to 3D Model</b> or <b>Tools &gt; Parts to 3D Model</b>, also in the <b>Laser and Mill</b> toolbar and the right-click menu; the thickness stands in <b>Laser and Mill &gt; Sheet…</b></p>
+    <p class="where" lang="nl">Waar: <b>Laser en frees &gt; Onderdelen naar 3D-model</b> of <b>Gereedschap &gt; Onderdelen naar 3D-model</b>, ook op de werkbalk <b>Laser en frees</b> en in het rechtsklikmenu; de dikte staat bij <b>Laser en frees &gt; Plaat…</b></p>
+    <ul lang="en">
+      <li>Set the thickness in <b>Laser and Mill &gt; Sheet…</b>, for example 3 mm.</li>
+      <li>Every part with a closed outline on a cut, mill or drill layer becomes a plate of that thickness at the same position.</li>
+      <li>Holes go through, pockets are cut to their depth from the top, engravings stay 2D.</li>
+      <li>Doing it again replaces the earlier parts; with a selection on the sheet only those parts are added.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Stel de dikte in bij <b>Laser en frees &gt; Plaat…</b>, bijvoorbeeld 3 mm.</li>
+      <li>Elk onderdeel met een gesloten rand op een snij-, frees- of boorlaag wordt een plaat met die dikte op dezelfde plek.</li>
+      <li>Gaten gaan erdoor, uitkameringen gaan van boven tot hun diepte, gravures blijven 2D.</li>
+      <li>Nog een keer doen vervangt de vorige onderdelen; met een selectie op het werkblad komen alleen die onderdelen erbij.</li>
     </ul>
 
     <!-- ===================================================== settings -->
     <h2 id="settings"><span lang="en">Settings</span><span lang="nl">Instellingen</span></h2>
+    <h3><span lang="en">Model Info</span><span lang="nl">Modelinfo</span></h3>
+    <p lang="en">What this model is made of and in what unit you work.</p>
+    <p lang="nl">Waaruit dit model is opgebouwd en in welke eenheid je werkt.</p>
+    <p class="where" lang="en">Where: <b>Window &gt; Model Info</b></p>
+    <p class="where" lang="nl">Waar: <b>Venster &gt; Modelinfo</b></p>
     <ul lang="en">
-      <li><b>3D Printing &gt; Printer Setup…</b>: choose your printer (Bambu, Prusa, Creality, Voron or a custom size) for the print bed, and the <a href="#filament">filament</a>.</li>
-      <li><b>Window &gt; Model Info</b>: units and precision, statistics (groups, loose edges and faces, total volume) and the print bed.</li>
-      <li><b>Window &gt; Preferences</b>: General (circle segments, the update check, the question to simplify a large import and the <a href="#language">language</a>), Display (the <a href="#theme">theme</a>), Drawing (the <a href="#overhangs">overhang limit</a>), <a href="#spacemouse">3D Mouse</a> and Shortcuts (search, add, remove, reset).</li>
-      <li><b>View</b>: Wireframe, Hidden Line, Shaded and Monochrome (Face Style); X-ray (<kbd>Alt</kbd>+<kbd>X</kbd>), back edges (<kbd>K</kbd>), hidden geometry, guides, axes and print bed.</li>
+      <li><b>Units</b>: the units and the precision of every measurement box.</li>
+      <li><b>Statistics</b>: groups, loose edges and faces, and the total volume.</li>
+      <li><b>Print Bed</b>: the printer and the <a href="#filament">filament</a>, which <b>3D Printing &gt; Printer Setup…</b> opens directly.</li>
     </ul>
     <ul lang="nl">
-      <li><b>3D-printen &gt; Printer instellen</b>: kies je printer (Bambu, Prusa, Creality, Voron of een eigen maat) voor het printbed, en het <a href="#filament">filament</a>.</li>
-      <li><b>Venster &gt; Modelinfo</b>: eenheden en nauwkeurigheid, statistieken (groepen, losse randen en vlakken, totaal volume) en het printbed.</li>
-      <li><b>Venster &gt; Voorkeuren</b>: Algemeen (cirkelsegmenten, de updatecontrole, de vraag om een grote import te versimpelen en de <a href="#language">taal</a>), Weergave (het <a href="#theme">thema</a>), Tekenen (de <a href="#overhangs">overhanggrens</a>), <a href="#spacemouse">3D-muis</a> en Sneltoetsen (zoeken, toevoegen, weghalen, terugzetten).</li>
-      <li><b>Beeld</b>: draadmodel, verborgen lijnen, gearceerd en monochroom; röntgen (<kbd>Alt</kbd>+<kbd>X</kbd>), achterliggende randen (<kbd>K</kbd>), verborgen geometrie, hulplijnen, assen en printbed.</li>
+      <li><b>Eenheden</b>: de eenheden en de nauwkeurigheid in elk meetvak.</li>
+      <li><b>Statistieken</b>: groepen, losse randen en vlakken, en het totale volume.</li>
+      <li><b>Printbed</b>: de printer en het <a href="#filament">filament</a>; <b>3D-printen &gt; Printer instellen…</b> opent deze pagina meteen.</li>
+    </ul>
+    <h3><span lang="en">Preferences</span><span lang="nl">Voorkeuren</span></h3>
+    <p lang="en">The few things Volura should do your way, in five pages.</p>
+    <p lang="nl">Het paar dingen die Volura op jouw manier moet doen, in vijf pagina's.</p>
+    <p class="where" lang="en">Where: <b>Window &gt; Preferences</b></p>
+    <p class="where" lang="nl">Waar: <b>Venster &gt; Voorkeuren</b></p>
+    <ul lang="en">
+      <li><b>General</b>: the segments of a circle, the update check, the question to simplify a large import and the <a href="#language">language</a>.</li>
+      <li><b>Display</b>: the <a href="#theme">theme</a>.</li>
+      <li><b>Drawing</b>: the <a href="#overhangs">overhang limit</a> and the snapping of lengths.</li>
+      <li><b>3D Mouse</b>: the <a href="#spacemouse">3D mouse</a> and its speed.</li>
+      <li><b>Shortcuts</b>: search, add, remove and reset every key.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Algemeen</b>: de segmenten van een cirkel, de updatecontrole, de vraag om een grote import te versimpelen en de <a href="#language">taal</a>.</li>
+      <li><b>Weergave</b>: het <a href="#theme">thema</a>.</li>
+      <li><b>Tekenen</b>: de <a href="#overhangs">overhanggrens</a> en het snappen van lengtes.</li>
+      <li><b>3D-muis</b>: de <a href="#spacemouse">3D-muis</a> en zijn snelheid.</li>
+      <li><b>Sneltoetsen</b>: elke toets zoeken, toevoegen, weghalen en terugzetten.</li>
+    </ul>
+    <h3><span lang="en">View options</span><span lang="nl">Beeldopties</span></h3>
+    <p lang="en">How the model is drawn, and what you want to see while you work.</p>
+    <p lang="nl">Hoe het model getekend wordt, en wat je wilt zien terwijl je werkt.</p>
+    <p class="where" lang="en">Where: <b>View</b></p>
+    <p class="where" lang="nl">Waar: <b>Beeld</b></p>
+    <ul lang="en">
+      <li><b>Face Style</b>: Wireframe, Hidden Line, Shaded and Monochrome, plus <a href="#overhangs">Overhangs</a>.</li>
+      <li><b>Edge Style</b>: the profile edges and the back edges (<kbd>K</kbd>).</li>
+      <li>X-ray (<kbd>Alt</kbd>+<kbd>X</kbd>), hidden geometry, guides, the axes and the grid of the print bed.</li>
+      <li>On the worksheet here you also switch the grid and the <a href="#laser">layers</a> of the worksheet.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Vlakstijl</b>: draadmodel, verborgen lijnen, gearceerd en monochroom, plus <a href="#overhangs">Overhang</a>.</li>
+      <li><b>Randstijl</b>: de profielranden en de achterliggende randen (<kbd>K</kbd>).</li>
+      <li>Röntgen (<kbd>Alt</kbd>+<kbd>X</kbd>), verborgen geometrie, hulplijnen, de assen en het raster van het printbed.</li>
+      <li>Op het werkblad zet je hier ook het raster en de <a href="#laser">lagen</a> van het werkblad aan en uit.</li>
     </ul>
     <h3 id="language"><span lang="en">Language</span><span lang="nl">Taal</span></h3>
-    <p lang="en">The interface of Volura is in English or Dutch. Choose under <b>Window &gt; Preferences &gt; General &gt; Language</b>: <i>System</i> (the default) follows the language of your system and uses English if Volura does not have it; <i>English</i> and <i>Nederlands</i> pick a fixed language. The change takes effect after you restart Volura.</p>
-    <p lang="nl">De interface van Volura is in het Engels of het Nederlands. Kies onder <b>Venster &gt; Voorkeuren &gt; Algemeen &gt; Taal</b>: <i>Systeem</i> (standaard) volgt de taal van je systeem en gebruikt Engels als Volura die taal niet heeft; <i>English</i> en <i>Nederlands</i> kiezen een vaste taal. De wijziging werkt na het opnieuw starten van Volura.</p>
+    <p lang="en">The interface of Volura is in English or Dutch.</p>
+    <p lang="nl">De interface van Volura is in het Engels of het Nederlands.</p>
+    <p class="where" lang="en">Where: <b>Window &gt; Preferences &gt; General &gt; Language</b></p>
+    <p class="where" lang="nl">Waar: <b>Venster &gt; Voorkeuren &gt; Algemeen &gt; Taal</b></p>
+    <ul lang="en">
+      <li><i>System</i> (the default) follows the language of your system and uses English if Volura does not have it.</li>
+      <li><i>English</i> and <i>Nederlands</i> pick a fixed language.</li>
+    </ul>
+    <ul lang="nl">
+      <li><i>Systeem</i> (standaard) volgt de taal van je systeem en gebruikt Engels als Volura die taal niet heeft.</li>
+      <li><i>English</i> en <i>Nederlands</i> kiezen een vaste taal.</li>
+    </ul>
+    <p class="note" lang="en">The change takes effect after you restart Volura.</p>
+    <p class="note" lang="nl">De wijziging werkt na het opnieuw starten van Volura.</p>
     <h3 id="theme"><span lang="en">Light or dark theme</span><span lang="nl">Licht of donker thema</span></h3>
-    <p lang="en">Under <b>Window &gt; Preferences &gt; Display &gt; Theme</b> you choose <i>System</i> (follows the light or dark setting of your system), <i>Light</i> or <i>Dark</i>. The new theme is applied right away.</p>
-    <p lang="nl">Onder <b>Venster &gt; Voorkeuren &gt; Weergave &gt; Thema</b> kies je <i>Systeem</i> (volgt de lichte of donkere instelling van je systeem), <i>Licht</i> of <i>Donker</i>. Het nieuwe thema gaat meteen in.</p>
+    <p lang="en">The colours of the window, so Volura matches the rest of your desktop.</p>
+    <p lang="nl">De kleuren van het venster, zodat Volura bij de rest van je bureaublad past.</p>
+    <p class="where" lang="en">Where: <b>Window &gt; Preferences &gt; Display &gt; Theme</b></p>
+    <p class="where" lang="nl">Waar: <b>Venster &gt; Voorkeuren &gt; Weergave &gt; Thema</b></p>
+    <ul lang="en">
+      <li><i>System</i> follows the light or dark setting of your system; <i>Light</i> and <i>Dark</i> pick one.</li>
+      <li>The new theme is applied right away.</li>
+    </ul>
+    <ul lang="nl">
+      <li><i>Systeem</i> volgt de lichte of donkere instelling van je systeem; <i>Licht</i> en <i>Donker</i> kiezen er één.</li>
+      <li>Het nieuwe thema gaat meteen in.</li>
+    </ul>
     <div class="note" lang="en">In the dark theme the plate on the 2D worksheet stays light, so the laser layer colours (pure red, blue, black) stay easy to read, and the 3D view gets a muted grey background on which both the black edges and the white faces stand out.</div>
     <div class="note" lang="nl">In het donkere thema blijft de plaat op het 2D-werkblad licht, zodat de laagkleuren voor de laser (puur rood, blauw, zwart) goed leesbaar blijven, en krijgt het 3D-venster een gedempt grijze achtergrond waarop zowel de zwarte randen als de witte vlakken goed uitkomen.</div>
 
     <!-- ===================================================== keys -->
     <h2 id="keys"><span lang="en">Keyboard shortcuts</span><span lang="nl">Sneltoetsen</span></h2>
+    <p lang="en">The keys of the tools you use most; <kbd>F1</kbd> opens the help with the same list.</p>
+    <p lang="nl">De toetsen van de gereedschappen die je het meest gebruikt; <kbd>F1</kbd> opent de help met dezelfde lijst.</p>
+    <p class="where" lang="en">Where: every shortcut is listed and editable under <b>Window &gt; Preferences &gt; Shortcuts</b></p>
+    <p class="where" lang="nl">Waar: elke sneltoets staat er en is aan te passen onder <b>Venster &gt; Voorkeuren &gt; Sneltoetsen</b></p>
     <div class="tbl"><table>
       <tr><th><span lang="en">Key</span><span lang="nl">Toets</span></th><th><span lang="en">Tool</span><span lang="nl">Gereedschap</span></th><th><span lang="en">Key</span><span lang="nl">Toets</span></th><th><span lang="en">Tool</span><span lang="nl">Gereedschap</span></th></tr>
       <tr><td><kbd>Space</kbd></td><td><span lang="en">Select</span><span lang="nl">Selecteren</span></td><td><kbd>P</kbd></td><td><span lang="en">Push/pull</span><span lang="nl">Duwen/trekken</span></td></tr>
@@ -759,6 +1275,5 @@ volura</code></pre>
       <tr><td><kbd>K</kbd></td><td><span lang="en">Back edges</span><span lang="nl">Achterliggende randen</span></td><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td><span lang="en">Undo / redo</span><span lang="nl">Ongedaan maken / opnieuw</span></td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td><span lang="en">Print (multicolour 3MF)</span><span lang="nl">Afdrukken (meerkleuren-3MF)</span></td><td><kbd>F1</kbd></td><td>Help</td></tr>
       <tr><td><kbd>F5</kbd></td><td><span lang="en">Print check</span><span lang="nl">Printcontrole</span></td><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td><span lang="en">Drop to bed</span><span lang="nl">Op bed plaatsen</span></td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>2</kbd></td><td><span lang="en">2D worksheet</span><span lang="nl">2D-werkblad</span></td><td><kbd>Esc</kbd></td><td><span lang="en">Cancel the tool</span><span lang="nl">Gereedschap wegmaken</span></td></tr>
     </table></div>
-    <p lang="en">You can change every shortcut under <b>Window &gt; Preferences &gt; Shortcuts</b>.</p>
-    <p lang="nl">Elke sneltoets kun je aanpassen onder <b>Venster &gt; Voorkeuren &gt; Sneltoetsen</b>.</p>
