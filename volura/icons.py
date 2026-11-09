@@ -224,6 +224,37 @@ SVG = {
                 f'stroke-linecap="round"/>'
                 f'<path d="M20 9 L20 6 M17 6 L17 9 M14 6 L14 9" {N} stroke="#d23b3b" '
                 f'stroke-width="1.5" stroke-linecap="round"/>',
+    # vent pattern: a plate with a field of round holes
+    "vent": f'<rect x="2.5" y="4" width="19" height="16" rx="1" fill="#eef2f7" {S()}/>'
+            f'<circle cx="7" cy="9" r="1.7" fill="#fff" stroke="#d23b3b" stroke-width="1.2"/>'
+            f'<circle cx="12" cy="9" r="1.7" fill="#fff" stroke="#d23b3b" stroke-width="1.2"/>'
+            f'<circle cx="17" cy="9" r="1.7" fill="#fff" stroke="#d23b3b" stroke-width="1.2"/>'
+            f'<circle cx="9.5" cy="14" r="1.7" fill="#fff" stroke="#d23b3b" stroke-width="1.2"/>'
+            f'<circle cx="14.5" cy="14" r="1.7" fill="#fff" stroke="#d23b3b" stroke-width="1.2"/>',
+    # fit test: a comb whose slots get wider from left to right
+    "fit_test": f'<path d="M2.5 6 L5 6 L5 13 L6.2 13 L6.2 6 L9 6 L9 13 L10.6 13 L10.6 6 L13.5 6 '
+                f'L13.5 13 L15.5 13 L15.5 6 L18.5 6 L18.5 13 L21.5 13 L21.5 18 L2.5 18 Z" '
+                f'fill="#e8c897" {S(w=1.3)}/>',
+    # spur gear: a wheel with teeth and a bore
+    "gear": f'<path d="M10.6 2.5 L13.4 2.5 L13.9 5.2 L16.1 6.1 L18.4 4.5 L20.4 6.5 L18.8 8.8 '
+            f'L19.7 11 L22.5 11.5 L22.5 14.3 L19.7 14.8 L18.8 17 L20.4 19.3 L18.4 21.3 L16.1 19.7 '
+            f'L13.9 20.6 L13.4 23.3 L10.6 23.3 L10.1 20.6 L7.9 19.7 L5.6 21.3 L3.6 19.3 L5.2 17 '
+            f'L4.3 14.8 L1.5 14.3 L1.5 11.5 L4.3 11 L5.2 8.8 L3.6 6.5 L5.6 4.5 L7.9 6.1 L10.1 5.2 Z" '
+            f'fill="#cfe0f5" {S(w=1.2)} transform="translate(0 -0.9)"/>'
+            f'<circle cx="12" cy="12" r="2.8" fill="#fff" {S(w=1.2)}/>',
+    # holding tabs: a red cut contour with small gaps where the part stays in the sheet
+    "tabs": f'<rect x="2.5" y="4" width="19" height="16" rx="1" fill="#eef2f7" {S(w=1.2)}/>'
+            f'<path d="M6 7.5 L10.5 7.5 M13.5 7.5 L18 7.5 L18 10.5 M18 13.5 L18 16.5 L13.5 16.5 '
+            f'M10.5 16.5 L6 16.5 L6 13.5 M6 10.5 L6 7.5" {N} stroke="#d23b3b" stroke-width="1.6" '
+            f'stroke-linecap="round"/>',
+    # round corners: a square with a red radius in its corner
+    "round_corners": f'<path d="M4 20 L4 4 L20 4 L20 20 Z" {N} stroke="#9a9a9a" stroke-width="1.2" '
+                     f'stroke-dasharray="2 1.6"/>'
+                     f'<path d="M4 20 L4 11 A7 7 0 0 1 11 4 L20 4" {N} stroke="#d23b3b" '
+                     f'stroke-width="2.2" stroke-linecap="round"/>',
+    # dogbone corners: an inside corner with the round relief of the cutter
+    "dogbone": f'<path d="M3 3 L21 3 L21 21 L11 21 L11 11 L3 11 Z" fill="#e8c897" {S(w=1.3)}/>'
+               f'<circle cx="12.6" cy="12.6" r="2.3" fill="#fff" stroke="#d23b3b" stroke-width="1.4"/>',
     # living hinge: staggered slits in a plate of plywood
     "hinge": f'<rect x="3" y="5" width="18" height="14" rx="1" fill="#e8c897" {S()}/>'
              f'<path d="M7.5 7 L7.5 11.5 M7.5 13.5 L7.5 17 M12 7 L12 9.5 M12 11.5 L12 14.5 '

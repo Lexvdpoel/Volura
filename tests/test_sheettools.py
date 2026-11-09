@@ -708,7 +708,8 @@ def test_sheettoolbar_has_the_new_buttons(win):
     bar = next((b for b in win.findChildren(QToolBar)
                 if b.objectName() == "SheetToolbar"), None)
     assert bar is not None
-    labels = [a.text().replace("&", "") for a in bar.actions() if not a.isSeparator()]
+    labels = [a.text().replace("&", "") for b in win._sheet_toolbars()
+              for a in b.actions() if not a.isSeparator()]
     for want in ("Line", "Rectangle", "Rounded Rectangle", "Circle", "Ellipse", "Arc",
                  "Polygon", "Text", "Offset", "Union Outlines",
                  "Subtract Outlines", "Intersect Outlines", "Join Lines",

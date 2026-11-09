@@ -256,10 +256,11 @@ def test_the_fit_test_follows_the_sheet_commands_in_the_laser_menu(win):
     assert tools.index("Vent Pattern") == tools.index("Living Hinge") + 1
 
 
-def test_the_fit_test_follows_the_living_hinge_on_the_sheet_toolbar(win):
-    labels = [clean(a.text()) for a in win.tb_sheet.actions() if not a.isSeparator()]
-    assert labels.index("Vent Pattern") == labels.index("Living Hinge") + 1
-    assert labels.index("Fit Test") == labels.index("Vent Pattern") + 1
+def test_the_fit_test_follows_the_spur_gear_on_the_laser_toolbar(win):
+    labels = [clean(a.text()) for a in win.tb_laser.actions() if not a.isSeparator()]
+    assert labels.index("Fit Test") == labels.index("Spur Gear") + 1
+    edit = [clean(a.text()) for a in win.tb_sheet_edit.actions() if not a.isSeparator()]
+    assert edit.index("Vent Pattern") == edit.index("Living Hinge") + 1
 
 
 if __name__ == "__main__":

@@ -4166,9 +4166,11 @@ class MainWindow(QMainWindow):
             for bar, shown in self._hidden_3d_toolbars.items():
                 if shown:
                     bar.hide()
-            self.tb_sheet.show()
+            for bar in self._sheet_toolbars():
+                bar.show()
         else:
-            self.tb_sheet.hide()
+            for bar in self._sheet_toolbars():
+                bar.hide()
             for bar, shown in getattr(self, "_hidden_3d_toolbars", {}).items():
                 if shown:
                     bar.show()
@@ -4550,19 +4552,19 @@ class MainWindow(QMainWindow):
                             "hinge, so the panel bends there"))
         # ---- vent pattern
         self.a_vent_pattern = A(tr("Vent Pattern…"),
-                                lambda checked=False: self.vent_pattern_dialog(), None, None,
+                                lambda checked=False: self.vent_pattern_dialog(), None, "vent",
                                 False,
                                 tr("Fill the selected closed contour on the worksheet with a "
                                    "pattern of holes, for a ventilation grille or a speaker "
                                    "cover"))
         # ---- fit test
         self.a_fit_test = A(tr("Fit Test…"),
-                            lambda checked=False: self.fit_test_dialog(), None, None, False,
+                            lambda checked=False: self.fit_test_dialog(), None, "fit_test", False,
                              tr("A comb of slots that shows which offset gives a good press "
                                 "fit for the sheet you are cutting"))
         # ---- spur gear
         self.a_spur_gear = A(tr("Spur Gear…"),
-                             lambda checked=False: self.spur_gear_dialog(), None, None, False,
+                             lambda checked=False: self.spur_gear_dialog(), None, "gear", False,
                              tr("Add an involute spur gear to the worksheet, with the teeth, "
                                 "the module and the bore you choose"))
         self.a_spur_gear_3d = A(tr("Spur Gear…"),
@@ -4603,20 +4605,21 @@ class MainWindow(QMainWindow):
                                  "desk"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
-                                lambda checked=False: self.holding_tabs_dialog(), None, None,
+                                lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
                                 False,
                                 tr("Leave small uncut bridges in the selected closed contours, "
                                    "so a part stays in the sheet until the job is done"))
         # ---- round corners
         self.a_round_corners = A(tr("Round &Corners…"),
-                                 lambda checked=False: self.round_corners_dialog(), None, None,
+                                 lambda checked=False: self.round_corners_dialog(), None,
+                                 "round_corners",
                                  False,
                                  tr("Round the sharp corners of the selected paths with a "
                                     "radius, so a cut panel has no sharp edges left"))
         # ---- dogbone corners
         self.a_dogbone_corners = A(tr("&Dogbone Corners…"),
                                    lambda checked=False: self.dogbone_corners_dialog(),
-                                   None, None, False,
+                                   None, "dogbone", False,
                                    tr("Cut a round relief in every inside corner of the "
                                       "selected closed contours, so a round mill leaves no "
                                       "fillet in the corner"))
@@ -4827,39 +4830,69 @@ class MainWindow(QMainWindow):
         self._build_print_tools_toolbar()
         self._build_sheet_toolbar()
 
-    def _build_sheet_toolbar(self):
-        """The '2D Worksheet' toolbar on the left; only visible in 2D mode."""
-        bar = self.findChild(QToolBar, "SheetToolbar")
+    def _sheet_bar(self, name, title, new_column=False):
+        """One of the toolbars of the worksheet on the left; made once, hidden in 3D.
+        With `new_column` it starts a column of its own next to the previous one."""
+        bar = self.findChild(QToolBar, name)
         if bar is None:
-            bar = QToolBar(tr("2D Worksheet"))
-            bar.setObjectName("SheetToolbar")
+            bar = QToolBar(title)
+            bar.setObjectName(name)
             bar.setIconSize(QSize(24, 24))
+            if new_column:
+                self.addToolBarBreak(Qt.LeftToolBarArea)
             self.addToolBar(Qt.LeftToolBarArea, bar)
-        self.tb_sheet = bar
-        if not bar.actions():
-            T = self.sheet_tool_actions
-            for a in (T["select"], T["move"], T["rotate"], T["scale"], None,
-                      T["line"], T["rectangle"], T["roundrect"], T["circle"], T["ellipse"],
-                      T["arc"], T["centerarc"], T["polygon"], T["text"], T["offset"], None,
-                      self.a_sheet_union, self.a_sheet_subtract, self.a_sheet_intersect,
-                      self.a_sheet_join, self.a_sheet_split, None,
-                      self.a_mirror_h, self.a_mirror_v, self.a_sheet_align,
-                      self.a_sheet_distribute, self.a_sheet_duplicate,
-                      self.a_sheet_duplicate_circle, None,
-                      self.a_sheet_grid, self.a_sheet_round, self.a_sheet_to_layer,
-                      None, self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint,
-                      self.a_hinge, self.a_vent_pattern, self.a_fit_test, self.a_spur_gear,
-                      self.a_holding_tabs, self.a_round_corners, self.a_dogbone_corners,
-                      self.a_sheet_to_model,
-                      self.a_job_estimate, None,
-                      self.a_extents):
-                bar.addSeparator() if a is None else bar.addAction(a)
-            self._add_dropdown(bar, self.a_sheet_align,
+        return bar
+
+    def _build_sheet_toolbar(self):
+        """The toolbars of the worksheet: three columns on the left, only in 2D mode.
+
+        One column with every button would be taller than the window, and Qt then folds
+        the rest behind an arrow that closes again as soon as the mouse leaves it. So:
+        drawing, editing, and what is for the laser or the mill, side by side."""
+        T = self.sheet_tool_actions
+        bars = (
+            ("SheetToolbar", tr("2D Worksheet"),
+             (T["select"], T["move"], T["rotate"], T["scale"], None,
+              T["line"], T["rectangle"], T["roundrect"], T["circle"], T["ellipse"],
+              T["arc"], T["centerarc"], T["polygon"], T["text"], None,
+              T["offset"], self.a_sheet_round, self.a_sheet_grid, None,
+              self.a_extents)),
+            ("SheetEditToolbar", tr("2D Editing"),
+             (self.a_sheet_union, self.a_sheet_subtract, self.a_sheet_intersect, None,
+              self.a_sheet_join, self.a_sheet_split, None,
+              self.a_mirror_h, self.a_mirror_v, self.a_sheet_align,
+              self.a_sheet_distribute, self.a_sheet_duplicate,
+              self.a_sheet_duplicate_circle, None,
+              self.a_round_corners, self.a_hinge, self.a_vent_pattern, None,
+              self.a_sheet_to_layer)),
+            ("LaserToolbar", tr("Laser and Mill"),
+             (self.a_sheet_plaat, self.a_sheet_nest, None,
+              self.a_box_joint, self.a_spur_gear, self.a_fit_test, None,
+              self.a_holding_tabs, self.a_dogbone_corners, None,
+              self.a_sheet_to_model, self.a_job_estimate)),
+        )
+        made = []
+        for name, title, items in bars:
+            bar = self._sheet_bar(name, title, new_column=bool(made))
+            if not bar.actions():
+                for a in items:
+                    bar.addSeparator() if a is None else bar.addAction(a)
+            made.append(bar)
+        self.tb_sheet, self.tb_sheet_edit, self.tb_laser = made
+        edit = self.tb_sheet_edit
+        if self.a_sheet_align not in self._dropdown_buttons:
+            self._add_dropdown(edit, self.a_sheet_align,
                                tuple(self.sheet_align_actions.values()))
-            self._add_dropdown(bar, self.a_sheet_distribute,
+            self._add_dropdown(edit, self.a_sheet_distribute,
                                tuple(self.sheet_distribute_actions.values()))
-            self._add_layer_dropdown(bar, self.a_sheet_to_layer)
-        bar.hide()          # SketchUp shows no toolbar on the left by default
+            self._add_layer_dropdown(edit, self.a_sheet_to_layer)
+        for bar in made:
+            bar.hide()      # SketchUp shows no toolbar on the left by default
+
+    def _sheet_toolbars(self):
+        return [bar for bar in (getattr(self, "tb_sheet", None),
+                                getattr(self, "tb_sheet_edit", None),
+                                getattr(self, "tb_laser", None)) if bar is not None]
 
     def _add_layer_dropdown(self, tb, action):
         """Button with a drop-down menu of the layers; the menu is filled each time it opens."""
@@ -6127,7 +6160,9 @@ class MainWindow(QMainWindow):
         lay.addWidget(QLabel(tr("Show or hide the toolbars:")))
         for bar, label in ((self.tb_main, tr("Getting Started")), (self.tb_tools, tr("Large Tool Set")),
                            (getattr(self, "tb_print", None), tr("Print Tools")),
-                           (getattr(self, "tb_sheet", None), tr("2D Worksheet"))):
+                           (getattr(self, "tb_sheet", None), tr("2D Worksheet")),
+                           (getattr(self, "tb_sheet_edit", None), tr("2D Editing")),
+                           (getattr(self, "tb_laser", None), tr("Laser and Mill"))):
             if bar is None:
                 continue
             cb = QCheckBox(label)

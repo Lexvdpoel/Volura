@@ -273,9 +273,9 @@ def test_the_spur_gear_follows_the_finger_joint_box_in_the_draw_menu(win):
     assert labels.index("Spur Gear") == labels.index("Box with Finger Joints") + 1
 
 
-def test_the_spur_gear_follows_the_fit_test_on_the_sheet_toolbar(win):
-    labels = [clean(a.text()) for a in win.tb_sheet.actions() if not a.isSeparator()]
-    assert labels.index("Spur Gear") == labels.index("Fit Test") + 1
+def test_the_spur_gear_follows_the_finger_joint_box_on_the_laser_toolbar(win):
+    labels = [clean(a.text()) for a in win.tb_laser.actions() if not a.isSeparator()]
+    assert labels.index("Spur Gear") == labels.index("Box with Finger Joints") + 1
 
 
 # ---------------------------------------------------------------- the printed wheel

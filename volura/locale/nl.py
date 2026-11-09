@@ -1553,4 +1553,6 @@ TRANSLATIONS = {
     'Fills the selected closed contour with a grid of holes, for a ventilation grille or a speaker cover. The holes go on the cut layer.': 'Vult de geselecteerde gesloten contour met een raster van gaten, voor een ventilatierooster of een luidsprekerrooster. De gaten komen op de snijlaag.',
     'Select one closed contour on the worksheet first (a rectangle, a circle or lines that close into one shape).': 'Selecteer eerst één gesloten contour op het werkblad (een rechthoek, een cirkel of lijnen die samen één vorm sluiten).',
     'No hole fits inside this contour: make the holes, the web or the edge margin smaller.': 'Er past geen gat in deze contour: maak de gaten, de tussenrand of de randmarge kleiner.',
+    '2D Editing': '2D-bewerken',
+    'Laser and Mill': 'Laser en frees',
 }
