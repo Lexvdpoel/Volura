@@ -3,6 +3,21 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.27 — 2026-11-09
+
+### New
+- **Label Plate** (Tools > Print Tools > Label Plate…): a printable tag for a drawer, a box
+  or a keyring, with up to four lines of text raised on the plate or engraved into it,
+  rounded corners and, if you like, a hole for a ring or a screw.
+
+### Improved
+- Round Corners and Dogbone Corners are much faster on big imported contours: a contour of
+  20,000 points without corners now takes a hundredth of a second instead of one and a
+  half, with exactly the same result.
+
+### Website
+- The manual describes the label plate.
+
 ## 0.2.26 — 2026-11-09
 
 ### New
