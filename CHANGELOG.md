@@ -3,6 +3,14 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.31 — 2026-11-09
+
+### Fixed
+- The toolbar of the 2D worksheet was far too wide and kept folding away: it held more
+  buttons than fit in the window, and six of them had no icon and showed their text. The
+  worksheet now has three narrow toolbars side by side (drawing, editing, and laser and
+  mill), and every button has an icon.
+
 ## 0.2.30 — 2026-11-09
 
 ### Improved
