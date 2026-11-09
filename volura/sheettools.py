@@ -1782,61 +1782,73 @@ def round_corners(pts, radius, closed=True, min_angle=10.0, tol=CURVE_TOL) -> np
     radius = float(radius)
     if radius <= 0.0:
         return pts.copy()
-    keep = [pts[0]] if len(pts) else []
-    for p in pts[1:]:
-        if float(np.hypot(*(p - keep[-1]))) > 1e-9:
-            keep.append(p)
-    pts = np.asarray(keep, dtype=float).reshape(-1, 2)
+    if len(pts) > 1:
+        d = np.hypot(*(pts[1:] - pts[:-1]).T)
+        pts = pts[np.concatenate(([True], d > 1e-9))]
     if closed and len(pts) > 1 and float(np.hypot(*(pts[0] - pts[-1]))) <= 1e-9:
         pts = pts[:-1]
     n = len(pts)
     if n < 3:
         return pts.copy()
 
-    def unit(v):
-        L = float(np.hypot(*v))
-        return v / L if L > 1e-12 else None
+    def span_of(p, m, q):
+        """`arc_span` on arrays: the angle from `p` to `q` that passes `m`."""
+        two = 2.0 * math.pi
 
-    def ang(q):
-        return math.atan2(float(q[1]), float(q[0]))
+        def delta(from_a, to_a):            # both are atan2 angles, so one step is enough
+            d = to_a - from_a
+            d = np.where(d <= -math.pi, d + two, d)
+            return np.where(d > math.pi, d - two, d)
+
+        d0, d1 = delta(p, m), delta(m, q)
+        tot = d0 + d1                       # no arc through the middle: the long way round
+        return np.where(d0 * d1 <= 0.0, tot + np.where(tot < 0.0, two, -two), tot)
 
     turn = math.radians(max(0.0, float(min_angle)))
+    e1, e2 = np.roll(pts, 1, 0) - pts, np.roll(pts, -1, 0) - pts
+    la, lb = np.hypot(*e1.T), np.hypot(*e2.T)
+    u = e1 / np.where(la > 1e-12, la, 1.0)[:, None]
+    w = e2 / np.where(lb > 1e-12, lb, 1.0)[:, None]
+    beta = np.arccos(np.clip(u[:, 0] * w[:, 0] + u[:, 1] * w[:, 1], -1.0, 1.0))
+    bis = u + w
+    lbis = np.hypot(*bis.T)
+    bis = bis / np.where(lbis > 1e-12, lbis, 1.0)[:, None]
+    r = np.minimum(radius, 0.5 * np.minimum(la, lb) * np.tan(0.5 * beta))
+    sharp = (la > 1e-12) & (lb > 1e-12) & (lbis > 1e-12) & (math.pi - beta > turn) & (r >= 1e-6)
+    if not closed:
+        sharp[0] = sharp[n - 1] = False     # the ends of an open path stay as they are
+
     arcs = {}
-    for i in range(n):
-        if not closed and (i == 0 or i == n - 1):
-            continue                          # the ends of an open path stay as they are
-        a, v, b = pts[i - 1], pts[i], pts[(i + 1) % n]
-        u, w = unit(a - v), unit(b - v)
-        if u is None or w is None:
-            continue
-        beta = math.acos(float(np.clip(float(u @ w), -1.0, 1.0)))
-        bis = unit(u + w)
-        if bis is None or math.pi - beta <= turn:
-            continue                          # too straight to see an arc in it
-        r = min(radius, 0.5 * min(float(np.hypot(*(a - v))),
-                                  float(np.hypot(*(b - v)))) * math.tan(0.5 * beta))
-        if r < 1e-6:
-            continue                          # no room for a corner worth the name
-        t = r / math.tan(0.5 * beta)          # from the vertex to both tangent points
-        c = v + (r / math.sin(0.5 * beta)) * bis
-        t1, t2 = v + t * u, v + t * w
-        arcs[i] = arc_points(c, r, ang(t1 - c),
-                             ang(t1 - c) + arc_span(ang(t1 - c), ang(v - c), ang(t2 - c)),
-                             tol)
+    idx = np.flatnonzero(sharp)
+    if len(idx):
+        v, hb, rr = pts[idx], 0.5 * beta[idx], r[idx]
+        t = rr / np.tan(hb)                 # from the vertex to both tangent points
+        c = v + (rr / np.sin(hb))[:, None] * bis[idx]
+        t1, t2 = v + t[:, None] * u[idx], v + t[:, None] * w[idx]
+        a0 = np.arctan2(t1[:, 1] - c[:, 1], t1[:, 0] - c[:, 0])
+        am = np.arctan2(v[:, 1] - c[:, 1], v[:, 0] - c[:, 0])
+        a1 = np.arctan2(t2[:, 1] - c[:, 1], t2[:, 0] - c[:, 0])
+        span = span_of(a0, am, a1)
+        for k, i in enumerate(idx):         # only here is a corner worth an arc
+            arcs[int(i)] = arc_points(c[k], float(rr[k]), float(a0[k]),
+                                      float(a0[k] + span[k]), tol)
 
     out = []
-
-    def emit(q):
-        if out and float(np.hypot(*(q - out[-1]))) <= 1e-9:
-            return                            # the two corners of an edge can meet exactly
-        out.append(np.asarray(q, dtype=float))
-
-    for i in range(n):
-        for q in arcs.get(i, (pts[i],)):
-            emit(q)
+    prev = 0
+    for i, arc in arcs.items():             # the vertices between two arcs come as a whole
+        if i > prev:
+            out.append(pts[prev:i])
+        out.append(arc)
+        prev = i + 1
+    if prev < n:
+        out.append(pts[prev:])
+    out = np.concatenate(out) if out else np.zeros((0, 2))
+    if len(out) > 1:                        # the two corners of an edge can meet exactly
+        d = np.hypot(*(out[1:] - out[:-1]).T)
+        out = out[np.concatenate(([True], d > 1e-9))]
     while len(out) > 1 and float(np.hypot(*(out[0] - out[-1]))) <= 1e-9:
-        out.pop()
-    return np.ascontiguousarray(np.asarray(out, dtype=float).reshape(-1, 2), dtype=float)
+        out = out[:-1]
+    return np.ascontiguousarray(out.reshape(-1, 2), dtype=float)
 
 
 def _dogbone_reliefs(pts, tool_d, material_inside, min_angle,
@@ -1855,51 +1867,61 @@ def _dogbone_reliefs(pts, tool_d, material_inside, min_angle,
     tool_d = float(tool_d)
     if tool_d <= 0.0:
         return pts.copy(), {}
-    keep = [pts[0]] if len(pts) else []
-    for p in pts[1:]:
-        if float(np.hypot(*(p - keep[-1]))) > 1e-9:
-            keep.append(p)
-    pts = np.asarray(keep, dtype=float).reshape(-1, 2)
+    if len(pts) > 1:
+        d = np.hypot(*(pts[1:] - pts[:-1]).T)
+        pts = pts[np.concatenate(([True], d > 1e-9))]
     if len(pts) > 1 and float(np.hypot(*(pts[0] - pts[-1]))) <= 1e-9:
         pts = pts[:-1]                          # imports often close a contour by hand
     n = len(pts)
     if n < 3:
         return pts, {}
 
-    def unit(v):
-        L = float(np.hypot(*v))
-        return v / L if L > 1e-12 else None
+    def span_of(p, m, q):
+        """`arc_span` on arrays: the angle from `p` to `q` that passes `m`."""
+        two = 2.0 * math.pi
 
-    def ang(q):
-        return math.atan2(float(q[1]), float(q[0]))
+        def delta(from_a, to_a):            # both are atan2 angles, so one step is enough
+            d = to_a - from_a
+            d = np.where(d <= -math.pi, d + two, d)
+            return np.where(d > math.pi, d - two, d)
+
+        d0, d1 = delta(p, m), delta(m, q)
+        tot = d0 + d1                       # no arc through the middle: the long way round
+        return np.where(d0 * d1 <= 0.0, tot + np.where(tot < 0.0, two, -two), tot)
 
     r = 0.5 * tool_d
     turn = math.radians(max(0.0, float(min_angle)))
     orient = 1.0 if float(polygon_area(pts)) > 0.0 else -1.0
     want = 1.0 if material_inside else -1.0     # reflex for a part, convex for a hole
+    e1, e2 = np.roll(pts, 1, 0) - pts, np.roll(pts, -1, 0) - pts
+    la, lb = np.hypot(*e1.T), np.hypot(*e2.T)
+    u = e1 / np.where(la > 1e-12, la, 1.0)[:, None]
+    w = e2 / np.where(lb > 1e-12, lb, 1.0)[:, None]
+    cross = u[:, 0] * w[:, 1] - u[:, 1] * w[:, 0]
+    beta = np.arccos(np.clip(u[:, 0] * w[:, 0] + u[:, 1] * w[:, 1], -1.0, 1.0))
+    bis = u + w
+    lbis = np.hypot(*bis.T)
+    bis = bis / np.where(lbis > 1e-12, lbis, 1.0)[:, None]
+    chord = 2.0 * r * np.cos(0.5 * beta)        # from the vertex to both crossings
+    inside = ((la > 1e-12) & (lb > 1e-12) & (want * orient * cross > 0.0) & (lbis > 1e-12)
+              & (math.pi - beta > turn) & (chord <= np.minimum(la, lb)))
+
     reliefs: dict[int, tuple[np.ndarray, np.ndarray]] = {}
-    for i in range(n):
-        a, v, b = pts[i - 1], pts[i], pts[(i + 1) % n]
-        u, w = unit(a - v), unit(b - v)
-        if u is None or w is None:
-            continue
-        if want * orient * float(u[0] * w[1] - u[1] * w[0]) <= 0.0:
-            continue                            # the cutter reaches into this corner
-        beta = math.acos(float(np.clip(float(u @ w), -1.0, 1.0)))
-        bis = unit(u + w)
-        if bis is None or math.pi - beta <= turn:
-            continue                            # too straight for the cutter to leave a corner
-        chord = 2.0 * r * math.cos(0.5 * beta)  # from the vertex to both crossings
-        if chord > min(float(np.hypot(*(a - v))), float(np.hypot(*(b - v)))):
-            continue                            # no room for the relief on the edge next to it
-        c = v + r * bis
-        q1, q2 = v + chord * u, v + chord * w
-        a0, am = ang(q1 - c), ang(v - c)
-        span = arc_span(a0, am, ang(q2 - c))
-        # the two halves of the arc are mirror images, so half the span is the corner point
-        arc = np.vstack([arc_points(c, r, a0, a0 + 0.5 * span, tol),
-                         arc_points(c, r, a0 + 0.5 * span, a0 + span, tol)[1:]])
-        reliefs[i] = (c, arc)
+    idx = np.flatnonzero(inside)
+    if len(idx):
+        v = pts[idx]
+        c = v + r * bis[idx]
+        q1, q2 = v + chord[idx][:, None] * u[idx], v + chord[idx][:, None] * w[idx]
+        a0 = np.arctan2(q1[:, 1] - c[:, 1], q1[:, 0] - c[:, 0])
+        am = np.arctan2(v[:, 1] - c[:, 1], v[:, 0] - c[:, 0])
+        a1 = np.arctan2(q2[:, 1] - c[:, 1], q2[:, 0] - c[:, 0])
+        span = span_of(a0, am, a1)
+        for k, i in enumerate(idx):             # only here is a corner worth a relief
+            cc, a, half = c[k], float(a0[k]), 0.5 * float(span[k])
+            # the two halves of the arc are mirror images, so half the span is the corner point
+            arc = np.vstack([arc_points(cc, r, a, a + half, tol),
+                             arc_points(cc, r, a + half, a + 2.0 * half, tol)[1:]])
+            reliefs[int(i)] = (cc, arc)
     return pts, reliefs
 
 
@@ -1937,18 +1959,21 @@ def dogbone_corners(pts, tool_d, material_inside=True, min_angle=30.0,
     """
     pts, reliefs = _dogbone_reliefs(pts, tool_d, material_inside, min_angle, tol)
     out = []
-
-    def emit(q):
-        if out and float(np.hypot(*(q - out[-1]))) <= 1e-9:
-            return                            # the two corners of an edge can meet exactly
-        out.append(np.asarray(q, dtype=float))
-
-    for i in range(len(pts)):
-        for q in (pts[i],) if i not in reliefs else reliefs[i][1]:
-            emit(q)
+    prev = 0
+    for i, (_c, arc) in reliefs.items():    # the vertices between two reliefs come as a whole
+        if i > prev:
+            out.append(pts[prev:i])
+        out.append(arc)
+        prev = i + 1
+    if prev < len(pts):
+        out.append(pts[prev:])
+    out = np.concatenate(out) if out else np.zeros((0, 2))
+    if len(out) > 1:                        # the two corners of an edge can meet exactly
+        d = np.hypot(*(out[1:] - out[:-1]).T)
+        out = out[np.concatenate(([True], d > 1e-9))]
     while len(out) > 1 and float(np.hypot(*(out[0] - out[-1]))) <= 1e-9:
-        out.pop()
-    return np.ascontiguousarray(np.asarray(out, dtype=float).reshape(-1, 2), dtype=float)
+        out = out[:-1]
+    return np.ascontiguousarray(out.reshape(-1, 2), dtype=float)
 
 
 def joined_paths(paths) -> list[VPath]:

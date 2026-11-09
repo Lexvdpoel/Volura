@@ -13,6 +13,7 @@ nothing to round leaves the undo stack untouched and says so in the status bar.
 
 Run with:  python -m pytest tests/test_round_corners.py
 """
+import hashlib
 import math
 import os
 import sys
@@ -73,6 +74,19 @@ def on_edge(pts, a, b):
     d = d / L
     return [float((p - a) @ d) for p in np.asarray(pts, float)
             if seg_distance(p, a, b) <= 1e-9]
+
+
+def zigzag(count=200, r_out=40.0, r_in=25.0) -> np.ndarray:
+    """A closed star of `count` points, its radius out and in from point to point."""
+    t = np.linspace(0.0, 2.0 * math.pi, count + 1)[:-1]
+    rad = np.where(np.arange(count) % 2 == 0, r_out, r_in)
+    return np.column_stack([rad * np.cos(t), rad * np.sin(t)])
+
+
+def digest(q) -> str:
+    """The fingerprint of a contour: its shape and every point rounded to a nanometre."""
+    q = np.ascontiguousarray(np.asarray(q, dtype=float).reshape(-1, 2), dtype=float)
+    return hashlib.sha256(np.round(q, 9).tobytes() + str(q.shape).encode()).hexdigest()[:16]
 
 
 # ------------------------------------------------------------------ the function
@@ -155,6 +169,27 @@ def test_no_radius_changes_nothing():
 def test_a_contour_without_sharp_corners_stays_as_it_is():
     loop = circle_loop((0.0, 0.0), 20.0, segments=64)
     assert np.array_equal(round_corners(loop, 2.0), loop), "5.6 degrees is no corner"
+
+
+# ------------------------------------------------------------------ the exact contour
+
+OPEN = np.array([[0.0, 0.0], [30.0, 0.0], [30.0, 20.0], [60.0, 20.0], [60.0, 45.0]])
+
+#: the fingerprint of the rounded contour for a few contours; a rewrite of the arithmetic
+#: may not move a single point, so a corner that comes out elsewhere fails here
+PINNED = [
+    ("rectangle", RECT, dict(radius=R), "bb64bd334ff06ec2"),
+    ("L-shape", L, dict(radius=R), "44eecc720ae52332"),
+    ("circle-64", circle_loop((0.0, 0.0), 20.0, segments=64), dict(radius=2.0),
+     "ba5ae35ec447b528"),
+    ("star-200", zigzag(), dict(radius=3.0), "613d643f93297654"),
+    ("open-polyline", OPEN, dict(radius=4.0, closed=False), "4f0a00231b763d2f"),
+]
+
+
+@pytest.mark.parametrize("name, pts, kw, want", PINNED, ids=[p[0] for p in PINNED])
+def test_the_rounded_contour_is_pinned(name, pts, kw, want):
+    assert digest(round_corners(pts, **kw)) == want
 
 
 # ------------------------------------------------------------------ in the window
