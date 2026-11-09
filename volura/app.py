@@ -19,15 +19,16 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
                                QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog,
                                QFontComboBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
                                QInputDialog,
-                               QLabel, QLineEdit, QKeySequenceEdit, QListWidget, QListWidgetItem,
-                               QMainWindow, QMenu, QMessageBox, QProgressDialog, QPushButton, QRadioButton,
+                                QLabel, QLineEdit, QKeySequenceEdit, QListWidget, QListWidgetItem,
+                                QMainWindow, QMenu, QMessageBox, QPlainTextEdit,
+                                QProgressDialog, QPushButton, QRadioButton,
                                QSizePolicy, QSlider, QSpinBox, QStackedWidget, QTableWidget,
                                QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from . import (__version__, background, boxgen, cam, dxf, enclosure, errors, fileio, gcode,
-               gears, i18n, joints, knob, nesting, ops, sheet3d, sheettools, svg, spacemouse,
-                standoff, theme, threads, vector_export, vector_import, workers)
+                gears, i18n, joints, knob, label_plate, nesting, ops, sheet3d, sheettools, svg,
+                 spacemouse, standoff, theme, threads, vector_export, vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -515,6 +516,44 @@ class Settings:
         except (TypeError, ValueError):
             self.standoff_count = 1
         self.standoff_count = max(standoff.COUNT_MIN, min(standoff.COUNT_MAX, self.standoff_count))
+        self.label_text = str(self.q.value("label_text", "Volura")).strip() or "Volura"
+        try:
+            self.label_height = float(self.q.value("label_height", 8.0))
+        except (TypeError, ValueError):
+            self.label_height = 8.0
+        self.label_height = max(label_plate.HEIGHT_MIN,
+                                min(label_plate.HEIGHT_MAX, self.label_height))
+        try:
+            self.label_thickness = float(self.q.value("label_thickness", 2.0))
+        except (TypeError, ValueError):
+            self.label_thickness = 2.0
+        self.label_thickness = max(label_plate.THICKNESS_MIN,
+                                   min(label_plate.THICKNESS_MAX, self.label_thickness))
+        try:
+            self.label_relief = float(self.q.value("label_relief", 0.8))
+        except (TypeError, ValueError):
+            self.label_relief = 0.8
+        self.label_relief = max(label_plate.RELIEF_MIN,
+                                min(label_plate.RELIEF_MAX, self.label_relief))
+        self.label_mode = str(self.q.value("label_mode", "raised"))
+        if self.label_mode not in label_plate.LABEL_MODES:
+            self.label_mode = "raised"
+        try:
+            self.label_margin = float(self.q.value("label_margin", 3.0))
+        except (TypeError, ValueError):
+            self.label_margin = 3.0
+        self.label_margin = max(label_plate.MARGIN_MIN,
+                                min(label_plate.MARGIN_MAX, self.label_margin))
+        try:
+            self.label_radius = float(self.q.value("label_radius", 2.0))
+        except (TypeError, ValueError):
+            self.label_radius = 2.0
+        self.label_radius = max(0.0, min(20.0, self.label_radius))
+        try:
+            self.label_hole = float(self.q.value("label_hole", 0.0))
+        except (TypeError, ValueError):
+            self.label_hole = 0.0
+        self.label_hole = max(0.0, min(label_plate.HOLE_MAX, self.label_hole))
         try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
@@ -629,6 +668,14 @@ class Settings:
         self.q.setValue("standoff_bore", self.standoff_bore)
         self.q.setValue("standoff_clearance", self.standoff_clearance)
         self.q.setValue("standoff_count", self.standoff_count)
+        self.q.setValue("label_text", self.label_text)
+        self.q.setValue("label_height", self.label_height)
+        self.q.setValue("label_thickness", self.label_thickness)
+        self.q.setValue("label_relief", self.label_relief)
+        self.q.setValue("label_mode", self.label_mode)
+        self.q.setValue("label_margin", self.label_margin)
+        self.q.setValue("label_radius", self.label_radius)
+        self.q.setValue("label_hole", self.label_hole)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
@@ -2747,6 +2794,83 @@ class StandoffDialog(QDialog):
                 "clearance": round(self.clearance.value(), 6)}
 
 
+class LabelPlateDialog(QDialog):
+    """The "Label Plate…" dialog: a printable name tag or drawer label with text on it.
+
+    A label is read from a distance, so the dialog starts with the text and how tall its letters
+    are; the height is the height of a capital, which is what a label is read by. The plate is
+    that text with a band of margin all round, so the margin and the corner radius say how much
+    plate there is and how it feels in the fingers. Raised letters are what a printer does best
+    and print in one go with the plate; engraved ones still read when the plate is rubbed or
+    painted, but may not go deeper than the plate is thick. A hole hangs the tag on a hook or a
+    screw. The values come from Settings and are remembered, the text too.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Label Plate"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.text = QPlainTextEdit()
+        self.text.setPlainText(s.label_text)
+        self.text.setTabChangesFocus(True)
+        self.text.setToolTip(tr("The text on the plate; Enter starts the next line"))
+        self.height = spin(label_plate.HEIGHT_MIN, label_plate.HEIGHT_MAX, s.label_height)
+        self.height.setToolTip(tr("The height of a capital letter, which is what a label is "
+                                  "read by"))
+        self.thickness = spin(label_plate.THICKNESS_MIN, label_plate.THICKNESS_MAX,
+                              s.label_thickness)
+        self.thickness.setToolTip(tr("How thick the plate is"))
+        self.relief = spin(label_plate.RELIEF_MIN, label_plate.RELIEF_MAX, s.label_relief, 0.1)
+        self.relief.setToolTip(tr("How high the letters stand above the plate, or how deep they "
+                                  "are cut in"))
+        self.mode = QComboBox()
+        for label, key in ((tr("Raised"), "raised"), (tr("Engraved"), "engraved")):
+            self.mode.addItem(label, key)
+        self.mode.setCurrentIndex(max(0, self.mode.findData(s.label_mode)))
+        self.mode.setToolTip(tr("Raised letters print easiest, engraved ones still read after "
+                                "the paint"))
+        self.margin = spin(label_plate.MARGIN_MIN, label_plate.MARGIN_MAX, s.label_margin)
+        self.margin.setToolTip(tr("The band of plate around the text"))
+        self.radius = spin(0.0, 20.0, s.label_radius)
+        self.radius.setToolTip(tr("The rounding of the corners of the plate"))
+        self.hole = spin(0.0, label_plate.HOLE_MAX, s.label_hole)
+        self.hole.setToolTip(tr("A round hole through the plate, left of the text, to hang the "
+                                "tag up; 0 leaves it out"))
+        lay.addRow(tr("Text"), self.text)
+        lay.addRow(tr("Text height"), self.height)
+        lay.addRow(tr("Thickness"), self.thickness)
+        lay.addRow(tr("Relief"), self.relief)
+        lay.addRow(tr("Style"), self.mode)
+        lay.addRow(tr("Margin"), self.margin)
+        lay.addRow(tr("Corner radius"), self.radius)
+        lay.addRow(tr("Hole"), self.hole)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"text": self.text.toPlainText(),
+                "height": round(self.height.value(), 6),
+                "thickness": round(self.thickness.value(), 6),
+                "relief": round(self.relief.value(), 6),
+                "mode": str(self.mode.currentData()),
+                "margin": round(self.margin.value(), 6),
+                "radius": round(self.radius.value(), 6),
+                "hole": round(self.hole.value(), 6)}
+
+
 class HoldingTabsDialog(QDialog):
     """The "Holding Tabs…" dialog: the small bridges that keep a part in the sheet.
 
@@ -4239,6 +4363,12 @@ class MainWindow(QMainWindow):
                             tr("Add printable standoffs to the model: spacers for a PCB or a "
                                "panel, round or hexagonal, with a through hole, a self-tapping "
                                "pilot or a hole for a heat-set insert"))
+        # ---- label plate
+        self.a_label_plate = A(tr("Label Plate…"),
+                               lambda checked=False: self.label_plate_dialog(), None, None,
+                               False,
+                               tr("Add a printable name tag or drawer label to the model: your "
+                                  "text raised or engraved on a plate, with a hole to hang it up"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, None,
@@ -4348,7 +4478,8 @@ class MainWindow(QMainWindow):
                                            self.a_screw_hole, self.a_clearance_test,
                                            self.a_overhang_test,
                                            self.a_spur_gear_3d, self.a_project_box,
-                                            self.a_knob, self.a_standoff, None,
+                                            self.a_knob, self.a_standoff, self.a_label_plate,
+                                            None,
                                           self.a_cutplane, self.a_cut_join, None,
                                           self.a_fillet, self.a_chamfer, self.a_elephant,
                                           self.a_mouse_ears, self.a_orient_print))
@@ -5179,6 +5310,67 @@ class MainWindow(QMainWindow):
             self.view.set_status(tr("Standoff failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the standoffs…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ label plate
+    def label_plate_dialog(self):
+        """Tools > Print Tools > Label Plate…: a printable name tag or drawer label."""
+        dlg = LabelPlateDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.label_text = str(options["text"]).strip()
+        self.settings.label_height = float(options["height"])
+        self.settings.label_thickness = float(options["thickness"])
+        self.settings.label_relief = float(options["relief"])
+        self.settings.label_mode = str(options["mode"])
+        self.settings.label_margin = float(options["margin"])
+        self.settings.label_radius = float(options["radius"])
+        self.settings.label_hole = float(options["hole"])
+        self.settings.save()
+        made = self.make_label_plate_model(options)
+        self.setFocus()
+        return made
+
+    def make_label_plate_model(self, options):
+        """The label plate as a printed part: one undo step, on the bed next to the model.
+
+        The text is hundreds of contours and the letters are a boolean with the plate, so the
+        label is built in the background, like the standoffs, and the window keeps responding. It
+        stands on the bed in the middle of the free bed, or on the free place 10 mm to the right
+        of what is already in the model, so a second label does not land in the first one. The
+        group is named after the first line of the text, because that is what the user typed.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("text", "height", "thickness", "relief", "mode",
+                                        "margin", "radius", "hole")}
+        name = str(options["text"]).split("\n")[0].strip() or tr("Label Plate")
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the label plate…"))
+            m = label_plate.label_plate(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the label away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, name)
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Label plate added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Label plate failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the label plate…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ holding tabs

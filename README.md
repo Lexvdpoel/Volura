@@ -82,6 +82,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
   through hole a screw goes through, a self-tapping pilot hole or a hole for a heat-set insert,
   in the screw size you choose. Up to twelve standoffs print in one row and land on the bed to
   the right of your model as one undo step
+- **Label Plate** (Tools > Print Tools): a printable tag for a drawer, a box or a keyring:
+  up to four lines of text, raised on the plate or engraved into it, on a plate with rounded
+  corners and, if you like, a hole for a ring or a screw
 - **Elephant Foot Chamfer** (Tools > Print Tools): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is
