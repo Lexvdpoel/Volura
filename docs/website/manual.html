@@ -5,36 +5,86 @@
     <h1><span lang="en">Volura manual</span><span lang="nl">Handleiding Volura</span></h1>
     <p lang="en">This manual explains the functions of Volura step by step. The interface is in English or Dutch (see <a href="#language">Language</a>); menu names are given here as they appear in the English interface. Inside Volura, <kbd>F1</kbd> opens the help and <b>Window &gt; Preferences &gt; Shortcuts</b> lists every shortcut.</p>
     <p lang="nl">Deze handleiding legt de functies van Volura stap voor stap uit. De interface is in het Engels of het Nederlands (zie <a href="#language">Taal</a>); de menunamen staan hier zoals in de Nederlandse interface. In Volura zelf opent <kbd>F1</kbd> de help en staan alle sneltoetsen onder <b>Venster &gt; Voorkeuren &gt; Sneltoetsen</b>.</p>
+    <div class="note" lang="en"><b>New in this version:</b> what Volura added recently stands in the <a href="https://github.com/Lexvdpoel/Volura/blob/main/CHANGELOG.md">changelog</a>.</div>
+    <div class="note" lang="nl"><b>Nieuw in deze versie:</b> wat Volura recent toevoegde staat in de <a href="https://github.com/Lexvdpoel/Volura/blob/main/CHANGELOG.md">changelog</a>.</div>
+
+    <!-- ===================================================== start -->
+    <h2 id="start"><span lang="en">Getting started</span><span lang="nl">Aan de slag</span></h2>
+    <p lang="en">Five steps from an empty print bed to a file for the printer. Every step is a chapter further down.</p>
+    <p lang="nl">Vijf stappen van een leeg printbed naar een bestand voor de printer. Elke stap is een hoofdstuk verderop.</p>
+    <ol lang="en">
+      <li><b>Draw a rectangle</b> (<kbd>R</kbd>): click a corner, move the mouse, click the other corner. A closed shape becomes a face. See <a href="#draw">Drawing</a>.</li>
+      <li><b>Push/pull</b> (<kbd>P</kbd>): click that face, move the mouse and click again. Up adds plastic, down cuts it away. See <a href="#pushpull">Push/pull</a>.</li>
+      <li><b>Type a size</b>: instead of the second click type <code>40;25</code> for the rectangle, or <code>12</code> after the pull, and press <kbd>Enter</kbd>. See <a href="#vcb">Typing exact sizes</a>.</li>
+      <li><b>Make a group and give it a colour</b>: triple-click the solid and press <kbd>G</kbd>; pick a filament in <b>Materials</b> and paint the faces with the Paint Bucket (<kbd>B</kbd>). See <a href="#groups">Groups and colours</a>.</li>
+      <li><b>Export 3MF</b>: <b>File &gt; Export &gt; Multicolor 3MF…</b> gives one file in which every colour is already on its own filament. See <a href="#export">Export and files</a>.</li>
+    </ol>
+    <ol lang="nl">
+      <li><b>Teken een rechthoek</b> (<kbd>R</kbd>): klik een hoek, beweeg de muis, klik de andere hoek. Een gesloten vorm wordt een vlak. Zie <a href="#draw">Tekenen</a>.</li>
+      <li><b>Duwen/trekken</b> (<kbd>P</kbd>): klik dat vlak, beweeg de muis en klik opnieuw. Omhoog is plastic erbij, omlaag is eraf. Zie <a href="#pushpull">Duwen/trekken</a>.</li>
+      <li><b>Typ een maat</b>: typ in plaats van de tweede klik <code>40;25</code> voor de rechthoek, of <code>12</code> na het optrekken, en druk op <kbd>Enter</kbd>. Zie <a href="#vcb">Maten typen</a>.</li>
+      <li><b>Maak een groep en geef een kleur</b>: driemaal klikken op het volume en <kbd>G</kbd> drukken; kies een filament bij <b>Materialen</b> en verf de vlakken met de verfemmer (<kbd>B</kbd>). Zie <a href="#groups">Groepen en kleuren</a>.</li>
+      <li><b>Exporteer 3MF</b>: bij <b>Bestand &gt; Exporteren &gt; Meerkleuren 3MF…</b> staat elke kleur in één bestand al op haar eigen filament. Zie <a href="#export">Exporteren en bestanden</a>.</li>
+    </ol>
+    <p class="note" lang="en">The status bar at the bottom always says what the active tool expects next; <kbd>Esc</kbd> cancels a tool.</p>
+    <p class="note" lang="nl">De statusbalk onderaan zegt altijd wat het actieve gereedschap als volgende verwacht; met <kbd>Esc</kbd> maak je een gereedschap weg.</p>
 
     <!-- ===================================================== install -->
     <h2 id="install"><span lang="en">Installing</span><span lang="nl">Installeren</span></h2>
-    <h3>Windows</h3>
-    <p lang="en">Download <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-setup.exe"><code>Volura-windows-setup.exe</code></a> and run it. It needs no administrator rights: it installs for you only, in <code>%LOCALAPPDATA%\Programs\Volura</code>, adds Volura to the Start menu and opens <code>.volura</code> files with Volura. Uninstall it from <b>Settings &gt; Apps</b>.</p>
-    <p lang="nl">Download <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-setup.exe"><code>Volura-windows-setup.exe</code></a> en start het. Er zijn geen beheerdersrechten nodig: het installeert alleen voor jou, in <code>%LOCALAPPDATA%\Programs\Volura</code>, zet Volura in het Startmenu en opent <code>.volura</code>-bestanden met Volura. Verwijderen gaat via <b>Instellingen &gt; Apps</b>.</p>
-    <p lang="en">Prefer no installation? Unzip <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-x86_64.zip"><code>Volura-windows-x86_64.zip</code></a> anywhere and start <code>Volura\Volura.exe</code>. Your settings and the automatic backup of an unsaved model are kept in <code>%APPDATA%\Volura</code>.</p>
-    <p lang="nl">Liever zonder installatie? Pak <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-x86_64.zip"><code>Volura-windows-x86_64.zip</code></a> uit waar je wilt en start <code>Volura\Volura.exe</code>. Je instellingen en de automatische reservekopie van een niet-opgeslagen model staan in <code>%APPDATA%\Volura</code>.</p>
-    <h3>Updates</h3>
-    <p lang="en">Once a day at startup Volura checks GitHub for a newer version. When you installed it with the installer, <b>Update Now</b> downloads and verifies the new version, installs it and starts Volura again; your model is saved first if you want. The zip and Linux versions open the <a href="https://github.com/Lexvdpoel/Volura/releases/latest">download page</a>. Check yourself with <b>Help &gt; Check for Updates…</b>, or switch the daily check off in <b>Window &gt; Preferences &gt; General</b>.</p>
-    <p lang="nl">Bij het opstarten kijkt Volura één keer per dag op GitHub of er een nieuwere versie is. Heb je het met de installatie geïnstalleerd, dan downloadt en controleert <b>Nu bijwerken</b> de nieuwe versie, installeert die en start Volura opnieuw; je model wordt eerst bewaard als je dat wilt. De zip- en Linux-versie openen de <a href="https://github.com/Lexvdpoel/Volura/releases/latest">downloadpagina</a>. Zelf kijken kan met <b>Help &gt; Controleren op updates…</b>; de dagelijkse controle zet je uit in <b>Venster &gt; Voorkeuren &gt; Algemeen</b>.</p>
-    <h3>Linux</h3>
+    <h3><span lang="en">Windows</span><span lang="nl">Windows</span></h3>
+    <p lang="en">Volura runs on Windows 10 and 11, with the installer or straight from a zip.</p>
+    <p lang="nl">Volura werkt op Windows 10 en 11, met de installatie of rechtstreeks uit een zip.</p>
+    <ul lang="en">
+      <li><b>Installer</b>: download <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-setup.exe"><code>Volura-windows-setup.exe</code></a> and run it. No administrator rights: it installs for you only, in <code>%LOCALAPPDATA%\Programs\Volura</code>, adds Volura to the Start menu and opens <code>.volura</code> files with Volura.</li>
+      <li><b>Uninstall</b>: from <b>Settings &gt; Apps</b>.</li>
+      <li><b>Without installation</b>: unzip <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-x86_64.zip"><code>Volura-windows-x86_64.zip</code></a> anywhere and start <code>Volura\Volura.exe</code>.</li>
+      <li><b>Your files</b>: settings and the automatic backup of an unsaved model are kept in <code>%APPDATA%\Volura</code>.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Installatie</b>: download <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-setup.exe"><code>Volura-windows-setup.exe</code></a> en start het. Geen beheerdersrechten nodig: het installeert alleen voor jou, in <code>%LOCALAPPDATA%\Programs\Volura</code>, zet Volura in het Startmenu en opent <code>.volura</code>-bestanden met Volura.</li>
+      <li><b>Verwijderen</b>: via <b>Instellingen &gt; Apps</b>.</li>
+      <li><b>Zonder installatie</b>: pak <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-x86_64.zip"><code>Volura-windows-x86_64.zip</code></a> uit waar je wilt en start <code>Volura\Volura.exe</code>.</li>
+      <li><b>Jouw bestanden</b>: je instellingen en de automatische reservekopie van een niet-opgeslagen model staan in <code>%APPDATA%\Volura</code>.</li>
+    </ul>
+    <h3><span lang="en">Linux</span><span lang="nl">Linux</span></h3>
     <p lang="en">Download <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-linux-x86_64.tar.gz"><code>Volura-linux-x86_64.tar.gz</code></a> and:</p>
     <p lang="nl">Download <a href="https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-linux-x86_64.tar.gz"><code>Volura-linux-x86_64.tar.gz</code></a> en:</p>
     <pre><code>tar xzf Volura-linux-x86_64.tar.gz
 cd Volura
 ./install.sh      # ~/.local/opt/volura + menu item
 volura</code></pre>
-    <p lang="en"><code>./install.sh --remove</code> removes everything again. Volura needs OpenGL (Mesa is fine) and a few Qt libraries; on Debian and Ubuntu:</p>
-    <p lang="nl"><code>./install.sh --remove</code> haalt alles weer weg. Volura heeft OpenGL nodig (Mesa is genoeg) en een paar Qt-bibliotheken; op Debian en Ubuntu:</p>
+    <ul lang="en">
+      <li><b>Remove</b>: <code>./install.sh --remove</code> takes everything away again.</li>
+      <li><b>What it needs</b>: OpenGL (Mesa is fine) and a few Qt libraries; on Debian and Ubuntu:</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Verwijderen</b>: <code>./install.sh --remove</code> haalt alles weer weg.</li>
+      <li><b>Wat het nodig heeft</b>: OpenGL (Mesa is genoeg) en een paar Qt-bibliotheken; op Debian en Ubuntu:</li>
+    </ul>
     <pre><code>sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3</code></pre>
     <p lang="en">Under Wayland, Volura starts through XWayland automatically. For a <a href="#spacemouse">3D mouse</a>, install and start <code>spacenavd</code>.</p>
     <p lang="nl">Onder Wayland start Volura automatisch via XWayland. Voor een <a href="#spacemouse">3D-muis</a> installeer en start je <code>spacenavd</code>.</p>
+    <h3><span lang="en">Updates</span><span lang="nl">Updates</span></h3>
+    <p lang="en">Once a day at startup Volura checks GitHub for a newer version.</p>
+    <p lang="nl">Bij het opstarten kijkt Volura één keer per dag op GitHub of er een nieuwere versie is.</p>
+    <ul lang="en">
+      <li><b>Installed with the installer</b>: <b>Update Now</b> downloads and verifies the new version, installs it and starts Volura again; your model is saved first if you want.</li>
+      <li><b>Zip and Linux versions</b>: open the <a href="https://github.com/Lexvdpoel/Volura/releases/latest">download page</a>.</li>
+      <li><b>Yourself</b>: <b>Help &gt; Check for Updates…</b>; the daily check goes off under <b>Window &gt; Preferences &gt; General</b>.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Met de installatie geplaatst</b>: <b>Nu bijwerken</b> downloadt en controleert de nieuwe versie, installeert die en start Volura opnieuw; je model wordt eerst bewaard als je dat wilt.</li>
+      <li><b>Zip- en Linux-versie</b>: openen de <a href="https://github.com/Lexvdpoel/Volura/releases/latest">downloadpagina</a>.</li>
+      <li><b>Zelf kijken</b>: <b>Help &gt; Controleren op updates…</b>; de dagelijkse controle zet je uit in <b>Venster &gt; Voorkeuren &gt; Algemeen</b>.</li>
+    </ul>
     <h3><span lang="en">From source</span><span lang="nl">Vanaf de broncode</span></h3>
     <p lang="en">With Python 3.10 or newer: double-click <code>run.bat</code> (Windows) or run <code>./run.sh</code> (Linux). Both create a virtual environment and install the requirements the first time.</p>
     <p lang="nl">Met Python 3.10 of nieuwer: dubbelklik <code>run.bat</code> (Windows) of start <code>./run.sh</code> (Linux). Beide maken de eerste keer een virtuele omgeving en installeren wat nodig is.</p>
 
     <!-- ===================================================== window -->
     <h2 id="window"><span lang="en">The window</span><span lang="nl">Het venster</span></h2>
-    <img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/window_3d.png" alt="Volura with a project box, a knob, standoffs, a label plate and a cable clip" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/window_3d.png" alt="Volura met een projectdoos, een knop, afstandsbussen, een naamplaatje en een kabelclip" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px">
+    <p lang="en">What you see when Volura opens, and where everything is.</p>
+    <p lang="nl">Wat je ziet als Volura opent, en waar alles staat.</p>
     <ul lang="en">
       <li><b>Menu bar and toolbar</b> at the top, with the drawing and editing tools.</li>
       <li><b>The drawing area</b> with the red, green and blue axes and the print bed of your printer.</li>
@@ -49,9 +99,13 @@ volura</code></pre>
       <li><b>Statusbalk</b> onderaan: vertelt wat het gekozen gereedschap als volgende verwacht.</li>
       <li><b>Meetvak</b> (Afmetingen) rechtsonder: toont lengtes tijdens het tekenen en neemt getypte waarden aan. Je hoeft er nooit in te klikken; gewoon typen.</li>
     </ul>
+    <figure class="shots"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/window_3d.png" alt="Volura with a project box, a knob, standoffs, a label plate and a cable clip" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/window_3d.png" alt="Volura met een projectdoos, een knop, afstandsbussen, een naamplaatje en een kabelclip" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"></figure>
 
     <!-- ===================================================== navigate -->
     <h2 id="navigate"><span lang="en">Navigating</span><span lang="nl">Navigeren</span></h2>
+    <h3><span lang="en">Orbit, pan and zoom</span><span lang="nl">Draaien, pannen en zoomen</span></h3>
+    <p lang="en">You never have to choose a tool to look around: the mouse does it while you draw.</p>
+    <p lang="nl">Je hoeft geen gereedschap te kiezen om rond te kijken: de muis doet het terwijl je tekent.</p>
     <div class="tbl"><table>
       <tr><th><span lang="en">Action</span><span lang="nl">Actie</span></th><th><span lang="en">Mouse</span><span lang="nl">Muis</span></th><th><span lang="en">Tool</span><span lang="nl">Gereedschap</span></th></tr>
       <tr><td><span lang="en">Orbit</span><span lang="nl">Draaien</span></td><td><span lang="en">middle button</span><span lang="nl">middelste knop</span></td><td><kbd>O</kbd></td></tr>
@@ -59,15 +113,34 @@ volura</code></pre>
       <tr><td><span lang="en">Zoom</span><span lang="nl">Zoomen</span></td><td><span lang="en">scroll wheel (towards the cursor)</span><span lang="nl">scrollwiel (naar de cursor)</span></td><td><kbd>Z</kbd></td></tr>
       <tr><td><span lang="en">Zoom extents</span><span lang="nl">Zoomen tot alles</span></td><td></td><td><kbd>Shift</kbd>+<kbd>Z</kbd></td></tr>
     </table></div>
-    <p lang="en">The <b>Camera</b> menu has the standard views (top, front, right, back, left, iso), parallel projection or perspective, field of view, zoom window, and previous/next view.</p>
-    <p lang="nl">Het menu <b>Camera</b> heeft de standaardweergaven (boven, voor, rechts, achter, links, iso), parallelle projectie of perspectief, gezichtsveld, zoomvenster en vorige/volgende weergave.</p>
-    <p lang="en">With a 3Dconnexion SpaceMouse you can also steer with your other hand while you draw; see <a href="#spacemouse">3D mouse</a>.</p>
+    <h3><span lang="en">Camera views</span><span lang="nl">Cameraweergaven</span></h3>
+    <p lang="en">For a straight view of one side, and to go back to where you were.</p>
+    <p lang="nl">Voor een recht aanzicht van één kant, en om terug te gaan waar je was.</p>
+    <p class="where" lang="en">Where: <b>Camera</b></p>
+    <p class="where" lang="nl">Waar: <b>Camera</b></p>
+    <ul lang="en">
+      <li><b>Standard Views</b>: top, front, right, back, left, iso.</li>
+      <li><b>Projection</b>: parallel projection or perspective, with the field of view.</li>
+      <li><b>Zoom Window</b>: drag the rectangle you want to see large.</li>
+      <li><b>Previous and Next View</b>: back and forward over the views you visited.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Standaardweergaven</b>: boven, voor, rechts, achter, links, iso.</li>
+      <li><b>Projectie</b>: parallelle projectie of perspectief, met het gezichtsveld.</li>
+      <li><b>Zoomvenster</b>: sleep het vak dat je groot wilt zien.</li>
+      <li><b>Vorige en Volgende weergave</b>: terug en vooruit over de weergaven die je bezocht.</li>
+    </ul>
+    <p lang="en">With a 3Dconnexion SpaceMouse you also steer with your other hand while you draw; see <a href="#spacemouse">3D mouse</a>.</p>
     <p lang="nl">Met een SpaceMouse van 3Dconnexion stuur je ook met je andere hand terwijl je tekent; zie <a href="#spacemouse">3D-muis</a>.</p>
 
     <!-- ===================================================== spacemouse -->
     <h2 id="spacemouse"><span lang="en">3D mouse</span><span lang="nl">3D-muis</span></h2>
+    <p lang="en">Steer the model with one hand and draw with the other; the model follows the cap as hard as you push it.</p>
+    <p lang="nl">Stuur het model met één hand en teken met de andere; het model volgt de kap zo hard als je duwt.</p>
+    <h3><span lang="en">Which mice work</span><span lang="nl">Welke muizen werken</span></h3>
     <p lang="en">Volura works with 3Dconnexion 3D mice: the current SpaceMouse models (Wireless, Pro, Compact, Enterprise and the Universal Receiver) and older ones such as the SpaceNavigator, SpaceExplorer and SpacePilot.</p>
     <p lang="nl">Volura werkt met 3D-muizen van 3Dconnexion: de huidige SpaceMouse-modellen (Wireless, Pro, Compact, Enterprise en de Universal Receiver) en oudere zoals de SpaceNavigator, SpaceExplorer en SpacePilot.</p>
+    <h3><span lang="en">What the cap does</span><span lang="nl">Wat de kap doet</span></h3>
     <div class="tbl"><table>
       <tr><th><span lang="en">Cap</span><span lang="nl">Kap</span></th><th>3D</th><th>2D</th></tr>
       <tr><td><span lang="en">Slide</span><span lang="nl">Schuiven</span></td><td><span lang="en">moves (pans) the model</span><span lang="nl">verschuift het model</span></td><td><span lang="en">pans the sheet</span><span lang="nl">verschuift het werkblad</span></td></tr>
@@ -75,6 +148,7 @@ volura</code></pre>
       <tr><td><span lang="en">Twist / tilt</span><span lang="nl">Draaien / kantelen</span></td><td><span lang="en">rotates the model</span><span lang="nl">draait het model</span></td><td></td></tr>
       <tr><td><span lang="en">Buttons</span><span lang="nl">Knoppen</span></td><td colspan="2"><span lang="en">Fit (zoom extents) and the standard views</span><span lang="nl">Passend maken (zoomen tot alles) en de standaardweergaven</span></td></tr>
     </table></div>
+    <h3><span lang="en">Connecting</span><span lang="nl">Aansluiten</span></h3>
     <ul lang="en">
       <li><b>With the driver</b>: with 3DxWare 10 or the older 3DxSoftware installed, Volura uses the driver. Volura gets its own profile in 3DxWare, where you set up the buttons and axes.</li>
       <li><b>Without a driver on Windows</b>: Volura reads the device directly; the left button goes to the iso view, the right button to zoom extents.</li>
@@ -85,13 +159,23 @@ volura</code></pre>
       <li><b>Zonder stuurprogramma onder Windows</b>: Volura leest het apparaat zelf; de linkerknop gaat naar het iso-aanzicht, de rechterknop zoomt tot alles.</li>
       <li><b>Linux</b>: via <code>spacenavd</code>; installeer en start het.</li>
     </ul>
-    <p lang="en">Under <b>Window &gt; Preferences &gt; 3D Mouse</b> you switch the 3D mouse on or off, set the speed, see how it is connected and test it live: move the cap and the values change.</p>
-    <p lang="nl">Onder <b>Venster &gt; Voorkeuren &gt; 3D-muis</b> zet je de 3D-muis aan of uit, stel je de snelheid in, zie je hoe hij verbonden is en test je hem meteen: beweeg de kap en de waarden veranderen.</p>
+    <h3><span lang="en">Settings</span><span lang="nl">Instellingen</span></h3>
+    <p lang="en">Switch it on or off, set the speed and see how it is connected.</p>
+    <p lang="nl">Zet hem aan of uit, stel de snelheid in en zie hoe hij verbonden is.</p>
+    <p class="where" lang="en">Where: <b>Window &gt; Preferences &gt; 3D Mouse</b></p>
+    <p class="where" lang="nl">Waar: <b>Venster &gt; Voorkeuren &gt; 3D-muis</b></p>
+    <p lang="en">Test it live: move the cap and the values change.</p>
+    <p lang="nl">Test hem meteen: beweeg de kap en de waarden veranderen.</p>
 
     <!-- ===================================================== draw -->
     <h2 id="draw"><span lang="en">Drawing</span><span lang="nl">Tekenen</span></h2>
     <p lang="en">A model is made of <b>edges and faces</b>. Edges split each other where they cross, a closed shape becomes a face, a line across a face splits it, and erasing an edge merges faces again.</p>
     <p lang="nl">Een model bestaat uit <b>randen en vlakken</b>. Randen splitsen elkaar waar ze kruisen, een gesloten vorm wordt een vlak, een lijn over een vlak splitst het, en een rand wissen voegt vlakken weer samen.</p>
+    <h3><span lang="en">Drawing tools in 3D</span><span lang="nl">Tekengereedschap in 3D</span></h3>
+    <p lang="en">The tools that lay edges on the bed, on a face or in the air.</p>
+    <p lang="nl">Het gereedschap dat randen op het bed, op een vlak of in de lucht zet.</p>
+    <p class="where" lang="en">Where: <b>Draw &gt; Lines / Arcs / Shapes / Basic Shapes</b></p>
+    <p class="where" lang="nl">Waar: <b>Tekenen &gt; Lijnen / Bogen / Vormen / Basisvormen</b></p>
     <div class="tbl"><table>
       <tr><th><span lang="en">Tool</span><span lang="nl">Gereedschap</span></th><th><span lang="en">Key</span><span lang="nl">Toets</span></th><th><span lang="en">How</span><span lang="nl">Werking</span></th></tr>
       <tr><td><span lang="en">Line</span><span lang="nl">Lijn</span></td><td><kbd>L</kbd></td><td><span lang="en">Click points; type a length for the next segment. Closing a shape makes a face.</span><span lang="nl">Klik punten; typ een lengte voor het volgende stuk. Een gesloten vorm wordt een vlak.</span></td></tr>
@@ -101,12 +185,157 @@ volura</code></pre>
       <tr><td><span lang="en">Circle</span><span lang="nl">Cirkel</span></td><td><kbd>C</kbd></td><td><span lang="en">Centre, then radius. Type <code>64s</code> first for 64 segments.</span><span lang="nl">Middelpunt, dan straal. Typ eerst <code>64s</code> voor 64 segmenten.</span></td></tr>
       <tr><td><span lang="en">Polygon</span><span lang="nl">Veelhoek</span></td><td></td><td><span lang="en">Like the circle, with straight sides (<code>6s</code> = hexagon).</span><span lang="nl">Zoals de cirkel, met rechte zijden (<code>6s</code> = zeshoek).</span></td></tr>
       <tr><td><span lang="en">Arcs</span><span lang="nl">Bogen</span></td><td><kbd>A</kbd></td><td><span lang="en">2-point arc, arc from centre, 3-point arc and pie (Draw &gt; Arcs).</span><span lang="nl">Boog door 2 punten, boog vanuit middelpunt, boog door 3 punten en taartpunt (Tekenen &gt; Bogen).</span></td></tr>
-      <tr><td><span lang="en">3D text</span><span lang="nl">3D-tekst</span></td><td><kbd>Shift</kbd>+<kbd>T</kbd></td><td><span lang="en">Type a text, choose font and height, click to place it on a face; then push/pull.</span><span lang="nl">Typ een tekst, kies lettertype en hoogte, klik om hem op een vlak te zetten; daarna duwen/trekken.</span></td></tr>
-      <tr><td><span lang="en">Primitives</span><span lang="nl">Basisvormen</span></td><td></td><td><span lang="en">Box, cylinder, cone, sphere and torus with exact sizes.</span><span lang="nl">Kubus/balk, cilinder, kegel, bol en torus met exacte maten.</span></td></tr>
+      <tr><td><span lang="en">Basic Shapes</span><span lang="nl">Basisvormen</span></td><td></td><td><span lang="en">Box, cylinder, cone, sphere and torus with exact sizes.</span><span lang="nl">Kubus/balk, cilinder, kegel, bol en torus met exacte maten.</span></td></tr>
     </table></div>
+    <h3><span lang="en">Drawing tools on the worksheet</span><span lang="nl">Tekengereedschap op het werkblad</span></h3>
+    <p lang="en">The 2D worksheet has its own set of tools for contours you cut or mill.</p>
+    <p lang="nl">Het 2D-werkblad heeft een eigen set gereedschap voor contouren die je snijdt of freest.</p>
+    <p class="where" lang="en">Where: <b>Draw</b> (on the 2D worksheet)</p>
+    <p class="where" lang="nl">Waar: <b>Tekenen</b> (op het 2D-werkblad)</p>
+    <ul lang="en">
+      <li><b>Line, rectangle, rounded rectangle, circle, ellipse, arc, arc from centre, polygon and text</b>, with the same typing and snapping as in 3D.</li>
+      <li><b>Box with finger joints</b> and <b>Spur Gear</b> are under Draw too; see <a href="#laser">Laser and CNC</a>.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Lijn, rechthoek, afgeronde rechthoek, cirkel, ellips, boog, boog vanuit middelpunt, veelhoek en tekst</b>, met hetzelfde typen en snappen als in 3D.</li>
+      <li><b>Doos met vingerlassen</b> en <b>Tandwiel</b> staan ook onder Tekenen; zie <a href="#laser">Laser en frees</a>.</li>
+    </ul>
+    <h3><span lang="en">Project box</span><span lang="nl">Projectdoos</span></h3>
+    <p lang="en">An enclosure for your electronics: a tray with an open top and a lid that slides into it, with screw posts and vent slots.</p>
+    <p lang="nl">Een behuizing voor je elektronica: een bak met een open bovenkant en een deksel dat erin schuift, met schroefzuilen en ventilatiesleuven.</p>
+    <p class="where" lang="en">Where: <b>Draw &gt; Parts &gt; Project Box…</b></p>
+    <p class="where" lang="nl">Waar: <b>Tekenen &gt; Onderdelen &gt; Projectdoos…</b></p>
+    <ul lang="en">
+      <li><b>Inside sizes</b>: you enter the <i>inside</i> length, width and height, because that is what has to fit; the wall, the floor and the lid are the plastic around it.</li>
+      <li><b>Rounded corners</b>: the vertical corners are rounded outside and one wall less inside, so the wall stays the same thickness all the way round.</li>
+      <li><b>Lip</b>: the underside of the lid carries a ring as thick as the wall, which goes into the opening with the clearance you chose, 0.2 mm by default; the question starts at the clearance of the screw holes, the one your printer already proved.</li>
+      <li><b>Screws</b>: with a screw size the base gets a round post with a blind pilot hole in every inside corner and the lid a clearance hole above it; the lip steps around those posts, so the lid still slides down and you screw it on.</li>
+      <li><b>Vent slots</b>: the two long walls get that many vertical slots through them, evenly spaced and centred along the length, from 3 mm above the floor to 3 mm below the height at which the lip comes down, so the air can change while the lid never covers a slot; the slots stay clear of the posts.</li>
+      <li><b>On the bed</b>: base and lid are built in the background and land side by side, the lid flipped over, so its flat top lies on the bed and its lip stands up in the air and neither part needs support.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Binnenmaat</b>: je vult de <i>binnen</i>lengte, -breedte en -hoogte in, want dat is wat erin moet; de wand, de bodem en het deksel zijn het plastic eromheen.</li>
+      <li><b>Afgeronde hoeken</b>: de verticale hoeken zijn buiten afgerond en binnen één wand minder, zodat de wand overal even dik blijft.</li>
+      <li><b>Opstaande rand</b>: de onderkant van het deksel heeft een ring zo dik als de wand, die met de speling die je koos (standaard 0,2 mm) in de opening gaat; de vraag begint bij die van de schroefgaten, die je printer al bewezen heeft.</li>
+      <li><b>Schroeven</b>: bij een schroefmaat krijgt de doos in elke binnenhoek een ronde zuil met een blind voorboorgat en het deksel daarboven een doorvoergat; de rand maakt ruimte rond die zuilen, zodat het deksel nog steeds naar beneden schuift en je het vastdraait.</li>
+      <li><b>Ventilatiesleuven</b>: de beide lange wanden krijgen dat aantal verticale sleuven door de wand, gelijkmatig verdeeld en gecentreerd over de lengte, van 3 mm boven de bodem tot 3 mm onder de hoogte waar de rand neerkomt, zodat de lucht kan veranderen terwijl het deksel nooit een sleuf afdekt; de sleuven blijven vrij van de zuilen.</li>
+      <li><b>Op het bed</b>: doos en deksel worden op de achtergrond gebouwd en komen naast elkaar te staan, met het deksel omgekeerd, zodat zijn platte bovenkant op het bed ligt en de rand in de lucht staat en geen van beide support nodig heeft.</li>
+    </ul>
+    <p class="note" lang="en">One undo takes the box and the lid away again.</p>
+    <p class="note" lang="nl">Met één keer ongedaan maken zijn doos en deksel weer weg.</p>
+    <figure class="shots"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/project_box.png" alt="A project box with screw posts and vent slots, and its lid" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/project_box.png" alt="Een projectdoos met schroefzuilen en ventilatiesleuven, en het deksel" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/dialog_project_box.png" alt="The Project Box dialog" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/dialog_project_box.png" alt="Het venster Projectdoos" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"></figure>
+    <h3><span lang="en">Knob</span><span lang="nl">Knop</span></h3>
+    <p lang="en">The round part you turn with two fingers, on a bolt that stands out of a machine or on the shaft of a potentiometer.</p>
+    <p lang="nl">Het ronde deel dat je met twee vingers draait, op een bout die uit een machine steekt of op de as van een potentiometer.</p>
+    <p class="where" lang="en">Where: <b>Draw &gt; Parts &gt; Knob…</b></p>
+    <p class="where" lang="nl">Waar: <b>Tekenen &gt; Onderdelen &gt; Knop…</b></p>
+    <ul lang="en">
+      <li><b>Grip Knurled</b>: straight ribs of 1 mm around the rim, about one rib per 2 mm of circumference, and that stays grippy with oily fingers.</li>
+      <li><b>Grip Lobed</b>: a star of rounded lobes, easier to print than fine ribs and still good under a thumb.</li>
+      <li><b>Grip Smooth</b>: a plain cylinder.</li>
+      <li><b>Mount Nut</b>: a clearance hole through the knob with a hexagonal pocket in the bottom face, so you press a hex nut in and screw the knob onto a bolt.</li>
+      <li><b>Mount Bolt head</b>: that hole with a round counterbore, so the head of a socket head bolt is captured and the knob turns with it.</li>
+      <li><b>Mount D-shaft</b>: a blind hole with one side flat, so the knob cannot spin on the axle.</li>
+      <li><b>Clearance</b>: which starts at the one of the screw holes, is added to every diameter, because a printed hole comes out smaller than drawn.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Greep Gekarteld</b>: rechte ribben van 1 mm rond de rand, ongeveer één rib per 2 mm omtrek, en dat blijft grijpen met vettige vingers.</li>
+      <li><b>Greep Stervormig</b>: een ster van afgeronde punten, makkelijker te printen dan fijne ribben en nog steeds goed onder een duim.</li>
+      <li><b>Greep Glad</b>: een gewone cilinder.</li>
+      <li><b>Bevestiging Moer</b>: een spelinggat door de knop met een zeshoekige zak in de onderkant, zodat je er een zeskantmoer in drukt en de knop op een bout schroeft.</li>
+      <li><b>Bevestiging Boutkop</b>: dat gat met een ronde verdieping, zodat de kop van een inbusschroef gevangen wordt en de knop met hem meedraait.</li>
+      <li><b>Bevestiging D-as</b>: een blind gat met één kant plat, zodat de knop niet op de as meedraait.</li>
+      <li><b>Speling</b>: die begint bij die van de schroefgaten en gaat op elke diameter, want een geprint gat wordt kleiner dan je tekende.</li>
+    </ul>
+    <p class="note" lang="en">The knob is built in the background and stands on the bed to the right of your model, 10 mm from what is already there, as one undo step; a knob whose hole leaves too little plastic around it is refused with a clear text.</p>
+    <p class="note" lang="nl">De knop wordt op de achtergrond gebouwd en komt rechts van je model op het bed, 10 mm van wat er al staat, als één stap om ongedaan te maken; een knop waarvan het gat te weinig plastic rondom overlaat, wordt met een duidelijke tekst geweigerd.</p>
+    <figure class="shots"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/knob.png" alt="Knobs: knurled, lobed and smooth" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/knob.png" alt="Knoppen: gekarteld, stervormig en glad" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"></figure>
+    <h3><span lang="en">Standoff</span><span lang="nl">Afstandsbus</span></h3>
+    <p lang="en">The spacer that holds a PCB, a panel or a cover off the surface under it.</p>
+    <p lang="nl">De spacer die een printplaat, een paneel of een deksel van het oppervlak eronder af houdt.</p>
+    <p class="where" lang="en">Where: <b>Draw &gt; Parts &gt; Standoff…</b></p>
+    <p class="where" lang="nl">Waar: <b>Tekenen &gt; Onderdelen &gt; Afstandsbus…</b></p>
+    <ul lang="en">
+      <li><b>Shape Round</b>: a cylinder of the outer size you enter, which is how thick the spacer is.</li>
+      <li><b>Shape Hexagonal</b>: a hexagon across the flats, which stands still on a tilted bed and grips in a slot.</li>
+      <li><b>Mount Through hole</b>: a clearance hole all the way, so the screw goes through the standoff into what lies above it.</li>
+      <li><b>Mount Self-tapping</b>: a pilot hole of 0.85 of the nominal diameter, into which a self-tapping screw cuts its own thread and stays.</li>
+      <li><b>Mount Heat-set insert</b>: a hole for a heat-set insert from the top, with the clearance hole under it the rest of the way, so a bolt that comes through the board reaches out of the bottom.</li>
+      <li><b>Clearance</b>: which starts at the one of the screw holes, is added to the clearance holes, because a printed hole comes out smaller than drawn.</li>
+      <li><b>Count</b>: stands that many of them in a row, 4 mm of bed apart, so the four corners of a board print in one go and you break them apart afterwards.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Vorm Rond</b>: een cilinder van de buitenmaat die je invult; dat is hoe dik het busje is.</li>
+      <li><b>Vorm Zeskant</b>: een zeskant over de vlakken, die op een scheef bed stil blijft staan en in een gleuf grijpt.</li>
+      <li><b>Bevestiging Doorgaand gat</b>: een spelinggat helemaal door, zodat de schroef door de afstandsbus in wat erboven ligt gaat.</li>
+      <li><b>Bevestiging Zelftappend</b>: een voorboorgat van 0,85 van de nominale diameter, waarin een zelftappende schroef zijn eigen draad snijdt en blijft zitten.</li>
+      <li><b>Bevestiging Inzetmoer (warm)</b>: van bovenaf een gat voor een inzetmoer, met daaronder de rest van de weg een spelinggat, zodat een bout die door de plaat komt eruit steekt.</li>
+      <li><b>Speling</b>: die begint bij die van de schroefgaten en gaat op de spelinggaten, want een geprint gat wordt kleiner dan je tekende.</li>
+      <li><b>Aantal</b>: zet zoveel bussen op een rij, 4 mm bed uit elkaar, zodat de vier hoeken van een plaat in één keer printen en je ze achteraf uit elkaar breekt.</li>
+    </ul>
+    <p class="note" lang="en">The row is built in the background and stands on the bed to the right of your model, 10 mm from what is already there, as one undo step; a standoff whose hole leaves too little plastic around it is refused with a clear text.</p>
+    <p class="note" lang="nl">De rij wordt op de achtergrond gebouwd en komt rechts van je model op het bed, 10 mm van wat er al staat, als één stap om ongedaan te maken; een afstandsbus waarvan het gat te weinig plastic rondom overlaat, wordt met een duidelijke tekst geweigerd.</p>
+    <h3><span lang="en">Label plate</span><span lang="nl">Naamplaatje</span></h3>
+    <p lang="en">A tag for a drawer, a box of screws or a keyring, with up to four lines of text, each line centred.</p>
+    <p lang="nl">Een plaatje voor een la, een doos schroeven of een sleutelbos, met maximaal vier regels tekst, elke regel gecentreerd.</p>
+    <p class="where" lang="en">Where: <b>Draw &gt; Parts &gt; Label Plate…</b></p>
+    <p class="where" lang="nl">Waar: <b>Tekenen &gt; Onderdelen &gt; Naamplaatje…</b></p>
+    <ul lang="en">
+      <li><b>Text height and plate thickness</b>: what the plate and the letters are made of.</li>
+      <li><b>Raised or engraved</b>: the letters stand on the plate or are cut into it, and you set how high or deep they go; an engraving always leaves plastic under it.</li>
+      <li><b>Shape</b>: the plate is the text with a margin around it and rounded corners, and a hole for a ring or a screw makes it a little longer on the left.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Teksthoogte en plaatdikte</b>: waar het plaatje en de letters van gemaakt zijn.</li>
+      <li><b>Verhoogd of gegraveerd</b>: de letters staan op het plaatje of zijn erin gesneden, en je stelt in hoe hoog of diep ze gaan; onder een gravering blijft altijd plastic over.</li>
+      <li><b>Vorm</b>: het plaatje is de tekst met een marge eromheen en afgeronde hoeken, en een gat voor een ring of een schroef maakt het links iets langer.</li>
+    </ul>
+    <p class="note" lang="en">Raised letters print best in a second colour: change the filament at the height of the plate. The dialog remembers the text and the sizes, and the plate lands next to your model as one undo step.</p>
+    <p class="note" lang="nl">Verhoogde letters printen het mooist in een tweede kleur: wissel het filament op de hoogte van het plaatje. Het venster onthoudt de tekst en de maten, en het plaatje komt naast je model te staan als één stap om ongedaan te maken.</p>
+    <h3><span lang="en">Cable clip</span><span lang="nl">Kabelclip</span></h3>
+    <p lang="en">The clip that keeps a cable, a hose or a bundle of both where it belongs.</p>
+    <p lang="nl">De clip die een kabel, een slang of een bundel van allebei op zijn plek houdt.</p>
+    <p class="where" lang="en">Where: <b>Draw &gt; Parts &gt; Cable Clip…</b></p>
+    <p class="where" lang="nl">Waar: <b>Tekenen &gt; Onderdelen &gt; Kabelclip…</b></p>
+    <ul lang="en">
+      <li><b>Ring</b>: of the cable diameter, with a mouth narrower than the cable, so you push the cable past the mouth and the ring springs back behind it.</li>
+      <li><b>Wall</b>: the plastic around the cable, thick enough to survive snapping the cable in.</li>
+      <li><b>Opening</b>: the mouth as a part of the cable, 80 % by default: less holds harder but is harder to get in, more lets the cable walk out.</li>
+      <li><b>Foot</b>: a flat foot beside the ring with a screw hole through its thickness, in the middle of the foot and of the height, so the screw has plastic around it on every side; the <i>size</i> is a metric screw from M2 up to M8.</li>
+      <li><b>Width</b>: how high the clip stands; the clip prints lying on its side, so the ring is a wall on the bed that needs no support while the cable runs across the bed.</li>
+      <li><b>Count</b>: stands that many clips in a row, 4 mm of bed apart, so a run along a desk prints in one go and you break them apart afterwards.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Ring</b>: van de kabeldiameter met een bek die smaller is dan de kabel, zodat je de kabel erdoor duwt en de ring erachter terugspringt.</li>
+      <li><b>Wand</b>: het plastic om de kabel, dik genoeg om het inklikken te overleven.</li>
+      <li><b>Opening</b>: de bek als deel van de kabel, standaard 80 %: minder houdt sterker maar gaat moeilijker in, meer laat de kabel eruit lopen.</li>
+      <li><b>Voet</b>: een platte voet naast de ring met een schroefgat door de dikte, in het midden van de voet en van de hoogte, zodat de schroef overal plastic om zich heen heeft; het <i>formaat</i> is een metrische schroef van M2 tot M8.</li>
+      <li><b>Breedte</b>: hoe hoog de clip staat; de clip print liggend op zijn zij, dus de ring is een wand op het bed die geen support nodig heeft en de kabel loopt over het bed.</li>
+      <li><b>Aantal</b>: zet zoveel clips op een rij, 4 mm bed uit elkaar, zodat een reeks langs een bureau in één keer print en je ze achteraf uit elkaar breekt.</li>
+    </ul>
+    <p class="note" lang="en">The row is built in the background and stands on the bed to the right of your model, 10 mm from what is already there, as one undo step; a clip whose screw hole leaves too little foot around it is refused with a clear text.</p>
+    <p class="note" lang="nl">De rij wordt op de achtergrond gebouwd en komt rechts van je model op het bed, 10 mm van wat er al staat, als één stap om ongedaan te maken; een clip waarvan het schroefgat te weinig voet rondom overlaat, wordt met een duidelijke tekst geweigerd.</p>
+    <h3><span lang="en">Spur gear</span><span lang="nl">Tandwiel</span></h3>
+    <p lang="en">An involute gear to print, standing on the bed as a part of the thickness you enter, with the bore through it.</p>
+    <p lang="nl">Een evolvent tandwiel om te printen, dat als onderdeel met de opgegeven dikte op het bed staat, met het asgat erdoor.</p>
+    <p class="where" lang="en">Where: <b>Draw &gt; Parts &gt; Spur Gear…</b></p>
+    <p class="where" lang="nl">Waar: <b>Tekenen &gt; Onderdelen &gt; Tandwiel…</b></p>
+    <ul lang="en">
+      <li><b>Sizes</b>: the number of teeth, the module and the pressure angle, a bore for the axle and the backlash.</li>
+      <li><b>While you type</b>: the dialog shows the pitch diameter and the outside diameter.</li>
+      <li><b>Meshing</b>: two gears with the same module and pressure angle mesh at half the sum of their pitch diameters.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Maten</b>: het aantal tanden, de module en de aangrijpingshoek, een asgat en de speling.</li>
+      <li><b>Terwijl je typt</b>: het venster toont de deelcirkel- en de buitendiameter.</li>
+      <li><b>Aangrijpen</b>: twee tandwielen met dezelfde module en aangrijpingshoek grijpen in elkaar op de helft van de som van hun deelcirkeldiameters.</li>
+    </ul>
+    <p class="note" lang="en">For a gear that stays flat in a laser-cut panel you want the worksheet version, <b>Draw &gt; Spur Gear…</b>; see <a href="#laser">Laser and CNC</a>.</p>
+    <p class="note" lang="nl">Voor een tandwiel dat plat in een gelaserd paneel blijft, wil je de versie op het werkblad, <b>Tekenen &gt; Tandwiel…</b>; zie <a href="#laser">Laser en frees</a>.</p>
 
     <!-- ===================================================== vcb -->
     <h2 id="vcb"><span lang="en">Typing exact sizes</span><span lang="nl">Maten typen</span></h2>
+    <h3><span lang="en">What you can type</span><span lang="nl">Wat je kunt typen</span></h3>
     <p lang="en">While a tool is active, just type and press <kbd>Enter</kbd>. The direction follows your mouse. Millimetres are the default unit.</p>
     <p lang="nl">Typ gewoon terwijl een gereedschap actief is en druk op <kbd>Enter</kbd>. De richting volgt je muis. Millimeter is de standaardeenheid.</p>
     <div class="tbl"><table>
@@ -118,13 +347,30 @@ volura</code></pre>
       <tr><td><code>64s</code></td><td><span lang="en">number of segments of a circle, polygon or arc</span><span lang="nl">aantal segmenten van een cirkel, veelhoek of boog</span></td></tr>
       <tr><td><code>5x</code> · <code>/5</code></td><td><span lang="en">after a copy with Move: 5 copies in a row, or 5 copies divided over the distance; after a copy with Rotate: 5 copies around the same axis, or the angle divided into 5 steps</span><span lang="nl">na een kopie met Verplaatsen: 5 kopieën op een rij, of 5 kopieën verdeeld over de afstand; na een kopie met Roteren: 5 kopieën rond dezelfde as, of de hoek verdeeld in 5 stappen</span></td></tr>
     </table></div>
+    <h3><span lang="en">Correcting what you just typed</span><span lang="nl">Wat je net typte verbeteren</span></h3>
     <p lang="en">Typing right after an operation changes it: pull a face 10 mm, type <code>12</code> and the face goes to 12 mm instead.</p>
     <p lang="nl">Typen direct na een handeling past die aan: trek een vlak 10 mm op, typ <code>12</code> en het vlak gaat naar 12 mm.</p>
 
     <!-- ===================================================== inference -->
     <h2 id="inference"><span lang="en">Snapping</span><span lang="nl">Snappen</span></h2>
-    <p lang="en">Volura shows what the cursor snaps to: <b>endpoint</b> (green), <b>midpoint</b> (cyan), <b>on edge</b>, <b>on face</b>, the <b>origin</b>, and the <b>red, green and blue axis</b> directions. Lengths snap to 1 mm and angles to 15° (adjustable).</p>
-    <p lang="nl">Volura toont waarop de cursor snapt: <b>eindpunt</b> (groen), <b>middelpunt</b> (cyaan), <b>op rand</b>, <b>op vlak</b>, de <b>oorsprong</b> en de richting van de <b>rode, groene en blauwe as</b>. Lengtes snappen op 1 mm en hoeken op 15° (instelbaar).</p>
+    <h3><span lang="en">What the cursor snaps to</span><span lang="nl">Waar de cursor op snapt</span></h3>
+    <p lang="en">Volura shows what the cursor snaps to, so you draw on the right point without zooming in.</p>
+    <p lang="nl">Volura toont waarop de cursor snapt, zodat je op het goede punt tekent zonder in te zoomen.</p>
+    <ul lang="en">
+      <li><b>Endpoint</b> (green) and <b>midpoint</b> (cyan).</li>
+      <li><b>On edge</b> and <b>on face</b>.</li>
+      <li>The <b>origin</b> and the <b>red, green and blue axis</b> directions.</li>
+      <li>Lengths snap to 1 mm and angles to 15° (adjustable).</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Eindpunt</b> (groen) en <b>middelpunt</b> (cyaan).</li>
+      <li><b>Op rand</b> en <b>op vlak</b>.</li>
+      <li>De <b>oorsprong</b> en de richting van de <b>rode, groene en blauwe as</b>.</li>
+      <li>Lengtes snappen op 1 mm en hoeken op 15° (instelbaar).</li>
+    </ul>
+    <h3><span lang="en">Locking a direction</span><span lang="nl">Een richting vergrendelen</span></h3>
+    <p lang="en">When the model is busy and the snapping jumps around, you hold the direction yourself.</p>
+    <p lang="nl">Als het model druk is en het snappen springt rond, houd je de richting zelf vast.</p>
     <ul lang="en">
       <li>Hold <kbd>Shift</kbd> to lock the current direction.</li>
       <li>The arrow keys lock a direction: <kbd>→</kbd> red, <kbd>←</kbd> green, <kbd>↑</kbd> blue.</li>
@@ -136,8 +382,10 @@ volura</code></pre>
 
     <!-- ===================================================== pushpull -->
     <h2 id="pushpull"><span lang="en">Push/pull</span><span lang="nl">Duwen/trekken</span></h2>
+    <h3><span lang="en">Turning a face into a solid</span><span lang="nl">Van een vlak een volume maken</span></h3>
     <p lang="en">Push/pull (<kbd>P</kbd>) turns a face into a solid. Click a face, move the mouse and click again, or type a distance. Pulling up or out of a solid is positive, pushing in is negative.</p>
     <p lang="nl">Duwen/trekken (<kbd>P</kbd>) maakt van een vlak een volume. Klik op een vlak, beweeg de muis en klik nog eens, of typ een afstand. Omhoog of uit een volume trekken is positief, erin duwen is negatief.</p>
+    <h3><span lang="en">Keys while you push</span><span lang="nl">Toetsen tijdens het duwen</span></h3>
     <ul lang="en">
       <li>Push a face all the way through to make a hole.</li>
       <li><kbd>Ctrl</kbd>: keep the starting face (start a new face).</li>
@@ -153,35 +401,78 @@ volura</code></pre>
 
     <!-- ===================================================== edit -->
     <h2 id="edit"><span lang="en">Editing</span><span lang="nl">Bewerken</span></h2>
+    <h3><span lang="en">Selecting</span><span lang="nl">Selecteren</span></h3>
+    <p lang="en">Everything else works on what you selected first.</p>
+    <p lang="nl">Alles anders werkt op wat je eerst selecteert.</p>
+    <p class="where" lang="en">Where: <kbd>Space</kbd>, or <b>Tools &gt; Select</b></p>
+    <p class="where" lang="nl">Waar: <kbd>Space</kbd>, of <b>Gereedschap &gt; Selecteren</b></p>
+    <ul lang="en">
+      <li>Click; double-click selects a face with its edges, triple-click everything connected.</li>
+      <li>Drag left-to-right for a window, right-to-left for everything it crosses.</li>
+      <li><kbd>Shift</kbd> adds or removes.</li>
+      <li><b>Select All</b> and <b>Select None</b> are in the <b>Edit</b> menu.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Klik; dubbelklik selecteert een vlak met randen, driemaal klikken alles wat verbonden is.</li>
+      <li>Sleep van links naar rechts voor een venster, van rechts naar links voor alles wat hij kruist.</li>
+      <li><kbd>Shift</kbd> voegt toe of haalt weg.</li>
+      <li><b>Alles selecteren</b> en <b>Niets selecteren</b> staan in het menu <b>Bewerken</b>.</li>
+    </ul>
+    <h3><span lang="en">Move, Rotate, Scale and Offset</span><span lang="nl">Verplaatsen, Roteren, Schalen en Verschuiving</span></h3>
+    <p class="where" lang="en">Where: <b>Tools</b></p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap</b></p>
     <div class="tbl"><table>
       <tr><th><span lang="en">Tool</span><span lang="nl">Gereedschap</span></th><th><span lang="en">Key</span><span lang="nl">Toets</span></th><th><span lang="en">How</span><span lang="nl">Werking</span></th></tr>
-      <tr><td><span lang="en">Select</span><span lang="nl">Selecteren</span></td><td><kbd>Space</kbd></td><td><span lang="en">Click; double-click selects a face with its edges, triple-click everything connected. Drag left-to-right for a window, right-to-left for crossing. <kbd>Shift</kbd> adds or removes.</span><span lang="nl">Klik; dubbelklik selecteert een vlak met randen, driemaal klikken alles wat verbonden is. Sleep van links naar rechts voor een venster, van rechts naar links voor kruisen. <kbd>Shift</kbd> voegt toe of haalt weg.</span></td></tr>
       <tr><td><span lang="en">Move</span><span lang="nl">Verplaatsen</span></td><td><kbd>M</kbd></td><td><span lang="en">Base point, then target or distance. <kbd>Ctrl</kbd> makes a copy.</span><span lang="nl">Basispunt, dan doel of afstand. <kbd>Ctrl</kbd> maakt een kopie.</span></td></tr>
       <tr><td><span lang="en">Rotate</span><span lang="nl">Roteren</span></td><td><kbd>Q</kbd></td><td><span lang="en">Centre and axis, start direction, then angle (type degrees). <kbd>Ctrl</kbd> makes a copy; then type <code>5x</code> for a circular pattern: rotate-copy a spoke 60° and type <code>5x</code> for 6 spokes.</span><span lang="nl">Middelpunt en as, beginrichting, dan hoek (graden typen). <kbd>Ctrl</kbd> maakt een kopie; typ daarna <code>5x</code> voor een cirkelpatroon: roteer-kopieer een spaak 60° en typ <code>5x</code> voor 6 spaken.</span></td></tr>
       <tr><td><span lang="en">Scale</span><span lang="nl">Schalen</span></td><td><kbd>S</kbd></td><td><span lang="en">Drag a grip, or type a factor such as <code>2</code> or <code>0,5</code>.</span><span lang="nl">Sleep een greep, of typ een factor zoals <code>2</code> of <code>0,5</code>.</span></td></tr>
       <tr><td><span lang="en">Offset</span><span lang="nl">Verschuiving</span></td><td><kbd>F</kbd></td><td><span lang="en">Copies the edges of a face inwards or outwards.</span><span lang="nl">Kopieert de randen van een vlak naar binnen of buiten.</span></td></tr>
-      <tr><td><span lang="en">Follow me</span><span lang="nl">Volg mij</span></td><td></td><td><span lang="en">Sweeps a profile along a path (Tools &gt; Follow Me).</span><span lang="nl">Trekt een profiel langs een pad (menu Gereedschap).</span></td></tr>
+    </table></div>
+    <h3><span lang="en">Erasing and painting</span><span lang="nl">Wissen en verven</span></h3>
+    <div class="tbl"><table>
+      <tr><th><span lang="en">Tool</span><span lang="nl">Gereedschap</span></th><th><span lang="en">Key</span><span lang="nl">Toets</span></th><th><span lang="en">How</span><span lang="nl">Werking</span></th></tr>
       <tr><td><span lang="en">Eraser</span><span lang="nl">Gum</span></td><td><kbd>E</kbd></td><td><span lang="en">Click or drag over edges. <kbd>Shift</kbd> hides, <kbd>Ctrl</kbd> softens.</span><span lang="nl">Klik of sleep over randen. <kbd>Shift</kbd> verbergt, <kbd>Ctrl</kbd> verzacht.</span></td></tr>
       <tr><td><span lang="en">Paint bucket</span><span lang="nl">Verfemmer</span></td><td><kbd>B</kbd></td><td><span lang="en">Gives a face or group the current filament colour. Painted faces are exported as colour painting in the 3MF.</span><span lang="nl">Geeft een vlak of groep de huidige filamentkleur. Geverfde vlakken worden in de 3MF als kleurbeschildering geëxporteerd.</span></td></tr>
-      <tr><td><span lang="en">Tape measure</span><span lang="nl">Meetlint</span></td><td><kbd>T</kbd></td><td><span lang="en">Measures distances and makes guide lines and guide points.</span><span lang="nl">Meet afstanden en maakt hulplijnen en hulppunten.</span></td></tr>
-      <tr><td><span lang="en">Protractor</span><span lang="nl">Gradenboog</span></td><td></td><td><span lang="en">Makes guide lines at an angle.</span><span lang="nl">Maakt hulplijnen onder een hoek.</span></td></tr>
     </table></div>
-    <p lang="en">The <b>Edit</b> menu also has hide/unhide, lock/unlock, and <b>Intersect Faces</b> with the model or with the selection. Undo (<kbd>Ctrl</kbd>+<kbd>Z</kbd>) is unlimited.</p>
-    <p lang="nl">Het menu <b>Bewerken</b> heeft ook verbergen/zichtbaar maken, vergrendelen/ontgrendelen en <b>Vlakken snijden</b> met het model of met de selectie. Ongedaan maken (<kbd>Ctrl</kbd>+<kbd>Z</kbd>) is onbeperkt.</p>
+    <h3><span lang="en">The Edit menu</span><span lang="nl">Het menu Bewerken</span></h3>
+    <p lang="en">What is around the tools: the clipboard and the state of the geometry.</p>
+    <p lang="nl">Wat om het gereedschap heen ligt: het klembord en de staat van de geometrie.</p>
+    <p class="where" lang="en">Where: <b>Edit</b></p>
+    <p class="where" lang="nl">Waar: <b>Bewerken</b></p>
+    <ul lang="en">
+      <li><b>Undo and Redo</b> (<kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd>): unlimited.</li>
+      <li><b>Cut, Copy, Paste and Paste In Place</b>, <b>Delete</b> and <b>Erase Guides</b>.</li>
+      <li><b>Hide</b> and <b>Unhide</b>, <b>Lock</b> and <b>Unlock</b>, also per selection or all of them.</li>
+      <li><b>Make Component</b>, <b>Make Group</b> and <b>Close Group</b>; see <a href="#groups">Groups and colours</a>.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Ongedaan maken en opnieuw</b> (<kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd>): onbeperkt.</li>
+      <li><b>Knippen, Kopiëren, Plakken en Plakken op locatie</b>, <b>Wissen</b> en <b>Hulplijnen wissen</b>.</li>
+      <li><b>Verbergen</b> en <b>Zichtbaar maken</b>, <b>Vergrendelen</b> en <b>Ontgrendelen</b>, ook per selectie of allemaal.</li>
+      <li><b>Component maken</b>, <b>Groep maken</b> en <b>Groep sluiten</b>; zie <a href="#groups">Groepen en kleuren</a>.</li>
+    </ul>
 
     <!-- ===================================================== groups -->
     <h2 id="groups"><span lang="en">Groups and colours</span><span lang="nl">Groepen en kleuren</span></h2>
+    <h3><span lang="en">Groups</span><span lang="nl">Groepen</span></h3>
     <p lang="en">Select geometry (triple-click) and press <kbd>G</kbd> to make a <b>group</b>. A group is one printable part with its own filament colour. Double-click a group to edit its contents; press <kbd>Esc</kbd> or click outside to close it.</p>
     <p lang="nl">Selecteer geometrie (driemaal klikken) en druk op <kbd>G</kbd> om een <b>groep</b> te maken. Een groep is één printbaar onderdeel met een eigen filamentkleur. Dubbelklik op een groep om de inhoud te bewerken; druk op <kbd>Esc</kbd> of klik ernaast om hem te sluiten.</p>
-    <p lang="en">The filament list in the <b>Materials</b> panel sets the order of the filaments. On export, only the colours you actually use get a filament number: 1, 2, 3… in the order of this list. A model with three colours therefore always uses filaments 1 to 3, even if those colours are further down the list. Add, change or remove filaments there.</p>
-    <p lang="nl">De filamentlijst in het paneel <b>Materialen</b> bepaalt de volgorde van de filamenten. Bij het exporteren krijgen alleen de kleuren die je echt gebruikt een filamentnummer: 1, 2, 3… in de volgorde van deze lijst. Een model met drie kleuren gebruikt dus altijd filament 1 tot en met 3, ook als die kleuren verderop in de lijst staan. Daar voeg je filamenten toe, wijzig je ze of haal je ze weg.</p>
     <div class="note" lang="en">Loose geometry that forms a closed solid also counts as a part. Make it a group to give it its own colour.</div>
     <div class="note" lang="nl">Losse geometrie die een gesloten volume vormt telt ook als onderdeel. Maak er een groep van om het een eigen kleur te geven.</div>
+    <h3><span lang="en">Filaments and colours</span><span lang="nl">Filamenten en kleuren</span></h3>
+    <p lang="en">The filament list in the <b>Materials</b> panel sets the order of the filaments. On export, only the colours you actually use get a filament number: 1, 2, 3… in the order of this list. A model with three colours therefore always uses filaments 1 to 3, even if those colours are further down the list. Add, change or remove filaments there.</p>
+    <p lang="nl">De filamentlijst in het paneel <b>Materialen</b> bepaalt de volgorde van de filamenten. Bij het exporteren krijgen alleen de kleuren die je echt gebruikt een filamentnummer: 1, 2, 3… in de volgorde van deze lijst. Een model met drie kleuren gebruikt dus altijd filament 1 tot en met 3, ook als die kleuren verderop in de lijst staan. Daar voeg je filamenten toe, wijzig je ze of haal je ze weg.</p>
 
-    <!-- ===================================================== solids -->
-    <h2 id="solids"><span lang="en">Solid tools</span><span lang="nl">Volumegereedschap</span></h2>
-    <p lang="en">Under <b>Tools &gt; Solid Tools</b> and in the right-click menu of selected groups:</p>
-    <p lang="nl">Onder <b>Gereedschap &gt; Volumegereedschap</b> en in het rechtsklikmenu van geselecteerde groepen:</p>
+    <!-- ===================================================== tools -->
+    <span id="solids"></span>
+    <h2 id="tools"><span lang="en">Tools</span><span lang="nl">Gereedschap</span></h2>
+    <p lang="en">The <b>Tools</b> menu combines solids, works their edges, puts threads and screw holes in them, and measures the model.</p>
+    <p lang="nl">Het menu <b>Gereedschap</b> voegt volumes samen, werkt hun randen bij, zet er schroefdraad en schroefgaten in en meet het model.</p>
+    <h3><span lang="en">Solid tools</span><span lang="nl">Volumegereedschap</span></h3>
+    <p lang="en">Boolean operations on two or more selected groups, when one part is not enough.</p>
+    <p lang="nl">Bewerkingen op twee of meer geselecteerde groepen, als één onderdeel niet genoeg is.</p>
+    <p class="where" lang="en">Where: <b>Tools &gt; Solid Tools</b>, and the right-click menu of selected groups</p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap &gt; Volumegereedschap</b>, en het rechtsklikmenu van geselecteerde groepen</p>
     <div class="tbl"><table>
       <tr><td><b><span lang="en">Union</span><span lang="nl">Samenvoegen</span></b></td><td><span lang="en">merges solids into one</span><span lang="nl">voegt volumes samen tot één</span></td></tr>
       <tr><td><b><span lang="en">Subtract</span><span lang="nl">Aftrekken</span></b></td><td><span lang="en">removes the second from the first</span><span lang="nl">haalt het tweede van het eerste af</span></td></tr>
@@ -189,22 +480,130 @@ volura</code></pre>
       <tr><td><b><span lang="en">Trim</span><span lang="nl">Bijsnijden</span></b></td><td><span lang="en">cuts one solid away from another but keeps both</span><span lang="nl">snijdt het ene volume weg uit het andere maar houdt beide</span></td></tr>
       <tr><td><b><span lang="en">Split</span><span lang="nl">Splitsen</span></b></td><td><span lang="en">splits overlapping solids into separate parts</span><span lang="nl">splitst overlappende volumes in losse delen</span></td></tr>
     </table></div>
-    <p lang="en">Directly in the <b>Tools</b> menu (Outer Shell also in the right-click menu):</p>
-    <p lang="nl">Direct in het menu <b>Gereedschap</b> (Buitenschil ook in het rechtsklikmenu):</p>
-    <div class="tbl"><table>
-      <tr><td><b><span lang="en">Outer Shell</span><span lang="nl">Buitenschil</span></b></td><td><span lang="en">keeps only the outside of overlapping solids</span><span lang="nl">houdt alleen de buitenkant van overlappende volumes over</span></td></tr>
-      <tr><td><b><span lang="en">Simplify Model…</span><span lang="nl">Model vereenvoudigen…</span></b></td><td><span lang="en">fewer triangles on the selected groups, see <a href="#simplify">Simplify Model</a></span><span lang="nl">minder driehoeken op de geselecteerde groepen, zie <a href="#simplify">Model vereenvoudigen</a></span></td></tr>
-    </table></div>
+    <h3><span lang="en">Intersect faces</span><span lang="nl">Vlakken snijden</span></h3>
+    <p lang="en">Draws the lines where faces cross each other, so you can cut a shape out of another with Push/pull.</p>
+    <p lang="nl">Tekent de lijnen waar vlakken elkaar kruisen, zodat je met Duwen/trekken een vorm uit een andere snijdt.</p>
+    <p class="where" lang="en">Where: <b>Tools &gt; Intersect Faces</b>, with the model or with the selection</p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap &gt; Vlakken snijden</b>, met het model of met de selectie</p>
+    <h3><span lang="en">Fillet and chamfer</span><span lang="nl">Afronden en afschuinen</span></h3>
+    <p lang="en">Round or bevel the edges you click, convex or concave, with a radius you type.</p>
+    <p lang="nl">Rond de randen af die je aanklikt of schuin ze af, bol of hol, met een straal die je typt.</p>
+    <p class="where" lang="en">Where: <b>Tools &gt; Fillet</b> / <b>Tools &gt; Chamfer</b></p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap &gt; Afronden</b> / <b>Gereedschap &gt; Afschuinen</b></p>
+    <ul lang="en">
+      <li>Click the edges: a click on a smooth edge selects the whole curve, a click on a face selects all its edges.</li>
+      <li>Type the radius or distance and press <kbd>Enter</kbd>.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Klik de randen aan: een klik op een gladde rand kiest de hele ronding, een klik op een vlak al zijn randen.</li>
+      <li>Typ de straal of afstand en druk op <kbd>Enter</kbd>.</li>
+    </ul>
+    <h3><span lang="en">Screw threads</span><span lang="nl">Schroefdraad</span></h3>
+    <p lang="en">A real thread on a cylinder or in a hole, or a bolt and a nut that fit together after printing.</p>
+    <p lang="nl">Echte schroefdraad op een cilinder of in een gat, of een bout en een moer die na het printen in elkaar passen.</p>
+    <p class="where" lang="en">Where: <b>Tools &gt; Screw Threads</b></p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap &gt; Schroefdraad</b></p>
+    <ul lang="en">
+      <li><b>External Thread on Cylinder…</b> and <b>Internal Thread in Hole…</b> put a thread on what you selected.</li>
+      <li><b>New Bolt…</b> and <b>New Nut or Sleeve…</b> make the part from scratch.</li>
+      <li>Choose a metric size; the clearance is set so that printed parts fit together.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Buitendraad op cilinder…</b> en <b>Binnendraad in gat…</b> zetten draad op wat je selecteerde.</li>
+      <li><b>Nieuwe bout…</b> en <b>Nieuwe moer of bus…</b> maken het onderdeel vanaf nul.</li>
+      <li>Kies een metrische maat; de speling is zo gekozen dat geprinte delen in elkaar passen.</li>
+    </ul>
+    <h3><span lang="en">Screw hole</span><span lang="nl">Schroefgat</span></h3>
+    <p lang="en">Turns a circle you drew into a hole for a metric screw from M2 up to M8, with the clearance printing needs.</p>
+    <p lang="nl">Maakt van een getekende cirkel een gat voor een metrische schroef van M2 tot M8, met de speling die printen vraagt.</p>
+    <p class="where" lang="en">Where: <b>Tools &gt; Screw Hole…</b></p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap &gt; Schroefgat…</b></p>
+    <ul lang="en">
+      <li><b>Draw a circle</b> with the <b>Circle</b> tool where the screw has to go and select it; the size of the circle does not matter, only its centre and the direction of the face.</li>
+      <li><b>Through</b>: a straight clearance hole.</li>
+      <li><b>Counterbore</b>: also makes room for the cylindrical head of a socket head screw.</li>
+      <li><b>Countersunk</b>: cuts a cone of 90° for a flat head.</li>
+      <li><b>Nut pocket</b>: a hexagonal pocket so a hex nut sits in the part while the screw goes through the straight hole.</li>
+      <li><b>Teardrop for sideways holes</b>: a hole that runs sideways gets a roof of 45°, so it prints without support.</li>
+      <li><b>Clearance</b>: 0.2 mm by default, added to every diameter, because a printed hole comes out smaller than drawn.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Teken een cirkel</b> met de <b>Cirkel</b> waar de schroef moet komen en selecteer die; de grootte van de cirkel doet er niet toe, alleen zijn midden en de richting van het vlak.</li>
+      <li><b>Doorlopend</b>: een recht spelinggat.</li>
+      <li><b>Verzonken kop (cilinder)</b>: maakt ook ruimte voor de cilinderkop van een inbusschroef.</li>
+      <li><b>Verzonken kop (conisch)</b>: snijdt een kegel van 90° voor een platte kop.</li>
+      <li><b>Moeruitsparing</b>: een zeshoekige uitsparing waarin een zeskantmoer in het deel gaat zitten, terwijl de schroef door het rechte gat gaat.</li>
+      <li><b>Druppelvorm voor zijwaartse gaten</b>: een liggend gat krijgt een dak van 45°, zodat het zonder support print.</li>
+      <li><b>Speling</b>: standaard 0,2 mm, op elke diameter, want een geprint gat wordt kleiner dan je tekende.</li>
+    </ul>
+    <p class="note" lang="en">What you chose last is remembered, and one undo takes the hole out again.</p>
+    <p class="note" lang="nl">Wat je het laatst koos wordt onthouden en met één keer ongedaan maken is het gat weer weg.</p>
+    <h3><span lang="en">Outer shell</span><span lang="nl">Buitenschil</span></h3>
+    <p lang="en">Turns loose or overlapping parts into one solid, without the walls inside.</p>
+    <p lang="nl">Maakt van losse of overlappende delen één volume, zonder de wanden binnenin.</p>
+    <p class="where" lang="en">Where: <b>Tools &gt; Outer Shell</b>, and the right-click menu</p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap &gt; Buitenschil</b>, en het rechtsklikmenu</p>
+    <ul lang="en">
+      <li>Keeps only the outside of overlapping solids.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Houdt alleen de buitenkant van overlappende volumes over.</li>
+    </ul>
+    <h3 id="simplify"><span lang="en">Simplify Model</span><span lang="nl">Model vereenvoudigen</span></h3>
+    <p lang="en">A scan or a downloaded model can have hundreds of thousands of triangles, which makes Volura slow.</p>
+    <p lang="nl">Een scan of gedownload model kan honderdduizenden driehoeken hebben, en dat maakt Volura traag.</p>
+    <p class="where" lang="en">Where: <b>Tools &gt; Simplify Model…</b></p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap &gt; Model vereenvoudigen…</b></p>
+    <ul lang="en">
+      <li>Removes triangles from the selected groups.</li>
+      <li>The slider goes from <i>Lossless</i> (0.005 mm) to <i>Half the nozzle</i> (0.2 mm); each step tells you what to expect in the print.</li>
+      <li>A live estimate shows how many triangles remain; the default, 0.02 mm, stays far below a 0.1 mm layer.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Haalt driehoeken weg uit de geselecteerde groepen.</li>
+      <li>De schuifregelaar loopt van <i>Verliesvrij</i> (0,005 mm) tot <i>Halve nozzle</i> (0,2 mm); bij elke stap staat wat je in de print kunt verwachten.</li>
+      <li>Een schatting toont meteen hoeveel driehoeken er overblijven; de standaard, 0,02 mm, blijft ver onder een laag van 0,1 mm.</li>
+    </ul>
+    <p class="note" lang="en">One undo restores everything.</p>
+    <p class="note" lang="nl">Eén keer ongedaan maken zet alles terug.</p>
+    <h3><span lang="en">Follow me</span><span lang="nl">Volg mij</span></h3>
+    <p lang="en">Sweeps a profile along a path, for a moulding, a handle or a pipe that bends.</p>
+    <p lang="nl">Trekt een profiel langs een pad, voor een lijst, een handgreep of een gebogen buis.</p>
+    <p class="where" lang="en">Where: <b>Tools &gt; Follow Me</b></p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap &gt; Volg mij</b></p>
+    <h3><span lang="en">Tape measure</span><span lang="nl">Meetlint</span></h3>
+    <p lang="en">Measures distances and makes guide lines and guide points to draw against.</p>
+    <p lang="nl">Meet afstanden en maakt hulplijnen en hulppunten waar je op tekent.</p>
+    <p class="where" lang="en">Where: <b>Tools &gt; Tape Measure</b> (<kbd>T</kbd>)</p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap &gt; Meetlint</b> (<kbd>T</kbd>)</p>
+    <h3><span lang="en">Protractor</span><span lang="nl">Gradenboog</span></h3>
+    <p lang="en">Makes guide lines at an angle, which you then draw along.</p>
+    <p lang="nl">Maakt hulplijnen onder een hoek, waar je langs tekent.</p>
+    <p class="where" lang="en">Where: <b>Tools &gt; Protractor</b></p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap &gt; Gradenboog</b></p>
+    <h3><span lang="en">3D text</span><span lang="nl">3D-tekst</span></h3>
+    <p lang="en">Letters as geometry, to engrave or emboss a part.</p>
+    <p lang="nl">Letters als geometrie, om een onderdeel te graveren of te reliëven.</p>
+    <p class="where" lang="en">Where: <b>Tools &gt; 3D Text</b> (<kbd>Shift</kbd>+<kbd>T</kbd>)</p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap &gt; 3D-tekst</b> (<kbd>Shift</kbd>+<kbd>T</kbd>)</p>
+    <ul lang="en">
+      <li>Type a text, choose font and height, and click to place it on a face.</li>
+      <li>Then push/pull the letters into or out of the part.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Typ een tekst, kies lettertype en hoogte, en klik om hem op een vlak te zetten.</li>
+      <li>Daarna duw of trek je de letters het onderdeel in of uit.</li>
+    </ul>
+
+    <!-- ===================================================== print -->
+    <h2 id="print"><span lang="en">3D printing</span><span lang="nl">3D-printen</span></h2>
+    <img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/menu_3d_printing.png" alt="The 3D Printing menu" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/menu_3d_printing.png" alt="Het menu 3D-printen" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px">
     <p lang="en"><b>Tools &gt; Arrange on Bed</b> (also in the right-click menu) lays the selected groups, or every group when nothing is selected, side by side on the print bed without overlapping, like a slicer: turned 0, 90, 180 or 270 degrees, 5 mm from the edge and from each other. When the parts do not fit on one bed, nothing moves. One undo puts everything back.</p>
     <p lang="nl"><b>Gereedschap &gt; Schikken op bed</b> (ook in het rechtsklikmenu) zet de geselecteerde groepen, of alle groepen als er niets geselecteerd is, naast elkaar op het printbed zonder dat ze elkaar raken, zoals een slicer: 0, 90, 180 of 270 graden gedraaid, 5 mm van de rand en van elkaar. Passen de onderdelen niet op één bed, dan verschuift er niets. Eén keer ongedaan maken zet alles terug.</p>
     <p lang="en">Right-click a group for <b>Drop to Bed</b> (<kbd>Ctrl</kbd>+<kbd>B</kbd>), which puts it on the build plate of your printer, and <b>Center on Bed</b>, which also moves it to the middle of the plate. <b>Flip Along</b> mirrors it along the red, green or blue axis.</p>
     <p lang="nl">Klik met rechts op een groep voor <b>Op bed plaatsen</b> (<kbd>Ctrl</kbd>+<kbd>B</kbd>), dat hem op het printbed van je printer zet, en <b>Centreren op bed</b>, dat hem ook naar het midden van het bed schuift. <b>Spiegelen langs</b> spiegelt hem langs de rode, groene of blauwe as.</p>
     <p lang="en">Right-click a face of a group (also a face you selected while editing the group) for <b>Lay Flat on This Face</b>: the group turns about its own centre, the shortest way round, until that face lies down, and stands on the print bed afterwards, like "place on face" of a slicer. Handy for a part that is easier to print on another side. One undo turns it back.</p>
     <p lang="nl">Klik met rechts op een vlak van een groep (ook een vlak dat je selecteerde tijdens het bewerken van de groep) voor <b>Plat leggen op dit vlak</b>: de groep draait om zijn eigen midden, de kortste weg, totdat dat vlak plat ligt en daarna op het printbed staat, zoals "place on face" van een slicer. Handig voor een onderdeel dat op een andere kant makkelijker print. Eén keer ongedaan maken draait hem terug.</p>
-
-    <!-- ===================================================== print -->
-    <h2 id="print"><span lang="en">3D printing</span><span lang="nl">3D-printen</span></h2>
-    <img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/menu_3d_printing.png" alt="The 3D Printing menu" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/menu_3d_printing.png" alt="Het menu 3D-printen" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px">
     <h3><span lang="en">Print check</span><span lang="nl">Printcontrole</span></h3>
     <img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/overhangs.png" alt="The overhang view marks the faces that need support" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/overhangs.png" alt="De overhangweergave markeert de vlakken die support nodig hebben" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px">
     <p lang="en"><b>3D Printing &gt; Print Check</b> (<kbd>F5</kbd>, and the Print Check panel in the Default Tray) lists every part and why it is or isn't a valid solid: holes, open edges, double faces or loose geometry. Click a problem to see it in the model, and let Volura repair it. It also counts the support: a part that hangs over more steeply than the overhang limit gets a line with the cm² a printer has to support, and the advice to use <b>Orient for Printing</b> when turning it clearly makes less of that.</p>
@@ -217,12 +616,6 @@ volura</code></pre>
     <h3 id="overhangs"><span lang="en">Overhangs</span><span lang="nl">Overhang</span></h3>
     <p lang="en"><b>View &gt; Face Style &gt; Overhangs</b> colours every face that hangs over too far to print without support, and the status bar counts them. The limit is 45° from the vertical; change it under <b>Window &gt; Preferences &gt; Drawing</b>. Faces that lie on the print bed (the lowest point of the model) are never marked.</p>
     <p lang="nl"><b>Beeld &gt; Vlakstijl &gt; Overhang</b> kleurt elk vlak dat te ver overhangt om zonder support te printen, en de statusbalk telt ze. De grens is 45° vanaf de verticaal; wijzig die onder <b>Venster &gt; Voorkeuren &gt; Tekenen</b>. Vlakken die op het printbed liggen (het laagste punt van het model) worden nooit gemarkeerd.</p>
-    <h3><span lang="en">Threads, bolts and nuts</span><span lang="nl">Schroefdraad, bouten en moeren</span></h3>
-    <p lang="en">Under <b>Tools &gt; Screw Threads</b>: <i>External Thread on Cylinder</i>, <i>Internal Thread in Hole</i>, <i>New Bolt</i> and <i>New Nut or Sleeve</i>. Choose a metric size; the clearance is set so that printed parts fit together.</p>
-    <p lang="nl">Onder <b>Gereedschap &gt; Schroefdraad</b>: Buitendraad op cilinder, Binnendraad in gat, Nieuwe bout en Nieuwe moer of bus. Kies een metrische maat; de speling is zo gekozen dat geprinte delen in elkaar passen.</p>
-    <h3><span lang="en">Screw holes</span><span lang="nl">Schroefgaten</span></h3>
-    <p lang="en">Draw a circle with the <b>Circle</b> tool where the screw has to go, select that circle and choose <b>Tools &gt; Screw Hole…</b>. Volura cuts a hole for a metric screw from M2 up to M8: <i>Through</i> is a straight clearance hole, <i>Counterbore</i> also makes room for the cylindrical head of a socket head screw, and <i>Countersunk</i> cuts a cone of 90° for a flat head. <i>Nut pocket</i> makes a hexagonal pocket so a hex nut sits in the part while the screw goes through the straight hole. With <i>Teardrop for sideways holes</i> a hole that runs sideways gets a roof of 45°, so it prints without support. The size of the circle does not matter, only its centre and the direction of the face. The clearance, 0.2 mm by default, is added to every diameter, because a printed hole comes out smaller than drawn; what you chose last is remembered and one undo takes the hole out again.</p>
-    <p lang="nl">Teken met de <b>Cirkel</b> een cirkel waar de schroef moet komen, selecteer die cirkel en kies <b>Gereedschap &gt; Schroefgat…</b>. Volura snijdt een gat voor een metrische schroef van M2 tot M8: <i>Doorlopend</i> is een recht spelinggat, <i>Verzonken kop (cilinder)</i> maakt ook ruimte voor de cilinderkop van een inbusschroef, en <i>Verzonken kop (conisch)</i> snijdt een kegel van 90° voor een platte kop. <i>Moeruitsparing</i> maakt een zeshoekige uitsparing waarin een zeskantmoer in het deel gaat zitten, terwijl de schroef door het rechte gat gaat. Met <i>Druppelvorm voor zijwaartse gaten</i> krijgt een liggend gat een dak van 45°, zodat het zonder support print. De grootte van de cirkel doet er niet toe, alleen zijn midden en de richting van het vlak. De speling, standaard 0,2 mm, gaat op elke diameter, want een geprint gat wordt kleiner dan je tekende; wat je het laatst koos wordt onthouden en met één keer ongedaan maken is het gat weer weg.</p>
     <h3><span lang="en">Clearance test</span><span lang="nl">Spelingstest</span></h3>
     <img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/test_prints.png" alt="The clearance test and the overhang test" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/test_prints.png" alt="De spelingstest en de overhangtest" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px">
     <p lang="en">A printed hole comes out smaller than you drew it, and how much smaller depends on your printer. <b>3D Printing &gt; Clearance Test…</b> makes a small test print that tells you what to use: a plate with a row of holes that grow by a step from left to right, each with its clearance standing on the plate in raised letters, and a loose pin beside the plate. Print it and try the pin in every hole: the clearance of the hole in which it fits best is the clearance to use in <i>Screw Hole…</i>, in the threads and in <i>Cut and Join</i>. The question asks for the diameter of the pin (5 mm by default), the first clearance, the step and the number of holes, and remembers what you used last. Plate and pin land to the right of your model as one undo step; the pin is a little taller than the plate and has a bevelled top, so it enters every hole by hand.</p>
@@ -230,29 +623,9 @@ volura</code></pre>
     <h3><span lang="en">Overhang test</span><span lang="nl">Overhangtest</span></h3>
     <p lang="en">How far a printer prints an overhang cleanly is different for every machine. <b>3D Printing &gt; Overhang Test…</b> makes a small test print that tells you where your limit lies: a plate with a row of fins that lean further over from left to right, each with its angle standing on the plate in raised letters. Every fin is a post from which a wall leans out, so its underside is an overhang with nothing under it; 0° is a straight wall and 90° a flat bridge. Print it and read the largest angle that still came out clean: that is the overhang to keep under. The question asks for the first angle (30° by default), the step (10°) and the number of fins (6, so 30° up to 80°), and remembers what you used last. The plate lands to the right of your model as one undo step.</p>
     <p lang="nl">Hoe ver een printer een overhang netjes print, verschilt per machine. <b>3D-printen &gt; Overhangtest…</b> maakt een kleine testprint die je vertelt waar jouw grens ligt: een plaat met een rij vinnen die van links naar rechts steeds verder overhellen, waarvan bij elke vin de hoek in verhoogde letters op het plaatje staat. Elke vin is een zuil waar een wand uit overhelt, zodat zijn onderkant een overhang is met niets eronder; 0° is een rechte wand en 90° een platte brug. Print hem en lees de grootste hoek af die nog netjes lukte: dat is de overhang die je niet overschrijdt. Je kiest de eerste hoek (standaard 30°), de stap (10°) en het aantal vinnen (6, dus 30° tot 80°); wat je het laatst invulde wordt onthouden. Het plaatje komt rechts van je model te staan en is één stap om ongedaan te maken.</p>
-    <h3><span lang="en">Project box</span><span lang="nl">Projectdoos</span></h3>
-    <img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/project_box.png" alt="A project box with screw posts and vent slots, and its lid" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/project_box.png" alt="Een projectdoos met schroefzuilen en ventilatiesleuven, en het deksel" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/dialog_project_box.png" alt="The Project Box dialog" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/dialog_project_box.png" alt="Het venster Projectdoos" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px">
-    <p lang="en">An enclosure for your electronics: <b>Draw &gt; Parts &gt; Project Box…</b> makes a tray with an open top and a lid that slides into it. You enter the <i>inside</i> length, width and height, because that is what has to fit; the wall, the floor and the lid are the plastic around it, and the vertical corners are rounded outside and one wall less inside, so the wall stays the same thickness all the way round. The lid carries a lip on its underside, a ring as thick as the wall, that goes into the opening with the clearance you chose, 0.2 mm by default; it starts at the clearance of the screw holes, the one your printer already proved. With a screw size the base also gets a round post in every inside corner with a blind pilot hole and the lid a clearance hole above it, and the lip steps around those posts, so the lid still slides down and you screw it on. With <i>Vent slots</i> the two long walls get that many vertical slots through them, evenly spaced and centred along the length, from 3 mm above the floor to 3 mm below the height at which the lip of the lid comes down, so the air inside the box can change while the lid never covers a slot; the slots stay clear of the posts in the corners. Base and lid are built in the background and land side by side on the bed, the lid flipped over, so its flat top lies on the bed and its lip stands up in the air and neither part needs support. One undo takes the box and the lid away again.</p>
-    <p lang="nl">Een behuizing voor je elektronica: <b>Tekenen &gt; Onderdelen &gt; Projectdoos…</b> maakt een bak met een open bovenkant en een deksel dat erin schuift. Je vult de <i>binnen</i>lengte, -breedte en -hoogte in, want dat is wat erin moet; de wand, de bodem en het deksel zijn het plastic eromheen, en de verticale hoeken zijn buiten afgerond en binnen één wand minder, zodat de wand overal even dik blijft. Het deksel heeft aan de onderkant een opstaande rand, een ring zo dik als de wand, die met de speling die je koos (standaard 0,2 mm) in de opening gaat; die speling begint bij die van de schroefgaten, die je printer al bewezen heeft. Kies je een schroefmaat, dan krijgt de doos in elke binnenhoek een ronde zuil met een blind voorboorgat en het deksel daarboven een doorvoergat; de opstaande rand maakt ruimte rond die zuilen, zodat het deksel nog steeds naar beneden schuift en je het vastdraait. Met <i>Ventilatiesleuven</i> krijgen de beide lange wanden dat aantal verticale sleuven door de wand, gelijkmatig verdeeld en gecentreerd over de lengte, van 3 mm boven de bodem tot 3 mm onder de hoogte waar de opstaande rand van het deksel neerkomt, zodat de lucht binnen in de doos kan veranderen terwijl het deksel nooit een sleuf afdekt; de sleuven blijven vrij van de zuilen in de hoeken. Doos en deksel worden op de achtergrond gebouwd en komen naast elkaar op het bed, met het deksel omgekeerd, zodat zijn platte bovenkant op het bed ligt en de opstaande rand in de lucht staat en geen van beide support nodig heeft. Met één keer ongedaan maken zijn doos en deksel weer weg.</p>
-    <h3><span lang="en">Knob</span><span lang="nl">Knop</span></h3>
-    <img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/knob.png" alt="Knobs: knurled, lobed and smooth" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/knob.png" alt="Knoppen: gekarteld, stervormig en glad" loading="lazy" style="margin:12px 0;border:1px solid #d0d7de;border-radius:8px">
-    <p lang="en">The round part you turn with two fingers, on a bolt that stands out of a machine or on the shaft of a potentiometer: <b>Draw &gt; Parts &gt; Knob…</b> The <i>grip</i> is the rim you hold: <i>Knurled</i> puts straight ribs of 1 mm around it, about one rib per 2 mm of circumference, and that stays grippy with oily fingers; <i>Lobed</i> makes a star of rounded lobes, easier to print than fine ribs and still good under a thumb; <i>Smooth</i> leaves it a plain cylinder. The <i>mount</i> says what the knob turns on: <i>Nut</i> cuts a clearance hole through the knob with a hexagonal pocket in the bottom face, so you press a hex nut in and screw the knob onto a bolt; <i>Bolt head</i> cuts that hole with a round counterbore, so the head of a socket head bolt is captured and the knob turns with it; <i>D-shaft</i> cuts a blind hole with one side flat, so the knob cannot spin on the axle. The clearance, which starts at the one of the screw holes, is added to every diameter, because a printed hole comes out smaller than drawn. The knob is built in the background and stands on the bed to the right of your model, 10 mm from what is already there, as one undo step; a knob whose hole leaves too little plastic around it is refused with a clear text.</p>
-    <p lang="nl">Het ronde deel dat je met twee vingers draait, op een bout die uit een machine steekt of op de as van een potentiometer: <b>Tekenen &gt; Onderdelen &gt; Knop…</b> De <i>greep</i> is de rand die je vasthoudt: <i>Gekarteld</i> zet er rechte ribben van 1 mm rond, ongeveer één rib per 2 mm omtrek, en dat blijft grijpen met vettige vingers; <i>Stervormig</i> maakt een ster van afgeronde punten, makkelijker te printen dan fijne ribben en nog steeds goed onder een duim; <i>Glad</i> laat hem een gewone cilinder. De <i>bevestiging</i> zegt wat de knop draait: <i>Moer</i> snijdt een spelinggat door de knop met een zeshoekige zak in de onderkant, zodat je er een zeskantmoer in drukt en de knop op een bout schroeft; <i>Boutkop</i> snijdt dat gat met een ronde verdieping, zodat de kop van een inbusschroef gevangen wordt en de knop met hem meedraait; <i>D-as</i> snijdt een blind gat met één kant plat, zodat de knop niet op de as meedraait. De speling, die begint bij die van de schroefgaten, gaat op elke diameter, want een geprint gat wordt kleiner dan je tekende. De knop wordt op de achtergrond gebouwd en komt rechts van je model op het bed, 10 mm van wat er al staat, als één stap om ongedaan te maken; een knop waarvan het gat te weinig plastic rondom overlaat, wordt met een duidelijke tekst geweigerd.</p>
-    <h3><span lang="en">Standoff</span><span lang="nl">Afstandsbus</span></h3>
-    <p lang="en">The spacer between a board and the wall under it: <b>Draw &gt; Parts &gt; Standoff…</b> makes a printable standoff that holds a PCB, a panel or a cover off the surface. The <i>outer size</i> and the <i>shape</i> say how thick the spacer is: <i>Round</i> is a cylinder, <i>Hexagonal</i> is a hexagon across the flats, which stands still on a tilted bed and grips in a slot. The <i>mount</i> says how the screw is held: <i>Through hole</i> cuts a clearance hole all the way, so the screw goes through the standoff into what lies above it; <i>Self-tapping</i> cuts a pilot hole of 0.85 of the nominal diameter, into which a self-tapping screw cuts its own thread and stays; <i>Heat-set insert</i> cuts a hole for a heat-set insert from the top, with the clearance hole under it the rest of the way, so a bolt that comes through the board reaches out of the bottom. The clearance, which starts at the one of the screw holes, is added to the clearance holes, because a printed hole comes out smaller than drawn. The <i>count</i> stands that many of them in a row, 4 mm of bed apart, so the four corners of a board print in one go and you break them apart afterwards. The row is built in the background and stands on the bed to the right of your model, 10 mm from what is already there, as one undo step; a standoff whose hole leaves too little plastic around it is refused with a clear text.</p>
-    <p lang="nl">De spacer tussen een plaat en de wand eronder: <b>Tekenen &gt; Onderdelen &gt; Afstandsbus…</b> maakt een printbare afstandsbus die een printplaat, een paneel of een deksel van het oppervlak eronder af houdt. De <i>buitenmaat</i> en de <i>vorm</i> zeggen hoe dik het busje is: <i>Rond</i> is een cilinder, <i>Zeskant</i> een zeskant over de vlakken, die op een scheef bed stil blijft staan en in een gleuf grijpt. De <i>bevestiging</i> zegt hoe de schroef gehouden wordt: <i>Doorgaand gat</i> snijdt een spelinggat helemaal door, zodat de schroef door de afstandsbus in wat erboven ligt gaat; <i>Zelftappend</i> snijdt een voorboorgat van 0,85 van de nominale diameter, waarin een zelftappende schroef zijn eigen draad snijdt en blijft zitten; <i>Inzetmoer (warm)</i> snijdt van bovenaf een gat voor een inzetmoer, met daaronder de rest van de weg een spelinggat, zodat een bout die door de plaat komt eruit steekt. De speling, die begint bij die van de schroefgaten, gaat op de spelinggaten, want een geprint gat wordt kleiner dan je tekende. Het <i>aantal</i> zet zoveel bussen op een rij, 4 mm bed uit elkaar, zodat de vier hoeken van een plaat in één keer printen en je ze achteraf uit elkaar breekt. De rij wordt op de achtergrond gebouwd en komt rechts van je model op het bed, 10 mm van wat er al staat, als één stap om ongedaan te maken; een afstandsbus waarvan het gat te weinig plastic rondom overlaat, wordt met een duidelijke tekst geweigerd.</p>
-    <h3><span lang="en">Label plate</span><span lang="nl">Naamplaatje</span></h3>
-    <p lang="en">A tag for a drawer, a box of screws or a keyring: <b>Draw &gt; Parts &gt; Label Plate…</b> makes a plate with up to four lines of text, each line centred. Choose the text height, the thickness of the plate and whether the letters stand on the plate (raised) or are cut into it (engraved), and how high or deep they go; an engraving always leaves plastic under it. The plate is the text with a margin around it and rounded corners, and a hole for a ring or a screw makes it a little longer on the left. Raised letters print best in a second colour: change the filament at the height of the plate. The dialog remembers the text and the sizes, and the plate lands next to your model as one undo step.</p>
-    <p lang="nl">Een plaatje voor een la, een doos schroeven of een sleutelbos: <b>Tekenen &gt; Onderdelen &gt; Naamplaatje…</b> maakt een plaatje met maximaal vier regels tekst, elke regel gecentreerd. Kies de teksthoogte, de dikte van het plaatje en of de letters op het plaatje staan (verhoogd) of erin gesneden zijn (gegraveerd), en hoe hoog of diep ze gaan; onder een gravering blijft altijd plastic over. Het plaatje is de tekst met een marge eromheen en afgeronde hoeken, en een gat voor een ring of een schroef maakt het links iets langer. Verhoogde letters printen het mooist in een tweede kleur: wissel het filament op de hoogte van het plaatje. Het venster onthoudt de tekst en de maten, en het plaatje komt naast je model te staan als één stap om ongedaan te maken.</p>
-    <h3><span lang="en">Cable clip</span><span lang="nl">Kabelclip</span></h3>
-    <p lang="en">The clip that keeps a cable, a hose or a bundle of both where it belongs: <b>Draw &gt; Parts &gt; Cable Clip…</b> makes a ring of the cable diameter with a mouth that is narrower than the cable, so you push the cable past the mouth and the ring springs back behind it. The <i>wall</i> is the plastic around the cable, thick enough to survive snapping the cable in, and the <i>opening</i> is the mouth as a part of the cable, 80 % by default: less holds harder but is harder to get in, more lets the cable walk out. The ring stands on a flat <i>foot</i> that runs out beside it with a screw hole through its thickness, in the middle of the foot and in the middle of the height, so the screw has plastic around it on every side; the <i>size</i> is a metric screw from M2 up to M8. The <i>width</i> is how high the clip stands, and because the clip prints lying on its side, the ring is a wall on the bed that needs no support while the cable runs across the bed. The <i>count</i> stands that many clips in a row, 4 mm of bed apart, so a run along a desk prints in one go and you break them apart afterwards. The row is built in the background and stands on the bed to the right of your model, 10 mm from what is already there, as one undo step; a clip whose screw hole leaves too little foot around it is refused with a clear text.</p>
-    <p lang="nl">De clip die een kabel, een slang of een bundel van allebei op zijn plek houdt: <b>Tekenen &gt; Onderdelen &gt; Kabelclip…</b> maakt een ring van de kabeldiameter met een bek die smaller is dan de kabel, zodat je de kabel erdoor duwt en de ring erachter terugspringt. De <i>wand</i> is het plastic om de kabel, dik genoeg om het inklikken te overleven, en de <i>opening</i> is de bek als deel van de kabel, standaard 80 %: minder houdt sterker maar gaat moeilijker in, meer laat de kabel eruit lopen. De ring staat op een platte <i>voet</i> die naast de ring uitloopt, met daarin een schroefgat door de dikte, in het midden van de voet en in het midden van de hoogte, zodat de schroef overal plastic om zich heen heeft; het <i>formaat</i> is een metrische schroef van M2 tot M8. De <i>breedte</i> is hoe hoog de clip staat, en omdat de clip liggend op zijn zij print, is de ring een wand op het bed die geen support nodig heeft en loopt de kabel over het bed. Het <i>aantal</i> zet zoveel clips op een rij, 4 mm bed uit elkaar, zodat een reeks langs een bureau in één keer print en je ze achteraf uit elkaar breekt. De rij wordt op de achtergrond gebouwd en komt rechts van je model op het bed, 10 mm van wat er al staat, als één stap om ongedaan te maken; een clip waarvan het schroefgat te weinig voet rondom overlaat, wordt met een duidelijke tekst geweigerd.</p>
     <h3><span lang="en">Cut and join</span><span lang="nl">Snijden en verbinden</span></h3>
     <p lang="en">The <b>Cut</b> tool cuts a group on a plane. <b>Cut and Join</b> also adds connections so the halves fit back together: pins, holes for separate pins, or a dovetail, with adjustable size and clearance. Ideal for models that are bigger than your print bed.</p>
     <p lang="nl">Het gereedschap <b>Snijden</b> knipt een groep op een vlak door. <b>Snijden en verbinden</b> voegt ook verbindingen toe zodat de helften weer in elkaar passen: pennen, gaten voor losse pennen of een zwaluwstaart, met instelbare maat en speling. Ideaal voor modellen die groter zijn dan je printbed.</p>
-    <h3><span lang="en">Fillet and chamfer</span><span lang="nl">Afronden en afschuinen</span></h3>
-    <p lang="en">Choose <b>Fillet</b> or <b>Chamfer</b> (<b>Tools</b>), click the edges (a click on a smooth edge selects the whole curve, a click on a face selects all its edges), type the radius or distance and press <kbd>Enter</kbd>.</p>
-    <p lang="nl">Kies <b>Afronden</b> of <b>Afschuinen</b> (<b>Gereedschap</b>), klik de randen aan (een klik op een gladde rand kiest de hele ronding, een klik op een vlak al zijn randen), typ de straal of afstand en druk op <kbd>Enter</kbd>.</p>
     <h3><span lang="en">Elephant foot chamfer</span><span lang="nl">Olifantsvoet-afschuining</span></h3>
     <p lang="en">The first layer of a print is squashed a little wider than the rest of the part, so it sticks out: an <i>elephant's foot</i>. <b>3D Printing &gt; Elephant Foot Chamfer…</b> puts a small chamfer along the bottom edges of the selected parts, or of all visible parts when nothing is selected, so that squashed layer no longer forms a lip. The question asks for the size, 0.4 mm by default, and remembers what you used last. Parts that stand on a point or on a tilted edge, and parts that are too small for the size, are left alone; one undo brings the bottom back.</p>
     <p lang="nl">De eerste laag van een print wordt iets breder platgedrukt dan de rest van het onderdeel, waardoor hij uitsteekt: een <i>olifantsvoet</i>. <b>3D-printen &gt; Olifantsvoet-afschuining…</b> zet een kleine afschuining langs de onderkant van de geselecteerde onderdelen, of van alle zichtbare onderdelen als je niets hebt geselecteerd, zodat die platgedrukte laag geen rand meer vormt. Je kiest de maat, standaard 0,4 mm; wat je het laatst invulde wordt onthouden. Onderdelen die op een punt of op een scheve rand staan en onderdelen die te klein zijn voor de maat, blijven zoals ze zijn; één keer ongedaan maken zet de onderkant terug.</p>
@@ -262,9 +635,6 @@ volura</code></pre>
     <h3><span lang="en">Orient for printing</span><span lang="nl">Oriënteren voor printen</span></h3>
     <p lang="en"><b>3D Printing &gt; Orient for Printing</b> turns the selected parts, or all visible parts when nothing is selected, so that each one stands on the face that needs the least support, like the auto-orient of a slicer. Volura tries the flat sides of the convex hull of every part and stands it on the one with the least overhang, with the limit of <b>View &gt; Face Style &gt; Overhangs</b>; when two ways are equally good, the largest face wins, because that stands the most steadily, and a part that already stands right is only dropped on the bed. Parts that are locked or not closed are left alone, and one undo brings the old places back. Afterwards <b>Arrange on Bed</b> lays the parts side by side; with <b>Lay Flat on This Face</b> you still choose the face yourself.</p>
     <p lang="nl"><b>3D-printen &gt; Oriënteren voor printen</b> draait de geselecteerde onderdelen, of alle zichtbare onderdelen als je niets hebt geselecteerd, zodat elk op het vlak staat dat de minste support nodig heeft, zoals de auto-orient van een slicer. Volura probeert de platte kanten van de convexe hull van elk onderdeel en zet het op het vlak met de minste overhang, bij de grens van <b>Beeld &gt; Vlakstijl &gt; Overhang</b>; staan twee manieren even goed, dan wint het grootste vlak, want dat staat het stabielst, en een onderdeel dat al goed staat wordt alleen op het bed gezet. Onderdelen die vergrendeld of niet gesloten zijn, blijven zoals ze zijn, en met één keer ongedaan maken staan ze weer waar ze stonden. Daarna zet <b>Schikken op bed</b> de onderdelen naast elkaar; met <b>Plat leggen op dit vlak</b> kies je het vlak zelf.</p>
-    <h3 id="simplify"><span lang="en">Simplify Model</span><span lang="nl">Model vereenvoudigen</span></h3>
-    <p lang="en">A scan or a downloaded model can have hundreds of thousands of triangles, which makes Volura slow. <b>Tools &gt; Simplify Model…</b> removes triangles from the selected groups. The slider goes from <i>Lossless</i> (0.005 mm) to <i>Half the nozzle</i> (0.2 mm); each step tells you what to expect in the print, and a live estimate shows how many triangles remain. The default, 0.02 mm, stays far below a 0.1 mm layer. One undo restores everything.</p>
-    <p lang="nl">Een scan of gedownload model kan honderdduizenden driehoeken hebben, en dat maakt Volura traag. <b>Gereedschap &gt; Model vereenvoudigen…</b> haalt driehoeken weg uit de geselecteerde groepen. De schuifregelaar loopt van <i>Verliesvrij</i> (0,005 mm) tot <i>Halve nozzle</i> (0,2 mm); bij elke stap staat wat je in de print kunt verwachten, en een schatting toont meteen hoeveel driehoeken er overblijven. De standaard, 0,02 mm, blijft ver onder een laag van 0,1 mm. Eén keer ongedaan maken zet alles terug.</p>
 
     <!-- ===================================================== import -->
     <h2 id="import"><span lang="en">Importing 3D models</span><span lang="nl">3D-modellen importeren</span></h2>
@@ -284,7 +654,6 @@ volura</code></pre>
     </ul>
     <p lang="en">SVG and DXF drawings are imported too: see <a href="#laser">Laser and CNC</a>.</p>
     <p lang="nl">SVG- en DXF-tekeningen importeer je ook: zie <a href="#laser">Laser en frees</a>.</p>
-
     <!-- ===================================================== export -->
     <h2 id="export"><span lang="en">Export and files</span><span lang="nl">Exporteren en bestanden</span></h2>
     <div class="tbl"><table>
@@ -393,4 +762,3 @@ volura</code></pre>
     </table></div>
     <p lang="en">You can change every shortcut under <b>Window &gt; Preferences &gt; Shortcuts</b>.</p>
     <p lang="nl">Elke sneltoets kun je aanpassen onder <b>Venster &gt; Voorkeuren &gt; Sneltoetsen</b>.</p>
-  
