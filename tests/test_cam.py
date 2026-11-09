@@ -422,6 +422,69 @@ def test_add_and_remove_layer(win):
     assert list(sheet.layers)[0] == "0"
 
 
+class FakeDeleteBox:
+    """Stands in for the question of "Delete Layer": presses the button the test chose."""
+
+    Question = AcceptRole = DestructiveRole = Cancel = 0
+    choice = None            # the text of the button to press, None for nothing
+    asked = []
+
+    def __init__(self, parent=None):
+        self.buttons = []
+
+    def setIcon(self, icon):
+        pass
+
+    def setWindowTitle(self, title):
+        pass
+
+    def setText(self, text):
+        FakeDeleteBox.asked.append(text)
+
+    def addButton(self, text, role=0):
+        self.buttons.append(text)
+        return text
+
+    def exec(self):
+        return 0
+
+    def clickedButton(self):
+        return next((b for b in self.buttons if b == self.choice), None)
+
+
+def layer_with_one_outline(win, name="Engrave"):
+    """The worksheet in 2D with one outline on `name`, and that layer selected in the panel."""
+    win.set_mode("2d")
+    sheet = win.doc.sheet
+    sheet.add_path(rect(10, 10), closed=True, layer=name, src=1)
+    win.layers_panel.refresh()
+    win.layers_panel.table.selectRow(list(sheet.layers).index(name))
+    return sheet
+
+
+def test_deleting_a_layer_with_outlines_asks_first(win, monkeypatch):
+    """The Layers panel lives in `volura/panels.py`, so that is where its box is patched."""
+    import volura.panels as panels_module
+
+    FakeDeleteBox.asked, FakeDeleteBox.choice = [], "Paths to layer 0"
+    monkeypatch.setattr(panels_module, "QMessageBox", FakeDeleteBox)
+    sheet = layer_with_one_outline(win)
+    win.layers_panel.remove_layer()
+    assert FakeDeleteBox.asked and "Engrave" in FakeDeleteBox.asked[0]
+    assert "Engrave" not in sheet.layers
+    assert sheet.paths[0].layer == "0", "the outlines move to layer 0"
+
+
+def test_deleting_a_layer_can_take_the_paths_with_it(win, monkeypatch):
+    import volura.panels as panels_module
+
+    FakeDeleteBox.asked, FakeDeleteBox.choice = [], "Delete paths too"
+    monkeypatch.setattr(panels_module, "QMessageBox", FakeDeleteBox)
+    sheet = layer_with_one_outline(win)
+    win.layers_panel.remove_layer()
+    assert "Engrave" not in sheet.layers and sheet.paths == []
+
+
 def test_removing_asks_what_happens_to_the_paths():
     d = Drawing.new_sheet()
     d.add_path(rect(5, 5), closed=True, layer="Cut", src=1)
