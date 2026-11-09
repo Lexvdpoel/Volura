@@ -3,6 +3,21 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.34 — 2026-11-09
+
+### New
+- **Model and worksheet stay linked**: a part that goes to the worksheet with To Laser or
+  Mill, or comes from it with Parts to 3D Model, stays linked to its outline. Change the
+  shape on one side and the other follows when you switch between 3D and 2D (or with
+  Tools > Update Links), while each side keeps its own place: arranging the sheet never
+  moves the model, and moving a plate in 3D never moves the sheet. A plate also changes
+  back from the sheet, rebuilt with its thickness where it stands; a face of another solid
+  only goes from the model to the sheet. Links are saved with the file, every update is
+  one undo step, and Tools > Unlink lets go.
+
+### Website
+- The manual explains the links.
+
 ## 0.2.33 — 2026-11-09
 
 ### Website
