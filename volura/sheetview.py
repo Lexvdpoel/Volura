@@ -25,7 +25,7 @@ from .sheettools import (ALIGN_LABELS, MEASURE_LABEL, PICK_PX, SHEET_TOOLS, alig
                          joined_paths, mirror_matrix, next_src, path_distance, path_in_rect,
                          path_touches_rect, paths_bbox, polar_angles, rotation,
                          split_into_segments, translation, transformed_points)
-from .i18n import tr
+from .i18n import tr, trn
 from .sheetsnap import SnapEngine, grid_step
 from .vector2d import (DEFAULT_LAYERS, SHEET_SPACING, OP_LABELS, Layer, VPath, _transform_meta,
                        default_layer_names)
@@ -158,7 +158,8 @@ class SheetView(QWidget):
             for p in moved:
                 p.layer = name
         self.edit(change)
-        self.set_status(tr("{n} contours to layer {name}").format(n=len(moved), name=name))
+        self.set_status(trn("{n} contour to layer {name}", "{n} contours to layer {name}",
+                            len(moved)).format(n=len(moved), name=name))
         return True
 
     # ------------------------------------------------------------ world and screen
@@ -314,7 +315,8 @@ class SheetView(QWidget):
         self._outside_ids = {id(p) for p in outside}
         n = len(outside)
         if n and announce:
-            self.show_status(tr("{n} paths lie outside the sheet or in the margin").format(n=n))
+            self.show_status(trn("{n} path lies outside the sheet or in the margin",
+                                 "{n} paths lie outside the sheet or in the margin", n).format(n=n))
         return n
 
     def _prune_selection(self):
@@ -439,7 +441,8 @@ class SheetView(QWidget):
 
         self.edit(drop)
         self.clear_selection()
-        self.set_status(tr("{n} contours deleted").format(n=len(sel)))
+        self.set_status(trn("{n} contour deleted", "{n} contours deleted",
+                            len(sel)).format(n=len(sel)))
         return len(sel)
 
     def mirror(self, horizontal=True):
@@ -486,9 +489,11 @@ class SheetView(QWidget):
 
     def sheet_boolean(self, op) -> bool:
         """Union, subtract or intersect the selected closed paths."""
-        done = {"union": tr("{n} contours united"), "subtract": tr("{n} contours subtracted"),
-                "intersect": tr("{n} contours intersected")}
         sel = self.selected_paths()
+        done = {"union": trn("{n} contour united", "{n} contours united", len(sel)),
+                "subtract": trn("{n} contour subtracted", "{n} contours subtracted", len(sel)),
+                "intersect": trn("{n} contour intersected", "{n} contours intersected",
+                                 len(sel))}
         if len([p for p in sel if p.closed and len(p.pts) >= 3]) < (1 if op == "union" else 2):
             self.set_status(tr("First select two closed contours for this operation."))
             return False
@@ -554,7 +559,7 @@ class SheetView(QWidget):
             sheet.paths = keep
         self.edit(change)
         self.set_selection([p for p in sheet.paths if int(p.src) == src])
-        self.set_status(tr("{n} segments").format(n=len(segs)))
+        self.set_status(trn("{n} segment", "{n} segments", len(segs)).format(n=len(segs)))
         return len(segs)
 
     def align_selected(self, mode) -> bool:
@@ -607,7 +612,8 @@ class SheetView(QWidget):
                     fresh.append(q)
         self.edit(change)
         self.set_selection(fresh)
-        self.set_status(tr("{n} copies placed").format(n=len(fresh)))
+        self.set_status(trn("{n} copy placed", "{n} copies placed",
+                            len(fresh)).format(n=len(fresh)))
         return fresh
 
     def duplicate_circle(self, count=6, total=360.0, center=None, rotate=True) -> list:
@@ -643,7 +649,8 @@ class SheetView(QWidget):
                     fresh.append(q)
         self.edit(change)
         self.set_selection(list(sel) + fresh)
-        self.set_status(tr("{n} copies placed").format(n=len(fresh)))
+        self.set_status(trn("{n} copy placed", "{n} copies placed",
+                            len(fresh)).format(n=len(fresh)))
         return fresh
 
     # ------------------------------------------------------------ auto arrange

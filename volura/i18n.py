@@ -6,6 +6,7 @@ throwaway variable, as in ``_, r, u = cam.basis()``)::
     from .i18n import tr
     label = tr("Push/Pull")
     status = tr("{count} faces selected").format(count=n)
+    status = trn("{n} face selected", "{n} faces selected", n).format(n=n)
 
 Placeholders are named (``{count}``), never f-strings inside ``tr()``, so a translation
 can put them in another order. A table lives in ``volura/locale/<code>.py`` as
@@ -35,6 +36,16 @@ _reverse: dict[str, str] | None = None
 def tr(text: str) -> str:
     """The text in the current language (the English text when there is no translation)."""
     return _table.get(text, text)
+
+
+def trn(singular: str, plural: str, n) -> str:
+    """The text for a count: ``singular`` when ``n`` is 1, ``plural`` otherwise.
+
+    Both texts are ordinary keys, so a translation needs both forms::
+
+        status = trn("{n} cable clip added.", "{n} cable clips added.", n).format(n=n)
+    """
+    return tr(singular) if n == 1 else tr(plural)
 
 
 def tr_noop(text: str) -> str:

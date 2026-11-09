@@ -190,7 +190,7 @@ def test_the_action_adds_ears_to_the_selected_group(win, monkeypatch):
     win.doc.set_selection([("g", g.id, g.id)])
     win.a_mouse_ears.trigger()
     assert pump_until(lambda: g.ents.to_manifold().volume() > BOX_VOLUME + 1), "no ears added"
-    assert pump_until(lambda: "Added mouse ears to 1 parts." in win.hint.text()), win.hint.text()
+    assert pump_until(lambda: "Added mouse ears to 1 part." in win.hint.text()), win.hint.text()
 
 
 def test_the_action_takes_every_visible_group_when_nothing_is_selected(win, monkeypatch):

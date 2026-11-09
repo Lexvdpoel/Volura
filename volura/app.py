@@ -34,7 +34,7 @@ from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
 from . import repair
 from .geom import Plane
-from .i18n import tr, tr_noop
+from .i18n import tr, tr_noop, trn
 from .icons import icon
 from .model import ROOT, LOCKED_MSG, Document
 from .app_dialogs import (FILAMENT_MATERIALS, ModelInfoDialog, PageDialog,
@@ -2295,7 +2295,9 @@ class MainWindow(QMainWindow):
         self.doc.notify()
         self.sheet_view.set_selection(added)
         self.sheet_view._refresh_outside(announce=False)
-        self.hint.setText(tr("{n} slits added: the panel bends there.").format(n=len(added)))
+        self.hint.setText(trn("{n} slit added: the panel bends there.",
+                              "{n} slits added: the panel bends there.", len(added))
+                          .format(n=len(added)))
         return added
 
     # ------------------------------------------------------------ vent pattern
@@ -2374,7 +2376,8 @@ class MainWindow(QMainWindow):
         self.doc.notify()
         self.sheet_view.set_selection(added)
         self.sheet_view._refresh_outside(announce=False)
-        self.hint.setText(tr("{n} holes added.").format(n=len(added)))
+        self.hint.setText(trn("{n} hole added.", "{n} holes added.", len(added))
+                          .format(n=len(added)))
         return added
 
     # ------------------------------------------------------------ fit test
@@ -2714,7 +2717,8 @@ class MainWindow(QMainWindow):
             g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Standoff"))
             doc.set_selection([("g", g.id, g.id)])
             doc.notify()
-            self.view.set_status(tr("{n} standoffs of {h} mm added.")
+            self.view.set_status(trn("{n} standoff of {h} mm added.",
+                                     "{n} standoffs of {h} mm added.", n)
                                  .format(n=n, h=f"{height:g}"))
 
         def failed(exc):
@@ -2835,7 +2839,8 @@ class MainWindow(QMainWindow):
             g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Cable clip"))
             doc.set_selection([("g", g.id, g.id)])
             doc.notify()
-            self.view.set_status(tr("{n} cable clips for {d} mm cable added.")
+            self.view.set_status(trn("{n} cable clip for {d} mm cable added.",
+                                     "{n} cable clips for {d} mm cable added.", n)
                                  .format(n=n, d=f"{cable_d:g}"))
 
         def failed(exc):
@@ -2909,14 +2914,19 @@ class MainWindow(QMainWindow):
             tabbed += 1
         notes = []
         if tabbed:
-            notes.append(tr("{n} contours got {k} tabs each.").format(n=tabbed, k=count))
+            notes.append(trn("{n} contour got {k} tabs each.",
+                             "{n} contours got {k} tabs each.", tabbed).format(n=tabbed, k=count))
         if holes:
-            notes.append(tr("{n} holes were left without tabs.").format(n=holes))
+            notes.append(trn("{n} hole was left without tabs.",
+                             "{n} holes were left without tabs.", holes).format(n=holes))
         if skipped:
-            notes.append(tr("{n} paths were skipped (open or not a cutting layer).")
+            notes.append(trn("{n} path was skipped (open or not a cutting layer).",
+                             "{n} paths were skipped (open or not a cutting layer).", skipped)
                          .format(n=skipped))
         if too_small:
-            notes.append(tr("{n} contours are too small for these tabs.").format(n=too_small))
+            notes.append(trn("{n} contour is too small for these tabs.",
+                             "{n} contours are too small for these tabs.", too_small)
+                         .format(n=too_small))
         if not tabbed:
             self.hint.setText(" ".join(notes))
             return None
@@ -3005,7 +3015,8 @@ class MainWindow(QMainWindow):
             replacements[id(p)] = pts
             rounded += 1
         if not rounded:
-            self.hint.setText(tr("{n} paths have no corners to round.").format(n=blunt)
+            self.hint.setText(trn("{n} path has no corners to round.",
+                                  "{n} paths have no corners to round.", blunt).format(n=blunt)
                               if blunt else tr("Nothing to round."))
             return None
         self.doc.checkpoint()
@@ -3023,7 +3034,8 @@ class MainWindow(QMainWindow):
         self.doc.notify()
         self.sheet_view.set_selection(fresh)
         self.sheet_view._refresh_outside(announce=False)
-        self.hint.setText(tr("{n} paths rounded.").format(n=rounded))
+        self.hint.setText(trn("{n} path rounded.", "{n} paths rounded.", rounded)
+                          .format(n=rounded))
         return fresh
 
     # ------------------------------------------------------------ dogbone corners
@@ -3112,11 +3124,15 @@ class MainWindow(QMainWindow):
             corners += made
         notes = []
         if corners:
-            notes.append(tr("{n} inside corners got a dogbone.").format(n=corners))
+            notes.append(trn("{n} inside corner got a dogbone.",
+                             "{n} inside corners got a dogbone.", corners).format(n=corners))
         elif plain:
-            notes.append(tr("{n} contours have no inside corners.").format(n=plain))
+            notes.append(trn("{n} contour has no inside corners.",
+                             "{n} contours have no inside corners.", plain).format(n=plain))
         if skipped:
-            notes.append(tr("{n} paths were skipped (not a closed contour).").format(n=skipped))
+            notes.append(trn("{n} path was skipped (not a closed contour).",
+                             "{n} paths were skipped (not a closed contour).", skipped)
+                         .format(n=skipped))
         if not corners:
             self.hint.setText(" ".join(notes) if notes else tr("Nothing to dogbone."))
             return None
@@ -3796,11 +3812,13 @@ class MainWindow(QMainWindow):
             if len(groups) > 1:
                 said.append(tr("{n} parts imported from {name}").format(n=len(groups), name=base))
             if removed:
-                said.append(tr("{n} duplicate triangles removed from {name}").format(
-                    n=removed, name=base))
+                said.append(trn("{n} duplicate triangle removed from {name}",
+                                "{n} duplicate triangles removed from {name}",
+                                removed).format(n=removed, name=base))
             if loose:
-                said.append(tr("{n} loose triangles removed from {name}").format(
-                    n=loose, name=base))
+                said.append(trn("{n} loose triangle removed from {name}",
+                                "{n} loose triangles removed from {name}",
+                                loose).format(n=loose, name=base))
             said += notes
             if said:
                 self.hint.setText("; ".join(said))
@@ -4018,7 +4036,8 @@ class MainWindow(QMainWindow):
     def add_drawing_to_sheet(self, drawing, message=None, **fields):
         """Put a drawing on the worksheet as one undo step and select the new paths.
 
-        `message` is a translated template with {n} (the number of paths) and `fields`."""
+        `message` is a translated template with {n} (the number of paths) and `fields`, or a
+        (singular, plural) pair of texts to translate; the pair follows that number."""
         if drawing is None or not drawing.paths:
             self.active_view().set_status(tr("There was nothing to add to the worksheet."))
             self.hint.setText(tr("Nothing was added."))
@@ -4029,7 +4048,11 @@ class MainWindow(QMainWindow):
         self.set_mode("2d")
         self.sheet_view.set_selection(added)
         self.sheet_view.zoom_extents()
-        message = message or tr("{n} outlines added to the worksheet")
+        if message is None:
+            message = (tr_noop("{n} outline added to the worksheet"),
+                       tr_noop("{n} outlines added to the worksheet"))
+        if isinstance(message, tuple):
+            message = trn(message[0], message[1], len(added))
         self.hint.setText(message.format(n=len(added), **fields))
         return added
 
@@ -4044,10 +4067,14 @@ class MainWindow(QMainWindow):
             drawing = self.load_vector(path)
             if drawing is None:
                 return None
-        added = self.add_drawing_to_sheet(drawing, tr("{n} outlines added from {name}"), name=name)
+        added = self.add_drawing_to_sheet(
+            drawing, (tr_noop("{n} outline added from {name}"),
+                      tr_noop("{n} outlines added from {name}")), name=name)
         if added is not None and drawing.warnings:
-            self.hint.setText(tr("{n} outlines added from {name} ({warnings})").format(
-                n=len(added), name=name, warnings="; ".join(drawing.warnings)))
+            self.hint.setText(trn("{n} outline added from {name} ({warnings})",
+                                  "{n} outlines added from {name} ({warnings})", len(added))
+                              .format(n=len(added), name=name,
+                                      warnings="; ".join(drawing.warnings)))
         return added
 
     def copy_to_sheet(self, options=None):
@@ -4067,7 +4094,9 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, tr("Copy to 2D Worksheet"), msg)
             self.hint.setText(tr("Nothing was copied."))
             return None
-        return self.add_drawing_to_sheet(drawing, tr("{n} outlines copied to the worksheet"))
+        return self.add_drawing_to_sheet(
+            drawing, (tr_noop("{n} outline copied to the worksheet"),
+                      tr_noop("{n} outlines copied to the worksheet")))
 
     # ------------------------------------------------------------ 3D and worksheet together
     def _laser_layers(self):
@@ -4134,12 +4163,16 @@ class MainWindow(QMainWindow):
             thickness = self._face_plate_thickness(faces)
         else:
             thickness = sheet3d.solid_thickness(groups) if groups else None
-        added = self.add_drawing_to_sheet(drawing, tr("{n} outlines put on layer {layer}"),
-                                          layer=layer)
+        added = self.add_drawing_to_sheet(
+            drawing, (tr_noop("{n} outline put on layer {layer}"),
+                      tr_noop("{n} outlines put on layer {layer}")), layer=layer)
         if added and thickness and not sheet.sheet_thickness:
             sheet.sheet_thickness = thickness
-            self.hint.setText(tr("{n} outlines put on layer {layer}; sheet thickness {t:g} mm "
-                                 "taken over").format(n=len(added), layer=layer, t=thickness))
+            self.hint.setText(trn("{n} outline put on layer {layer}; sheet thickness {t:g} mm "
+                                  "taken over",
+                                  "{n} outlines put on layer {layer}; sheet thickness {t:g} mm "
+                                  "taken over", len(added))
+                              .format(n=len(added), layer=layer, t=thickness))
         if added:
             self._link_sent_to_sheet(added, groups, faces)
         return added
@@ -4217,8 +4250,8 @@ class MainWindow(QMainWindow):
         self.set_mode("3d")
         self.view.zoom_extents()
         self._link_parts_to_sheet(groups, plates)
-        message = (tr("{n} part of {t:g} mm placed in the model") if len(groups) == 1
-                   else tr("{n} parts of {t:g} mm placed in the model"))
+        message = trn("{n} part of {t:g} mm placed in the model",
+                      "{n} parts of {t:g} mm placed in the model", len(groups))
         self.hint.setText(message.format(n=len(groups), t=float(t)))
         return groups
 
@@ -4391,10 +4424,12 @@ class MainWindow(QMainWindow):
                 self.view.update()
         updated = len(to_sheet) + len(to_model)
         if both:
-            self.hint.setText(tr("Both sides changed: the model won for {n} links.")
+            self.hint.setText(trn("Both sides changed: the model won for {n} link.",
+                                  "Both sides changed: the model won for {n} links.", both)
                               .format(n=both))
         elif updated:
-            self.hint.setText(tr("{n} links updated.").format(n=updated))
+            self.hint.setText(trn("{n} link updated.", "{n} links updated.", updated)
+                              .format(n=updated))
         elif face_only:
             self.hint.setText(tr("This link only goes from 3D to 2D: a change on the worksheet "
                                  "is not put back in the model."))
@@ -4438,7 +4473,8 @@ class MainWindow(QMainWindow):
         doc.checkpoint()
         doc.links = keep
         doc.notify()
-        self.hint.setText(tr("{n} links removed.").format(n=removed))
+        self.hint.setText(trn("{n} link removed.", "{n} links removed.", removed)
+                          .format(n=removed))
         return removed
 
     # ------------------------------------------------------------ export for laser and mill
@@ -4576,14 +4612,22 @@ class MainWindow(QMainWindow):
             return None
         where = (files[0] if len(files) == 1
                  else tr("{n} files ({first})").format(n=len(files), first=files[0]))
+        n_paths = len(drawing.paths)
         if kind == "gcode":
-            message = (tr("{n} outlines exported to {where} with kerf/cutter compensation, "
-                          "estimated time {time}") if options.get("compensate")
-                       else tr("{n} outlines exported to {where}, estimated time {time}"))
+            message = (trn("{n} outline exported to {where} with kerf/cutter compensation, "
+                           "estimated time {time}",
+                           "{n} outlines exported to {where} with kerf/cutter compensation, "
+                           "estimated time {time}", n_paths) if options.get("compensate")
+                       else trn("{n} outline exported to {where}, estimated time {time}",
+                                "{n} outlines exported to {where}, estimated time {time}",
+                                n_paths))
         else:
-            message = (tr("{n} outlines exported to {where} with kerf/cutter compensation")
-                       if options.get("compensate") else tr("{n} outlines exported to {where}"))
-        self.hint.setText(message.format(n=len(drawing.paths), where=where,
+            message = (trn("{n} outline exported to {where} with kerf/cutter compensation",
+                           "{n} outlines exported to {where} with kerf/cutter compensation",
+                           n_paths) if options.get("compensate")
+                       else trn("{n} outline exported to {where}",
+                                "{n} outlines exported to {where}", n_paths))
+        self.hint.setText(message.format(n=n_paths, where=where,
                                          time=(fmt_time(job_estimate(drawing)["total"])
                                                if kind == "gcode" else None)))
         return files[0]
@@ -4859,8 +4903,9 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, tr("Export Failed"), str(e))
             return None
-        self.hint.setText(tr("{n} outlines exported to {where}").format(n=len(drawing.paths),
-                                                                       where=path))
+        self.hint.setText(trn("{n} outline exported to {where}",
+                              "{n} outlines exported to {where}", len(drawing.paths))
+                          .format(n=len(drawing.paths), where=path))
         return path
 
     def _export_vector_async(self, kind, opts):
@@ -4898,7 +4943,9 @@ class MainWindow(QMainWindow):
             return len(drawing.paths)
 
         def written(n):
-            self.hint.setText(tr("{n} outlines exported to {where}").format(n=n, where=path))
+            self.hint.setText(trn("{n} outline exported to {where}",
+                                  "{n} outlines exported to {where}", n)
+                              .format(n=n, where=path))
 
         background.run(self, write, text=tr("Exporting…"), can_cancel=False, on_done=written,
                        on_error=self._vector_export_failed)
@@ -5097,7 +5144,8 @@ class MainWindow(QMainWindow):
 
     def copy(self):
         self.clipboard = list(self.doc.selection)
-        self.hint.setText(tr("{n} item(s) copied.").format(n=len(self.clipboard)))
+        self.hint.setText(trn("{n} item copied.", "{n} items copied.", len(self.clipboard))
+                          .format(n=len(self.clipboard)))
 
     def cut(self):
         if not self.doc.selection:
@@ -5252,8 +5300,11 @@ class MainWindow(QMainWindow):
     def _sel_groups(self, minimum=1):
         groups = self.doc.selected_groups()
         if len(groups) < minimum:
-            QMessageBox.information(self, "Volura", tr("Select at least {n} group(s). First make a "
-                                                       "group of loose geometry (G).").format(n=minimum))
+            QMessageBox.information(self, "Volura",
+                                    trn("Select at least {n} group. First make a group of loose "
+                                        "geometry (G).",
+                                        "Select at least {n} groups. First make a group of loose "
+                                        "geometry (G).", minimum).format(n=minimum))
             return None
         return groups
 
@@ -5417,10 +5468,13 @@ class MainWindow(QMainWindow):
             for g, new in out:
                 g.ents = new
             self.doc.notify()
-            msg = tr("Chamfered the bottom edges of {n} parts.").format(n=len(out))
+            msg = trn("Chamfered the bottom edges of {n} part.",
+                      "Chamfered the bottom edges of {n} parts.", len(out)).format(n=len(out))
             if skipped:
-                msg += " " + tr("{n} parts were skipped: no bottom edges, or the size is "
-                                "too large.").format(n=skipped)
+                msg += " " + trn("{n} part was skipped: no bottom edges, or the size is "
+                                 "too large.",
+                                 "{n} parts were skipped: no bottom edges, or the size is "
+                                 "too large.", skipped).format(n=skipped)
             self.hint.setText(msg)
 
         def failed(exc):
@@ -5484,10 +5538,13 @@ class MainWindow(QMainWindow):
             for g, new in out:
                 g.ents = new
             self.doc.notify()
-            msg = tr("Added mouse ears to {n} parts.").format(n=len(out))
+            msg = trn("Added mouse ears to {n} part.",
+                      "Added mouse ears to {n} parts.", len(out)).format(n=len(out))
             if skipped:
-                msg += " " + tr("{n} parts were skipped: no sharp bottom corners, or not a "
-                                "closed volume.").format(n=skipped)
+                msg += " " + trn("{n} part was skipped: no sharp bottom corners, or not a "
+                                 "closed volume.",
+                                 "{n} parts were skipped: no sharp bottom corners, or not a "
+                                 "closed volume.", skipped).format(n=skipped)
             self.hint.setText(msg)
 
         def failed(exc):
@@ -5539,12 +5596,16 @@ class MainWindow(QMainWindow):
                 else:
                     unchanged += 1
             self.doc.notify()
-            msg = tr("Turned {n} parts to need the least support.").format(n=turned)
+            msg = trn("Turned {n} part to need the least support.",
+                      "Turned {n} parts to need the least support.", turned).format(n=turned)
             if unchanged:
-                msg += " " + tr("{n} parts were already the right way round.").format(n=unchanged)
+                msg += " " + trn("{n} part was already the right way round.",
+                                 "{n} parts were already the right way round.",
+                                 unchanged).format(n=unchanged)
             if skipped:
-                msg += " " + tr("{n} parts were skipped: locked or not a closed volume.") \
-                    .format(n=skipped)
+                msg += " " + trn("{n} part was skipped: locked or not a closed volume.",
+                                 "{n} parts were skipped: locked or not a closed volume.",
+                                 skipped).format(n=skipped)
             self.hint.setText(msg)
 
         def failed(exc):
@@ -5719,7 +5780,9 @@ class MainWindow(QMainWindow):
                 ops.transform_selection(self.doc, M3, t, items=sel)
                 ops.drop_to_bed(self.doc, sel)
             self.doc.notify()
-            self.hint.setText(tr("Arranged {n} parts on the bed.").format(n=len(real)))
+            self.hint.setText(trn("Arranged {n} part on the bed.",
+                                  "Arranged {n} parts on the bed.", len(real))
+                              .format(n=len(real)))
 
         def failed(exc):
             QMessageBox.warning(self, "Volura", str(exc))    # nothing moved, so no undo either
@@ -6378,8 +6441,10 @@ class MainWindow(QMainWindow):
         doc.set_selection(sel)
         doc.notify()
         label = dict((k, l) for l, k in self.CUT_JOINTS)[kind].lower()
-        self.view.set_status((tr("Model cut with {joint} and {n} loose pin(s).") if extras
-                              else tr("Model cut with {joint}.")).format(joint=label, n=len(extras)))
+        self.view.set_status((trn("Model cut with {joint} and {n} loose pin.",
+                                  "Model cut with {joint} and {n} loose pins.", len(extras))
+                              if extras else tr("Model cut with {joint}."))
+                             .format(joint=label, n=len(extras)))
 
     def _lay_part_flat(self, g, normal, sign):
         """Rotate a part about its centre so the cut face lies down, then drop it to the bed."""
@@ -6441,8 +6506,9 @@ class MainWindow(QMainWindow):
             msgs = [("info", tr("The model has no volumes yet."))]
         loose = len(self.doc.root.loose_edges())
         if loose:
-            msgs.append(("info", tr("{n} loose edge(s) without a face are not printed.").format(
-                n=loose)))
+            msgs.append(("info", trn("{n} loose edge without a face is not printed.",
+                                     "{n} loose edges without a face are not printed.",
+                                     loose).format(n=loose)))
         # the levels are the identifiers of ops.check_parts (Dutch, not shown)
         icons = {"ok": "✔", "info": "ℹ", "waarschuwing": "⚠", "fout": "✖"}
         colors = {"ok": theme.color("ok"), "info": theme.color("info"),

@@ -26,6 +26,12 @@ from volura.settings import qsettings  # noqa: E402
 
 SETTING_KEYS = ("show_overhangs", "overhang_limit")
 HINT = "Overhangs: {n} faces need support (over {limit}°)"
+HINT_ONE = "Overhangs: {n} face needs support (over {limit}°)"
+
+
+def hint(n, limit):
+    """The status text of the overhang view for `n` faces."""
+    return (HINT_ONE if n == 1 else HINT).format(n=n, limit=limit)
 
 
 def P(x, y, z=0):
@@ -181,7 +187,7 @@ def test_a_cube_on_the_bed_says_nothing(win):
     """Also not at the origin: the bed is the lowest z of the model, not z = 0 of a group."""
     add(win, cube(100, 100, 0, 10), "on the bed")
     win.a_overhangs.trigger()
-    assert win.hint.text() != HINT.format(n=1, limit=45)
+    assert win.hint.text() != hint(1, 45)
     assert "Overhang" not in win.hint.text()
     assert not tinted(win, win.doc.groups[0].ents).any(), "the bottom on the bed stays its own colour"
 
@@ -191,7 +197,7 @@ def test_a_floating_cube_counts_its_bottom(win):
     add(win, cube(100, 100, 0, 10), "on the bed")
     win.a_overhangs.trigger()
     add(win, cube(140, 100, 20, 10), "floating")
-    assert win.hint.text() == HINT.format(n=1, limit=45)
+    assert win.hint.text() == hint(1, 45)
     assert int(tinted(win, win.doc.groups[1].ents).sum()) == 6, "the bottom face: two triangles"
     assert not tinted(win, win.doc.groups[0].ents).any()
     win.a_overhangs.trigger()
@@ -205,7 +211,7 @@ def test_the_count_follows_the_model(win):
     add(win, cube(100, 100, 0, 10), "on the bed")
     add(win, cube(140, 100, 20, 10), "floating")
     win.a_overhangs.trigger()
-    assert win.hint.text() == HINT.format(n=1, limit=45)
+    assert win.hint.text() == hint(1, 45)
     win.doc.remove_group(win.doc.groups[1].id)
     win.doc.notify()
     assert "Overhang" not in win.hint.text()
@@ -217,13 +223,13 @@ def test_the_limit_of_the_preferences_is_used(win):
     add(win, cube(100, 100, 0, 10), "on the bed")
     add(win, cube(140, 100, 20, 10), "floating")
     win.a_overhangs.trigger()
-    assert win.hint.text() == HINT.format(n=1, limit=45)
+    assert win.hint.text() == hint(1, 45)
     win.settings.overhang_limit = 89
     win.view.update_overhang_status()
-    assert win.hint.text() == HINT.format(n=1, limit=89)
+    assert win.hint.text() == hint(1, 89)
     win.settings.overhang_limit = 10
     win.view.update_overhang_status()
-    assert win.hint.text() == HINT.format(n=1, limit=10)
+    assert win.hint.text() == hint(1, 10)
 
 
 def test_the_overhang_limit_is_a_preference(win):

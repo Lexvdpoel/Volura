@@ -10,7 +10,7 @@ import manifold3d as mf
 from .brep import TOL, Entities, manifold_from_tris, mesh_payload, triangulate_job
 from .geom import (Plane, default_u, extrude_cs, manifold_from_mesh, mesh_arrays, normalize,
                    rotation_matrix)
-from .i18n import tr, tr_noop
+from .i18n import tr, tr_noop, trn
 from .model import ROOT, Document, Group
 from .vector2d import VPath, polygon_area
 from . import fillet, joints, nesting, workers
@@ -1150,7 +1150,9 @@ def _finish_part(name, color, m):
 def _part(name, color, ents, fids):
     open_e = ents.open_edges(fids)
     if open_e:
-        return Part(name, color, problem=tr("not closed: {n} open or doubled edge(s)").format(n=len(open_e)))
+        return Part(name, color, problem=trn("not closed: {n} open or doubled edge",
+                                             "not closed: {n} open or doubled edges",
+                                             len(open_e)).format(n=len(open_e)))
     # every triangle carries the color of its face (a painted face, or the part color)
     m = ents.to_manifold(fids, face_ids={f: color_id(ents.F[f].color or color) for f in fids})
     return _finish_part(name, color, m)
@@ -1180,7 +1182,9 @@ def part_summary(name, color, ents, pool=False):
     fids = list(ents.F)
     open_e = ents.open_edges(fids)
     if open_e:
-        return 0.0, 0.0, tr("not closed: {n} open or doubled edge(s)").format(n=len(open_e))
+        return 0.0, 0.0, trn("not closed: {n} open or doubled edge",
+                             "not closed: {n} open or doubled edges",
+                             len(open_e)).format(n=len(open_e))
     payload = mesh_payload(ents, fids)
     if pool:
         vol, area, problem = workers.parallel_map(part_check_job, [payload])[0]
@@ -1253,7 +1257,9 @@ def build_parts(items):
     for name, color, open_e, payload in prepared:
         if payload is None:
             out.append(Part(name, color,
-                            problem=tr("not closed: {n} open or doubled edge(s)").format(n=len(open_e))))
+                            problem=trn("not closed: {n} open or doubled edge",
+                                        "not closed: {n} open or doubled edges",
+                                        len(open_e)).format(n=len(open_e))))
         else:
             tris, tags = next(it)
             out.append(_finish_part(name, color, manifold_from_tris(payload[0], tris, tags)))
@@ -1598,24 +1604,34 @@ def _inspect_part(ents, ctx, name, fids, loose=(), tri=None):
     probs = []
     if loose:
         probs.append(Problem(LOOSE_EDGE, ctx, name, edges=loose, point=_edge_mid(ents, loose[0]),
-                             detail=tr("{n} edge(s) without a face").format(n=len(loose))))
+                             detail=trn("{n} edge without a face",
+                                        "{n} edges without a face", len(loose))
+                             .format(n=len(loose))))
     one, many = _part_edges(ents, fids)
     if one:
         probs.append(Problem(OPEN_EDGE, ctx, name, edges=one, point=_edge_mid(ents, one[0]),
-                             detail=tr("{n} edge(s) with 1 face: hole").format(n=len(one))))
+                             detail=trn("{n} edge with 1 face: hole",
+                                        "{n} edges with 1 face: hole", len(one))
+                             .format(n=len(one))))
     if many:
         probs.append(Problem(MANY_FACES, ctx, name, edges=many, point=_edge_mid(ents, many[0]),
-                             detail=tr("{n} edge(s) with more than 2 faces").format(n=len(many))))
+                             detail=trn("{n} edge with more than 2 faces",
+                                        "{n} edges with more than 2 faces", len(many))
+                             .format(n=len(many))))
     inner = _interior_faces(ents, fids, tri)
     if inner:
         probs.append(Problem(INTERIOR_FACE, ctx, name, faces=inner,
                              point=_face_center(ents, inner[0]),
-                             detail=tr("{n} face(s) inside a volume").format(n=len(inner))))
+                             detail=trn("{n} face inside a volume",
+                                        "{n} faces inside a volume", len(inner))
+                             .format(n=len(inner))))
     flipped = _faces_to_reverse(ents, fids) if not one and not many else set()
     if flipped:
         probs.append(Problem(REVERSED_FACE, ctx, name, faces=sorted(flipped),
                              point=_face_center(ents, sorted(flipped)[0]),
-                             detail=tr("{n} face(s) with the normal pointing inwards")
+                             detail=trn("{n} face with the normal pointing inwards",
+                                        "{n} faces with the normal pointing inwards",
+                                        len(flipped))
                              .format(n=len(flipped))))
     if fids and not probs:
         m = ents.to_manifold(fids)

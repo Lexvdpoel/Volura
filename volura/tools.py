@@ -13,7 +13,7 @@ from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainterPath, QPen
 from . import fillet, icons, ops, vector_import
 from .background import BackgroundCancelled
 from .brep import Entities
-from .i18n import tr
+from .i18n import tr, trn
 from .geom import (AXES, MeshData, Plane, arc_from_bulge, arc_from_center, arc_through_3,
                    circle_points, closest_on_line_to_ray, extrude_cs, normalize, point_in_polys,
                    rotated_rect, rotation_matrix, simplify_polyline)
@@ -3219,7 +3219,9 @@ class EdgeSizeTool(Tool):
         self.reset()
         self.set_vcb(format_length(size))
         if bad:
-            self.view.set_status(tr("{n} edges skipped: they do not belong to two faces.").format(n=len(bad)))
+            self.view.set_status(trn("{n} edge skipped: it does not belong to two faces.",
+                                     "{n} edges skipped: they do not belong to two faces.",
+                                     len(bad)).format(n=len(bad)))
 
     def draw(self, view):
         self._show()

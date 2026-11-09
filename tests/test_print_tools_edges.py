@@ -267,7 +267,7 @@ def test_orient_a_clicked_face_turns_its_group(win):
     g = cone(win.doc)
     win.doc.set_selection([("f", g.id, face_id(g))])
     win.a_orient_print.trigger()
-    ready = lambda: "Turned 1 parts to need the least support." in win.hint.text()
+    ready = lambda: "Turned 1 part to need the least support." in win.hint.text()
     assert pump_until(ready), win.hint.text()
     assert g.ents.bbox()[0][2] == pytest.approx(0.0), "the cone does not stand on the bed"
 
@@ -308,7 +308,7 @@ def test_orient_one_undo_restores_the_part(win):
     before = vertices(g)
     win.doc.set_selection([("g", g.id, g.id)])
     win.a_orient_print.trigger()
-    assert pump_until(lambda: "Turned 1 parts" in win.hint.text()), win.hint.text()
+    assert pump_until(lambda: "Turned 1 part" in win.hint.text()), win.hint.text()
     win.doc.undo()
     assert np.allclose(vertices(g), before), "one undo did not bring the old place back"
 

@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QColorDialog, QComb
                                QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from . import background, ops, theme
-from .i18n import tr
+from .i18n import tr, trn
 from .icons import icon
 from .model import ROOT
 from .vector2d import (CORNER_LABELS, CORNER_STYLES, LASER_OPS, LASER_PARAMS, MILL_OPS,
@@ -427,8 +427,7 @@ class EntityInfoPanel(QWidget):
         if closed:
             self._filament_rows(form, [(s[0], s[1]) for s in closed])
         if skipped:
-            text = (tr("{n} part is not closed") if skipped == 1
-                    else tr("{n} parts are not closed"))
+            text = trn("{n} part is not closed", "{n} parts are not closed", skipped)
             form.addRow(tr("Not counted"), QLabel(text.format(n=skipped)))
 
     def _apply(self, fn):
@@ -563,8 +562,10 @@ class PrintCheckPanel(QWidget):
         self.tree.blockSignals(False)
         if order:
             bad = len({p.part for p in self.problems})
-            self.summary.setText(tr("{count} part(s) with problems. Click a problem to see it; "
-                                    "double-click zooms to it.").format(count=bad))
+            self.summary.setText(trn("{count} part with problems. Click a problem to see it; "
+                                     "double-click zooms to it.",
+                                     "{count} parts with problems. Click a problem to see it; "
+                                     "double-click zooms to it.", bad).format(count=bad))
         else:
             self.summary.setText(tr("All parts are closed volumes and can be printed."))
         self.win.view.problem_items = []

@@ -23,7 +23,7 @@ from dataclasses import replace
 import numpy as np
 import manifold3d as mf
 
-from .i18n import tr
+from .i18n import tr, trn
 from .vector2d import (Drawing, VPath, _point_in_poly, arc_points, layer_param,
                        polygon_area, regions)
 
@@ -385,6 +385,7 @@ def compensate(drawing) -> Drawing:
             skipped += 1
         out.paths.extend(made)
     if skipped:
-        out.warn(tr("{n} contours are too small for the chosen cutter or kerf and "
-                    "were skipped.").format(n=skipped))
+        out.warn(trn("{n} contour is too small for the chosen cutter or kerf and was skipped.",
+                     "{n} contours are too small for the chosen cutter or kerf and were skipped.",
+                     skipped).format(n=skipped))
     return out

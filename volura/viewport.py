@@ -10,7 +10,7 @@ from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
 from . import errors, icons, ops, theme
 from .camera import Camera, horizon_line
-from .i18n import tr
+from .i18n import tr, trn
 from .inference import InferenceEngine
 from .tools import MEASURE_LABEL
 
@@ -757,7 +757,8 @@ class Viewport(QOpenGLWidget):
         tool comes back, so the bar never keeps a count that is no longer true."""
         info = self._overhang_faces()
         if info and info[1]:
-            text = tr("Overhangs: {n} faces need support (over {limit}°)").format(
+            text = trn("Overhangs: {n} face needs support (over {limit}°)",
+                       "Overhangs: {n} faces need support (over {limit}°)", info[1]).format(
                 n=info[1], limit=int(self.settings.overhang_limit))
         else:
             text = ""

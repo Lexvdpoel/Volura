@@ -248,7 +248,7 @@ def test_the_action_turns_the_selected_cone(win):
     g = cone(win.doc)
     win.doc.set_selection([("g", g.id, g.id)])
     win.a_orient_print.trigger()
-    ready = lambda: "Turned 1 parts to need the least support." in win.hint.text()
+    ready = lambda: "Turned 1 part to need the least support." in win.hint.text()
     assert pump_until(ready), win.hint.text()
     lo, hi = g.ents.bbox()
     assert lo[2] == pytest.approx(0.0) and hi[2] == pytest.approx(20.0), "the cone did not turn"
@@ -273,11 +273,11 @@ def test_the_action_counts_what_it_left_alone(win):
     locked.locked = True
     win.doc.set_selection([("g", g.id, g.id), ("g", plate.id, plate.id), ("g", locked.id, locked.id)])
     win.a_orient_print.trigger()
-    ready = lambda: "1 parts were skipped" in win.hint.text()
+    ready = lambda: "1 part was skipped" in win.hint.text()
     assert pump_until(ready), win.hint.text()
     text = win.hint.text()
-    assert "Turned 1 parts to need the least support." in text
-    assert "1 parts were already the right way round." in text
+    assert "Turned 1 part to need the least support." in text
+    assert "1 part was already the right way round." in text
     assert "locked or not a closed volume" in text
 
 
@@ -294,7 +294,7 @@ def test_the_action_passes_the_overhang_limit_of_the_settings(win, monkeypatch):
     win.settings.overhang_limit = 89
     win.doc.set_selection([("g", g.id, g.id)])
     win.a_orient_print.trigger()
-    ready = lambda: "Turned 1 parts to need the least support." in win.hint.text()
+    ready = lambda: "Turned 1 part to need the least support." in win.hint.text()
     assert pump_until(ready), win.hint.text()
     assert seen == [89.0], "the search did not use the limit of the settings"
 
@@ -315,6 +315,6 @@ def test_the_action_is_one_undo_step(win):
     before = vertices(g)
     win.doc.set_selection([("g", g.id, g.id)])
     win.a_orient_print.trigger()
-    assert pump_until(lambda: "Turned 1 parts" in win.hint.text()), win.hint.text()
+    assert pump_until(lambda: "Turned 1 part" in win.hint.text()), win.hint.text()
     win.doc.undo()
     assert np.allclose(vertices(g), before), "one undo did not bring the old place back"

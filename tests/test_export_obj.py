@@ -75,7 +75,7 @@ def test_a_part_far_from_the_origin_keeps_its_coordinates(tmp_path):
 
 def test_a_part_that_does_not_print_is_left_out(tmp_path):
     path = tmp_path / "mixed.obj"
-    open_part = ops.Part("Open", "#0000ff", problem="not closed: 4 open or doubled edge(s)")
+    open_part = ops.Part("Open", "#0000ff", problem="not closed: 4 open or doubled edges")
     assert fileio.export_obj(str(path), [two_cubes()[0], open_part]) == 12
     assert [v.name for v in read(path)] == ["Left_Part"]
 

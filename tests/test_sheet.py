@@ -649,7 +649,7 @@ def test_export_in_2d_writes_visible_layers(win, tmp_path):
     b = str(tmp_path / "sheet.dxf")
     assert win.export_vector("dxf", path=b) == b
     assert {p.layer for p in dxf.read_dxf(b).paths} == {"cutting"}
-    assert "outlines exported to" in win.hint.text()
+    assert "1 outline exported to" in win.hint.text(), "one outline: the singular"
 
 
 def test_copy_to_2d_worksheet_with_top_view(win):

@@ -225,7 +225,7 @@ def test_a_part_without_holes_has_no_inside_corners(win, monkeypatch):
     assert win.dogbone_corners_dialog() is None
     assert len(win.doc.undo_stack) == steps, "nothing changed, so no undo step"
     assert win.doc.sheet.paths == before
-    assert win.hint.text() == "1 contours have no inside corners."
+    assert win.hint.text() == "1 contour has no inside corners."
 
 
 def test_nothing_selected_is_no_undo_step(win, monkeypatch):

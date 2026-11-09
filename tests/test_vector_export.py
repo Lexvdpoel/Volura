@@ -356,7 +356,7 @@ def test_window_writes_svg_and_dxf(win, tmp_path):
     a = str(tmp_path / "model.svg")
     assert win.export_vector("svg", path=a, options={"source": "top"}) == a
     assert abs(total_area(svg.read_svg(a)) - 100.0) < 1e-3
-    assert "1 outlines exported to" in win.hint.text() and a in win.hint.text()
+    assert "1 outline exported to" in win.hint.text() and a in win.hint.text()
 
     b = str(tmp_path / "section.dxf")
     assert win.export_vector("dxf", path=b, options={"source": "section", "z": 5.0}) == b

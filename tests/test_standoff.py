@@ -287,6 +287,12 @@ def test_the_row_stands_to_the_right_of_the_model(win):
     assert win.hint.text() == "4 standoffs of 12 mm added."
 
 
+def test_one_standoff_is_said_as_one(win):
+    win.make_standoff_model(OPTIONS)
+    assert pump_until(lambda: "standoff of" in win.hint.text()), win.hint.text()
+    assert win.hint.text() == "1 standoff of 10 mm added."
+
+
 def test_a_row_that_cannot_be_built_is_a_clear_text(win):
     win.make_standoff_model(dict(OPTIONS, outer=4.0))
     assert pump_until(lambda: "Standoff failed" in win.hint.text()), win.hint.text()

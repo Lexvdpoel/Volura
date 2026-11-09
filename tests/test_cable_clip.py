@@ -220,6 +220,12 @@ def test_the_row_stands_on_the_bed_to_the_right_of_the_model(win):
     assert win.hint.text() == "3 cable clips for 6 mm cable added."
 
 
+def test_one_clip_is_said_as_one(win):
+    win.make_cable_clip_model(OPTIONS)
+    assert pump_until(lambda: "cable clip for" in win.hint.text()), win.hint.text()
+    assert win.hint.text() == "1 cable clip for 6 mm cable added."
+
+
 def test_a_clip_that_cannot_be_built_is_a_clear_text(win):
     win.make_cable_clip_model(dict(OPTIONS, width=4.0))
     assert pump_until(lambda: "Cable clip failed" in win.hint.text()), win.hint.text()

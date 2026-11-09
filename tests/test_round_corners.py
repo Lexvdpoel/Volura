@@ -235,7 +235,7 @@ def test_a_rectangle_is_rounded_in_one_undo_step(win, monkeypatch):
     assert made[0].layer == p.layer and int(made[0].src) == int(p.src), \
         "same layer and source, so the part still moves and nests as one"
     assert len(made[0]) > len(p), "the arcs are new points"
-    assert win.hint.text() == "1 paths rounded."
+    assert win.hint.text() == "1 path rounded."
     win.doc.undo()
     assert win.doc.sheet.paths == before
 
@@ -261,7 +261,7 @@ def test_a_path_without_corners_changes_nothing(win, monkeypatch):
     assert win.round_corners_dialog() is None
     assert len(win.doc.undo_stack) == steps, "nothing changed, so no undo step"
     assert win.doc.sheet.paths == before
-    assert win.hint.text() == "1 paths have no corners to round."
+    assert win.hint.text() == "1 path has no corners to round."
 
 
 def test_nothing_selected_is_no_undo_step(win, monkeypatch):

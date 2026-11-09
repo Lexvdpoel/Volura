@@ -16,15 +16,18 @@ from volura.locale import nl  # noqa: E402
 
 
 def tr_literals():
-    """Every literal passed to tr() or tr_noop() in the volura package: (text, file:line)."""
+    """Every literal passed to tr(), tr_noop() or trn() in the volura package: (text, file:line)."""
     out = []
     for path in glob.glob(os.path.join(ROOT, "volura", "*.py")):
         tree = ast.parse(open(path, encoding="utf-8").read())
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and getattr(node.func, "id", None) in ("tr", "tr_noop") \
-                    and node.args and isinstance(node.args[0], ast.Constant) \
-                    and isinstance(node.args[0].value, str):
-                out.append((node.args[0].value, f"{os.path.basename(path)}:{node.lineno}"))
+            if not (isinstance(node, ast.Call) and getattr(node.func, "id", None)
+                    in ("tr", "tr_noop", "trn")):
+                continue
+            count = 2 if node.func.id == "trn" else 1   # trn(singular, plural, n)
+            for arg in node.args[:count]:
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    out.append((arg.value, f"{os.path.basename(path)}:{node.lineno}"))
     return out
 
 
@@ -62,6 +65,30 @@ def test_switching_language():
         assert i18n.tr("a text without translation") == "a text without translation"
     finally:
         i18n.set_language("en")
+
+
+def test_trn_picks_the_form_of_the_count():
+    one, more = "{n} cable clip for {d} mm cable added.", "{n} cable clips for {d} mm cable added."
+    assert i18n.trn(one, more, 1) == one
+    assert i18n.trn(one, more, 0) == more
+    assert i18n.trn(one, more, 3) == more
+
+
+def test_trn_picks_the_dutch_form_of_the_count():
+    one, more = "{n} cable clip for {d} mm cable added.", "{n} cable clips for {d} mm cable added."
+    try:
+        assert i18n.set_language("nl") == "nl"
+        assert i18n.trn(one, more, 1) == nl.TRANSLATIONS[one]
+        assert i18n.trn(one, more, 3) == nl.TRANSLATIONS[more]
+    finally:
+        i18n.set_language("en")
+
+
+def test_both_forms_of_trn_are_keys_of_the_table():
+    """trn("…", "…", n) gives two texts that the tests above must find back."""
+    keys = {text for text, _ in tr_literals()}
+    assert "{n} standoff of {h} mm added." in keys
+    assert "{n} standoffs of {h} mm added." in keys
 
 
 @pytest.mark.parametrize("choice, expected", (("en", "en"), ("nl", "nl")))

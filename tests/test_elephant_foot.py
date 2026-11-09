@@ -221,7 +221,7 @@ def test_the_action_chamfers_the_selected_group(win):
     win.a_elephant.trigger()
     assert pump_until(lambda: g.ents.to_manifold().volume() < CUBE ** 3 - 1), "nothing was chamfered"
     assert g.ents.to_manifold().volume() == pytest.approx(CUBE ** 3 - 10, abs=0.5)
-    assert pump_until(lambda: "Chamfered the bottom edges of 1 parts." in win.hint.text())
+    assert pump_until(lambda: "Chamfered the bottom edges of 1 part." in win.hint.text())
 
 
 def test_the_action_takes_every_visible_group_when_nothing_is_selected(win):
@@ -240,9 +240,9 @@ def test_the_action_counts_the_parts_it_skipped(win):
     g, tilted = add_cube(win.doc, name="a"), tilt_about_a_vertex(win.doc, name="tilted")
     win.doc.set_selection([("g", g.id, g.id), ("g", tilted.id, tilted.id)])
     win.a_elephant.trigger()
-    ready = lambda: "1 parts were skipped" in win.hint.text()
+    ready = lambda: "1 part was skipped" in win.hint.text()
     assert pump_until(ready), win.hint.text()
-    assert "Chamfered the bottom edges of 1 parts." in win.hint.text()
+    assert "Chamfered the bottom edges of 1 part." in win.hint.text()
 
 
 def test_a_part_without_bottom_edges_leaves_no_undo_step(win):

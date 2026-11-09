@@ -160,7 +160,7 @@ def test_a_rectangle_gets_its_tabs_in_one_undo_step(win, monkeypatch):
     assert all(not q.closed for q in made), "the pieces are open"
     assert all(q.layer == p.layer and int(q.src) == int(p.src) for q in made), \
         "same layer and source, so the part still moves and nests as one"
-    assert win.hint.text() == "1 contours got 4 tabs each."
+    assert win.hint.text() == "1 contour got 4 tabs each."
     win.doc.undo()
     assert win.doc.sheet.paths == before
 
@@ -235,7 +235,7 @@ def test_a_hole_is_left_without_tabs_by_default(win, monkeypatch):
     assert made is not None and len(made) == 4, "only the outer contour is cut into pieces"
     assert all(q.layer == outer.layer for q in made)
     assert hole in win.doc.sheet.paths and hole.closed, "the hole keeps its shape"
-    assert "1 holes were left without tabs." in win.hint.text()
+    assert "1 hole was left without tabs." in win.hint.text()
 
 
 def test_turning_outer_contours_off_tabs_the_hole_too(win, monkeypatch):
@@ -262,7 +262,7 @@ def test_a_hole_is_a_hole_even_when_its_outer_is_not_selected(win, monkeypatch):
     assert win.holding_tabs_dialog() is None, "the only thing selected is a hole"
     assert len(win.doc.undo_stack) == steps, "nothing changed, so no undo step"
     assert hole in win.doc.sheet.paths and hole.closed
-    assert win.hint.text() == "1 holes were left without tabs."
+    assert win.hint.text() == "1 hole was left without tabs."
 
 
 def test_apply_holding_tabs_treats_a_missing_option_as_outer_only(win):
@@ -272,7 +272,7 @@ def test_apply_holding_tabs_treats_a_missing_option_as_outer_only(win):
     made = win.apply_holding_tabs({"count": 4, "width": 1.0})
     assert made is not None and len(made) == 4, "no outer_only key behaves as on"
     assert hole in win.doc.sheet.paths and hole.closed
-    assert "1 holes were left without tabs." in win.hint.text()
+    assert "1 hole was left without tabs." in win.hint.text()
 
 
 def test_the_outer_contours_option_starts_checked_and_is_remembered(win, monkeypatch):
