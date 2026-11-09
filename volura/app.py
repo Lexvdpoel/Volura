@@ -1741,38 +1741,38 @@ MOVED_COMMANDS = {
     'Other/Union Outlines': 'Tools/Union Outlines',
     'Other/Worksheet Layers': 'View/Worksheet Layers',
     'Tools/Arrange on Bed': '3D Printing/Arrange on Bed',
-    'Tools/Print Tools/Cable Clip': '3D Printing/Parts/Cable Clip',
+    'Tools/Print Tools/Cable Clip': 'Draw/Parts/Cable Clip',
     'Tools/Print Tools/Chamfer': 'Tools/Chamfer',
-    'Tools/Print Tools/Clearance Test': '3D Printing/Test Prints/Clearance Test',
+    'Tools/Print Tools/Clearance Test': '3D Printing/Clearance Test',
     'Tools/Print Tools/Cut': '3D Printing/Cut',
     'Tools/Print Tools/Cut and Join': '3D Printing/Cut and Join',
     'Tools/Print Tools/Elephant Foot Chamfer': '3D Printing/Elephant Foot Chamfer',
-    'Tools/Print Tools/External Thread on Cylinder': '3D Printing/Screw Threads/External Thread on Cylinder',
+    'Tools/Print Tools/External Thread on Cylinder': 'Tools/Screw Threads/External Thread on Cylinder',
     'Tools/Print Tools/Fillet': 'Tools/Fillet',
-    'Tools/Print Tools/Internal Thread in Hole': '3D Printing/Screw Threads/Internal Thread in Hole',
-    'Tools/Print Tools/Knob': '3D Printing/Parts/Knob',
-    'Tools/Print Tools/Label Plate': '3D Printing/Parts/Label Plate',
+    'Tools/Print Tools/Internal Thread in Hole': 'Tools/Screw Threads/Internal Thread in Hole',
+    'Tools/Print Tools/Knob': 'Draw/Parts/Knob',
+    'Tools/Print Tools/Label Plate': 'Draw/Parts/Label Plate',
     'Tools/Print Tools/Mouse Ears': '3D Printing/Mouse Ears',
-    'Tools/Print Tools/New Bolt': '3D Printing/Screw Threads/New Bolt',
-    'Tools/Print Tools/New Nut or Sleeve': '3D Printing/Screw Threads/New Nut or Sleeve',
+    'Tools/Print Tools/New Bolt': 'Tools/Screw Threads/New Bolt',
+    'Tools/Print Tools/New Nut or Sleeve': 'Tools/Screw Threads/New Nut or Sleeve',
     'Tools/Print Tools/Orient for Printing': '3D Printing/Orient for Printing',
-    'Tools/Print Tools/Overhang Test': '3D Printing/Test Prints/Overhang Test',
-    'Tools/Print Tools/Project Box': '3D Printing/Parts/Project Box',
-    'Tools/Print Tools/Screw Hole': '3D Printing/Screw Hole',
-    'Tools/Print Tools/Spur Gear': '3D Printing/Parts/Spur Gear',
-    'Tools/Print Tools/Standoff': '3D Printing/Parts/Standoff',
-    'Tools/Print Tools/Thread': '3D Printing/Screw Threads/Thread',
+    'Tools/Print Tools/Overhang Test': '3D Printing/Overhang Test',
+    'Tools/Print Tools/Project Box': 'Draw/Parts/Project Box',
+    'Tools/Print Tools/Screw Hole': 'Tools/Screw Hole',
+    'Tools/Print Tools/Spur Gear': 'Draw/Parts/Spur Gear',
+    'Tools/Print Tools/Standoff': 'Draw/Parts/Standoff',
+    'Tools/Print Tools/Thread': 'Tools/Screw Threads/Thread',
     'View/Auto Arrange': 'Laser and Mill/Auto Arrange',
-    'View/Box with Finger Joints': 'Laser and Mill/Box with Finger Joints',
+    'View/Box with Finger Joints': 'Draw/Box with Finger Joints',
     'View/Dogbone Corners': 'Laser and Mill/Dogbone Corners',
     'View/Fit Test': 'Laser and Mill/Fit Test',
     'View/Holding Tabs': 'Laser and Mill/Holding Tabs',
-    'View/Living Hinge': 'Laser and Mill/Living Hinge',
+    'View/Living Hinge': 'Tools/Living Hinge',
     'View/Parts to 3D Model': 'Tools/Parts to 3D Model',
     'View/Round Corners': 'Tools/Round Corners',
     'View/Sheet': 'Laser and Mill/Sheet',
-    'View/Spur Gear': 'Laser and Mill/Spur Gear',
-    'View/Vent Pattern': 'Laser and Mill/Vent Pattern',
+    'View/Spur Gear': 'Draw/Spur Gear',
+    'View/Vent Pattern': 'Tools/Vent Pattern',
 }
 SHOW_WELCOME_KEY = "show_welcome"
 # the group of the commands that are only in the right-click menu; English, as it is part
@@ -4699,7 +4699,7 @@ class MainWindow(QMainWindow):
                           T["orbit"], T["pan"], T["zoom"], self.a_fov, self.a_zoom_window)
                   + (self.a_extents,))
 
-        # ---- Draw
+        # ---- Draw: lines and shapes, and the parts Volura builds for you
         m = mb.addMenu(tr("&Draw"))
         lines = sub(tr("&Lines"), m, (T["line"], self.a_freehand))
         arcs = sub(tr("&Arcs"), m, (self.a_arc, self.a_arc2, self.a_arc3, self.a_pie))
@@ -4707,15 +4707,22 @@ class MainWindow(QMainWindow):
                                         T["polygon"]))
         primitives = sub(tr("&Basic Shapes"), m, (self.a_box, self.a_cylinder, self.a_cone,
                                                    self.a_sphere, self.a_torus))
-        self.fill(m, only("3d", lines, arcs, shapes, None, primitives)
+        parts_menu = sub(tr("&Parts"), m,
+                         (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
+                          self.a_label_plate, self.a_cable_clip))
+        self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
-                         S["ellipse"], S["arc"], S["centerarc"], S["polygon"], None, S["text"]))
+                         S["ellipse"], S["arc"], S["centerarc"], S["polygon"], None, S["text"],
+                         None, self.a_box_joint, self.a_spur_gear))
 
         # ---- Tools
         m = mb.addMenu(tr("&Tools"))
         solids = sub(tr("&Solid Tools"), m, (self.a_intersect, self.a_union, self.a_subtract,
                                              self.a_trim, self.a_split))
         cut_faces = sub(tr("Intersect &Faces"), m, (self.a_cut_face_model, self.a_cut_face_sel))
+        threads_menu = sub(tr("&Screw Threads"), m,
+                           (self.a_thread, self.a_thread_ext, self.a_thread_int,
+                            self.a_thread_bolt, self.a_thread_nut))
         align = sub(tr("&Align"), m, tuple(self.sheet_align_actions.values()))
         distribute = sub(tr("&Distribute"), m, tuple(self.sheet_distribute_actions.values()))
         self.fill(m, only("3d", T["select"], T["eraser"], T["paint"], None,
@@ -4723,6 +4730,7 @@ class MainWindow(QMainWindow):
                           T["pushpull"], self.a_follow_me, T["offset"], None,
                           self.a_fillet, self.a_chamfer, None,
                           solids, cut_faces, self.a_shell, self.a_simplify, None,
+                          threads_menu, self.a_screw_hole, None,
                           T["tape"], self.a_protractor, None,
                           T["text"], None,
                           self.a_to_sheet, self.a_to_laser)
@@ -4732,33 +4740,25 @@ class MainWindow(QMainWindow):
                          None, self.a_sheet_join, self.a_sheet_split, None,
                          self.a_mirror_h, self.a_mirror_v, align, distribute, None,
                          self.a_sheet_duplicate, self.a_sheet_duplicate_circle, None,
-                         self.a_round_corners, self.a_sheet_to_layer, None,
-                         self.a_sheet_to_model))
+                         self.a_round_corners, self.a_hinge, self.a_vent_pattern, None,
+                         self.a_sheet_to_layer, self.a_sheet_to_model))
 
-        # ---- 3D Printing: everything that makes a model ready for the printer
+        # ---- 3D Printing: what only matters for the printer
         m = mb.addMenu(tr("3D &Printing"))
         only("3d", m)
         self.print_tools_menu = m
-        threads_menu = sub(tr("&Screw Threads"), m,
-                           (self.a_thread, self.a_thread_ext, self.a_thread_int,
-                            self.a_thread_bolt, self.a_thread_nut))
-        tests_menu = sub(tr("&Test Prints"), m, (self.a_clearance_test, self.a_overhang_test))
-        parts_menu = sub(tr("&Parts"), m,
-                         (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
-                          self.a_label_plate, self.a_cable_clip))
         self.fill(m, (self.a_print_setup, self.a_check, None,
                       self.a_orient_print, self.a_drop, self.a_center, self.a_arrange, None,
                       self.a_cutplane, self.a_cut_join, None,
                       self.a_elephant, self.a_mouse_ears, None,
-                      threads_menu, self.a_screw_hole, tests_menu, parts_menu))
+                      self.a_clearance_test, self.a_overhang_test))
 
-        # ---- Laser and Mill: what turns the worksheet into a job for the machine
+        # ---- Laser and Mill: what only matters for the machine
         m = mb.addMenu(tr("&Laser and Mill"))
         only("2d", m)
         self.laser_menu = m
         self.fill(m, (self.a_sheet_plaat, self.a_sheet_nest, None,
-                      self.a_box_joint, self.a_hinge, self.a_vent_pattern, self.a_fit_test,
-                      self.a_spur_gear, None,
+                      self.a_fit_test, None,
                       self.a_holding_tabs, self.a_dogbone_corners, None,
                       self.a_job_estimate))
 

@@ -53,7 +53,7 @@ The interface is available in English and Dutch (*Window > Preferences > General
   0, 90, 180 or 270 degrees and stand on the bed, 5 mm from the edge and from each other
 - **Lay Flat on This Face** (right-click a face of a group): turn that part about its own centre until
   the face you clicked lies on the print bed, like "place on face" of a slicer
-- **Screw Hole** (3D Printing): turn a circle you drew on a part into a printable hole
+- **Screw Hole** (Tools): turn a circle you drew on a part into a printable hole
   for a metric screw (M2 up to M8): straight, with a counterbore for a socket head, a 90°
   countersink for a flat head or a hexagonal pocket that holds a nut; a hole that runs
   sideways can get a 45° teardrop roof so it prints without support; the clearance (0.2 mm by
@@ -66,7 +66,7 @@ The interface is available in English and Dutch (*Window > Preferences > General
   printer prints an overhang without support: a plate with a row of fins that lean further over
   from left to right, each with its angle in raised letters; print it and read the largest angle
   that still came out clean
-- **Project Box** (3D Printing): an enclosure with a lid that fits into it: enter the
+- **Project Box** (Draw > Parts): an enclosure with a lid that fits into it: enter the
   inside length, width and height that your electronics need, with the wall, the floor, the
   rounding of the corners and the clearance between the lip of the lid and the wall. With a
   screw size the base also gets a post in every corner with a pilot hole and the lid a
@@ -74,20 +74,20 @@ The interface is available in English and Dutch (*Window > Preferences > General
   vertical slots through them, evenly spaced and centred, so the air inside the box can
   change. Base and lid land side by side on the bed, the lid flipped over so both print
   without support
-- **Knob** (3D Printing): a printable thumb knob that turns on a bolt or a shaft: the
+- **Knob** (Draw > Parts): a printable thumb knob that turns on a bolt or a shaft: the
   diameter and the height, the grip of the rim (knurled ribs, rounded lobes or smooth) and the
   mount (a hexagonal pocket for a nut, a counterbore for the head of a socket head bolt, or a
   blind D hole for the shaft of a potentiometer), with the screw size and the clearance that
   printing needs. It stands on the bed to the right of your model as one undo step
-- **Standoff** (3D Printing): printable spacers that hold a PCB or a panel off the
+- **Standoff** (Draw > Parts): printable spacers that hold a PCB or a panel off the
   surface under it: the height and the outer size, round or hexagonal across the flats, with a
   through hole a screw goes through, a self-tapping pilot hole or a hole for a heat-set insert,
   in the screw size you choose. Up to twelve standoffs print in one row and land on the bed to
   the right of your model as one undo step
-- **Label Plate** (3D Printing): a printable tag for a drawer, a box or a keyring:
+- **Label Plate** (Draw > Parts): a printable tag for a drawer, a box or a keyring:
   up to four lines of text, raised on the plate or engraved into it, on a plate with rounded
   corners and, if you like, a hole for a ring or a screw
-- **Cable Clip** (3D Printing): a printable clip that keeps a cable, a hose or a bundle
+- **Cable Clip** (Draw > Parts): a printable clip that keeps a cable, a hose or a bundle
   where it belongs: a ring of the cable diameter with a mouth narrower than the cable, so you push
   the cable in and it stays, on a foot you screw to a wall or under a desk. The clip prints lying
   on its side, so the ring needs no support. Up to twelve clips print in one row that you break
@@ -157,7 +157,7 @@ The interface is available in English and Dutch (*Window > Preferences > General
   you choose
 - **Spur gear**: an involute gear for the laser or the printer, from the number of teeth,
   the module and the pressure angle, with a bore and the backlash you choose; in the 3D
-  model (3D Printing) the same wheel comes out as a printable part of the
+  model (Draw > Parts) the same wheel comes out as a printable part of the
   thickness you choose
 - **Fit test**: a small comb of slots that shows which offset gives a good press fit for
   the sheet you cut, with that offset engraved under every slot

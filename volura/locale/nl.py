@@ -1544,7 +1544,6 @@ TRANSLATIONS = {
     '3D &Printing': '3D-&printen',
     '&Laser and Mill': '&Laser en frees',
     '&Screw Threads': '&Schroefdraad',
-    '&Test Prints': '&Testprints',
     '&Parts': '&Onderdelen',
     '&Align': '&Uitlijnen',
     '&Distribute': '&Verdelen',

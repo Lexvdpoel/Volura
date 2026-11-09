@@ -249,10 +249,11 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
         (pytest.approx(-0.3), pytest.approx(0.2), 7)
 
 
-def test_the_fit_test_follows_the_living_hinge_in_the_laser_menu(win):
+def test_the_fit_test_follows_the_sheet_commands_in_the_laser_menu(win):
     labels = menu_labels(win, "Laser and Mill")
-    assert labels.index("Vent Pattern") == labels.index("Living Hinge") + 1
-    assert labels.index("Fit Test") == labels.index("Vent Pattern") + 1
+    assert labels.index("Fit Test") == labels.index("Auto Arrange") + 1
+    tools = menu_labels(win, "Tools")
+    assert tools.index("Vent Pattern") == tools.index("Living Hinge") + 1
 
 
 def test_the_fit_test_follows_the_living_hinge_on_the_sheet_toolbar(win):

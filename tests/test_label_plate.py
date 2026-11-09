@@ -247,7 +247,7 @@ def test_a_label_that_cannot_be_built_is_a_clear_text(win):
 
 
 def test_the_label_plate_follows_the_standoff_in_print_tools(win):
-    labels = [clean(a.text()) for a in win.flat_actions(win.print_tools_menu)]
+    labels = [clean(a.text()) for a in win.flat_actions(win.menuBar())]
     assert labels.index("Label Plate") == labels.index("Standoff") + 1
 
 

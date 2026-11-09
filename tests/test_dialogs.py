@@ -433,10 +433,10 @@ def test_welcome_stays_hidden_when_the_box_is_off(win, monkeypatch):
 
 def test_a_shortcut_of_a_moved_command_moves_along(win, fresh):
     """The menus were arranged by mode: a shortcut stored under the old path of a command
-    (View > Vent Pattern, now Laser and Mill > Vent Pattern) still lands on it."""
+    (View > Vent Pattern, now Tools > Vent Pattern) still lands on it."""
     q = settings()
     q.setValue("shortcuts/View/Vent Pattern", ["Ctrl+Alt+V"])
     q.sync()
     again = fresh()
     assert shortcuts_of(again.a_vent_pattern) == ["Ctrl+Alt+V"]
-    assert shortcut_keys() == ["shortcuts/Laser and Mill/Vent Pattern"]
+    assert shortcut_keys() == ["shortcuts/Tools/Vent Pattern"]

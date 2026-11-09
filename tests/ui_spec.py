@@ -85,6 +85,7 @@ MENUS = [
         ("Shapes >", None),
         "---",
         ("Basic Shapes >", None),           # Volura (SketchUp: Sandbox position)
+        ("Parts >", None),                  # Volura: the parts it builds for you
     ]),
     ("Tools", [
         ("Select", "Space"),
@@ -102,6 +103,9 @@ MENUS = [
         ("Solid Tools >", None),            # Volura: grouped with the other solid commands
         ("Intersect Faces >", None),        # SketchUp: in Edit
         ("Outer Shell", None),
+        "---",
+        ("Screw Threads >", None),          # Volura
+        ("Screw Hole", None),               # Volura
         "---",
         ("Tape Measure", "T"),
         ("Protractor", None),
@@ -123,20 +127,14 @@ MENUS = [
         ("Elephant Foot Chamfer", None),
         ("Mouse Ears", None),
         "---",
-        ("Screw Threads >", None),
-        ("Screw Hole", None),
-        ("Test Prints >", None),
-        ("Parts >", None),
+        ("Clearance Test", None),
+        ("Overhang Test", None),
     ]),
     ("Laser and Mill", [                    # Volura: only on the 2D worksheet
         ("Sheet", None),
         ("Auto Arrange", None),
         "---",
-        ("Box with Finger Joints", None),
-        ("Living Hinge", None),
-        ("Vent Pattern", None),
         ("Fit Test", None),
-        ("Spur Gear", None),
         "---",
         ("Holding Tabs", None),
         ("Dogbone Corners", None),
@@ -162,11 +160,10 @@ SUBMENUS = {
     ("Edit", "Unhide"): [("Selected", None), ("Last", None), ("All", None)],
     ("Edit", "Unlock"): [("Selected", None), ("All", None)],
     ("Tools", "Intersect Faces"): [("With Model", None), ("With Selection", None)],
-    ("3D Printing", "Screw Threads"): [("Thread", None), ("External Thread on Cylinder", None),
+    ("Tools", "Screw Threads"): [("Thread", None), ("External Thread on Cylinder", None),
                                        ("Internal Thread in Hole", None), ("New Bolt", None),
                                        ("New Nut or Sleeve", None)],
-    ("3D Printing", "Test Prints"): [("Clearance Test", None), ("Overhang Test", None)],
-    ("3D Printing", "Parts"): [("Spur Gear", None), ("Project Box", None), ("Knob", None),
+    ("Draw", "Parts"): [("Spur Gear", None), ("Project Box", None), ("Knob", None),
                                ("Standoff", None), ("Label Plate", None), ("Cable Clip", None)],
     ("View", "Edge Style"): [("Edges", None), ("Back Edges", "K")],
     ("View", "Face Style"): [("X-ray", None), "---", ("Wireframe", None), ("Hidden Line", None),

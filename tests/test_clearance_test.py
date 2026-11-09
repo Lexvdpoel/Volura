@@ -306,11 +306,9 @@ def test_the_settings_clamp_what_they_read():
         q.sync()
 
 
-def test_the_action_is_in_the_print_tools_menu_after_the_screw_hole(win):
+def test_the_action_is_in_the_3d_printing_menu_after_the_mouse_ears(win):
     labels = [clean(a.text()) for a in win.flat_actions(win.print_tools_menu)]
-    at = labels.index("Thread")
-    assert labels[at:at + 7] == ["Thread", "External Thread on Cylinder", "Internal Thread in Hole",
-                                 "New Bolt", "New Nut or Sleeve", "Screw Hole", "Clearance Test"]
+    assert labels.index("Clearance Test") == labels.index("Mouse Ears") + 1
 
 
 if __name__ == "__main__":
