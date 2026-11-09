@@ -10,6 +10,10 @@ draw, but is never printed or exported.
 Next to the 3D model every document has one 2D sheet (`Document.sheet`, a
 `vector2d.Drawing`): vector work for the laser cutter and the mill. Working in 2D
 never changes the 3D geometry, and undo, `dirty` and the file cover both.
+
+Between the two sit the live links (`Document.links`, see `volura/linking.py`): one per
+part that went from the model to the worksheet or came back from it, so a shape that
+changes on one side is carried to the other when you switch between them.
 """
 from __future__ import annotations
 
@@ -19,6 +23,7 @@ from PySide6.QtCore import QObject, Signal
 from .brep import Entities
 from .geom import normalize
 from .i18n import tr, tr_noop
+from .linking import Link
 from .vector2d import Drawing
 
 # Names are translated when a new document gets them (see Document.reset); a saved file
@@ -108,6 +113,8 @@ class Document(QObject):
         self.dirty = False
         # the 2D worksheet: one drawing next to the 3D model, with the default layers
         self.sheet = Drawing.new_sheet()
+        # the live links between a group in the model and the outlines of one src on that sheet
+        self.links: list = []
 
     # ------------------------------------------------------------ guides
     def guide(self, gid):
@@ -183,11 +190,11 @@ class Document(QObject):
                 [(g.id, g.name, g.color, g.visible, g.locked, g.ents.state()) for g in self.groups],
                 [g.state() for g in self.guides],
                 [list(m) for m in self.materials], self.active, self.next_gid, self.group_counter,
-                self.next_guide_id, self.sheet.copy())
+                self.next_guide_id, self.sheet.copy(), [l.to_dict() for l in self.links])
 
     def _restore(self, st):
         (root, groups, guides, mats, self.active, self.next_gid, self.group_counter,
-         self.next_guide_id, sheet) = st
+         self.next_guide_id, sheet, links) = st
         self.root.load_state(root)
         old = {g.id: g for g in self.groups}        # undo keeps the Group objects you have
         self.groups = []
@@ -204,6 +211,7 @@ class Document(QObject):
         if self.active != ROOT and self.group(self.active) is None:
             self.active = ROOT
         self.selection = []
+        self.links = [Link.from_dict(d) for d in links]
         self.load_sheet(sheet)
 
     def load_sheet(self, sheet: "Drawing"):

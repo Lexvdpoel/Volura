@@ -27,9 +27,9 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from . import (__version__, background, boxgen, cable_clip, cam, dxf, enclosure, errors, fileio,
-                 gcode, gears, i18n, joints, knob, label_plate, nesting, ops, sheet3d,
-                 sheettools, svg, spacemouse, standoff, theme, threads, vector_export,
-                 vector_import, workers)
+                  gcode, gears, i18n, joints, knob, label_plate, linking, nesting, ops, sheet3d,
+                  sheettools, svg, spacemouse, standoff, theme, threads, vector_export,
+                  vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -45,7 +45,8 @@ from .tools import TOOL_CLASSES, fmt_deg, format_length, parse_length, set_lengt
 from .tray import TRAY_WIDTH, Tray
 from .vector2d import (CORNER_LABELS, CORNER_STYLES, SHEET_SPACING, Drawing, LASER_OPS,
                        LASER_PARAMS, MILL_OPS, MILL_PARAMS, OP_LABELS, OPS, PARAM_LABELS,
-                       VPath, _transform_meta, default_layer_names, job_estimate, layer_param)
+                       VPath, _transform_meta, default_layer_names, job_estimate, layer_param,
+                       polygon_area)
 from .viewport import (FACE_STYLES, HIDDENLINE, MONOCHROME, SHADED, WIREFRAME, Viewport)
 
 PRINTERS = [
@@ -4154,6 +4155,8 @@ class MainWindow(QMainWindow):
             self.view.setFocus()
             self.view.announce()
         self._show_layers_panel(want == "2d")
+        if changed:
+            self.sync_links("to_sheet" if want == "2d" else "to_model")
         return changed
 
     #: The panels of the Default Tray that belong to each mode (English keys, see PANELS).
@@ -4493,6 +4496,11 @@ class MainWindow(QMainWindow):
         self.a_sheet_to_model = A(tr("Parts to &3D Model"), self.sheet_to_model, None, "to_model",
                                   False, tr("Put what is cut into the 3D model as plates with the "
                                             "sheet thickness"))
+        self.a_update_links = A(tr("&Update Links"), self.update_links, None, None, False,
+                                tr("Carry a shape that changed on one side to the other, in both "
+                                   "directions"))
+        self.a_unlink = A(tr("&Unlink"), self.unlink, None, None, False,
+                          tr("Remove the links of the selected parts and outlines"))
         for name, label, tip in SHEET_TOOL_INFO:
             self.sheet_tool_act(tr(label), name, tip).setProperty(SOURCE_TEXT, label)
         self.a_mirror_h = A(tr("Flip &Horizontally"),
@@ -4785,8 +4793,9 @@ class MainWindow(QMainWindow):
                          None, self.a_sheet_join, self.a_sheet_split, None,
                          self.a_mirror_h, self.a_mirror_v, align, distribute, None,
                          self.a_sheet_duplicate, self.a_sheet_duplicate_circle, None,
-                         self.a_round_corners, self.a_hinge, self.a_vent_pattern, None,
-                         self.a_sheet_to_layer, self.a_sheet_to_model))
+                          self.a_round_corners, self.a_hinge, self.a_vent_pattern, None,
+                          self.a_sheet_to_layer, self.a_sheet_to_model)
+                   + (None, self.a_update_links, self.a_unlink))
 
         # ---- 3D Printing: what only matters for the printer
         m = mb.addMenu(tr("3D &Printing"))
@@ -7117,6 +7126,8 @@ class MainWindow(QMainWindow):
             sheet.sheet_thickness = thickness
             self.hint.setText(tr("{n} outlines put on layer {layer}; sheet thickness {t:g} mm "
                                  "taken over").format(n=len(added), layer=layer, t=thickness))
+        if added:
+            self._link_sent_to_sheet(added, groups, faces)
         return added
 
     def _face_plate_thickness(self, faces):
@@ -7165,11 +7176,11 @@ class MainWindow(QMainWindow):
                 return None
         selected = self.sheet_view.selected_paths() if self.mode == "2d" else []
         try:
-            solids = sheet3d.part_solids(sheet, t, selected or None)
+            plates = sheet3d.part_plates(sheet, t, selected or None)
         except Exception as e:
             QMessageBox.critical(self, tr("Parts to 3D Model"), str(e))
             return None
-        if not solids:
+        if not plates:
             self.hint.setText(tr("There are no closed cutting outlines on the worksheet "
                                  "(layer Cut, Mill or Drill)."))
             return None
@@ -7181,8 +7192,9 @@ class MainWindow(QMainWindow):
             for gid in [g for g in getattr(self.doc, "sheet_part_groups", ()) if g in live]:
                 self.doc.remove_group(gid)
             live = {g.id for g in self.doc.groups}
+            self.doc.links = [l for l in self.doc.links if int(l.group) in live]
         groups = [ops.group_from_manifold(self.doc, man, self.settings.current_color, name)
-                  for name, man in solids]
+                  for name, man, _src in plates]
         self.doc.sheet_part_groups = ([] if not selected else
                                       [g for g in getattr(self.doc, "sheet_part_groups", ())
                                        if g in live]) + [g.id for g in groups]
@@ -7190,10 +7202,230 @@ class MainWindow(QMainWindow):
         self.doc.notify()
         self.set_mode("3d")
         self.view.zoom_extents()
+        self._link_parts_to_sheet(groups, plates)
         message = (tr("{n} part of {t:g} mm placed in the model") if len(groups) == 1
                    else tr("{n} parts of {t:g} mm placed in the model"))
         self.hint.setText(message.format(n=len(groups), t=float(t)))
         return groups
+
+    # ------------------------------------------------------------ the live links
+    def _link_ents(self, link):
+        """The geometry a link reads in 3D: the group, or the loose geometry for ROOT."""
+        gid = int(link.group)
+        if gid == ROOT:
+            return self.doc.root
+        g = self.doc.group(gid)
+        return g.ents if g else None
+
+    def _link_sheet_loops(self, src):
+        """The closed paths of one source element on the worksheet, in link order."""
+        loops = [p.pts for p in self.doc.sheet.paths
+                 if int(p.src) == int(src) and p.closed and len(p.pts) >= 3]
+        return linking.sorted_loops(loops)
+
+    @staticmethod
+    def _shape_matches(a, b) -> bool:
+        """Whether the outline of a source element on the sheet is the shape of a part.
+
+        The rigid comparison of `same_shape` first; when the two were cut up differently
+        (a plate read by `plate_of`, the sheet by a projection) the areas of the loops say
+        the same thing, so a part is still recognised as the shape that went to the sheet.
+        """
+        if linking.same_shape(a, b):
+            return True
+        aa = sorted(abs(polygon_area(l)) for l in a)
+        bb = sorted(abs(polygon_area(l)) for l in b)
+        return bool(aa) and len(aa) == len(bb) and all(
+            abs(x - y) <= 1e-3 * max(1.0, y) for x, y in zip(aa, bb))
+
+    def _link_sent_to_sheet(self, added, groups, faces):
+        """Live links for the outlines that just went to the worksheet.
+
+        Every source element that came from a selected part or face is matched back to it
+        by shape, so the link knows which group and which `src` it joins. A plate becomes a
+        "plate" link (its shape may also travel back); a face, and a group that is not a
+        plate, becomes a "face" link that only carries the shape from 3D to the sheet.
+        """
+        by_src: dict = {}
+        for p in added:
+            by_src.setdefault(int(p.src), []).append(p.pts)
+        srcs = {s: linking.sorted_loops(l) for s, l in by_src.items()}
+        candidates = []
+        for ctx, fid in faces:
+            ents = self.doc.ents(ctx)
+            if ents is None or fid not in ents.F:
+                continue
+            F = ents.F[fid]
+            frame = linking.face_frame(F.normal, ents.V[F.loops[0][0]])
+            shape = linking.sorted_loops([linking.to_plane([ents.V[v] for v in loop], frame)
+                                          for loop in F.loops])
+            if shape:
+                candidates.append({"group": int(ctx), "kind": "face", "shape": shape,
+                                   "thickness": None, "frame": linking.frame_to_list(frame)})
+        if not candidates:
+            for g in groups:
+                m = g.ents.to_manifold()
+                if m is None or m.is_empty():
+                    continue
+                pl = linking.plate_of(m)
+                if pl is not None:
+                    candidates.append({"group": int(g.id), "kind": "plate",
+                                       "shape": linking.sorted_loops(pl["loops"]),
+                                       "thickness": float(pl["thickness"]), "frame": None})
+                    continue
+                bb = g.bbox()
+                if bb is None:
+                    continue
+                frame = linking.face_frame((0.0, 0.0, 1.0), 0.5 * (bb[0] + bb[1]))
+                shape = linking.face_shape(m, frame)
+                if shape:
+                    candidates.append({"group": int(g.id), "kind": "face",
+                                       "shape": linking.sorted_loops(shape), "thickness": None,
+                                       "frame": linking.frame_to_list(frame)})
+        used = set()
+        for src, loops in srcs.items():
+            for i, cand in enumerate(candidates):
+                if i in used or not self._shape_matches(loops, cand["shape"]):
+                    continue
+                used.add(i)
+                self.doc.links.append(linking.Link(src=src, group=cand["group"],
+                                                   kind=cand["kind"], shape=cand["shape"],
+                                                   thickness=cand["thickness"],
+                                                   frame=cand["frame"]))
+                break
+
+    def _link_parts_to_sheet(self, groups, plates):
+        """A "plate" link for every part that came from the worksheet into the model."""
+        for g, (_name, man, src) in zip(groups, plates):
+            pl = linking.plate_of(man)
+            if pl is None:
+                continue
+            self.doc.links.append(linking.Link(src=int(src), group=int(g.id), kind="plate",
+                                               shape=linking.sorted_loops(pl["loops"]),
+                                               thickness=float(pl["thickness"]), frame=None))
+
+    def sync_links(self, direction="both", announce_empty=False) -> int:
+        """Carry a shape that changed on one side to the other; returns how many moved.
+
+        `direction` is "to_sheet" (entering 2D: the model tells the worksheet), "to_model"
+        (entering 3D: the worksheet tells the model) or "both" (the Update Links command).
+        Only the shape travels and every side keeps its own placement: the new shape is put
+        where the old one lay by the rigid fit of `linking.placement`. A plate is the only
+        kind that may change in 3D; a change of a face outline on the sheet is left where it
+        is with a word about it. When both sides changed, the model wins. A link whose group
+        or paths are gone is dropped. One undo step, only when something really changed.
+        """
+        doc = self.doc
+        if not doc.links:
+            if announce_empty and direction == "both":
+                self.hint.setText(tr("Nothing to update."))
+            return 0
+        live = {int(g.id) for g in doc.groups} | {ROOT}
+        present = {int(p.src) for p in doc.sheet.paths if p.closed and len(p.pts) >= 3}
+        alive = [l for l in doc.links if int(l.group) in live and int(l.src) in present]
+        dropped = len(doc.links) - len(alive)
+        to_sheet, to_model, face_only, both = [], [], 0, 0
+        for l in alive:
+            sheet_loops = self._link_sheet_loops(l.src)
+            ents = self._link_ents(l)
+            man = ents.to_manifold() if ents is not None else None
+            plate = linking.plate_of(man) if (man is not None and not man.is_empty()) else None
+            three = None
+            if plate is not None and l.kind == "plate":
+                three = linking.sorted_loops(plate["loops"])
+            elif l.kind == "face":
+                frame = linking.frame_of(l.frame)
+                if frame is not None and man is not None and not man.is_empty():
+                    three = linking.sorted_loops(linking.face_shape(man, frame) or [])
+            ch3 = three is not None and linking.shape_changed(l.shape, three)
+            ch2 = linking.shape_changed(l.shape, sheet_loops)
+            push_sheet = direction in ("to_sheet", "both") and ch3
+            push_model = direction in ("to_model", "both") and ch2 and l.kind == "plate" \
+                and plate is not None
+            if push_sheet and push_model:
+                push_model = False
+                both += 1
+            elif direction in ("to_model", "both") and ch2 and l.kind == "face":
+                face_only += 1
+            if push_sheet:
+                to_sheet.append((l, three, sheet_loops))
+            elif push_model:
+                to_model.append((l, sheet_loops, plate))
+        changed = bool(to_sheet or to_model or dropped)
+        if changed:
+            doc.checkpoint()
+            if dropped:
+                doc.links = alive
+            for l, three, sheet_loops in to_sheet:
+                self._replace_sheet_src(int(l.src),
+                                        linking.place(three, linking.placement(l.shape, sheet_loops)))
+                l.shape = three
+            for l, sheet_loops, plate in to_model:
+                new = linking.place(linking.place(sheet_loops,
+                                                  linking.invert(linking.placement(l.shape, sheet_loops))),
+                                    linking.placement(l.shape, linking.sorted_loops(plate["loops"])))
+                solid = linking.plate_solid(new, plate["frame"],
+                                            l.thickness if l.thickness else plate["thickness"])
+                g = doc.group(int(l.group))
+                if g is not None:
+                    g.ents = Entities.from_manifold(solid)
+                l.shape = linking.sorted_loops(new)
+            doc.notify()
+            if self.mode == "2d":
+                self.sheet_view._refresh_outside(announce=False)
+            else:
+                self.view.update()
+        updated = len(to_sheet) + len(to_model)
+        if both:
+            self.hint.setText(tr("Both sides changed: the model won for {n} links.")
+                              .format(n=both))
+        elif updated:
+            self.hint.setText(tr("{n} links updated.").format(n=updated))
+        elif face_only:
+            self.hint.setText(tr("This link only goes from 3D to 2D: a change on the worksheet "
+                                 "is not put back in the model."))
+        elif announce_empty and direction == "both":
+            self.hint.setText(tr("Nothing to update."))
+        return updated
+
+    def _replace_sheet_src(self, src, loops):
+        """The paths of one source element replaced by `loops`, on the same layer."""
+        sheet = self.doc.sheet
+        old = [p for p in sheet.paths if int(p.src) == src]
+        if not old:
+            return
+        layer, filled, rule = old[0].layer, old[0].filled, old[0].rule
+        sheet.paths = [p for p in sheet.paths if int(p.src) != src]
+        for l in loops:
+            sheet.add_path(np.asarray(l, dtype=float), closed=True, layer=layer,
+                           filled=filled, rule=rule, src=src)
+
+    def update_links(self, checked=False):
+        """Tools > Update Links: sync both directions now."""
+        self.sync_links("both", announce_empty=True)
+
+    def unlink(self, checked=False):
+        """Tools > Unlink: drop the links of the selected parts and outlines."""
+        doc = self.doc
+        links = doc.links
+        if not links:
+            self.hint.setText(tr("There are no links to remove."))
+            return 0
+        groups = {int(g.id) for g in doc.selected_groups()}
+        srcs = {int(p.src) for p in self.sheet_view.selected_paths()} if self.mode == "2d" else set()
+        if not groups and not srcs:
+            self.hint.setText(tr("First select the parts or the outlines that are linked."))
+            return 0
+        keep = [l for l in links if int(l.group) not in groups and int(l.src) not in srcs]
+        removed = len(links) - len(keep)
+        if not removed:
+            self.hint.setText(tr("Nothing to update."))
+            return 0
+        doc.checkpoint()
+        doc.links = keep
+        doc.notify()
+        self.hint.setText(tr("{n} links removed.").format(n=removed))
+        return removed
 
     # ------------------------------------------------------------ export for laser and mill
     def sheet_layers_for_export(self) -> list:

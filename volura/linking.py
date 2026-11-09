@@ -151,6 +151,66 @@ def same_shape(a_loops, b_loops, tol=1e-3, allow_mirror=True) -> bool:
     return fit is not None and fit[1] <= tol
 
 
+def shape_changed(old, new, tol=1e-3, allow_mirror=True) -> bool:
+    """Whether `new` is another shape than the one a link last synced.
+
+    A fit that is clearly off is a change. Nothing to fit is only a change when there is
+    another number of loops, which is a hole that came or went; the same loops with
+    another number of points are one shape that two triangulations found differently,
+    and a link does not move for that.
+    """
+    old = [l for l in old if len(np.asarray(l, dtype=float).reshape(-1, 2)) >= 3]
+    new = [l for l in new if len(np.asarray(l, dtype=float).reshape(-1, 2)) >= 3]
+    if len(old) != len(new):
+        return True
+    fit = fit_rigid(old, new, allow_mirror=allow_mirror)
+    return fit is not None and fit[1] > tol
+
+
+def sorted_loops(loops) -> list:
+    """The loops in the order a link compares them: the largest first.
+
+    `fit_rigid` compares loop by loop, so both sides of a link have to hand them over in
+    the same order. The area counts without its sign, because the worksheet does not say
+    which way a loop runs, and the outline of a plate and the paths of one source element
+    come in the order their maker liked.
+    """
+    out = [np.asarray(l, dtype=float).reshape(-1, 2) for l in loops if len(l) >= 3]
+    return sorted(out, key=lambda l: -abs(polygon_area(l)))
+
+
+def place(loops, M) -> list:
+    """The loops through the homogeneous map `M`, as `fit_rigid` returns it."""
+    out = []
+    for l in loops:
+        p = np.asarray(l, dtype=float).reshape(-1, 2)
+        out.append(np.ascontiguousarray(p @ np.asarray(M, dtype=float)[:2, :2].T
+                                        + np.asarray(M, dtype=float)[:2, 2]))
+    return out
+
+
+def invert(M) -> np.ndarray:
+    """The map that undoes the homogeneous map `M` of the plane."""
+    R, t = np.asarray(M, dtype=float)[:2, :2], np.asarray(M, dtype=float)[:2, 2]
+    out = np.eye(3)
+    out[:2, :2] = np.linalg.inv(R)
+    out[:2, 2] = -out[:2, :2] @ t
+    return out
+
+
+def placement(old, current) -> np.ndarray:
+    """The map that carries the shape `old` onto where that shape is now (`current`).
+
+    This is the placement one side kept: the rigid fit of the shape the link last synced
+    onto the loops as they lie there now, so a new shape handed to `place` with this map
+    lands where the old one was. When the two cannot be matched at all - another number
+    of loops, a hole that came or went - there is no placement to read and the identity
+    is returned, which leaves the new shape where it is.
+    """
+    fit = fit_rigid(old, current)
+    return np.eye(3) if fit is None else fit[0]
+
+
 # --------------------------------------------------------------------------
 #  a plane in the model
 # --------------------------------------------------------------------------
@@ -191,6 +251,20 @@ def from_plane(points2d, frame) -> np.ndarray:
     o, u, v, _n = frame
     q = np.asarray(points2d, dtype=float).reshape(-1, 2)
     return np.asarray(o, dtype=float) + q[:, :1] * u + q[:, 1:2] * v
+
+
+def frame_to_list(frame) -> list:
+    """A frame as the plain numbers a link keeps: its origin and its normal."""
+    o, _u, _v, n = frame
+    return [float(c) for c in o] + [float(c) for c in n]
+
+
+def frame_of(v):
+    """The frame of `frame_to_list`; the axes follow from the normal, as in `face_frame`."""
+    if v is None or len(v) < 6:
+        return None
+    q = np.asarray(v, dtype=float).reshape(-1)
+    return face_frame(q[3:6], q[0:3])
 
 
 # --------------------------------------------------------------------------
@@ -375,6 +449,26 @@ def plate_solid(loops, frame, thickness) -> mf.Manifold:
     return mf.Manifold.extrude(cs, float(thickness)).transform(_matrix34(M))
 
 
+def face_shape(manifold, frame):
+    """The outline of a solid seen along the normal of `frame`, in the coordinates of that frame.
+
+    This is how a link of a *face* reads the model again: the projection along the normal
+    of the plane is that face for every prism, and for anything else it is the silhouette
+    in that direction. A solid that is gone, or that has nothing to show from that side,
+    gives None, and the link then has no news from the model.
+    """
+    if manifold is None or manifold.is_empty():
+        return None
+    o, u, v, n = frame
+    R = np.stack([u, v, n])
+    local = manifold.transform(_matrix34(np.column_stack([R, -R @ o])))
+    cs = local.project()
+    if cs.is_empty():
+        return None
+    loops = _orient([_clean(q) for q in cs.to_polygons()])
+    return loops or None
+
+
 # --------------------------------------------------------------------------
 #  what a link remembers
 # --------------------------------------------------------------------------
@@ -390,6 +484,10 @@ class Link:
     the loops in their own frame, without placement, and `thickness` the thickness of
     the plate then. Comparing that with the current shape is what shows a change, and
     it is blind to moving or mirroring either side.
+
+    `frame` is what a link of a face adds: the plane its outline lives in, as
+    `frame_to_list` keeps it, so the model can be read from the same side again. A plate
+    needs no frame, because `plate_of` finds the plane of the plate itself.
     """
 
     src: int
@@ -397,6 +495,7 @@ class Link:
     kind: str = "plate"
     shape: list = field(default_factory=list)
     thickness: float | None = None
+    frame: list | None = None
 
     def to_dict(self) -> dict:
         """Plain values only, so a link goes into a file as it is."""
@@ -405,13 +504,16 @@ class Link:
                            for x, y in np.asarray(l, dtype=float).reshape(-1, 2)]
                           for l in self.shape],
                 "thickness": None if self.thickness is None
-                else round(float(self.thickness), JSON_DECIMALS)}
+                else round(float(self.thickness), JSON_DECIMALS),
+                "frame": None if self.frame is None
+                else [round(float(c), JSON_DECIMALS) for c in self.frame]}
 
     @staticmethod
     def from_dict(d) -> "Link":
         kind = str(d.get("kind", "plate"))
-        thickness = d.get("thickness")
+        thickness, frame = d.get("thickness"), d.get("frame")
         return Link(int(d.get("src", 0)), int(d.get("group", 0)),
                     kind if kind in KINDS else "plate",
                     [np.asarray(l, dtype=float).reshape(-1, 2) for l in (d.get("shape") or [])],
-                    None if thickness is None else float(thickness))
+                    None if thickness is None else float(thickness),
+                    None if not frame else [float(c) for c in frame])

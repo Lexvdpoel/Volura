@@ -43,11 +43,11 @@ def _section(paths) -> mf.CrossSection:
     return mf.CrossSection(loops, mf.FillRule.EvenOdd)
 
 
-def part_solids(drawing: Drawing, thickness, paths=None):
-    """[(name, Manifold)] of the parts that are cut through the plate.
+def part_plates(drawing: Drawing, thickness, paths=None):
+    """[(name, Manifold, src)] of the parts that are cut through the plate.
 
-    `paths` limits it to the parts those paths are in (the selection).
-    A part without a closed outer boundary on a cutting layer gives nothing.
+    `src` is the source number of the outer boundary, so a part that goes into the model
+    can be linked to the outlines on the worksheet it came from (see `volura.linking`).
     """
     t = float(thickness)
     if t <= 0:
@@ -80,8 +80,18 @@ def part_solids(drawing: Drawing, thickness, paths=None):
             man = man - pocket
         if man.is_empty():
             continue
-        out.append((tr("{prefix} - part {n}").format(prefix=NAME_PREFIX, n=len(out) + 1), man))
+        out.append((tr("{prefix} - part {n}").format(prefix=NAME_PREFIX, n=len(out) + 1),
+                    man, int(outer.src)))
     return out
+
+
+def part_solids(drawing: Drawing, thickness, paths=None):
+    """[(name, Manifold)] of the parts that are cut through the plate.
+
+    `paths` limits it to the parts those paths are in (the selection).
+    A part without a closed outer boundary on a cutting layer gives nothing.
+    """
+    return [(name, man) for name, man, _src in part_plates(drawing, thickness, paths)]
 
 
 def solid_thickness(groups) -> float | None:
