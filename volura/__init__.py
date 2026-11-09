@@ -1,6 +1,6 @@
 """Volura - open source 3D modeller for 3D printing."""
 from . import _glconfig        # before anything imports OpenGL: see volura/_glconfig.py
 
-__version__ = "0.2.25"
+__version__ = "0.2.26"
 
 _glconfig.apply_env()

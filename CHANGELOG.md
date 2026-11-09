@@ -3,6 +3,20 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.26 — 2026-11-09
+
+### New
+- **Knob** (Tools > Print Tools > Knob…): a printable thumb knob, knurled, lobed or smooth,
+  with a pocket for a hex nut, a counterbore for the head of a socket head bolt or a D hole
+  for a potentiometer or motor shaft, with the clearance your printer needs.
+- **Standoff** (Tools > Print Tools > Standoff…): printable spacers for a circuit board or a
+  panel, round or hexagonal, with a through hole, a pilot hole for a self-tapping screw or
+  a hole for a heat-set insert; a whole set prints in one row.
+
+### Website
+- The feature overview describes the knob, the standoff, Round Corners and Dogbone
+  Corners; the manual describes the knob and the standoff.
+
 ## 0.2.25 — 2026-11-08
 
 ### New
