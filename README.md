@@ -77,6 +77,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
   mount (a hexagonal pocket for a nut, a counterbore for the head of a socket head bolt, or a
   blind D hole for the shaft of a potentiometer), with the screw size and the clearance that
   printing needs. It stands on the bed to the right of your model as one undo step
+- **Standoff** (Tools > Print Tools): printable spacers that hold a PCB or a panel off the
+  surface under it: the height and the outer size, round or hexagonal across the flats, with a
+  through hole a screw goes through, a self-tapping pilot hole or a hole for a heat-set insert,
+  in the screw size you choose. Up to twelve standoffs print in one row and land on the bed to
+  the right of your model as one undo step
 - **Elephant Foot Chamfer** (Tools > Print Tools): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

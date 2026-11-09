@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QColo
 
 from . import (__version__, background, boxgen, cam, dxf, enclosure, errors, fileio, gcode,
                gears, i18n, joints, knob, nesting, ops, sheet3d, sheettools, svg, spacemouse,
-               theme, threads, vector_export, vector_import, workers)
+                standoff, theme, threads, vector_export, vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -483,6 +483,39 @@ class Settings:
             self.knob_flat = 0.5
         self.knob_flat = max(0.0, min(10.0, self.knob_flat))
         try:
+            self.standoff_height = float(self.q.value("standoff_height", 10.0))
+        except (TypeError, ValueError):
+            self.standoff_height = 10.0
+        self.standoff_height = max(standoff.HEIGHT_MIN,
+                                   min(standoff.HEIGHT_MAX, self.standoff_height))
+        try:
+            self.standoff_outer = float(self.q.value("standoff_outer", 6.0))
+        except (TypeError, ValueError):
+            self.standoff_outer = 6.0
+        self.standoff_outer = max(standoff.OUTER_MIN, min(standoff.OUTER_MAX, self.standoff_outer))
+        self.standoff_shape = str(self.q.value("standoff_shape", "round"))
+        if self.standoff_shape not in standoff.STANDOFF_SHAPES:
+            self.standoff_shape = "round"
+        self.standoff_kind = str(self.q.value("standoff_kind", "through"))
+        if self.standoff_kind not in standoff.STANDOFF_KINDS:
+            self.standoff_kind = "through"
+        self.standoff_bore = str(self.q.value("standoff_bore", "M3"))
+        if self.standoff_bore not in threads.SCREW_HOLES:
+            self.standoff_bore = "M3"
+        try:
+            # the clearance of the screw holes is the clearance this printer already proved
+            self.standoff_clearance = float(self.q.value("standoff_clearance",
+                                                         self.screw_hole_clearance))
+        except (TypeError, ValueError):
+            self.standoff_clearance = self.screw_hole_clearance
+        self.standoff_clearance = max(0.0,
+                                      min(standoff.CLEARANCE_MAX, self.standoff_clearance))
+        try:
+            self.standoff_count = int(float(self.q.value("standoff_count", 1)))
+        except (TypeError, ValueError):
+            self.standoff_count = 1
+        self.standoff_count = max(standoff.COUNT_MIN, min(standoff.COUNT_MAX, self.standoff_count))
+        try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
             self.tab_count = 4
@@ -589,6 +622,13 @@ class Settings:
         self.q.setValue("knob_clearance", self.knob_clearance)
         self.q.setValue("knob_shaft_d", self.knob_shaft_d)
         self.q.setValue("knob_flat", self.knob_flat)
+        self.q.setValue("standoff_height", self.standoff_height)
+        self.q.setValue("standoff_outer", self.standoff_outer)
+        self.q.setValue("standoff_shape", self.standoff_shape)
+        self.q.setValue("standoff_kind", self.standoff_kind)
+        self.q.setValue("standoff_bore", self.standoff_bore)
+        self.q.setValue("standoff_clearance", self.standoff_clearance)
+        self.q.setValue("standoff_count", self.standoff_count)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
@@ -2625,6 +2665,88 @@ class KnobDialog(QDialog):
                 "clearance": round(self.clearance.value(), 6)}
 
 
+class StandoffDialog(QDialog):
+    """The "Standoff…" dialog: a printable spacer that holds a PCB or a panel off a surface.
+
+    A standoff is the spacer under a board, so the dialog starts with what it has to hold the
+    board off: the height. The outer size and the shape say how thick the spacer is and whether
+    it is a cylinder or a hexagon, which stands still on a tilted bed. The mount says how the
+    screw is held: a clearance hole the screw goes through, a pilot hole a self-tapping screw
+    cuts its own thread in, or a hole a heat-set insert is melted into, which takes a bolt as
+    often as you like. The clearance is added to the clearance holes, because a printed hole
+    comes out smaller than drawn, so the dialog starts at the clearance of the screw holes, the
+    one this printer already proved. The count puts that many standoffs in a row, so the corners
+    of a PCB print in one go. The other values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Standoff"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.height = spin(standoff.HEIGHT_MIN, standoff.HEIGHT_MAX, s.standoff_height)
+        self.height.setToolTip(tr("How far the board is held off the surface under it"))
+        self.outer = spin(standoff.OUTER_MIN, standoff.OUTER_MAX, s.standoff_outer)
+        self.outer.setToolTip(tr("How thick the standoff is; a hexagon is measured across "
+                                 "the flats"))
+        self.shape = QComboBox()
+        for label, key in ((tr("Round"), "round"), (tr("Hexagonal"), "hex")):
+            self.shape.addItem(label, key)
+        self.shape.setCurrentIndex(max(0, self.shape.findData(s.standoff_shape)))
+        self.shape.setToolTip(tr("A hexagon stands still on a tilted bed and grips in a slot"))
+        self.mount = QComboBox()
+        for label, key in ((tr("Through hole"), "through"), (tr("Self-tapping"), "tap"),
+                           (tr("Heat-set insert"), "insert")):
+            self.mount.addItem(label, key)
+        self.mount.setCurrentIndex(max(0, self.mount.findData(s.standoff_kind)))
+        self.mount.setToolTip(tr("A hole the screw goes through, a pilot hole a self-tapping "
+                                 "screw cuts its thread in, or a hole for a heat-set insert"))
+        self.size = QComboBox()
+        for size in sorted(threads.SCREW_HOLES, key=lambda m: float(m[1:])):
+            self.size.addItem(size, size)
+        self.size.setCurrentIndex(max(0, self.size.findData(s.standoff_bore)))
+        self.size.setToolTip(tr("The thread of the screw, which sets the hole and the size "
+                                "of the insert"))
+        self.count = QSpinBox()
+        self.count.setRange(standoff.COUNT_MIN, standoff.COUNT_MAX)
+        self.count.setValue(s.standoff_count)
+        self.count.setToolTip(tr("How many standoffs in a row, so the corners of a board "
+                                 "print in one go"))
+        self.clearance = spin(0.0, standoff.CLEARANCE_MAX, s.standoff_clearance, 0.05)
+        self.clearance.setToolTip(tr("The room on every clearance hole, because a printed hole "
+                                     "comes out smaller than drawn"))
+        lay.addRow(tr("Height"), self.height)
+        lay.addRow(tr("Outer size"), self.outer)
+        lay.addRow(tr("Shape"), self.shape)
+        lay.addRow(tr("Mount"), self.mount)
+        lay.addRow(tr("Size"), self.size)
+        lay.addRow(tr("Count"), self.count)
+        lay.addRow(tr("Clearance"), self.clearance)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"height": round(self.height.value(), 6),
+                "outer": round(self.outer.value(), 6),
+                "shape": str(self.shape.currentData()),
+                "kind": str(self.mount.currentData()),
+                "bore": str(self.size.currentData()),
+                "count": int(self.count.value()),
+                "clearance": round(self.clearance.value(), 6)}
+
+
 class HoldingTabsDialog(QDialog):
     """The "Holding Tabs…" dialog: the small bridges that keep a part in the sheet.
 
@@ -4111,6 +4233,12 @@ class MainWindow(QMainWindow):
                         lambda checked=False: self.knob_dialog(), None, None, False,
                         tr("Add a printable thumb knob to the model, with the grip you choose "
                            "and a mount for a nut, a bolt head or a shaft"))
+        # ---- standoff
+        self.a_standoff = A(tr("Standoff…"),
+                            lambda checked=False: self.standoff_dialog(), None, None, False,
+                            tr("Add printable standoffs to the model: spacers for a PCB or a "
+                               "panel, round or hexagonal, with a through hole, a self-tapping "
+                               "pilot or a hole for a heat-set insert"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, None,
@@ -4220,7 +4348,7 @@ class MainWindow(QMainWindow):
                                            self.a_screw_hole, self.a_clearance_test,
                                            self.a_overhang_test,
                                            self.a_spur_gear_3d, self.a_project_box,
-                                           self.a_knob, None,
+                                            self.a_knob, self.a_standoff, None,
                                           self.a_cutplane, self.a_cut_join, None,
                                           self.a_fillet, self.a_chamfer, self.a_elephant,
                                           self.a_mouse_ears, self.a_orient_print))
@@ -4991,6 +5119,66 @@ class MainWindow(QMainWindow):
             self.view.set_status(tr("Knob failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the knob…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ standoff
+    def standoff_dialog(self):
+        """Tools > Print Tools > Standoff…: a spacer that holds a PCB or a panel off a surface."""
+        dlg = StandoffDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.standoff_height = float(options["height"])
+        self.settings.standoff_outer = float(options["outer"])
+        self.settings.standoff_shape = str(options["shape"])
+        self.settings.standoff_kind = str(options["kind"])
+        self.settings.standoff_bore = str(options["bore"])
+        self.settings.standoff_count = int(options["count"])
+        self.settings.standoff_clearance = float(options["clearance"])
+        self.settings.save()
+        made = self.make_standoff_model(options)
+        self.setFocus()
+        return made
+
+    def make_standoff_model(self, options):
+        """The standoffs as printed parts: one undo step, on the bed next to the model.
+
+        A row is up to twelve bodies and every hole is a boolean, so the row is built in the
+        background, like the knob, and the window keeps responding. It stands on the bed in the
+        middle of the free bed, or on the free place 10 mm to the right of what is already in
+        the model, so a second row does not land in the first one.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("height", "outer", "shape", "bore", "kind",
+                                        "clearance", "count")}
+        height, n = float(options["height"]), int(options["count"])
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the standoffs…"))
+            m = standoff.standoff(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the standoffs away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Standoff"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("{n} standoffs of {h} mm added.")
+                                 .format(n=n, h=f"{height:g}"))
+
+        def failed(exc):
+            self.view.set_status(tr("Standoff failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the standoffs…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ holding tabs
