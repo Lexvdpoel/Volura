@@ -21,6 +21,9 @@ With a screw size the base also gets a post in every inside corner with a blind 
 and the lid a clearance hole above it; the lip makes room for the posts, so the lid still
 slides down without touching them.
 
+With vent slots the two long walls get the same vertical slots through them, evenly spaced
+and centred along the length, that stop below the lip of the lid; the lid is not changed.
+
 Run with:  python -m pytest tests/test_enclosure.py
 """
 import math
@@ -36,7 +39,7 @@ import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 from PySide6.QtCore import QCoreApplication  # noqa: E402
 from PySide6.QtWidgets import (QApplication, QComboBox, QDialog,  # noqa: E402
-                               QDoubleSpinBox)
+                               QDoubleSpinBox, QSpinBox)
 
 import volura.app as app_module  # noqa: E402
 from volura import enclosure  # noqa: E402
@@ -271,6 +274,63 @@ def test_posts_that_cannot_be_built_are_refused(kw, screws, wrong):
         enclosure.project_box(**box(**kw), screws=screws)
 
 
+# ------------------------------------------------------------------ vent slots
+
+def slot_volume(**kw):
+    """The plastic one vent slot takes out of one wall: a slab straight through the wall."""
+    o = box(**kw)
+    h = o["height"] - o["lip"] - enclosure.VENT_BOTTOM - enclosure.VENT_TOP
+    return enclosure.VENT_WIDTH * o["wall"] * h
+
+
+def test_without_vent_slots_the_box_is_the_plain_one():
+    plain = enclosure.project_box(**BOX)
+    for off in (0, None):
+        base, lid = enclosure.project_box(**BOX, vents=off)
+        assert base.volume() == plain[0].volume()
+        assert lid.volume() == plain[1].volume()
+
+
+def test_the_slots_go_through_both_long_walls():
+    plain = enclosure.project_box(**BOX)[0]
+    base = enclosure.project_box(**BOX, vents=5)[0]
+    assert plain.volume() - base.volume() == pytest.approx(2 * 5 * slot_volume(), rel=0.01)
+    assert base.status() == mf.Error.NoError
+    assert base.genus() == plain.genus() + 10, "every slot through a wall is one hole"
+    lid = enclosure.project_box(**BOX, vents=5)[1]
+    assert lid.volume() == pytest.approx(enclosure.project_box(**BOX)[1].volume()), \
+        "the vent slots may not change the lid"
+
+
+def test_the_slots_run_between_the_floor_and_the_lip_of_the_lid():
+    o = box()
+    base = enclosure.project_box(**o, vents=3)[0]
+    wall = (rounded_area(o["length"] + 2 * o["wall"], o["width"] + 2 * o["wall"], o["radius"])
+            - rounded_area(o["length"], o["width"], max(0.0, o["radius"] - o["wall"])))
+    slots = 2 * 3 * enclosure.VENT_WIDTH * o["wall"]
+    assert base.slice(o["floor"] + 1.0).area() == pytest.approx(wall, rel=REL), \
+        "a slot reaches into the floor"
+    assert base.slice(o["floor"] + o["height"] - o["lip"] - 1.0).area() == pytest.approx(
+        wall, rel=REL), "a slot reaches the top edge of the wall"
+    assert base.slice(o["floor"] + enclosure.VENT_BOTTOM + 1.0).area() == pytest.approx(
+        wall - slots, rel=REL), "the slots are not through both long walls"
+
+
+def test_the_slots_stay_clear_of_the_screw_posts():
+    posts = enclosure.project_box(**BOX, screws="M3")[0]
+    both = enclosure.project_box(**BOX, screws="M3", vents=5)[0]
+    assert posts.volume() - both.volume() == pytest.approx(2 * 5 * slot_volume(), rel=1e-6), \
+        "a slot cuts into a post"
+    assert both.status() == mf.Error.NoError and both.genus() == 10
+
+
+@pytest.mark.parametrize("kw", ({"vents": -1}, {"vents": 21}, {"vents": 20},
+                                {"length": 25.0, "vents": 4}, {"height": 9.0, "vents": 2}))
+def test_vent_slots_that_cannot_be_cut_are_refused(kw):
+    with pytest.raises(ValueError, match="vent slots"):
+        enclosure.project_box(**box(**kw))
+
+
 # ------------------------------------------------------------------ in the window
 
 def test_the_box_and_the_lid_are_two_parts_in_one_undo_step(win):
@@ -363,6 +423,26 @@ def test_the_dialog_starts_at_the_last_screws_and_remembers_the_new_ones(win, mo
     assert lid.genus() == 4, "the screw size did not reach the box"
     assert win.settings.box3d_screws == "M3"
     assert app_module.Settings().box3d_screws == "M3"
+
+
+def test_the_dialog_starts_at_the_last_vents_and_remembers_the_new_ones(win, monkeypatch):
+    seen = {}
+
+    def fill(dlg):
+        sp = dlg.findChild(QSpinBox)
+        seen["start"] = sp.value()
+        sp.setValue(6)
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", fill)
+    win.settings.box3d_vents = 3
+    win.project_box_dialog()
+    assert seen["start"] == 3, "the dialog did not start at the last number of vent slots"
+    assert pump_until(lambda: len(win.doc.groups) == 2), "no box in the model"
+    base = win.doc.groups[0].ents.to_manifold()
+    assert base.genus() == 12, "the number of vent slots did not reach the box"
+    assert win.settings.box3d_vents == 6
+    assert app_module.Settings().box3d_vents == 6
 
 
 def test_the_clearance_starts_at_the_one_of_the_screw_holes():

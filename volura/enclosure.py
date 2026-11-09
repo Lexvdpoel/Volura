@@ -22,6 +22,10 @@ With `screws` the box also gets **screw posts**: a round post in every inside co
 blind pilot hole, and a clearance hole through the lid above it, so the lid is screwed on
 instead of only pressed in. The lip of the lid runs along the wall right through the corner,
 so it is cut away around every post.
+
+With `vents` the two long walls get **vent slots**: `vents` vertical slots through each wall,
+evenly spaced and centred along the length, that stop below where the lip of the lid comes
+down, so the lid never covers them and the air inside the box can change.
 """
 from __future__ import annotations
 
@@ -43,6 +47,14 @@ POST_OVER_SCREW, PILOT_OVER_SCREW = 2.2, 0.8
 POST_FLOOR = 1.0
 #: the straight pieces a post, a pilot hole or a screw hole is approximated with
 SEGMENTS = 48
+#: the vent slots in the long walls: how wide they are, how far above the floor they start
+#: and how far below the top edge of the base minus the lip they stop
+VENT_WIDTH, VENT_BOTTOM, VENT_TOP = 2.0, 3.0, 3.0
+#: the shortest slot worth cutting, and the most slots one wall can carry
+VENT_MIN_H, VENTS_MAX = 3.0, 20
+#: the room a slot keeps from the inside corners: from a post when there is one, from the
+#: rounding of the corner when there is none
+VENT_POST_CLEAR, VENT_CORNER_CLEAR = 2.0, 3.0
 
 
 def rounded_rect(length, width, radius) -> mf.CrossSection:
@@ -73,9 +85,18 @@ def _cylinders(centres, height, radius, z) -> mf.Manifold:
          for x, y in centres], mf.OpType.Add)
 
 
+def _vent_slots(centres, height, z, depth) -> mf.Manifold:
+    """The vent slots together: a slab `VENT_WIDTH` wide, `height` high and `depth` deep on
+    every x in `centres`, standing on `z`, unioned into one solid. A slab reaches across the
+    whole box, so it cuts the same slot through both long walls at once."""
+    return mf.Manifold.batch_boolean(
+        [mf.Manifold.cube([VENT_WIDTH, depth, height])
+         .translate((x - 0.5 * VENT_WIDTH, -0.5 * depth, z)) for x in centres], mf.OpType.Add)
+
+
 def project_box(length=80, width=50, height=30, wall=2.0, floor=2.0, radius=3.0,
                 lid=2.0, lip=3.0, clearance=0.2,
-                screws=None) -> tuple[mf.Manifold, mf.Manifold]:
+                screws=None, vents=0) -> tuple[mf.Manifold, mf.Manifold]:
     """A printed enclosure with a fitting lid: the base and the lid, side by side on the bed.
 
     `length`, `width` and `height` are the **inside** of the box, what the electronics need;
@@ -87,6 +108,8 @@ def project_box(length=80, width=50, height=30, wall=2.0, floor=2.0, radius=3.0,
 
     `screws` is None or "" for a box without posts, or one of `threads.SCREW_HOLES`: then the
     base gets a round post in every inside corner and the lid a clearance hole above it.
+    `vents` is the number of slots cut through each of the two long walls, 0 for a box with
+    closed walls.
 
     Both parts stand on `z = 0` and are centred on the origin in plan. The base is the tray
     with its open top up; the lid is flipped for printing, so its flat top lies on the bed
@@ -122,6 +145,10 @@ def project_box(length=80, width=50, height=30, wall=2.0, floor=2.0, radius=3.0,
     post_d = POST_OVER_SCREW * nominal
     if size and post_d > 0.5 * min(L, W):
         raise ValueError(tr("The screw posts do not fit in this box."))
+    n_vents = int(vents or 0)
+    if n_vents < 0 or n_vents > VENTS_MAX:
+        raise ValueError(tr("the number of vent slots must be 0 to {max}")
+                         .format(max=VENTS_MAX))
 
     # the tray: the outer block with the inside cut out of it, past the top so it stays open
     outline = rounded_rect(L + 2.0 * t, W + 2.0 * t, r)
@@ -140,6 +167,20 @@ def project_box(length=80, width=50, height=30, wall=2.0, floor=2.0, radius=3.0,
         base = base + _cylinders(centres, post_h, 0.5 * post_d, f) \
             - _cylinders(centres, post_h - POST_FLOOR + 1.0,
                          0.5 * PILOT_OVER_SCREW * nominal, f + POST_FLOOR)
+
+    # the vent slots go straight through both long walls, so the air in the box can change;
+    # they stop where the lip of the lid comes down, and the lid itself is not touched
+    if n_vents:
+        slot_h = H - lip_h - VENT_BOTTOM - VENT_TOP
+        # the slots stay clear of the inside corners: of the posts when the box has them, of
+        # the rounding of the corners when it does not
+        clear = (post_d + VENT_POST_CLEAR) if size else (VENT_CORNER_CLEAR + r)
+        span = L - 2.0 * clear - VENT_WIDTH     # the room the centres of the slots may use
+        pitch = span / (n_vents - 1) if n_vents > 1 else 0.0
+        if slot_h < VENT_MIN_H or span < 0.0 or (n_vents > 1 and pitch < 2.0 * VENT_WIDTH):
+            raise ValueError(tr("The vent slots do not fit in this box."))
+        base = base - _vent_slots([(i - 0.5 * (n_vents - 1)) * pitch for i in range(n_vents)],
+                                  slot_h, f + VENT_BOTTOM, W + 2.0 * t + 2.0)
 
     # the lid: the plate on the bed, the lip above it, so both print without support
     top = mf.Manifold.extrude(outline, plate_t)

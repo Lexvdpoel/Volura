@@ -70,8 +70,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   inside length, width and height that your electronics need, with the wall, the floor, the
   rounding of the corners and the clearance between the lip of the lid and the wall. With a
   screw size the base also gets a post in every corner with a pilot hole and the lid a
-  clearance hole above it, so the lid screws on. Base and lid land side by side on the bed,
-  the lid flipped over so both print without support
+  clearance hole above it, so the lid screws on, and with vent slots the two long walls get
+  vertical slots through them, evenly spaced and centred, so the air inside the box can
+  change. Base and lid land side by side on the bed, the lid flipped over so both print
+  without support
 - **Knob** (Tools > Print Tools): a printable thumb knob that turns on a bolt or a shaft: the
   diameter and the height, the grip of the rim (knurled ribs, rounded lobes or smooth) and the
   mount (a hexagonal pocket for a nut, a counterbore for the head of a socket head bolt, or a
