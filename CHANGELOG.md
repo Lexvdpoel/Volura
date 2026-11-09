@@ -3,6 +3,20 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.32 — 2026-11-09
+
+### Improved
+- **Filament estimate like a slicer**: Print Check and Entity Info now show the weight,
+  length and cost of a real print, with a skin of the wall thickness and the infill of the
+  rest (1.2 mm and 15 % by default, under 3D Printing > Printer Setup). The weight of a
+  solid print stays below it, as the most a part can use.
+
+### Website
+- Screenshots in the feature overview and the manual, in English and Dutch: the printable
+  parts, the overhang view, the test prints, the project box, the knobs, the worksheet,
+  the vent pattern and the new menus. They are made by tools/screenshots.py and loaded
+  from GitHub, so they stay up to date.
+
 ## 0.2.31 — 2026-11-09
 
 ### Fixed
