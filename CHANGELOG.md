@@ -3,6 +3,19 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.33 — 2026-11-09
+
+### Website
+- **A clearer feature overview**: every card is one or two sentences, in full rows of three,
+  and the pictures sit in three wide cards between them.
+- **A new manual**: the chapters follow the menus, there is a quick start, every function
+  has its own topic with one sentence, where it is in the menus, its options as a short
+  list and its pictures, and the manual starts with what is new in this version.
+
+### Improved
+- The groundwork for keeping a part in the model and its outline on the worksheet linked
+  (not in use yet).
+
 ## 0.2.32 — 2026-11-09
 
 ### Improved
