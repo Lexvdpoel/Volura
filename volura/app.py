@@ -39,6 +39,7 @@ from .i18n import tr, tr_noop
 from .icons import icon
 from .model import ROOT, LOCKED_MSG, Document
 from .settings import qsettings
+from .sheettools import joined_paths
 from .sheetview import SheetView
 from .tools import TOOL_CLASSES, fmt_deg, format_length, parse_length, set_length_precision
 from .tray import TRAY_WIDTH, Tray
@@ -1696,6 +1697,83 @@ class LayersPanel(QWidget):
 # ---------------------------------------------------------------- dialogs
 
 SHORTCUTS_KEY = "shortcuts/"
+
+# The commands that moved when the menus were arranged by mode (3D model or 2D worksheet):
+# their old path, under which a shortcut of the user may still be stored, and the new one.
+MOVED_COMMANDS = {
+    'Edit/Copy to 2D Worksheet': 'Tools/Copy to 2D Worksheet',
+    'Edit/Intersect Faces/With Model': 'Tools/Intersect Faces/With Model',
+    'Edit/Intersect Faces/With Selection': 'Tools/Intersect Faces/With Selection',
+    'Edit/Job Estimate': 'Laser and Mill/Job Estimate',
+    'Edit/To Laser or Mill': 'Tools/To Laser or Mill',
+    'File/Print Check': '3D Printing/Print Check',
+    'File/Printer Setup': '3D Printing/Printer Setup',
+    'Other/Align Bottom': 'Tools/Align/Align Bottom',
+    'Other/Align Center': 'Tools/Align/Align Center',
+    'Other/Align Left': 'Tools/Align/Align Left',
+    'Other/Align Right': 'Tools/Align/Align Right',
+    'Other/Align Top': 'Tools/Align/Align Top',
+    'Other/Arc': 'Draw/Arc',
+    'Other/Arc Around Center': 'Draw/Arc Around Center',
+    'Other/Center on Bed': '3D Printing/Center on Bed',
+    'Other/Circle': 'Draw/Circle',
+    'Other/Distribute Horizontally': 'Tools/Distribute/Distribute Horizontally',
+    'Other/Distribute Vertically': 'Tools/Distribute/Distribute Vertically',
+    'Other/Drop to Bed': '3D Printing/Drop to Bed',
+    'Other/Duplicate in Row or Grid': 'Tools/Duplicate in Row or Grid',
+    'Other/Duplicate in a Circle': 'Tools/Duplicate in a Circle',
+    'Other/Ellipse': 'Draw/Ellipse',
+    'Other/Flip Horizontally': 'Tools/Flip Horizontally',
+    'Other/Flip Vertically': 'Tools/Flip Vertically',
+    'Other/Intersect Outlines': 'Tools/Intersect Outlines',
+    'Other/Join Lines': 'Tools/Join Lines',
+    'Other/Line': 'Draw/Line',
+    'Other/Polygon': 'Draw/Polygon',
+    'Other/Rectangle': 'Draw/Rectangle',
+    'Other/Rounded Corners on Offset': 'Tools/Rounded Corners on Offset',
+    'Other/Rounded Rectangle': 'Draw/Rounded Rectangle',
+    'Other/Snap to Grid': 'View/Snap to Grid',
+    'Other/Split into Segments': 'Tools/Split into Segments',
+    'Other/Subtract Outlines': 'Tools/Subtract Outlines',
+    'Other/Text': 'Draw/Text',
+    'Other/To Layer': 'Tools/To Layer',
+    'Other/Turn': 'Tools/Turn',
+    'Other/Union Outlines': 'Tools/Union Outlines',
+    'Other/Worksheet Layers': 'View/Worksheet Layers',
+    'Tools/Arrange on Bed': '3D Printing/Arrange on Bed',
+    'Tools/Print Tools/Cable Clip': '3D Printing/Parts/Cable Clip',
+    'Tools/Print Tools/Chamfer': 'Tools/Chamfer',
+    'Tools/Print Tools/Clearance Test': '3D Printing/Test Prints/Clearance Test',
+    'Tools/Print Tools/Cut': '3D Printing/Cut',
+    'Tools/Print Tools/Cut and Join': '3D Printing/Cut and Join',
+    'Tools/Print Tools/Elephant Foot Chamfer': '3D Printing/Elephant Foot Chamfer',
+    'Tools/Print Tools/External Thread on Cylinder': '3D Printing/Screw Threads/External Thread on Cylinder',
+    'Tools/Print Tools/Fillet': 'Tools/Fillet',
+    'Tools/Print Tools/Internal Thread in Hole': '3D Printing/Screw Threads/Internal Thread in Hole',
+    'Tools/Print Tools/Knob': '3D Printing/Parts/Knob',
+    'Tools/Print Tools/Label Plate': '3D Printing/Parts/Label Plate',
+    'Tools/Print Tools/Mouse Ears': '3D Printing/Mouse Ears',
+    'Tools/Print Tools/New Bolt': '3D Printing/Screw Threads/New Bolt',
+    'Tools/Print Tools/New Nut or Sleeve': '3D Printing/Screw Threads/New Nut or Sleeve',
+    'Tools/Print Tools/Orient for Printing': '3D Printing/Orient for Printing',
+    'Tools/Print Tools/Overhang Test': '3D Printing/Test Prints/Overhang Test',
+    'Tools/Print Tools/Project Box': '3D Printing/Parts/Project Box',
+    'Tools/Print Tools/Screw Hole': '3D Printing/Screw Hole',
+    'Tools/Print Tools/Spur Gear': '3D Printing/Parts/Spur Gear',
+    'Tools/Print Tools/Standoff': '3D Printing/Parts/Standoff',
+    'Tools/Print Tools/Thread': '3D Printing/Screw Threads/Thread',
+    'View/Auto Arrange': 'Laser and Mill/Auto Arrange',
+    'View/Box with Finger Joints': 'Laser and Mill/Box with Finger Joints',
+    'View/Dogbone Corners': 'Laser and Mill/Dogbone Corners',
+    'View/Fit Test': 'Laser and Mill/Fit Test',
+    'View/Holding Tabs': 'Laser and Mill/Holding Tabs',
+    'View/Living Hinge': 'Laser and Mill/Living Hinge',
+    'View/Parts to 3D Model': 'Tools/Parts to 3D Model',
+    'View/Round Corners': 'Tools/Round Corners',
+    'View/Sheet': 'Laser and Mill/Sheet',
+    'View/Spur Gear': 'Laser and Mill/Spur Gear',
+    'View/Vent Pattern': 'Laser and Mill/Vent Pattern',
+}
 SHOW_WELCOME_KEY = "show_welcome"
 # the group of the commands that are only in the right-click menu; English, as it is part
 # of the settings keys (shown translated)
@@ -2417,6 +2495,11 @@ class VentPatternDialog(QDialog):
         s = win.settings
         self.setWindowTitle(tr("Vent Pattern"))
         lay = QFormLayout(self)
+        intro = QLabel(tr("Fills the selected closed contour with a grid of holes, for a "
+                          "ventilation grille or a speaker cover. The holes go on the cut "
+                          "layer."))
+        intro.setWordWrap(True)
+        lay.addRow(intro)
 
         def spin(lo, hi, value, step=0.5):
             sp = QDoubleSpinBox()
@@ -4019,6 +4102,7 @@ class MainWindow(QMainWindow):
         self._update_mode_button()
         self.coords.setVisible(want == "2d")
         self._show_mode_toolbars(changed)
+        self._show_mode_menus(want)
         self._enable_3d_tools(want == "3d")
         if want == "2d":
             self.sheet_view.set_tool("select")
@@ -4206,7 +4290,7 @@ class MainWindow(QMainWindow):
 
         for name, label, ic, sc in TOOL_INFO:
             a = A(tr(label), lambda checked=False, n=name: self.set_tool(n), sc, ic, checkable=True)
-            a.setProperty(SOURCE_TEXT, label)     # "Orbit" and "Turn" are both "Draaien" in Dutch
+            a.setProperty(SOURCE_TEXT, label)     # the English label: the key of its shortcut
             self.tool_actions[name] = a
 
         self.a_freehand = self.tool_act(tr("&Freehand"), "freehand", None, "freehand")
@@ -4373,6 +4457,16 @@ class MainWindow(QMainWindow):
         self.a_mirror_v = A(tr("Flip &Vertically"),
                             lambda checked=False: self.sheet_view.mirror(False), None, "mirror_v",
                             False, tr("Swap top and bottom around the center of the selection"))
+        # ---- the Edit menu of the worksheet (the keys work on the worksheet itself)
+        self.a_sheet_delete = A(tr("&Delete"),
+                                lambda checked=False: self.sheet_view.delete_selected(), None,
+                                None, False, tr("Delete the selected outlines (Del)"))
+        self.a_sheet_sel_all = A(tr("Select &All"),
+                                 lambda checked=False: self.sheet_view.select_all(), None, None,
+                                 False, tr("Select everything on the worksheet (Ctrl+A)"))
+        self.a_sheet_sel_none = A(tr("Select None"),
+                                  lambda checked=False: self.sheet_view.clear_selection(), None,
+                                  None, False, tr("Clear the selection on the worksheet"))
         # ---- operations on the selection of the 2D worksheet
         self.a_sheet_union = A(tr("Union Outlines"),
                                lambda checked=False: self.sheet_op("union"), None, "union", False,
@@ -4535,108 +4629,168 @@ class MainWindow(QMainWindow):
         return a
 
     def _build_menus(self):
+        """The menu bar. Every command that only works on the 3D model or only on the 2D
+        worksheet is marked for its mode (`_menu_modes`), and `_show_mode_menus` shows just
+        the commands of the mode you are in; what is not marked works in both."""
         mb = self.menuBar()
+        self._menu_modes = {}
+        T, S = self.tool_actions, self.sheet_tool_actions
 
+        def only(mode, *items):
+            for a in items:
+                if a is not None:
+                    act = a.menuAction() if isinstance(a, QMenu) else a
+                    self._menu_modes[id(act)] = (act, mode)
+            return items
+
+        def sub(title, parent, items, mode=None):
+            menu = QMenu(title, parent)
+            self.fill(menu, items)
+            if mode:
+                only(mode, menu)
+            return menu
+
+        # ---- File
         m = mb.addMenu(tr("&File"))
         export = QMenu(tr("&Export"), m)
-        for a in (self.a_exp_stl, self.a_exp_3mf, self.a_exp_colors, self.a_exp_obj, None,
-                  self.a_exp_svg2d, self.a_exp_dxf2d, self.a_exp_gcode):
-            if a is None:
-                export.addSeparator()
-            else:
-                export.addAction(a)
+        self.fill(export, only("3d", self.a_exp_stl, self.a_exp_3mf, self.a_exp_colors,
+                               self.a_exp_obj) + (None,) +
+                  only("2d", self.a_exp_svg2d, self.a_exp_dxf2d, self.a_exp_gcode))
         self.recent_menu = QMenu(tr("&Recent Files"), m)
         self.update_recent_menu()
         self.fill(m, (self.a_new, self.a_open, self.recent_menu, None,
                       self.a_save, self.a_save_as, self.a_save_copy, None,
-                      self.a_import, export, None,
-                      self.a_print_setup, self.a_check, self.a_print, None,
-                      self.a_quit))
+                      self.a_import, export, None)
+                  + only("3d", self.a_print) + (None, self.a_quit))
 
+        # ---- Edit
         m = mb.addMenu(tr("&Edit"))
-        unhide = QMenu(tr("U&nhide"), m)
-        self.fill(unhide, (self.a_unhide_sel, self.a_unhide_last, self.a_unhide))
-        unlock = QMenu(tr("Unl&ock"), m)
-        self.fill(unlock, (self.a_unlock_sel, self.a_unlock_all))
-        cut_faces = QMenu(tr("Intersect &Faces"), m)
-        self.fill(cut_faces, (self.a_cut_face_model, self.a_cut_face_sel))
-        self.fill(m, (self.a_undo, self.a_redo, None,
-                      self.a_cut, self.a_copy, self.a_paste, self.a_paste_loc, self.a_to_sheet,
-                      self.a_to_laser, self.a_job_estimate, self.a_delete,
-                      self.a_erase_guides, None,
-                      self.a_sel_all, self.a_sel_none, None,
-                      self.a_hide, unhide, None,
-                      self.a_lock, unlock, None,
-                      self.a_component, self.a_group, self.a_close_group, None,
-                      cut_faces))
+        unhide = sub(tr("U&nhide"), m, (self.a_unhide_sel, self.a_unhide_last, self.a_unhide))
+        unlock = sub(tr("Unl&ock"), m, (self.a_unlock_sel, self.a_unlock_all))
+        self.fill(m, (self.a_undo, self.a_redo, None)
+                  + only("3d", self.a_cut, self.a_copy, self.a_paste, self.a_paste_loc,
+                         self.a_delete, self.a_erase_guides, None,
+                         self.a_sel_all, self.a_sel_none, None,
+                         self.a_hide, unhide, None,
+                         self.a_lock, unlock, None,
+                         self.a_component, self.a_group, self.a_close_group)
+                  + only("2d", self.a_sheet_delete, None,
+                         self.a_sheet_sel_all, self.a_sheet_sel_none))
 
+        # ---- View
         m = mb.addMenu(tr("&View"))
-        edge_style = QMenu(tr("&Edge Style"), m)
-        self.fill(edge_style, (self.a_edges, self.a_back_edges))
-        face_style = QMenu(tr("Face St&yle"), m)
-        self.fill(face_style, (self.a_xray, self.a_overhangs, None, self.a_wireframe,
-                               self.a_hidden_lines, self.a_shaded, self.a_monochrome))
-        comp_edit = QMenu(tr("Co&mponent Edit"), m)
-        self.fill(comp_edit, (self.a_hide_rest,))
-        self.fill(m, (self.a_toolbars, self.a_sheet, None,
-                      self.a_sheet_plaat, self.a_sheet_nest, self.a_box_joint, self.a_hinge,
-                      self.a_vent_pattern, self.a_fit_test, self.a_spur_gear,
-                      self.a_holding_tabs, self.a_round_corners, self.a_dogbone_corners,
-                      self.a_sheet_to_model, None,
-                      self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid, None,
-                      edge_style, face_style, comp_edit))
+        edge_style = sub(tr("&Edge Style"), m, (self.a_edges, self.a_back_edges))
+        face_style = sub(tr("Face St&yle"), m,
+                         (self.a_xray, self.a_overhangs, None, self.a_wireframe,
+                          self.a_hidden_lines, self.a_shaded, self.a_monochrome))
+        comp_edit = sub(tr("Co&mponent Edit"), m, (self.a_hide_rest,))
+        self.fill(m, (self.a_toolbars, self.a_sheet, None)
+                  + only("3d", self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid,
+                         None, edge_style, face_style, comp_edit)
+                  + only("2d", self.a_sheet_grid, self.a_sheet_layers))
 
+        # ---- Camera
         m = mb.addMenu(tr("&Camera"))
-        std_views = QMenu(tr("&Standard Views"), m)
-        self.fill(std_views, tuple(self.views[k] for k in
-                                   ("top", "bottom", "front", "back", "left", "right", "iso")))
-        self.fill(m, (self.a_prev_view, self.a_next_view, std_views, None,
-                      self.a_ortho, self.a_persp, None,
-                      self.tool_actions["orbit"], self.tool_actions["pan"], self.tool_actions["zoom"],
-                      self.a_fov, self.a_zoom_window, self.a_extents))
+        std_views = sub(tr("&Standard Views"), m,
+                        tuple(self.views[k] for k in
+                              ("top", "bottom", "front", "back", "left", "right", "iso")))
+        self.fill(m, only("3d", self.a_prev_view, self.a_next_view, std_views, None,
+                          self.a_ortho, self.a_persp, None,
+                          T["orbit"], T["pan"], T["zoom"], self.a_fov, self.a_zoom_window)
+                  + (self.a_extents,))
 
+        # ---- Draw
         m = mb.addMenu(tr("&Draw"))
-        lines = QMenu(tr("&Lines"), m)
-        self.fill(lines, (self.tool_actions["line"], self.a_freehand))
-        arcs = QMenu(tr("&Arcs"), m)
-        self.fill(arcs, (self.a_arc, self.a_arc2, self.a_arc3, self.a_pie))
-        shapes = QMenu(tr("&Shapes"), m)
-        self.fill(shapes, (self.tool_actions["rectangle"], self.a_rotrect, self.tool_actions["circle"],
-                           self.tool_actions["polygon"]))
-        primitives = QMenu(tr("&Basic Shapes"), m)
-        self.fill(primitives, (self.a_box, self.a_cylinder, self.a_cone, self.a_sphere, self.a_torus))
-        self.fill(m, (lines, arcs, shapes, None, primitives))
+        lines = sub(tr("&Lines"), m, (T["line"], self.a_freehand))
+        arcs = sub(tr("&Arcs"), m, (self.a_arc, self.a_arc2, self.a_arc3, self.a_pie))
+        shapes = sub(tr("&Shapes"), m, (T["rectangle"], self.a_rotrect, T["circle"],
+                                        T["polygon"]))
+        primitives = sub(tr("&Basic Shapes"), m, (self.a_box, self.a_cylinder, self.a_cone,
+                                                   self.a_sphere, self.a_torus))
+        self.fill(m, only("3d", lines, arcs, shapes, None, primitives)
+                  + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
+                         S["ellipse"], S["arc"], S["centerarc"], S["polygon"], None, S["text"]))
 
+        # ---- Tools
         m = mb.addMenu(tr("&Tools"))
-        solids = QMenu(tr("&Solid Tools"), m)
-        self.fill(solids, (self.a_intersect, self.a_union, self.a_subtract, self.a_trim, self.a_split))
-        self.print_tools_menu = QMenu(tr("P&rint Tools"), m)
-        self.fill(self.print_tools_menu, (self.a_thread, self.a_thread_ext, self.a_thread_int,
-                                          self.a_thread_bolt, self.a_thread_nut,
-                                           self.a_screw_hole, self.a_clearance_test,
-                                           self.a_overhang_test,
-                                           self.a_spur_gear_3d, self.a_project_box,
-                                             self.a_knob, self.a_standoff, self.a_label_plate,
-                                             self.a_cable_clip, None,
-                                          self.a_cutplane, self.a_cut_join, None,
-                                          self.a_fillet, self.a_chamfer, self.a_elephant,
-                                          self.a_mouse_ears, self.a_orient_print))
-        self.fill(m, (self.tool_actions["select"], self.tool_actions["eraser"], self.tool_actions["paint"],
-                      None,
-                      self.tool_actions["move"], self.tool_actions["rotate"], self.tool_actions["scale"],
-                      None,
-                      self.tool_actions["pushpull"], self.a_follow_me, self.tool_actions["offset"], None,
-                      self.a_shell, self.a_simplify, self.a_arrange, solids, None,
-                      self.tool_actions["tape"], self.a_protractor, None,
-                      self.tool_actions["text"], None,
-                      self.print_tools_menu))
+        solids = sub(tr("&Solid Tools"), m, (self.a_intersect, self.a_union, self.a_subtract,
+                                             self.a_trim, self.a_split))
+        cut_faces = sub(tr("Intersect &Faces"), m, (self.a_cut_face_model, self.a_cut_face_sel))
+        align = sub(tr("&Align"), m, tuple(self.sheet_align_actions.values()))
+        distribute = sub(tr("&Distribute"), m, tuple(self.sheet_distribute_actions.values()))
+        self.fill(m, only("3d", T["select"], T["eraser"], T["paint"], None,
+                          T["move"], T["rotate"], T["scale"], None,
+                          T["pushpull"], self.a_follow_me, T["offset"], None,
+                          self.a_fillet, self.a_chamfer, None,
+                          solids, cut_faces, self.a_shell, self.a_simplify, None,
+                          T["tape"], self.a_protractor, None,
+                          T["text"], None,
+                          self.a_to_sheet, self.a_to_laser)
+                  + only("2d", S["select"], S["move"], S["rotate"], S["scale"], None,
+                         S["offset"], self.a_sheet_round, None,
+                         self.a_sheet_union, self.a_sheet_subtract, self.a_sheet_intersect,
+                         None, self.a_sheet_join, self.a_sheet_split, None,
+                         self.a_mirror_h, self.a_mirror_v, align, distribute, None,
+                         self.a_sheet_duplicate, self.a_sheet_duplicate_circle, None,
+                         self.a_round_corners, self.a_sheet_to_layer, None,
+                         self.a_sheet_to_model))
 
+        # ---- 3D Printing: everything that makes a model ready for the printer
+        m = mb.addMenu(tr("3D &Printing"))
+        only("3d", m)
+        self.print_tools_menu = m
+        threads_menu = sub(tr("&Screw Threads"), m,
+                           (self.a_thread, self.a_thread_ext, self.a_thread_int,
+                            self.a_thread_bolt, self.a_thread_nut))
+        tests_menu = sub(tr("&Test Prints"), m, (self.a_clearance_test, self.a_overhang_test))
+        parts_menu = sub(tr("&Parts"), m,
+                         (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
+                          self.a_label_plate, self.a_cable_clip))
+        self.fill(m, (self.a_print_setup, self.a_check, None,
+                      self.a_orient_print, self.a_drop, self.a_center, self.a_arrange, None,
+                      self.a_cutplane, self.a_cut_join, None,
+                      self.a_elephant, self.a_mouse_ears, None,
+                      threads_menu, self.a_screw_hole, tests_menu, parts_menu))
+
+        # ---- Laser and Mill: what turns the worksheet into a job for the machine
+        m = mb.addMenu(tr("&Laser and Mill"))
+        only("2d", m)
+        self.laser_menu = m
+        self.fill(m, (self.a_sheet_plaat, self.a_sheet_nest, None,
+                      self.a_box_joint, self.a_hinge, self.a_vent_pattern, self.a_fit_test,
+                      self.a_spur_gear, None,
+                      self.a_holding_tabs, self.a_dogbone_corners, None,
+                      self.a_job_estimate))
+
+        # ---- Window and Help
         m = mb.addMenu(tr("&Window"))
         self.standard_menu = QMenu(tr("Default &Tray"), m)
         self.fill(m, (self.standard_menu, None, self.a_model_info, self.a_prefs))
 
         m = mb.addMenu(tr("&Help"))
         self.fill(m, (self.a_welcome, self.a_help, None, self.a_updates, self.a_about))
+        self._show_mode_menus(getattr(self, "mode", "3d"))
+
+    def _show_mode_menus(self, mode):
+        """Only the commands of the mode: the model's in 3D, the worksheet's in 2D.
+
+        A hidden command also gives up its shortcut, so a key of the model never acts on
+        the worksheet or the other way round. Qt folds the separators that are left over."""
+        for act, want in getattr(self, "_menu_modes", {}).values():
+            act.setVisible(want == mode)
+
+    @staticmethod
+    def flat_actions(menu):
+        """The commands of a menu and of its submenus, in the order the menu shows them."""
+        out = []
+        for a in menu.actions():
+            if a.isSeparator():
+                continue
+            if a.menu() is not None:
+                out.extend(MainWindow.flat_actions(a.menu()))
+            else:
+                out.append(a)
+        return out
 
     def _build_toolbars(self):
         self._dropdown_buttons = {}
@@ -5047,11 +5201,29 @@ class MainWindow(QMainWindow):
         return added
 
     # ------------------------------------------------------------ vent pattern
-    def vent_pattern_dialog(self):
-        """View > Vent Pattern…: the holes of a grille in the selected closed contour."""
+    def vent_outline(self):
+        """The contour the vent pattern fills: (points, source number) or None.
+
+        One selected closed path, or loose lines that together close into exactly one
+        contour (a drawing from a DXF, or a shape drawn line by line); the lines themselves
+        stay as they are."""
         sel = self.sheet_view.selected_paths()
-        if len(sel) != 1 or not sel[0].closed:
-            self.hint.setText(tr("Select one closed contour on the worksheet first."))
+        if len(sel) == 1 and sel[0].closed:
+            return np.asarray(sel[0].pts, dtype=float), int(sel[0].src or 0)
+        if sel and not any(p.closed for p in sel):
+            joined = joined_paths(sel)
+            if len(joined) == 1 and joined[0].closed:
+                return np.asarray(joined[0].pts, dtype=float), int(sel[0].src or 0)
+        return None
+
+    def _vent_selection_hint(self):
+        self.hint.setText(tr("Select one closed contour on the worksheet first (a rectangle, "
+                             "a circle or lines that close into one shape)."))
+
+    def vent_pattern_dialog(self):
+        """Laser and Mill > Vent Pattern…: the holes of a grille in the selected contour."""
+        if self.vent_outline() is None:
+            self._vent_selection_hint()
             self.setFocus()
             return None
         dlg = VentPatternDialog(self)
@@ -5074,22 +5246,23 @@ class MainWindow(QMainWindow):
         Every hole gets the source number of the contour, so clicking the panel, moving it
         and arranging the sheet take the grille along with the panel it is cut in.
         """
-        sel = self.sheet_view.selected_paths()
-        if len(sel) != 1 or not sel[0].closed:
-            self.hint.setText(tr("Select one closed contour on the worksheet first."))
+        found = self.vent_outline()
+        if found is None:
+            self._vent_selection_hint()
             return None
-        outline = sel[0]
+        outline_pts, outline_src = found
         self.set_mode("2d")
         sheet = self.doc.sheet
         try:
-            holes = boxgen.vent_pattern(outline.pts, shape=options["shape"],
+            holes = boxgen.vent_pattern(outline_pts, shape=options["shape"],
                                         size=options["size"], web=options["web"],
                                         margin=options["margin"])
         except Exception as e:                      # the generator must never crash
             return self._box_failure(e, "the vent pattern",
                                      tr("The vent pattern failed: {error}"))
         if not holes:
-            self.hint.setText(tr("No hole fits inside this contour."))
+            self.hint.setText(tr("No hole fits inside this contour: make the holes, the web "
+                                 "or the edge margin smaller."))
             return None
         layer = sheet.default_layer("cut") or default_layer_names("cut")[0]
         drawing = Drawing()
@@ -5097,9 +5270,9 @@ class MainWindow(QMainWindow):
             drawing.add_path(pts, closed=True, layer=layer, src=1)
         self.doc.checkpoint()
         added = sheet.merge(drawing)
-        if outline.src:
+        if outline_src:
             for p in added:
-                p.src = int(outline.src)
+                p.src = outline_src
         self.doc.notify()
         self.sheet_view.set_selection(added)
         self.sheet_view._refresh_outside(announce=False)
@@ -6073,6 +6246,9 @@ class MainWindow(QMainWindow):
             segs = segments(a)
             if segs[0] and id(a) not in seen:
                 add(tuple(f"{p}/{s}" for p, s in zip(other, segs)), a, overwrite=True)
+        for old_path, new_path in MOVED_COMMANDS.items():
+            if new_path in out:
+                legacy.setdefault(old_path, new_path)
         self._command_labels = labels
         self._legacy_paths = legacy
         return out

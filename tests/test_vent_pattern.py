@@ -203,7 +203,7 @@ def test_a_contour_too_small_for_a_hole_leaves_nothing(win, monkeypatch):
     assert win.vent_pattern_dialog() is None
     assert len(win.doc.undo_stack) == steps, "nothing changed, so no undo step"
     assert win.doc.sheet.paths == before
-    assert win.hint.text() == "No hole fits inside this contour."
+    assert win.hint.text() == "No hole fits inside this contour: make the holes, the web or the edge margin smaller."
 
 
 def test_an_open_path_is_no_contour(win, monkeypatch):
@@ -217,7 +217,38 @@ def test_an_open_path_is_no_contour(win, monkeypatch):
     assert win.vent_pattern_dialog() is None
     assert len(win.doc.undo_stack) == steps
     assert win.doc.sheet.paths == before
-    assert win.hint.text() == "Select one closed contour on the worksheet first."
+    assert win.hint.text() == (
+        "Select one closed contour on the worksheet first (a rectangle, a circle or lines that close into one shape).")
+
+
+def test_loose_lines_that_close_into_one_contour_are_filled(win, monkeypatch):
+    """A rectangle from a DXF or drawn line by line is four loose lines: they count as the
+    contour they close into, and the lines themselves stay as they were."""
+    accept_dialog(monkeypatch)
+    win.set_mode("2d")
+    sheet = win.doc.sheet
+    x0, y0, x1, y1 = 0.0, 0.0, 100.0, 60.0
+    lines = [sheet.add_path(pts, closed=False, layer=sheet.default_layer("cut"))
+             for pts in ([[x0, y0], [x1, y0]], [[x1, y0], [x1, y1]],
+                         [[x1, y1], [x0, y1]], [[x0, y1], [x0, y0]])]
+    win.sheet_view.set_selection(lines)
+    made = win.vent_pattern_dialog()
+    assert made, "the four lines close into a rectangle that takes holes"
+    assert all(p in win.doc.sheet.paths for p in lines), "the lines stay"
+    assert all(not p.closed for p in lines)
+
+
+def test_lines_that_do_not_close_are_no_contour(win, monkeypatch):
+    def no_dialog(dlg):
+        raise AssertionError("nothing to fill: the dialog should not open")
+
+    monkeypatch.setattr(app_module.QDialog, "exec", no_dialog)
+    win.set_mode("2d")
+    sheet = win.doc.sheet
+    lines = [sheet.add_path(pts, closed=False, layer=sheet.default_layer("cut"))
+             for pts in ([[0, 0], [100, 0]], [[100, 0], [100, 60]])]
+    win.sheet_view.set_selection(lines)
+    assert win.vent_pattern_dialog() is None
 
 
 def test_nothing_selected_is_a_clear_message(win, monkeypatch):
@@ -232,7 +263,8 @@ def test_nothing_selected_is_a_clear_message(win, monkeypatch):
     assert win.vent_pattern_dialog() is None
     assert len(win.doc.undo_stack) == steps
     assert win.doc.sheet.paths == before
-    assert win.hint.text() == "Select one closed contour on the worksheet first."
+    assert win.hint.text() == (
+        "Select one closed contour on the worksheet first (a rectangle, a circle or lines that close into one shape).")
 
 
 def test_apply_vent_pattern_needs_no_dialog(win):

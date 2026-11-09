@@ -239,9 +239,9 @@ def test_one_undo_brings_the_old_places_back():
 
 # ---------------------------------------------------------------- the window
 
-def test_the_action_stands_after_mouse_ears_in_print_tools(win):
+def test_the_action_stands_after_the_print_check_in_3d_printing(win):
     labels = menu_labels(win.print_tools_menu)
-    assert labels.index("Mouse Ears…") + 1 == labels.index(ACTION), labels
+    assert labels.index("Print &Check".replace("&", "")) + 1 == labels.index(ACTION), labels
 
 
 def test_the_action_turns_the_selected_cone(win):

@@ -227,7 +227,7 @@ def test_a_clip_that_cannot_be_built_is_a_clear_text(win):
 
 
 def test_the_cable_clip_follows_the_label_plate_in_print_tools(win):
-    labels = [clean(a.text()) for a in win.print_tools_menu.actions() if not a.isSeparator()]
+    labels = [clean(a.text()) for a in win.flat_actions(win.print_tools_menu)]
     assert labels.index("Cable Clip") == labels.index("Label Plate") + 1
 
 

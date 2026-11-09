@@ -267,7 +267,7 @@ def test_shortcut_page_lists_the_commands_grouped_per_menu(win):
     assert groups == menus + [app_module.OTHER_COMMANDS], "one group per menu, in the same order"
     paths = win.command_paths()
     for path in ("File/New", "Window/Model Info", "Window/Preferences", "Help/Welcome to Volura",
-                 "Other/Drop to Bed"):
+                 "3D Printing/Drop to Bed"):
         assert path in paths, f"{path} is missing from the list"
     assert paths["File/New"] is win.a_new
     assert len(paths) == len(set(id(a) for a in paths.values())), "every command is listed exactly once"
@@ -429,3 +429,14 @@ def test_welcome_stays_hidden_when_the_box_is_off(win, monkeypatch):
     monkeypatch.setattr(type(win), "show_welcome", lambda self, checked=False: calls.append(1))
     win.show_welcome_on_startup()
     assert calls == []
+
+
+def test_a_shortcut_of_a_moved_command_moves_along(win, fresh):
+    """The menus were arranged by mode: a shortcut stored under the old path of a command
+    (View > Vent Pattern, now Laser and Mill > Vent Pattern) still lands on it."""
+    q = settings()
+    q.setValue("shortcuts/View/Vent Pattern", ["Ctrl+Alt+V"])
+    q.sync()
+    again = fresh()
+    assert shortcuts_of(again.a_vent_pattern) == ["Ctrl+Alt+V"]
+    assert shortcut_keys() == ["shortcuts/Laser and Mill/Vent Pattern"]

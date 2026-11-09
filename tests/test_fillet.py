@@ -215,8 +215,9 @@ def win():
     w.close()
 
 
-def test_fillet_and_chamfer_are_in_the_print_tools_menu_and_toolbar(win):
-    menu = win.print_tools_menu
+def test_fillet_and_chamfer_are_in_the_tools_menu_and_the_print_toolbar(win):
+    menu = next(a.menu() for a in win.menuBar().actions()
+                if a.menu() is not None and clean(a.text()) == "Tools")
     texts = [clean(a.text()) for a in menu.actions() if not a.isSeparator()]
     assert "Fillet" in texts and "Chamfer" in texts
     bar = win.findChild(QToolBar, "PrintToolsToolbar")

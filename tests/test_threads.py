@@ -116,14 +116,13 @@ def test_print_tools_toolbar_is_visible_on_the_right(win):
     assert "Thread" in labels
 
 
-def test_print_tools_is_the_last_submenu_of_tools(win):
-    tools = next(a.menu() for a in win.menuBar().actions()
-                 if a.menu() is not None and clean(a.text()) == "Tools")
-    acts = [a for a in tools.actions() if not a.isSeparator()]
-    assert acts[-1].menu() is not None
-    assert clean(acts[-1].text()) == "Print Tools"
-    assert tools.actions()[-2].isSeparator()
-    labels = [clean(a.text()) for a in acts[-1].menu().actions() if not a.isSeparator()]
+def test_the_threads_are_a_submenu_of_3d_printing(win):
+    printing = next(a.menu() for a in win.menuBar().actions()
+                    if a.menu() is not None and clean(a.text()) == "3D Printing")
+    assert printing is win.print_tools_menu
+    sub = next(a.menu() for a in printing.actions()
+               if a.menu() is not None and clean(a.text()) == "Screw Threads")
+    labels = [clean(a.text()) for a in sub.actions() if not a.isSeparator()]
     thread_labels = ["Thread", "External Thread on Cylinder", "Internal Thread in Hole",
                      "New Bolt", "New Nut or Sleeve"]
     assert labels[:len(thread_labels)] == thread_labels

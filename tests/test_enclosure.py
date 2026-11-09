@@ -370,7 +370,7 @@ def test_a_box_that_cannot_be_built_is_a_clear_text(win):
 
 
 def test_the_project_box_follows_the_spur_gear_in_print_tools(win):
-    labels = [clean(a.text()) for a in win.print_tools_menu.actions() if not a.isSeparator()]
+    labels = [clean(a.text()) for a in win.flat_actions(win.print_tools_menu)]
     assert labels.index("Project Box") == labels.index("Spur Gear") + 1
 
 

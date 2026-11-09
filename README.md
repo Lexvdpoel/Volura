@@ -35,7 +35,7 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Multicolor**: hold **Alt** while pushing/pulling. Inwards makes an *inlay* (pocket + filling as a
   separate group), outwards a separate part. Ctrl works like in SketchUp (new starting face)
 - Solid tools on groups: union, subtract, intersect, trim, split, outer shell, mirror, place on bed
-- **Intersect Faces** (Edit or right-click): *With Model* adds the cut lines with the rest of the
+- **Intersect Faces** (Tools or right-click): *With Model* adds the cut lines with the rest of the
   model as edges so faces split, *With Selection* only between the selected items
 - Primitives: box, cylinder, cone, sphere, torus
 - Display styles under **View**: Wireframe, Hidden Line, Shaded and Monochrome (View > Face Style),
@@ -53,20 +53,20 @@ The interface is available in English and Dutch (*Window > Preferences > General
   0, 90, 180 or 270 degrees and stand on the bed, 5 mm from the edge and from each other
 - **Lay Flat on This Face** (right-click a face of a group): turn that part about its own centre until
   the face you clicked lies on the print bed, like "place on face" of a slicer
-- **Screw Hole** (Tools > Print Tools): turn a circle you drew on a part into a printable hole
+- **Screw Hole** (3D Printing): turn a circle you drew on a part into a printable hole
   for a metric screw (M2 up to M8): straight, with a counterbore for a socket head, a 90°
   countersink for a flat head or a hexagonal pocket that holds a nut; a hole that runs
   sideways can get a 45° teardrop roof so it prints without support; the clearance (0.2 mm by
   default) is added to every diameter, because a printed hole comes out smaller than drawn
-- **Clearance Test** (Tools > Print Tools): a small test print that shows which clearance your
+- **Clearance Test** (3D Printing): a small test print that shows which clearance your
   printer likes: a plate with a row of holes that grow by a step, each with its clearance in
   raised letters, and a loose pin next to it; print it, try the pin in every hole and use the
   clearance of the hole it fits best in Screw Hole, threads and Cut and Join
-- **Overhang Test** (Tools > Print Tools): a small test print that shows up to which angle your
+- **Overhang Test** (3D Printing): a small test print that shows up to which angle your
   printer prints an overhang without support: a plate with a row of fins that lean further over
   from left to right, each with its angle in raised letters; print it and read the largest angle
   that still came out clean
-- **Project Box** (Tools > Print Tools): an enclosure with a lid that fits into it: enter the
+- **Project Box** (3D Printing): an enclosure with a lid that fits into it: enter the
   inside length, width and height that your electronics need, with the wall, the floor, the
   rounding of the corners and the clearance between the lip of the lid and the wall. With a
   screw size the base also gets a post in every corner with a pilot hole and the lid a
@@ -74,34 +74,34 @@ The interface is available in English and Dutch (*Window > Preferences > General
   vertical slots through them, evenly spaced and centred, so the air inside the box can
   change. Base and lid land side by side on the bed, the lid flipped over so both print
   without support
-- **Knob** (Tools > Print Tools): a printable thumb knob that turns on a bolt or a shaft: the
+- **Knob** (3D Printing): a printable thumb knob that turns on a bolt or a shaft: the
   diameter and the height, the grip of the rim (knurled ribs, rounded lobes or smooth) and the
   mount (a hexagonal pocket for a nut, a counterbore for the head of a socket head bolt, or a
   blind D hole for the shaft of a potentiometer), with the screw size and the clearance that
   printing needs. It stands on the bed to the right of your model as one undo step
-- **Standoff** (Tools > Print Tools): printable spacers that hold a PCB or a panel off the
+- **Standoff** (3D Printing): printable spacers that hold a PCB or a panel off the
   surface under it: the height and the outer size, round or hexagonal across the flats, with a
   through hole a screw goes through, a self-tapping pilot hole or a hole for a heat-set insert,
   in the screw size you choose. Up to twelve standoffs print in one row and land on the bed to
   the right of your model as one undo step
-- **Label Plate** (Tools > Print Tools): a printable tag for a drawer, a box or a keyring:
+- **Label Plate** (3D Printing): a printable tag for a drawer, a box or a keyring:
   up to four lines of text, raised on the plate or engraved into it, on a plate with rounded
   corners and, if you like, a hole for a ring or a screw
-- **Cable Clip** (Tools > Print Tools): a printable clip that keeps a cable, a hose or a bundle
+- **Cable Clip** (3D Printing): a printable clip that keeps a cable, a hose or a bundle
   where it belongs: a ring of the cable diameter with a mouth narrower than the cable, so you push
   the cable in and it stays, on a foot you screw to a wall or under a desk. The clip prints lying
   on its side, so the ring needs no support. Up to twelve clips print in one row that you break
   apart afterwards, on the bed to the right of your model as one undo step
-- **Elephant Foot Chamfer** (Tools > Print Tools): a small chamfer along the bottom edges of the
+- **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is
   remembered, and parts that stand on a point or a tilted edge are left alone
-- **Mouse Ears** (Tools > Print Tools): thin round discs on the bed under the sharp bottom corners
+- **Mouse Ears** (3D Printing): thin round discs on the bed under the sharp bottom corners
   of the selected groups (or all visible ones), so those corners do not lift (warp) while printing -
   a classic trick for ABS and ASA and for large flat parts; a corner is sharp when its angle is at
   most 100°, so a box gets an ear on each corner and a cylinder gets none, and the discs are cut off
   after printing
-- **Orient for Printing** (Tools > Print Tools): turn the selected groups, or all visible ones, so
+- **Orient for Printing** (3D Printing): turn the selected groups, or all visible ones, so
   that each stands on the face that needs the least support, like the auto-orient of a slicer; the
   flat sides of the convex hull are tried at the overhang limit, the largest face wins a tie, a part
   that already stands right is only dropped on the bed, and locked or open groups are left alone
@@ -111,7 +111,7 @@ The interface is available in English and Dutch (*Window > Preferences > General
   left alone and the status bar counts the faces that need it
 - **Model Info** (Window) with the pages Units (length rounding and the number of decimals of the
   Measurements box), Statistics (groups, loose edges and faces, total volume) and Print Bed
-- **Filament** (File > Printer Setup > Print Bed): the material (PLA, PETG, ABS, ASA, TPU, Nylon
+- **Filament** (3D Printing > Printer Setup > Print Bed): the material (PLA, PETG, ABS, ASA, TPU, Nylon
   or a custom density), the diameter (1.75 or 2.85 mm) and the price per kg; **Entity Info** then
   shows the weight, length and cost of a selected part as a solid print (with infill it is less).
   Select several groups and Entity Info also shows the totals of the whole job: the volume,
@@ -157,7 +157,7 @@ The interface is available in English and Dutch (*Window > Preferences > General
   you choose
 - **Spur gear**: an involute gear for the laser or the printer, from the number of teeth,
   the module and the pressure angle, with a bore and the backlash you choose; in the 3D
-  model (Tools > Print Tools) the same wheel comes out as a printable part of the
+  model (3D Printing) the same wheel comes out as a printable part of the
   thickness you choose
 - **Fit test**: a small comb of slots that shows which offset gives a good press fit for
   the sheet you cut, with that offset engraved under every slot

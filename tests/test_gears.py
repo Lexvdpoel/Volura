@@ -268,8 +268,8 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
                                                           pytest.approx(8.0))
 
 
-def test_the_spur_gear_follows_the_fit_test_in_the_view_menu(win):
-    labels = menu_labels(win, "View")
+def test_the_spur_gear_follows_the_fit_test_in_the_laser_menu(win):
+    labels = menu_labels(win, "Laser and Mill")
     assert labels.index("Fit Test") == labels.index("Vent Pattern") + 1
     assert labels.index("Spur Gear") == labels.index("Fit Test") + 1
 
@@ -325,7 +325,7 @@ def test_a_bore_that_eats_the_printed_wheel_is_a_clear_text(win):
 
 
 def test_the_printed_gear_follows_the_test_prints_in_print_tools(win):
-    labels = [clean(a.text()) for a in win.print_tools_menu.actions() if not a.isSeparator()]
+    labels = [clean(a.text()) for a in win.flat_actions(win.print_tools_menu)]
     assert labels.index("Overhang Test") == labels.index("Clearance Test") + 1
     assert labels.index("Spur Gear") == labels.index("Overhang Test") + 1
 

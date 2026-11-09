@@ -1,9 +1,12 @@
-"""The SketchUp 2017 user interface that Volura mimics (English labels).
+"""The user interface of Volura (English labels), grown from SketchUp 2017.
 
 Recorded from SketchUp Make 2017 (menus, submenus, default shortcuts, the
-"Getting Started" toolbar and the Default Tray). Each menu lists its items in
-order as (label, shortcut). A label ending in ">" is a submenu, listed in SUBMENUS.
-"---" is a separator. Volura specific items are marked with a comment.
+"Getting Started" toolbar and the Default Tray) and since then arranged for Volura:
+the 3D printing and the laser/mill commands have a menu of their own, and the menus
+show the commands of the 3D model or of the 2D worksheet, depending on the mode.
+Each menu lists its items in order as (label, shortcut). A label ending in ">" is a
+submenu, listed in SUBMENUS. "---" is a separator. Volura specific items are marked
+with a comment.
 
 The menu titles and item labels must match exactly (ignoring "&" accelerators
 and a trailing "…"). Shortcuts are the SketchUp defaults.
@@ -21,8 +24,6 @@ MENUS = [
         ("Import", None),
         ("Export >", None),
         "---",
-        ("Printer Setup", None),            # SketchUp: Print Setup  -> printbed / printer
-        ("Print Check", None),              # SketchUp: Print Preview -> print check
         ("Print", "Ctrl+P"),                # SketchUp: Print -> export 3MF for the slicer
         "---",
         ("Exit", None),
@@ -50,8 +51,6 @@ MENUS = [
         ("Make Component", "G"),
         ("Make Group", None),
         ("Close Group/Component", None),
-        "---",
-        ("Intersect Faces >", None),
     ]),
     ("View", [
         ("Toolbars", None),
@@ -100,13 +99,49 @@ MENUS = [
         ("Follow Me", None),
         ("Offset", "F"),
         "---",
+        ("Solid Tools >", None),            # Volura: grouped with the other solid commands
+        ("Intersect Faces >", None),        # SketchUp: in Edit
         ("Outer Shell", None),
-        ("Solid Tools >", None),
         "---",
         ("Tape Measure", "T"),
         ("Protractor", None),
         "---",
         ("3D Text", None),
+    ]),
+    ("3D Printing", [                       # Volura: only with the 3D model
+        ("Printer Setup", None),            # SketchUp: Print Setup  -> printbed / printer
+        ("Print Check", "F5"),              # SketchUp: Print Preview -> print check
+        "---",
+        ("Orient for Printing", None),
+        ("Drop to Bed", "Ctrl+B"),
+        ("Center on Bed", None),
+        ("Arrange on Bed", None),
+        "---",
+        ("Cut", None),
+        ("Cut and Join", None),
+        "---",
+        ("Elephant Foot Chamfer", None),
+        ("Mouse Ears", None),
+        "---",
+        ("Screw Threads >", None),
+        ("Screw Hole", None),
+        ("Test Prints >", None),
+        ("Parts >", None),
+    ]),
+    ("Laser and Mill", [                    # Volura: only on the 2D worksheet
+        ("Sheet", None),
+        ("Auto Arrange", None),
+        "---",
+        ("Box with Finger Joints", None),
+        ("Living Hinge", None),
+        ("Vent Pattern", None),
+        ("Fit Test", None),
+        ("Spur Gear", None),
+        "---",
+        ("Holding Tabs", None),
+        ("Dogbone Corners", None),
+        "---",
+        ("Job Estimate", None),
     ]),
     ("Window", [
         ("Default Tray >", None),
@@ -126,7 +161,13 @@ SUBMENUS = {
     ("File", "Export"): [("3D Model (STL)", None), ("Multicolor 3MF", None), ("STL per Color", None)],
     ("Edit", "Unhide"): [("Selected", None), ("Last", None), ("All", None)],
     ("Edit", "Unlock"): [("Selected", None), ("All", None)],
-    ("Edit", "Intersect Faces"): [("With Model", None), ("With Selection", None)],
+    ("Tools", "Intersect Faces"): [("With Model", None), ("With Selection", None)],
+    ("3D Printing", "Screw Threads"): [("Thread", None), ("External Thread on Cylinder", None),
+                                       ("Internal Thread in Hole", None), ("New Bolt", None),
+                                       ("New Nut or Sleeve", None)],
+    ("3D Printing", "Test Prints"): [("Clearance Test", None), ("Overhang Test", None)],
+    ("3D Printing", "Parts"): [("Spur Gear", None), ("Project Box", None), ("Knob", None),
+                               ("Standoff", None), ("Label Plate", None), ("Cable Clip", None)],
     ("View", "Edge Style"): [("Edges", None), ("Back Edges", "K")],
     ("View", "Face Style"): [("X-ray", None), "---", ("Wireframe", None), ("Hidden Line", None),
                              ("Shaded", None), ("Monochrome", None)],

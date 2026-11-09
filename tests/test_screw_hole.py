@@ -414,6 +414,7 @@ def test_the_dialog_remembers_the_teardrop(win, monkeypatch):
 
 
 def test_the_action_is_in_the_print_tools_menu_after_the_threads(win):
-    labels = [clean(a.text()) for a in win.print_tools_menu.actions() if not a.isSeparator()]
-    assert labels[:6] == ["Thread", "External Thread on Cylinder", "Internal Thread in Hole",
-                          "New Bolt", "New Nut or Sleeve", "Screw Hole"]
+    labels = [clean(a.text()) for a in win.flat_actions(win.print_tools_menu)]
+    at = labels.index("Thread")
+    assert labels[at:at + 6] == ["Thread", "External Thread on Cylinder", "Internal Thread in Hole",
+                                 "New Bolt", "New Nut or Sleeve", "Screw Hole"]
