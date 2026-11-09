@@ -49,8 +49,9 @@ MOVED = ["open_sheet_settings", "auto_arrange",
          "vector_export_options", "vector_export_drawing", "vector_export_empty_message",
          "export_vector", "_write_vector_async"]
 
-# what stayed behind: the methods that ask something, and the 3D side of the gear
-KEPT = ["apply_round_corners", "apply_dogbone_corners", "make_spur_gear_model",
+# what stayed behind: the methods that ask something (the 3D side of the gear went with
+# the print methods in step 2, see tests/test_window_print.py)
+KEPT = ["apply_round_corners", "apply_dogbone_corners",
         "send_selection_to_sheet", "sheet_to_model", "export_sheet",
         "_export_vector_sync", "_export_vector_async", "_vector_export_failed"]
 
