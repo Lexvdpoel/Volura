@@ -3,6 +3,31 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.30 — 2026-11-09
+
+### Improved
+- **Menus by mode**: the menus show only what works where you are. With the 3D model you
+  get the new **3D Printing** menu (printer setup, print check, orienting and placing on the
+  bed, cut and join, elephant foot, mouse ears and the test prints); on the 2D worksheet
+  the new **Laser and Mill** menu (sheet, nesting, fit test, holding tabs, dogbone corners
+  and the job estimate). Edit, View, Camera, Draw, Tools and Export follow the mode too:
+  on the worksheet Draw holds the 2D drawing tools, the finger joint box and the spur gear,
+  and Tools the 2D commands that were only on the toolbar before (union, subtract,
+  overlap, join, flip, align, distribute, duplicate, round corners, living hinge, vent
+  pattern). With the 3D model the printable parts are under **Draw > Parts** and the
+  screw threads and the screw hole under **Tools**. Shortcuts you set yourself move along
+  with their command.
+- **Vent Pattern** also fills loose lines that close into one contour (a DXF, or a shape
+  drawn line by line), says in its dialog what it does, and tells you what to make smaller
+  when no hole fits.
+- **Dutch translation** reviewed: wrong terms corrected (for example "Overlap" for
+  intersect, "Op raster snappen", "Halve assen", "Drukhoek", "Flankspeling"), "je"
+  throughout, one word per concept, and clearer names such as Gatenrooster, Bruggetjes and
+  Tijdsschatting.
+
+### Website
+- The manual and the feature overview follow the new menus and the new Dutch names.
+
 ## 0.2.29 — 2026-11-09
 
 ### New
