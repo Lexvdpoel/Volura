@@ -107,6 +107,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
   cell snaps in and cannot fall out. A slot through the end wall at both ends of every cradle takes
   a spring contact or a wire, and a hole through the floor lets the lead come up from under the
   cells
+- **Storage Bin** (Draw > Parts): a printable open-top box whose inside is divided into
+  compartments by straight dividers of the wall thickness, which stop a millimetre under the top
+  edge so you can still reach over them; along the inside of the front wall a ledge of twelve
+  millimetres runs at the top, whose underside stands at 45 degrees, so a label lies under it
+  readable and the ledge prints without support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

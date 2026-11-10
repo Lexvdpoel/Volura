@@ -1,9 +1,9 @@
 """The dialogs of the printable parts: the gear, the box and the small hardware.
 
 The spur gear, the project box, the knob, the standoff, the label plate, the 3D text, the cable
-clip, the print-in-place hinge and the battery holder. Each one starts at the values of Settings
-and remembers the new ones; the actions that open them and the models they build live in
-`volura/app.py`.
+clip, the print-in-place hinge, the battery holder and the storage bin. Each one starts at the
+values of Settings and remembers the new ones; the actions that open them and the models they
+build live in `volura/app.py`.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QFontComboBox, QFormLayout, QLabel, QPlainTextEdit, QSpinBox)
 
 from . import (battery_holder, cable_clip, enclosure, fonts, gears, hinge, knob, label_plate,
-               standoff, text3d, threads)
+               standoff, storage_bin, text3d, threads)
 from .i18n import tr
 
 
@@ -710,3 +710,78 @@ class BatteryHolderDialog(QDialog):
                 "wall": round(self.wall.value(), 6),
                 "clearance": round(self.clearance.value(), 6),
                 "grip": round(self.grip.value() / 100.0, 6)}
+
+
+class StorageBinDialog(QDialog):
+    """The "Storage Bin…" dialog: an open-top box with compartments and a ledge for a label.
+
+    The three sizes are the outside of the bin, because that is what has to fit on the shelf, and
+    the wall and the floor are the plastic around the inside. The radius rounds the vertical
+    corners, the columns and the rows say how many compartments the dividers make, and the ledge
+    is the sloped piece along the inside of the front wall on which a label lies readable. The
+    values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Storage bin"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.length = spin(storage_bin.LENGTH_MIN, storage_bin.LENGTH_MAX, s.bin_length, 5.0)
+        self.length.setToolTip(tr("The outside length of the bin, along the front wall"))
+        self.width = spin(storage_bin.WIDTH_MIN, storage_bin.WIDTH_MAX, s.bin_width, 5.0)
+        self.width.setToolTip(tr("The outside width of the bin, from the front wall to the back"))
+        self.height = spin(storage_bin.HEIGHT_MIN, storage_bin.HEIGHT_MAX, s.bin_height, 5.0)
+        self.height.setToolTip(tr("The outside height of the bin, floor included"))
+        self.wall = spin(storage_bin.WALL_MIN, storage_bin.WALL_MAX, s.bin_wall, 0.2)
+        self.wall.setToolTip(tr("The plastic of the walls and of the dividers"))
+        self.floor = spin(storage_bin.FLOOR_MIN, storage_bin.FLOOR_MAX, s.bin_floor, 0.2)
+        self.floor.setToolTip(tr("The thickness of the bottom, so nothing walks out under the wall"))
+        self.radius = spin(storage_bin.RADIUS_MIN, storage_bin.RADIUS_MAX, s.bin_radius, 0.5)
+        self.radius.setToolTip(tr("The rounding of the vertical corners outside"))
+        self.cols = QSpinBox()
+        self.cols.setRange(storage_bin.COLS_MIN, storage_bin.COLS_MAX)
+        self.cols.setValue(s.bin_cols)
+        self.cols.setToolTip(tr("How many compartments lie next to each other along the length"))
+        self.rows = QSpinBox()
+        self.rows.setRange(storage_bin.COLS_MIN, storage_bin.COLS_MAX)
+        self.rows.setValue(s.bin_rows)
+        self.rows.setToolTip(tr("How many compartments lie next to each other along the width"))
+        self.label = QCheckBox(tr("Label ledge"))
+        self.label.setChecked(bool(s.bin_label))
+        self.label.setToolTip(tr("A sloped ledge along the inside of the front wall, on which a "
+                                 "label lies readable; it prints without support"))
+        lay.addRow(tr("Length"), self.length)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Height"), self.height)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Floor"), self.floor)
+        lay.addRow(tr("Radius"), self.radius)
+        lay.addRow(tr("Columns"), self.cols)
+        lay.addRow(tr("Rows"), self.rows)
+        lay.addRow("", self.label)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"length": round(self.length.value(), 6),
+                "width": round(self.width.value(), 6),
+                "height": round(self.height.value(), 6),
+                "wall": round(self.wall.value(), 6),
+                "floor": round(self.floor.value(), 6),
+                "radius": round(self.radius.value(), 6),
+                "cols": int(self.cols.value()),
+                "rows": int(self.rows.value()),
+                "label": bool(self.label.isChecked())}

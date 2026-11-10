@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
 
 from . import (__version__, background, battery_holder, boxgen, cable_clip, cam, dxf, enclosure,
                    errors, fileio, gcode, gears, hinge, i18n, joints, knob, label_plate, linking,
-                   nesting, ops, sheet3d, sheettools, svg, spacemouse, standoff, text3d, theme,
-                   threads, vector_export, vector_import, workers)
+                   nesting, ops, sheet3d, sheettools, svg, spacemouse, standoff, storage_bin,
+                   text3d, theme, threads, vector_export, vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -655,6 +655,50 @@ class Settings:
         self.battery_grip = max(battery_holder.GRIP_MIN,
                                 min(battery_holder.GRIP_MAX, self.battery_grip))
         try:
+            self.bin_length = float(self.q.value("bin_length", 80.0))
+        except (TypeError, ValueError):
+            self.bin_length = 80.0
+        self.bin_length = max(storage_bin.LENGTH_MIN,
+                              min(storage_bin.LENGTH_MAX, self.bin_length))
+        try:
+            self.bin_width = float(self.q.value("bin_width", 60.0))
+        except (TypeError, ValueError):
+            self.bin_width = 60.0
+        self.bin_width = max(storage_bin.WIDTH_MIN, min(storage_bin.WIDTH_MAX, self.bin_width))
+        try:
+            self.bin_height = float(self.q.value("bin_height", 40.0))
+        except (TypeError, ValueError):
+            self.bin_height = 40.0
+        self.bin_height = max(storage_bin.HEIGHT_MIN,
+                              min(storage_bin.HEIGHT_MAX, self.bin_height))
+        try:
+            self.bin_wall = float(self.q.value("bin_wall", 1.6))
+        except (TypeError, ValueError):
+            self.bin_wall = 1.6
+        self.bin_wall = max(storage_bin.WALL_MIN, min(storage_bin.WALL_MAX, self.bin_wall))
+        try:
+            self.bin_floor = float(self.q.value("bin_floor", 1.2))
+        except (TypeError, ValueError):
+            self.bin_floor = 1.2
+        self.bin_floor = max(storage_bin.FLOOR_MIN, min(storage_bin.FLOOR_MAX, self.bin_floor))
+        try:
+            self.bin_radius = float(self.q.value("bin_radius", 4.0))
+        except (TypeError, ValueError):
+            self.bin_radius = 4.0
+        self.bin_radius = max(storage_bin.RADIUS_MIN,
+                              min(storage_bin.RADIUS_MAX, self.bin_radius))
+        try:
+            self.bin_cols = int(float(self.q.value("bin_cols", 1)))
+        except (TypeError, ValueError):
+            self.bin_cols = 1
+        self.bin_cols = max(storage_bin.COLS_MIN, min(storage_bin.COLS_MAX, self.bin_cols))
+        try:
+            self.bin_rows = int(float(self.q.value("bin_rows", 1)))
+        except (TypeError, ValueError):
+            self.bin_rows = 1
+        self.bin_rows = max(storage_bin.COLS_MIN, min(storage_bin.COLS_MAX, self.bin_rows))
+        self.bin_label = self._bool("bin_label", True)
+        try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
             self.tab_count = 4
@@ -803,6 +847,15 @@ class Settings:
         self.q.setValue("battery_wall", self.battery_wall)
         self.q.setValue("battery_clearance", self.battery_clearance)
         self.q.setValue("battery_grip", self.battery_grip)
+        self.q.setValue("bin_length", self.bin_length)
+        self.q.setValue("bin_width", self.bin_width)
+        self.q.setValue("bin_height", self.bin_height)
+        self.q.setValue("bin_wall", self.bin_wall)
+        self.q.setValue("bin_floor", self.bin_floor)
+        self.q.setValue("bin_radius", self.bin_radius)
+        self.q.setValue("bin_cols", self.bin_cols)
+        self.q.setValue("bin_rows", self.bin_rows)
+        self.q.setValue("bin_label", self.bin_label)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
@@ -1622,6 +1675,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                      "an open cradle per cell, so the cells press in from above "
                                      "and the wires come through the slots in the end walls and "
                                      "the holes in the floor"))
+        # ---- storage bin
+        self.a_storage_bin = A(tr("Storage Bin…"),
+                               lambda checked=False: self.storage_bin_dialog(), None,
+                               "storage_bin", False,
+                               tr("Add a printable storage bin to the model: an open-top box "
+                                  "whose compartments are made by straight dividers, with a "
+                                  "sloped ledge along the inside of the front wall on which a "
+                                  "label lies readable"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -1732,7 +1793,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         parts_menu = sub(tr("&Parts"), m,
                          (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
                           self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
-                          self.a_battery_holder))
+                          self.a_battery_holder, self.a_storage_bin))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

@@ -23,14 +23,15 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QVBoxLayout)
 
 from . import (background, battery_holder, cable_clip, enclosure, gears, hinge, joints, knob,
-                label_plate, ops, standoff, text3d, theme, threads)
+                label_plate, ops, standoff, storage_bin, text3d, theme, threads)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
 from .part_dialogs import (BatteryHolderDialog, CableClipDialog, HingeDialog, KnobDialog,
-                           LabelPlateDialog, ProjectBoxDialog, StandoffDialog, Text3DDialog)
+                           LabelPlateDialog, ProjectBoxDialog, StandoffDialog, StorageBinDialog,
+                           Text3DDialog)
 
 
 TOOL_INFO = [
@@ -637,6 +638,66 @@ class PrintMixin:
             self.view.set_status(tr("Battery holder failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the battery holder…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ storage bin
+    def storage_bin_dialog(self):
+        """Draw > Parts > Storage Bin…: an open-top box with compartments and a label ledge."""
+        dlg = StorageBinDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.bin_length = float(options["length"])
+        self.settings.bin_width = float(options["width"])
+        self.settings.bin_height = float(options["height"])
+        self.settings.bin_wall = float(options["wall"])
+        self.settings.bin_floor = float(options["floor"])
+        self.settings.bin_radius = float(options["radius"])
+        self.settings.bin_cols = int(options["cols"])
+        self.settings.bin_rows = int(options["rows"])
+        self.settings.bin_label = bool(options["label"])
+        self.settings.save()
+        made = self.make_storage_bin_model(options)
+        self.setFocus()
+        return made
+
+    def make_storage_bin_model(self, options):
+        """The bin as a printed part: one undo step, on the bed next to the model.
+
+        The cavity, the dividers and the ledge are a handful of booleans, so the bin is built in
+        the background, like the holder, and the window keeps responding. It stands in the middle
+        of the free bed, or on the free place 10 mm to the right of what is already in the model,
+        so a second bin does not land in the first one.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("length", "width", "height", "wall", "floor", "radius",
+                                        "cols", "rows", "label")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the storage bin…"))
+            m = storage_bin.storage_bin(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the bin away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Storage bin"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Storage bin added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Storage bin failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the storage bin…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ dogbone corners

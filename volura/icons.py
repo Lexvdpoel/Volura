@@ -281,6 +281,12 @@ SVG = {
                       f'{S(w=1.2)}/>'
                       f'<path d="M17.5 6.75 L20 6.75" {N} stroke="#d23b3b" stroke-width="2" '
                       f'stroke-linecap="round"/>',
+    # storage bin: an open box with dividers and a 45 degree ledge for a label at the front
+    "storage_bin": f'<path d="M2.5 5.5 L2.5 18 A2 2 0 0 0 4.5 20 L19.5 20 A2 2 0 0 0 21.5 18 '
+                   f'L21.5 5.5 L18.8 5.5 L18.8 17.2 L5.2 17.2 L5.2 5.5 Z" fill="#cfe0f5" {S()}/>'
+                   f'<path d="M9.6 5.5 L9.6 14.6 M14.4 5.5 L14.4 14.6" {N} {S(w=1.4)}/>'
+                   f'<path d="M5.2 8.6 L8.3 5.5" {N} stroke="#d23b3b" stroke-width="1.7" '
+                   f'stroke-linecap="round"/>',
     # worksheet to model: a red cut contour rising up as a thick plate
     "to_model": f'<path d="M3 20 L11 16 L21 19 L13 23 Z" {N} stroke="#d23b3b" stroke-width="1.4" '
                 f'stroke-dasharray="2 1.4" stroke-linejoin="round"/>'
