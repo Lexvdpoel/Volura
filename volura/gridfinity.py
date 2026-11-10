@@ -26,8 +26,9 @@ four round pockets, in which a magnet is glued flush, which is what keeps a bin 
 and what holds a plate to a machine bed.
 
 The **stacking lip** on top of the wall is the top of a baseplate hole again, `LIP_HEIGHT`
-millimetres high and standing on the wall: the bin above drops into it with its foot and is
-located by the same two chamfers, so a tower of bins stays a tower. The lip leans out over the
+millimetres high and standing on the wall, around the whole bin rather than around every square,
+so nothing crosses the opening of a bin of more squares: the bin above drops into it with its
+foot and is located by the same two chamfers, so a tower of bins stays a tower. The lip leans out over the
 opening at its bottom and is widest at the top, which is also why nothing that stands in the bin
 sticks out of it.
 """
@@ -111,18 +112,20 @@ def _box(length, width, radius, height, z=0.0) -> mf.Manifold:
                                height).translate((0.0, 0.0, z))
 
 
-def _cell_levels(bottom) -> tuple:
-    """The three levels of the profile of a square from the bottom up, as (across, corner radius,
-    mm of vertical part), where the chamfer at the bottom is `bottom` millimetres.
+def _cell_levels(bottom, length=CELL, width=CELL) -> tuple:
+    """The three levels of the profile of a square from the bottom up, as (length, width, corner
+    radius, mm of vertical part), where the chamfer at the bottom is `bottom` millimetres.
 
     The foot of a bin and the hole of a plate are the same profile, and only that chamfer
     differs: the corner radius follows the side, so a chamfer is 45 degrees also around the
-    corner. The top level has no vertical part of its own; it is where the chamfer ends.
+    corner. The top level has no vertical part of its own; it is where the chamfer ends. The
+    top is `length` by `width`: a square, or the outline of a whole bin for its stacking lip.
     """
     mid_r = OUTER_RADIUS - NECK_CHAMFER
-    return ((FOOT_MID - 2.0 * bottom, mid_r - bottom, 0.0),
-            (FOOT_MID, mid_r, FOOT_HEIGHT),
-            (CELL, OUTER_RADIUS, 0.0))
+    neck = 2.0 * NECK_CHAMFER
+    return ((length - neck - 2.0 * bottom, width - neck - 2.0 * bottom, mid_r - bottom, 0.0),
+            (length - neck, width - neck, mid_r, FOOT_HEIGHT),
+            (length, width, OUTER_RADIUS, 0.0))
 
 
 def _stepped(levels, z=0.0) -> mf.Manifold:
@@ -134,33 +137,33 @@ def _stepped(levels, z=0.0) -> mf.Manifold:
     the corner grow together and the chamfer is 45 degrees everywhere.
     """
     parts = []
-    for i, (across, radius, height) in enumerate(levels):
+    for i, (length, width, radius, height) in enumerate(levels):
         if height > 0.0:
-            parts.append(_box(across, across, radius, height, z))
+            parts.append(_box(length, width, radius, height, z))
             z += height
         if i + 1 < len(levels):
-            up, ur, _ = levels[i + 1]
-            d = 0.5 * (up - across)
-            parts.append(mf.Manifold.batch_hull([_box(across, across, radius, SLIVER, z),
-                                                 _box(up, up, ur, SLIVER, z + d)]))
+            ul, uw, ur, _ = levels[i + 1]
+            d = 0.5 * (ul - length)
+            parts.append(mf.Manifold.batch_hull([_box(length, width, radius, SLIVER, z),
+                                                 _box(ul, uw, ur, SLIVER, z + d)]))
             z += d
     return mf.Manifold.batch_boolean(parts, mf.OpType.Add)
 
 
-def _cell_cutter(bottom, z=0.0, below=0.0, above=0.0) -> mf.Manifold:
+def _cell_cutter(bottom, z=0.0, below=0.0, above=0.0, length=CELL, width=CELL) -> mf.Manifold:
     """The profile of a square with the bottom chamfer of `bottom` millimetres, standing at `z`,
     as a cutter: carried `below` millimetres under its bottom and `above` millimetres past its
     top with the cross-sections it has there, so a cut comes right through instead of leaving a
-    skin of the plate behind.
+    skin of the plate behind. `length` and `width` are the top of the profile.
     """
-    levels = _cell_levels(bottom)
-    across, radius, _ = levels[0]
+    levels = _cell_levels(bottom, length, width)
+    bl, bw, radius, _ = levels[0]
     high = bottom + FOOT_HEIGHT + NECK_CHAMFER
     parts = [_stepped(levels, z)]
     if below > 0.0:
-        parts.append(_box(across, across, radius, below, z - below))
+        parts.append(_box(bl, bw, radius, below, z - below))
     if above > 0.0:
-        parts.append(_box(CELL + 2.0 * MARGIN, CELL + 2.0 * MARGIN, OUTER_RADIUS + MARGIN,
+        parts.append(_box(length + 2.0 * MARGIN, width + 2.0 * MARGIN, OUTER_RADIUS + MARGIN,
                           above, z + high))
     return mf.Manifold.batch_boolean(parts, mf.OpType.Add)
 
@@ -210,10 +213,10 @@ def gridfinity_bin(cols=1, rows=1, units=3, wall=1.2, floor=1.0, divisions=1, li
     cut = [_box(inner_l, inner_w, max(OUTER_RADIUS - t, 0.0),
                 H - bottom + (0.0 if lip else MARGIN), bottom)]
     if lip:
-        # the lip: the top of a plate hole again, standing on the wall, over every square
+        # the lip: the top of a plate hole again, standing on the wall, around the whole bin,
+        # so nothing of it crosses the opening between two squares
         drop = PLATE_HEIGHT - LIP_HEIGHT
-        cut += [_cell_cutter(PLATE_CHAMFER, H - drop, above=MARGIN).translate((x, y, 0.0))
-                for x, y in _cells(nc, nr)]
+        cut.append(_cell_cutter(PLATE_CHAMFER, H - drop, above=MARGIN, length=L, width=W))
     body = body - mf.Manifold.batch_boolean(cut, mf.OpType.Add)
 
     # what stands in the bin again: the dividers, which stop under the top of the wall

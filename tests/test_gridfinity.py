@@ -82,6 +82,29 @@ def test_a_bin_stands_in_the_lip_of_the_bin_under_it():
     assert overlap(m, m.translate((1.0, 0.0, 3 * UNIT - 0.3))) > 1.0, "the bin slides off"
 
 
+@pytest.mark.parametrize("cols, rows", [(2, 1), (1, 2), (2, 2), (3, 2)])
+def test_nothing_crosses_the_opening_of_a_bin_of_more_squares(cols, rows):
+    m = gridfinity.gridfinity_bin(cols, rows, 3)
+    room = 2.0 * (gridfinity.NECK_CHAMFER + 1.0)
+    probe = mf.Manifold.cube([cols * GRID - 0.5 - room, rows * GRID - 0.5 - room,
+                              gridfinity.LIP_HEIGHT + 2.0]).translate(
+        (-0.5 * (cols * GRID - 0.5 - room), -0.5 * (rows * GRID - 0.5 - room), 3 * UNIT - 1.0))
+    assert overlap(m, probe) < FIT, "a bar crosses the opening"
+
+
+def test_a_bin_of_two_squares_stands_in_the_lip_of_one_like_it():
+    m = gridfinity.gridfinity_bin(2, 1, 3)
+    assert overlap(m, m.translate((0.0, 0.0, 3 * UNIT))) < FIT
+    assert overlap(m, m.translate((0.0, 0.0, 3 * UNIT - 0.5))) > 1.0, "nothing carries the bin"
+    assert overlap(m, m.translate((1.0, 0.0, 3 * UNIT - 0.3))) > 1.0, "the bin slides off"
+
+
+def test_a_small_bin_stands_on_a_larger_one():
+    big, small = gridfinity.gridfinity_bin(2, 1, 3), gridfinity.gridfinity_bin(1, 1, 3)
+    for x in (-0.5 * GRID, 0.5 * GRID):
+        assert overlap(big, small.translate((x, 0.0, 3 * UNIT))) < FIT
+
+
 def test_magnet_pockets_cut_the_plastic_of_four_magnets():
     for cols, rows in ((1, 1), (2, 1)):
         plain = gridfinity.gridfinity_bin(cols, rows, 3, magnets=False)
