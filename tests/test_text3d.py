@@ -148,10 +148,11 @@ def test_the_lines_stand_as_asked(align, edge):
 
 def test_a_height_and_a_depth_outside_the_range_are_clamped():
     need_fonts()
-    low, high = bbox(part(height=1.0))
-    assert high[1] - low[1] == pytest.approx(text3d.HEIGHT_MIN, rel=2e-2)
-    low, high = bbox(part(height=500.0))
-    assert high[1] - low[1] == pytest.approx(text3d.HEIGHT_MAX, rel=2e-2)
+    # compared with the text at the limit itself: how a font renders a tiny capital differs
+    # per platform, the clamping does not
+    for asked, limit in ((1.0, text3d.HEIGHT_MIN), (500.0, text3d.HEIGHT_MAX)):
+        got, want = bbox(part(height=asked)), bbox(part(height=limit))
+        assert got[1] - got[0] == pytest.approx(want[1] - want[0])
     assert bbox(part(depth=0.1))[1][2] == pytest.approx(text3d.DEPTH_MIN)
     assert bbox(part(depth=500.0))[1][2] == pytest.approx(text3d.DEPTH_MAX)
 
