@@ -942,10 +942,19 @@ class CableChainDialog(QDialog):
         self.links.setRange(cable_chain.LINKS_MIN, cable_chain.LINKS_MAX)
         self.links.setValue(s.chain_links)
         self.links.setToolTip(tr("How many links the chain has"))
+        self.bend = QDoubleSpinBox()
+        self.bend.setRange(cable_chain.BEND_MIN, cable_chain.BEND_MAX)
+        self.bend.setDecimals(0)
+        self.bend.setSingleStep(5.0)
+        self.bend.setSuffix(" °")
+        self.bend.setValue(float(s.chain_bend))
+        self.bend.setToolTip(tr("How far one link turns on the next, one way; the other way the "
+                                "chain stays straight"))
         lay.addRow(tr("Inside width"), self.width)
         lay.addRow(tr("Inside height"), self.height)
         lay.addRow(tr("Wall"), self.wall)
         lay.addRow(tr("Links"), self.links)
+        lay.addRow(tr("Bend"), self.bend)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -955,7 +964,8 @@ class CableChainDialog(QDialog):
         return {"width": round(self.width.value(), 6),
                 "height": round(self.height.value(), 6),
                 "wall": round(self.wall.value(), 6),
-                "links": int(self.links.value())}
+                "links": int(self.links.value()),
+                "bend": round(self.bend.value(), 6)}
 
 
 class BinRackDialog(QDialog):

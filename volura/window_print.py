@@ -795,6 +795,7 @@ class PrintMixin:
         self.settings.chain_height = float(options["height"])
         self.settings.chain_wall = float(options["wall"])
         self.settings.chain_links = int(options["links"])
+        self.settings.chain_bend = float(options.get("bend", 60.0))
         self.settings.save()
         made = self.make_cable_chain_model(options)
         self.setFocus()
@@ -805,6 +806,7 @@ class PrintMixin:
         self.set_mode("3d")
         doc = self.doc
         size = {k: options[k] for k in ("width", "height", "wall", "links")}
+        size["bend"] = float(options.get("bend", 60.0))
         bb = doc.model_bbox()
         bx, by, _bz = self.settings.bed_size
 

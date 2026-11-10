@@ -1726,6 +1726,8 @@ TRANSLATIONS = {
     'Building the cable chain…': 'Kabelrups opbouwen…',
     'Cable chain of {n} links added.': 'Kabelrups van {n} schakels toegevoegd.',
     'Cable chain failed: {error}': 'Kabelrups mislukt: {error}',
+    'How far one link turns on the next, one way; the other way the chain stays straight': 'Hoe ver een schakel op de volgende draait, één kant op; de andere kant op blijft de rups recht',
+    'Bend': 'Buiging',
     'Gridfinity…': 'Gridfinity…',
     'Gridfinity': 'Gridfinity',
     'Add a Gridfinity bin or baseplate to the model: the open storage grid of 42 mm, whose bins stand on any Gridfinity baseplate and on each other': 'Gridfinity-bak of -bodemplaat aan het model toevoegen: het open opbergraster van 42 mm, waarvan de bakken op elke Gridfinity-bodemplaat en op elkaar staan',

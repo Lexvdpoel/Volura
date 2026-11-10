@@ -2,9 +2,11 @@
 
 `cable_chain.cable_chain` lays `links` links in a row: the narrow front of every link, with a pin
 on each side, lies in the wide rear of the link before it, with `CLEARANCE` of room around the
-pin and between the plates. These tests weigh the chain against that: every link is a part of
-its own (nothing is printed fast to its neighbour), the links turn on their pins far both ways
-without running into each other, and a link that is pulled along the chain is held by its pin.
+pin and between the plates, and a tab behind every pin runs in a window of the link before it,
+so a link turns from straight to `bend` degrees. These tests weigh the chain against that: every
+link is a part of its own (nothing is printed fast to its neighbour), a link turns as far as its
+bend and no further, not the other way, and a link that is pulled along the chain is held by its
+pin.
 
 Run with:  python -m pytest tests/test_cable_chain.py
 """
@@ -77,11 +79,22 @@ def test_the_inside_is_the_room_asked_for():
     assert hi[2] - lo[2] == pytest.approx(s["outer_h"])
 
 
-@pytest.mark.parametrize("deg", [-90, -45, -20, 20, 45, 90])
-def test_a_link_turns_on_its_pin_without_running_into_the_one_before(deg):
+@pytest.mark.parametrize("bend", [45.0, 60.0, 90.0])
+def test_a_link_turns_from_straight_to_its_bend_and_no_further(bend):
     s = cable_chain.sizes()
-    link = cable_chain.chain_link()
-    assert common(link, turned(link, deg, s)) == pytest.approx(0.0, abs=1e-6)
+    link = cable_chain.chain_link(bend=bend)
+    for deg in (0.0, 0.5 * bend, bend - 1.0):
+        assert common(link, turned(link, deg, s)) == pytest.approx(0.0, abs=1e-3), \
+            f"the link does not turn to {deg} degrees"
+    assert common(link, turned(link, bend + 5.0, s)) > 0.0, "the link turns past its bend"
+    assert common(link, turned(link, -5.0, s)) > 0.0, "the chain bends the wrong way"
+
+
+def test_a_chain_too_small_for_a_tab_has_no_stops():
+    s = cable_chain.sizes(width=5.0, height=5.0, wall=1.2)
+    assert cable_chain._tab(s) is None
+    link = cable_chain.chain_link(width=5.0, height=5.0, wall=1.2)
+    assert common(link, turned(link, -30.0, s)) == pytest.approx(0.0, abs=1e-3)
 
 
 def test_the_pin_holds_the_next_link():
@@ -109,6 +122,7 @@ def test_the_dialog_remembers_and_builds_one_part(win, monkeypatch):
     def fill(dlg):
         dlg.width.setValue(18.0)
         dlg.links.setValue(4)
+        dlg.bend.setValue(45.0)
         return QDialog.Accepted
 
     monkeypatch.setattr(app_module.QDialog, "exec", fill)
@@ -120,7 +134,8 @@ def test_the_dialog_remembers_and_builds_one_part(win, monkeypatch):
     assert len(win.doc.groups) == 1, "no chain in the model"
     assert len(win.doc.groups[0].ents.to_manifold().decompose()) == 4
     s = app_module.Settings()
-    assert (s.chain_width, s.chain_links) == (pytest.approx(18.0), 4)
+    assert (s.chain_width, s.chain_links, s.chain_bend) == (pytest.approx(18.0), 4,
+                                                              pytest.approx(45.0))
 
 
 if __name__ == "__main__":

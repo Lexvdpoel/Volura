@@ -767,6 +767,11 @@ class Settings:
         except (TypeError, ValueError):
             self.chain_links = 10
         self.chain_links = max(cable_chain.LINKS_MIN, min(cable_chain.LINKS_MAX, self.chain_links))
+        try:
+            self.chain_bend = float(self.q.value("chain_bend", 60.0))
+        except (TypeError, ValueError):
+            self.chain_bend = 60.0
+        self.chain_bend = max(cable_chain.BEND_MIN, min(cable_chain.BEND_MAX, self.chain_bend))
         self.grid_kind = str(self.q.value("grid_kind", "bin") or "bin")
         if self.grid_kind not in ("bin", "baseplate"):
             self.grid_kind = "bin"
@@ -959,6 +964,7 @@ class Settings:
         self.q.setValue("chain_height", self.chain_height)
         self.q.setValue("chain_wall", self.chain_wall)
         self.q.setValue("chain_links", self.chain_links)
+        self.q.setValue("chain_bend", self.chain_bend)
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets"):
             self.q.setValue(key, getattr(self, key))

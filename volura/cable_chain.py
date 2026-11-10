@@ -16,7 +16,13 @@ step from front to rear.
 
 The chain is printed **in place**: all links lie in a row on the bed, already in each other, with
 `CLEARANCE` millimetres of room around every pin and between the plates, so they come off the bed
-as one chain that bends. The links have no stops, so the chain bends both ways.
+as one chain that bends.
+
+The **stops** make it bend one way only: on the outside of every front plate, behind the pin, a
+small round **tab** stands in an arc-shaped **window** through the rear plate of the link before
+it. The window is the path of the tab from straight to `bend` degrees, with `CLEARANCE` around it,
+so the chain lies straight on a table, bends up to `bend` degrees the other way round its loop, and
+carries itself over a span. A chain too small for a tab beside its pin gets no stops.
 """
 from __future__ import annotations
 
@@ -42,6 +48,14 @@ PIN_PART = 0.36
 PITCH_ROOM = 1.0
 #: the straight pieces a round end or a pin is approximated with
 SEGMENTS = 48
+#: degrees one link may turn on the next: from a gentle curve to a quarter turn
+BEND_MIN, BEND_MAX = 20.0, 90.0
+#: the tab of a stop is this part of the outside height across, within these bounds in mm
+TAB_PART, TAB_R_MIN, TAB_R_MAX = 0.12, 0.6, 1.2
+#: mm of plate that stays between the window of a stop and the pin hole or the edge of the plate
+TAB_WEB = 0.6
+#: the steps in which the path of a tab is drawn, per 90 degrees
+TAB_STEPS = 12
 #: the plane of the side plates: local x, y are the world x, z, extruded along the world -y
 SIDE = Plane((0.0, 0.0, 0.0), (0.0, -1.0, 0.0), (1.0, 0.0, 0.0))
 
@@ -74,13 +88,44 @@ def _plate(profile, y_lo, y_hi) -> mf.Manifold:
     return extrude_cs(profile, SIDE, -y_hi, -y_lo)
 
 
-def chain_link(width=20.0, height=15.0, wall=2.0) -> mf.Manifold:
+def _tab(s):
+    """(radius of the tab, distance from the pin) of the stops of a chain, or None without room."""
+    r = 0.5 * s["outer_h"]
+    tab_r = max(TAB_R_MIN, min(TAB_R_MAX, TAB_PART * s["outer_h"]))
+    inner = s["pin_r"] + CLEARANCE + TAB_WEB + CLEARANCE + tab_r
+    outer = r - TAB_WEB - CLEARANCE - tab_r
+    if inner > outer:
+        return None
+    return tab_r, 0.5 * (inner + outer)
+
+
+def _window(s, bend, centre_x, tab):
+    """The window in a rear plate for the tab of the next link, which turns on the pin at
+    (`centre_x`, outside height / 2): the tab swept from straight to `bend` degrees, with
+    `CLEARANCE` around it, in the x, z plane of the plate."""
+    tab_r, rho = tab
+    r = 0.5 * s["outer_h"]
+    steps = max(2, int(math.ceil(TAB_STEPS * bend / 90.0)))
+    spots = []
+    for i in range(steps + 1):
+        a = math.radians(bend * i / steps)
+        # the tab stands behind the pin and climbs as the next link turns
+        spots.append(mf.CrossSection([_circle(centre_x - rho * math.cos(a), r + rho * math.sin(a),
+                                               tab_r + CLEARANCE)]))
+    return mf.CrossSection.batch_boolean(
+        [mf.CrossSection.batch_hull([a, b]) for a, b in zip(spots, spots[1:])], mf.OpType.Add)
+
+
+def chain_link(width=20.0, height=15.0, wall=2.0, bend=60.0) -> mf.Manifold:
     """One link, with the pin centre of its front on x = 0 and the hole of its rear on x = pitch.
 
     The link stands on `z = 0` and is centred on `y = 0`; the next link of a chain starts at
-    `x = pitch`.
+    `x = pitch`. The tab and the window of the stops let the next link turn from straight to
+    `bend` degrees and no further.
     """
     s = sizes(width, height, wall)
+    turn = _clamp(bend, BEND_MIN, BEND_MAX)
+    tab = _tab(s)
     t, H, P, r = s["wall"], s["outer_h"], s["pitch"], 0.5 * s["outer_h"]
     mid = 0.5 * P
     front = mf.CrossSection([_circle(0.0, r, r)]) + mf.CrossSection.square([mid + t, H])
@@ -88,6 +133,8 @@ def chain_link(width=20.0, height=15.0, wall=2.0) -> mf.Manifold:
             + mf.CrossSection.square([P - mid + t, H]).translate([mid - t, 0.0]))
     hole = mf.CrossSection([_circle(P, r, s["pin_r"] + CLEARANCE)])
     rear = rear - hole
+    if tab is not None:
+        rear = rear - _window(s, turn, P, tab)
     bridge = mf.CrossSection.square([2.0 * t, H]).translate([mid - t, 0.0])
     parts = []
     for side in (-1.0, 1.0):
@@ -99,6 +146,10 @@ def chain_link(width=20.0, height=15.0, wall=2.0) -> mf.Manifold:
         # the pin: from the front plate out through the hole of the link before it
         pin = mf.CrossSection([_circle(0.0, r, s["pin_r"])])
         parts.append(_plate(pin, *faces(s["front_out"] - 0.5, s["rear_out"])))
+        if tab is not None:
+            # the tab of the stop: behind the pin, through the window of the link before it
+            nub = mf.CrossSection([_circle(-tab[1], r, tab[0])])
+            parts.append(_plate(nub, *faces(s["front_out"] - 0.5, s["rear_out"])))
     # the cross bars, under and over the cables, where the plates step from front to rear
     for z in (0.0, H - t):
         parts.append(mf.Manifold.cube([2.0 * t, 2.0 * s["front_in"] + 1.0, t])
@@ -106,7 +157,7 @@ def chain_link(width=20.0, height=15.0, wall=2.0) -> mf.Manifold:
     return mf.Manifold.batch_boolean(parts, mf.OpType.Add)
 
 
-def cable_chain(width=20.0, height=15.0, wall=2.0, links=10) -> mf.Manifold:
+def cable_chain(width=20.0, height=15.0, wall=2.0, links=10, bend=60.0) -> mf.Manifold:
     """`links` links in a row, each in the one before it, printed in place as one chain.
 
     The chain lies along x from the round front of the first link, stands on `z = 0` and is
@@ -116,7 +167,7 @@ def cable_chain(width=20.0, height=15.0, wall=2.0, links=10) -> mf.Manifold:
     s = sizes(width, height, wall)
     if s["pin_r"] + CLEARANCE >= 0.5 * s["outer_h"] - s["wall"] * 0.5:
         raise ValueError(tr("the pins of this chain do not fit"))
-    one = chain_link(width, height, wall)
+    one = chain_link(width, height, wall, bend)
     chain = mf.Manifold.batch_boolean([one.translate((i * s["pitch"], 0.0, 0.0))
                                        for i in range(n)], mf.OpType.Add)
     lo = chain.bounding_box()

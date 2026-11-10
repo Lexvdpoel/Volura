@@ -130,7 +130,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Cable Chain** (Draw > Parts): a drag chain for the cables of a moving axis, printed in one
   piece: the links lie in a row, already in each other, with 0.3 mm of room around every pin and
   between the plates, so the chain comes off the bed and bends. Enter the inside width and height
-  for the cables, the wall and the number of links; the chain has no stops and bends both ways
+  for the cables, the wall, the number of links and how far one link may bend on the next: stops
+  keep the chain straight the other way, so it carries itself over a span
 - **Gridfinity** (Draw > Parts): bins and baseplates of the open Gridfinity storage grid of
   42 mm, so they fit what others print for it. A bin covers the columns and rows you choose, is a
   number of 7 mm units high, has compartments, a stacking lip and magnet holes if you want; a
