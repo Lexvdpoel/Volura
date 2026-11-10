@@ -3,6 +3,25 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.40 — 2026-11-10
+
+### New
+- **Gridfinity** (Draw > Parts): bins and baseplates of the open Gridfinity storage grid of
+  42 mm. A bin covers the columns and rows you choose, is a number of 7 mm units high and can
+  have compartments, a stacking lip and magnet holes; a baseplate carries a grid of the size you
+  choose. Bins drop into the plate and stand on each other.
+
+### Improved
+- **Storage bins open at the front**: with Open front the front wall stops at half the height and
+  the side walls run back at 45 degrees, so you reach into a bin also when another one stands on
+  it.
+- **The label of a storage bin faces forward**: it slides from above into a dovetail slot in the
+  front wall, its letters flush with the front, and cannot fall out forwards. This replaces the
+  label ledge on top.
+
+### Website
+- The manual describes Gridfinity, the open front and the label slot.
+
 ## 0.2.39 — 2026-11-10
 
 ### New
