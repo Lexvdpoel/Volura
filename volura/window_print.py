@@ -22,15 +22,15 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QLabel, QLineEdit, QPushButton, QSpinBox, QTextBrowser,
                                QVBoxLayout)
 
-from . import (background, cable_clip, enclosure, gears, hinge, joints, knob, label_plate, ops,
-               standoff, theme, threads)
+from . import (background, battery_holder, cable_clip, enclosure, gears, hinge, joints, knob,
+               label_plate, ops, standoff, theme, threads)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
-from .part_dialogs import (CableClipDialog, HingeDialog, KnobDialog, LabelPlateDialog,
-                           ProjectBoxDialog, StandoffDialog)
+from .part_dialogs import (BatteryHolderDialog, CableClipDialog, HingeDialog, KnobDialog,
+                           LabelPlateDialog, ProjectBoxDialog, StandoffDialog)
 
 
 TOOL_INFO = [
@@ -521,6 +521,63 @@ class PrintMixin:
             self.view.set_status(tr("Print-in-place hinge failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the hinge…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ battery holder
+    def battery_holder_dialog(self):
+        """Draw > Parts > Battery Holder…: a block that keeps round cells side by side."""
+        dlg = BatteryHolderDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.battery_cell = str(options["cell"])
+        self.settings.battery_count = int(options["count"])
+        self.settings.battery_wall = float(options["wall"])
+        self.settings.battery_clearance = float(options["clearance"])
+        self.settings.save()
+        made = self.make_battery_holder_model(options)
+        self.setFocus()
+        return made
+
+    def make_battery_holder_model(self, options):
+        """The holder as a printed part: one undo step, on the bed next to the model.
+
+        The cradles, the contact slots and the wire holes are a dozen booleans, so the holder is
+        built in the background, like the hinge, and the window keeps responding. It stands on the
+        bed in the middle of the free bed, or on the free place 10 mm to the right of what is
+        already in the model, so a second holder does not land in the first one.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("cell", "count", "wall", "clearance")}
+        cell, n = str(options["cell"]), int(options["count"])
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the battery holder…"))
+            m = battery_holder.battery_holder(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the holder away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Battery holder"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(trn("{n} cell holder for {cell} added.",
+                                     "Holder for {n} {cell} cells added.", n)
+                                 .format(n=n, cell=cell))
+
+        def failed(exc):
+            self.view.set_status(tr("Battery holder failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the battery holder…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ dogbone corners

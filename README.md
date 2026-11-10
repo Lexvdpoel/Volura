@@ -98,6 +98,12 @@ The interface is available in English and Dutch (*Window > Preferences > General
   with the play you enter, so the hinge turns as soon as it is off the bed and there is nothing to
   screw or to glue. The pin ends and the holes end in a chamfer, so nothing needs support, and the
   number of barrels is odd, so the pin cannot walk out
+- **Battery Holder** (Draw > Parts): a printable block that keeps one to eight round cells
+  side by side, of the cell you choose: AA, AAA, 18650, 21700 or CR123A. Every cell lies in a
+  cradle that is open at the top, with the play you enter all round it, so the cell lies in
+  from above. A slot through the end wall at both ends of every cradle takes
+  a spring contact or a wire, and a hole through the floor lets the lead come up from under the
+  cells
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

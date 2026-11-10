@@ -267,8 +267,16 @@ SVG = {
                    f'<circle cx="6" cy="12" r="2.5" fill="#b8c9de" {S(w=1.2)}/>'
                    f'<circle cx="12" cy="12" r="2.5" fill="#b8c9de" {S(w=1.2)}/>'
                    f'<circle cx="18" cy="12" r="2.5" fill="#b8c9de" {S(w=1.2)}/>'
-                   f'<path d="M3 12 L21 12" {N} stroke="#d23b3b" stroke-width="1.3" '
-                   f'stroke-linecap="round"/>',
+                    f'<path d="M3 12 L21 12" {N} stroke="#d23b3b" stroke-width="1.3" '
+                    f'stroke-linecap="round"/>',
+    # battery holder: a block with open cradles and a cell that presses in from above
+    "battery_holder": f'<rect x="2.5" y="12" width="19" height="8.5" rx="1.5" fill="#cfe0f5" {S()}/>'
+                      f'<path d="M4.5 12 A3.25 3.25 0 0 0 11 12 M13 12 A3.25 3.25 0 0 0 19.5 12" '
+                      f'{N} {S(w=1.3)}/>'
+                      f'<rect x="4.5" y="3.5" width="13" height="6.5" rx="3.25" fill="#b8c9de" '
+                      f'{S(w=1.2)}/>'
+                      f'<path d="M17.5 6.75 L20 6.75" {N} stroke="#d23b3b" stroke-width="2" '
+                      f'stroke-linecap="round"/>',
     # worksheet to model: a red cut contour rising up as a thick plate
     "to_model": f'<path d="M3 20 L11 16 L21 19 L13 23 Z" {N} stroke="#d23b3b" stroke-width="1.4" '
                 f'stroke-dasharray="2 1.4" stroke-linejoin="round"/>'

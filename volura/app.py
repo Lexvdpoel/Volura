@@ -25,10 +25,10 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout)
 
-from . import (__version__, background, boxgen, cable_clip, cam, dxf, enclosure, errors, fileio,
-                  gcode, gears, hinge, i18n, joints, knob, label_plate, linking, nesting, ops,
-                  sheet3d, sheettools, svg, spacemouse, standoff, theme, threads, vector_export,
-                  vector_import, workers)
+from . import (__version__, background, battery_holder, boxgen, cable_clip, cam, dxf, enclosure,
+                  errors, fileio, gcode, gears, hinge, i18n, joints, knob, label_plate, linking,
+                  nesting, ops, sheet3d, sheettools, svg, spacemouse, standoff, theme, threads,
+                  vector_export, vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -610,6 +610,27 @@ class Settings:
         except (TypeError, ValueError):
             self.hinge_pin_d = 3.0
         self.hinge_pin_d = max(hinge.PIN_MIN, min(hinge.PIN_MAX, self.hinge_pin_d))
+        self.battery_cell = str(self.q.value("battery_cell", "AA"))
+        if self.battery_cell not in battery_holder.CELLS:
+            self.battery_cell = "AA"
+        try:
+            self.battery_count = int(float(self.q.value("battery_count", 2)))
+        except (TypeError, ValueError):
+            self.battery_count = 2
+        self.battery_count = max(battery_holder.COUNT_MIN,
+                                 min(battery_holder.COUNT_MAX, self.battery_count))
+        try:
+            self.battery_wall = float(self.q.value("battery_wall", 1.6))
+        except (TypeError, ValueError):
+            self.battery_wall = 1.6
+        self.battery_wall = max(battery_holder.WALL_MIN,
+                                min(battery_holder.WALL_MAX, self.battery_wall))
+        try:
+            self.battery_clearance = float(self.q.value("battery_clearance", 0.4))
+        except (TypeError, ValueError):
+            self.battery_clearance = 0.4
+        self.battery_clearance = max(battery_holder.CLEARANCE_MIN,
+                                     min(battery_holder.CLEARANCE_MAX, self.battery_clearance))
         try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
@@ -748,6 +769,10 @@ class Settings:
         self.q.setValue("hinge_knuckles", self.hinge_knuckles)
         self.q.setValue("hinge_clearance", self.hinge_clearance)
         self.q.setValue("hinge_pin_d", self.hinge_pin_d)
+        self.q.setValue("battery_cell", self.battery_cell)
+        self.q.setValue("battery_count", self.battery_count)
+        self.q.setValue("battery_wall", self.battery_wall)
+        self.q.setValue("battery_clearance", self.battery_clearance)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
@@ -1549,10 +1574,18 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_print_hinge = A(tr("Print-in-Place Hinge…"),
                                lambda checked=False: self.hinge_dialog(), None, "print_hinge",
                                False,
-                               tr("Add a printable hinge to the model: two leaves that lie flat "
-                                  "on the bed, joined by a row of knuckles around a pin, so it "
-                                  "prints as one piece and turns as soon as it comes off the "
-                                  "printer"))
+                                tr("Add a printable hinge to the model: two leaves that lie flat "
+                                   "on the bed, joined by a row of knuckles around a pin, so it "
+                                   "prints as one piece and turns as soon as it comes off the "
+                                   "printer"))
+        # ---- battery holder
+        self.a_battery_holder = A(tr("Battery Holder…"),
+                                  lambda checked=False: self.battery_holder_dialog(), None,
+                                  "battery_holder", False,
+                                  tr("Add a printable battery holder to the model: a block with "
+                                     "an open cradle per cell, so the cells press in from above "
+                                     "and the wires come through the slots in the end walls and "
+                                     "the holes in the floor"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -1662,7 +1695,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                                    self.a_sphere, self.a_torus))
         parts_menu = sub(tr("&Parts"), m,
                          (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
-                          self.a_label_plate, self.a_cable_clip, self.a_print_hinge))
+                          self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
+                          self.a_battery_holder))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
                          S["ellipse"], S["arc"], S["centerarc"], S["polygon"], None, S["text"],

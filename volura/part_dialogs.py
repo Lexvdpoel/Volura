@@ -1,8 +1,8 @@
 """The dialogs of the printable parts: the gear, the box and the small hardware.
 
 The spur gear, the project box, the knob, the standoff, the label plate, the cable
-clip and the print-in-place hinge. Each one starts at the values of Settings and
-remembers the new ones; the actions that open them and the models they build live in
+clip, the print-in-place hinge and the battery holder. Each one starts at the values of Settings
+and remembers the new ones; the actions that open them and the models they build live in
 `volura/app.py`.
 """
 from __future__ import annotations
@@ -10,7 +10,8 @@ from __future__ import annotations
 from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
                                QFormLayout, QLabel, QPlainTextEdit, QSpinBox)
 
-from . import cable_clip, enclosure, gears, hinge, knob, label_plate, standoff, threads
+from . import (battery_holder, cable_clip, enclosure, gears, hinge, knob, label_plate, standoff,
+               threads)
 from .i18n import tr
 
 
@@ -574,3 +575,60 @@ class HingeDialog(QDialog):
                 "knuckles": int(self.knuckles.value()),
                 "clearance": round(self.clearance.value(), 6),
                 "pin_d": round(self.pin_d.value(), 6)}
+
+
+class BatteryHolderDialog(QDialog):
+    """The "Battery Holder…" dialog: a block that keeps round cells side by side.
+
+    A holder is made for one kind of cell, so the dialog starts with the cell: the list gives the
+    usual types and the cradles are built around the diameter and the length that belong to it. The
+    count is how many cells stand side by side, the wall is the plastic between the cradles, around
+    them and under them, and the clearance is the play a cell presses in with: too little and the
+    cell does not go in, too much and it rattles in the holder. The values come from Settings and
+    are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Battery holder"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.cell = QComboBox()
+        for name in battery_holder.CELLS:
+            self.cell.addItem(name, name)
+        self.cell.setCurrentIndex(max(0, self.cell.findData(s.battery_cell)))
+        self.cell.setToolTip(tr("The cell the cradles are made for"))
+        self.count = QSpinBox()
+        self.count.setRange(battery_holder.COUNT_MIN, battery_holder.COUNT_MAX)
+        self.count.setValue(s.battery_count)
+        self.count.setToolTip(tr("How many cells stand side by side in the holder"))
+        self.wall = spin(battery_holder.WALL_MIN, battery_holder.WALL_MAX, s.battery_wall, 0.2)
+        self.wall.setToolTip(tr("The plastic between the cradles, around them and under them"))
+        self.clearance = spin(battery_holder.CLEARANCE_MIN, battery_holder.CLEARANCE_MAX,
+                              s.battery_clearance, 0.05)
+        self.clearance.setToolTip(tr("The play around a cell: too little and it does not press in, "
+                                     "too much and it rattles in the holder"))
+        lay.addRow(tr("Cell"), self.cell)
+        lay.addRow(tr("Count"), self.count)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Clearance"), self.clearance)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"cell": str(self.cell.currentData()),
+                "count": int(self.count.value()),
+                "wall": round(self.wall.value(), 6),
+                "clearance": round(self.clearance.value(), 6)}
