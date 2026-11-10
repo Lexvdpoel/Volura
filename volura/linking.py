@@ -158,17 +158,22 @@ def same_shape(a_loops, b_loops, tol=1e-3, allow_mirror=True) -> bool:
 def shape_changed(old, new, tol=1e-3, allow_mirror=True) -> bool:
     """Whether `new` is another shape than the one a link last synced.
 
-    A fit that is clearly off is a change. Nothing to fit is only a change when there is
-    another number of loops, which is a hole that came or went; the same loops with
-    another number of points are one shape that two triangulations found differently,
-    and a link does not move for that.
+    A fit that is clearly off is a change. Nothing to fit is only a change when the loops
+    hold another shape: another number of loops is a hole that came or went, and loops of
+    another area are an outline that was cut up - a notch in the edge, a corner that is
+    gone. The same loops with another number of points are one shape that two
+    triangulations found differently, and a link does not move for that.
     """
     old = [l for l in old if len(np.asarray(l, dtype=float).reshape(-1, 2)) >= 3]
     new = [l for l in new if len(np.asarray(l, dtype=float).reshape(-1, 2)) >= 3]
     if len(old) != len(new):
         return True
     fit = fit_rigid(old, new, allow_mirror=allow_mirror)
-    return fit is not None and fit[1] > tol
+    if fit is not None:
+        return fit[1] > tol
+    a = sorted(abs(polygon_area(l)) for l in old)
+    b = sorted(abs(polygon_area(l)) for l in new)
+    return any(abs(x - y) > tol * max(1.0, y) for x, y in zip(a, b))
 
 
 def _edge_lengths(loop) -> np.ndarray:
@@ -496,6 +501,82 @@ def face_shape(manifold, frame):
         return None
     loops = _orient([_clean(q) for q in cs.to_polygons()])
     return loops or None
+
+
+def _flat_triangles(manifold, frame, tol) -> list:
+    """The triangles of `manifold` that lie in the plane of `frame` and look along its normal.
+
+    The solid is turned into the frame as in `face_shape`, so the plane is `z` = 0; a
+    triangle belongs to the face when all three of its vertices stand that close to the
+    plane and its own normal points along +z, which is the outside of the face. The
+    triangles come back flat, in the coordinates of the frame.
+    """
+    o, u, v, n = frame
+    R = np.stack([u, v, n])
+    local = manifold.transform(_matrix34(np.column_stack([R, -R @ o])))
+    mesh = local.to_mesh()
+    V = np.asarray(mesh.vert_properties, dtype=float)[:, :3]
+    T = np.asarray(mesh.tri_verts, dtype=np.int64)
+    if not len(T):
+        return []
+    t = V[T]
+    keep = np.all(np.abs(t[:, :, 2]) < tol, axis=1)
+    if not keep.any():
+        return []
+    t = t[keep]
+    keep = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])[:, 2] > 0.0
+    return [np.ascontiguousarray(q[:, :2]) for q in t[keep]]
+
+
+def _region_of(loops, ref):
+    """The loops of the one region of `loops` that `ref` was made for.
+
+    Several faces can lie in one plane - two tops at the same height, separated by a gap -
+    and only one of them is the linked face. The outer loop the link last synced says
+    which: the region that covers most of it wins, and when none covers it at all the
+    largest region does. `ref` is a loop in the coordinates of the same plane, or None.
+    """
+    regions = []
+    for outer in [l for l in loops if polygon_area(l) > 0.0]:
+        holes = [l for l in loops if polygon_area(l) < 0.0 and _point_in_poly(outer, l[0])]
+        regions.append([outer] + holes)
+    sections = [mf.CrossSection([np.ascontiguousarray(l, dtype=float) for l in r],
+                                mf.FillRule.EvenOdd) for r in regions]
+    if ref is not None and len(np.asarray(ref, dtype=float).reshape(-1, 2)) >= 3:
+        q = mf.CrossSection([np.ascontiguousarray(np.asarray(ref, dtype=float).reshape(-1, 2))])
+        cover = [mf.CrossSection.batch_boolean([s, q], mf.OpType.Intersect).area()
+                 for s in sections]
+        i = int(np.argmax(cover))
+        if cover[i] > 0.0:
+            return regions[i]
+    return regions[int(np.argmax([s.area() for s in sections]))]
+
+
+def face_region(manifold, frame, tol=1e-4, ref=None):
+    """The face of a solid in the plane of `frame`, in the coordinates of that frame.
+
+    Where `face_shape` projects the whole solid and so only shows what goes through it,
+    this reads the face itself: the triangles that lie in the plane and look along its
+    normal, unioned into the loops of that face. A pocket, a blind hole, a notch or a
+    corner that was cut off is part of the face and so comes to the worksheet; the plane
+    of the face is where the change is. A solid that is gone, or that has no flat face in
+    that plane any more, gives None.
+
+    `ref` is the outer loop the link last synced, in the same plane: it chooses the face
+    when more than one lies in that plane (see `_region_of`).
+    """
+    if manifold is None or manifold.is_empty():
+        return None
+    tris = _flat_triangles(manifold, frame, tol)
+    if not tris:
+        return None
+    cs = mf.CrossSection(tris, mf.FillRule.Positive)
+    if cs.is_empty():
+        return None
+    loops = _orient([_clean(q) for q in cs.to_polygons()])
+    if not loops:
+        return None
+    return _region_of(loops, ref)
 
 
 def _loops_json(loops) -> list:

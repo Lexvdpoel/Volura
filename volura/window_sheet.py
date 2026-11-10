@@ -36,6 +36,10 @@ from .tools import format_length
 from .vector2d import (SHEET_SPACING, Drawing, MILL_OPS, OP_LABELS, VPath, _transform_meta,
                        default_layer_names, polygon_area)
 
+#: mm of root mean square that a fit of a whole linked shape may be off and still say where it
+#: lies; a fit that is further off paired the loops up wrongly, and the outline decides instead
+PLACEMENT_FIT = 0.05
+
 
 class SheetMixin:
     """The worksheet methods of `MainWindow`; the window itself lives in the app."""
@@ -845,6 +849,7 @@ class SheetMixin:
             by_src.setdefault(int(p.src), []).append(p.pts)
         srcs = {s: linking.sorted_loops(l) for s, l in by_src.items()}
         candidates = []
+        solids: dict = {}
         for ctx, fid in faces:
             ents = self.doc.ents(ctx)
             if ents is None or fid not in ents.F:
@@ -853,9 +858,14 @@ class SheetMixin:
             frame = linking.face_frame(F.normal, ents.V[F.loops[0][0]])
             shape = linking.sorted_loops([linking.to_plane([ents.V[v] for v in loop], frame)
                                           for loop in F.loops])
-            if shape:
-                candidates.append({"group": int(ctx), "kind": "face", "shape": shape,
-                                   "thickness": None, "frame": linking.frame_to_list(frame)})
+            if not shape:
+                continue
+            if int(ctx) not in solids:
+                solids[int(ctx)] = ents.to_manifold()
+            region = linking.face_region(solids[int(ctx)], frame, ref=shape[0])
+            candidates.append({"group": int(ctx), "kind": "face",
+                               "shape": linking.sorted_loops(region or shape),
+                               "thickness": None, "frame": linking.frame_to_list(frame)})
         if not candidates:
             for g in groups:
                 m = g.ents.to_manifold()
@@ -922,15 +932,54 @@ class SheetMixin:
     def _link_placement(shape, loops) -> np.ndarray:
         """Where `loops` lie, read from the shape a link last synced.
 
-        `linking.placement` for the whole shape; when the loops no longer match it as a
-        whole - a grille that got more holes, or one that went - the outline is still the
-        outline, and that alone says where the shape is, so the sheet keeps its place and
-        the plate keeps its own.
+        `linking.placement` for the whole shape, when it really fits; when the loops no
+        longer match it as a whole - a grille that got more holes, or one that went, or a
+        grille of equal holes that `linking.fit_rigid` pairs up in another order once the
+        shape moved - the outline is still the outline, and that alone says where the shape
+        is, so the sheet keeps its place and the plate keeps its own. Nothing to fit at all,
+        not even the outlines, is a shape that was really cut up differently - a notch in the
+        edge, a corner that is gone - and then the middle of the old shape is where the new
+        one belongs.
         """
         fit = linking.fit_rigid(shape, loops)
-        if fit is None and len(shape) > 1 and len(loops) > 1:
+        if fit is not None and fit[1] > PLACEMENT_FIT:
+            fit = None
+        if fit is None and len(shape) and len(loops):
             fit = linking.fit_rigid([shape[0]], [loops[0]])
-        return np.eye(3) if fit is None else fit[0]
+        if fit is not None:
+            return fit[0]
+        a = np.asarray(shape[0], dtype=float).reshape(-1, 2) if len(shape) else np.zeros((0, 2))
+        b = np.asarray(loops[0], dtype=float).reshape(-1, 2) if len(loops) else np.zeros((0, 2))
+        if len(a) < 3 or len(b) < 3:
+            return np.eye(3)
+        M = np.eye(3)
+        M[:2, 2] = 0.5 * (b.min(axis=0) + b.max(axis=0)) - 0.5 * (a.min(axis=0) + a.max(axis=0))
+        return M
+
+    def _link_face_shape(self, link, man, ents) -> list:
+        """What the model says the linked face is now, in the plane of the link.
+
+        `linking.face_region` reads that plane and gives the face as it is: with the
+        pockets and blind holes in it, the notch in its edge and the corner that was cut
+        off, which the silhouette of `linking.face_shape` never saw. Nothing flat in that
+        plane means the solid moved or turned, so the shape of the link looks for its face
+        again and the plane follows with it. A face that is no longer flat anywhere gives
+        the projection along its normal, the last thing the model still has to say.
+        """
+        plane = linking.frame_of(link.frame)
+        ref = link.shape[0] if len(link.shape) else None
+        loops = linking.face_region(man, plane, ref=ref)
+        if not loops:
+            found = self._face_link_frame(link, ents)
+            if found is not None:
+                if ref is not None:
+                    ref = linking.to_plane(linking.from_plane(ref, plane), found)
+                link.frame = linking.frame_to_list(found)
+                plane = found
+                loops = linking.face_region(man, plane, ref=ref)
+        if not loops:
+            loops = linking.face_shape(man, plane)
+        return linking.sorted_loops(loops or [])
 
     def _link_plate_from_sheet(self, link, sheet_loops, plate) -> None:
         """The plate of `link` rebuilt from the loops on the worksheet, where it stands in 3D."""
@@ -953,7 +1002,8 @@ class SheetMixin:
         Only the shape travels and every side keeps its own placement: the new shape is put
         where the old one lay by the rigid fit of `linking.placement`. A plate is the only
         kind that may change in 3D; a change of a face outline on the sheet is left where it
-        is with a word about it. When both sides changed, the model wins. A face link of a
+        is with a word about it. When both sides changed, the model wins. A face link reads
+        the face in its own plane, so what was cut into that face comes to the sheet, and a
         solid that turned reads the face with the linked shape again, so a face that came to
         lie in the old plane does not take its place. A link whose group or paths are gone
         is dropped. After the links, the vent patterns of the outlines that changed are made
@@ -981,12 +1031,7 @@ class SheetMixin:
             elif l.kind == "face":
                 frame = linking.frame_of(l.frame)
                 if frame is not None and man is not None and not man.is_empty():
-                    three = linking.sorted_loops(linking.face_shape(man, frame) or [])
-                    if not three or linking.shape_changed(l.shape, three):
-                        found = self._face_link_frame(l, ents)
-                        if found is not None:
-                            l.frame = linking.frame_to_list(found)
-                            three = linking.sorted_loops(linking.face_shape(man, found) or [])
+                    three = self._link_face_shape(l, man, ents)
             ch3 = three is not None and linking.shape_changed(l.shape, three)
             ch2 = linking.shape_changed(l.shape, sheet_loops)
             push_sheet = direction in ("to_sheet", "both") and ch3
