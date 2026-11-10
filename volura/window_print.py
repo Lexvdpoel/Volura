@@ -595,6 +595,7 @@ class PrintMixin:
         self.settings.battery_wall = float(options["wall"])
         self.settings.battery_clearance = float(options["clearance"])
         self.settings.battery_grip = float(options["grip"])
+        self.settings.battery_screw = str(options["screw"])
         self.settings.save()
         made = self.make_battery_holder_model(options)
         self.setFocus()
@@ -603,14 +604,14 @@ class PrintMixin:
     def make_battery_holder_model(self, options):
         """The holder as a printed part: one undo step, on the bed next to the model.
 
-        The cradles, the contact slots and the wire holes are a dozen booleans, so the holder is
+        The cradles, the contact slots and the mounting holes are a dozen booleans, so the holder is
         built in the background, like the hinge, and the window keeps responding. It stands on the
         bed in the middle of the free bed, or on the free place 10 mm to the right of what is
         already in the model, so a second holder does not land in the first one.
         """
         self.set_mode("3d")
         doc = self.doc
-        size = {k: options[k] for k in ("cell", "count", "wall", "clearance", "grip")}
+        size = {k: options[k] for k in ("cell", "count", "wall", "clearance", "grip", "screw")}
         cell, n = str(options["cell"]), int(options["count"])
         bb = doc.model_bbox()
         bx, by, _bz = self.settings.bed_size

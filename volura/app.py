@@ -654,6 +654,9 @@ class Settings:
             self.battery_grip = 0.05
         self.battery_grip = max(battery_holder.GRIP_MIN,
                                 min(battery_holder.GRIP_MAX, self.battery_grip))
+        self.battery_screw = str(self.q.value("battery_screw", "M3"))
+        if self.battery_screw not in battery_holder.SCREWS:
+            self.battery_screw = "M3"
         try:
             self.bin_length = float(self.q.value("bin_length", 80.0))
         except (TypeError, ValueError):
@@ -847,6 +850,7 @@ class Settings:
         self.q.setValue("battery_wall", self.battery_wall)
         self.q.setValue("battery_clearance", self.battery_clearance)
         self.q.setValue("battery_grip", self.battery_grip)
+        self.q.setValue("battery_screw", self.battery_screw)
         self.q.setValue("bin_length", self.bin_length)
         self.q.setValue("bin_width", self.bin_width)
         self.q.setValue("bin_height", self.bin_height)
@@ -1672,9 +1676,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                   lambda checked=False: self.battery_holder_dialog(), None,
                                   "battery_holder", False,
                                   tr("Add a printable battery holder to the model: a block with "
-                                     "an open cradle per cell, so the cells press in from above "
-                                     "and the wires come through the slots in the end walls and "
-                                     "the holes in the floor"))
+                                     "an open cradle per cell, so the cells press in from above, "
+                                     "the wires come through the slots in the end walls and flat "
+                                     "head screws mount the holder through the floor"))
         # ---- storage bin
         self.a_storage_bin = A(tr("Storage Bin…"),
                                lambda checked=False: self.storage_bin_dialog(), None,

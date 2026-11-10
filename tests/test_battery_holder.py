@@ -7,14 +7,18 @@ plastic between the cradles, around them and under them. The block stands so far
 that the opening between the lips over a cradle is `d * (1 - grip)` millimetres across, narrower
 than the cell, so the cell snaps in; with `grip = 0` the top stands on the axis and the cradle is
 open all the way to it. A slot goes through the end wall at both ends of every cradle for a spring
-contact or a wire, and a hole through the floor at each end of the holder.
+contact or a wire, and two holes with a countersunk head mount the holder: one under the axis of the
+first cradle and one under the axis of the last one, so they lie diagonally and always in the middle
+of a cradle.
 
 These tests weigh a holder against what it promises: it is one volume that stands on the bed, the
 box round it is the size asked for, the grip narrows the opening over a cradle without touching the
-cell, and a cell of the type asked for fits in every cradle without touching it. A size that cannot
-be printed becomes the nearest one that can, and a cell that is not known is refused. The place in
-the interface is checked too (Parts right after the hinge, one group in one undo step, and the
-dialog that remembers its values).
+cell, and a cell of the type asked for fits in every cradle without touching it. The mounting holes
+are under the axes of the cradles, not in the wall between two of them, the head sinks under the
+cell and the cone does not cut through the bottom. A size that cannot be printed becomes the nearest
+one that can, and a cell or a screw that is not known is refused. The place in the interface is
+checked too (Parts right after the hinge, one group in one undo step, and the dialog that remembers
+its values).
 
 Run with:  python -m pytest tests/test_battery_holder.py
 """
@@ -33,13 +37,14 @@ from PySide6.QtCore import QCoreApplication  # noqa: E402
 from PySide6.QtWidgets import QApplication, QDialog, QDoubleSpinBox  # noqa: E402
 
 import volura.app as app_module  # noqa: E402
-from volura import battery_holder  # noqa: E402
+from volura import battery_holder, threads  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
 
 CELL, D, L = "AA", 14.5, 50.5
 GRIP = 0.05                                   # the grip of the dialog: 5 % narrower than the cell
-BASE = dict(cell=CELL, count=2, wall=1.6, clearance=0.4, grip=GRIP)
+SCREW = "M3"                                  # the screw the holder is mounted with by default
+BASE = dict(cell=CELL, count=2, wall=1.6, clearance=0.4, grip=GRIP, screw=SCREW)
 OPTIONS = dict(BASE)
 
 
@@ -66,12 +71,12 @@ def make(**kw):
     return battery_holder.battery_holder(**dict(BASE, **kw))
 
 
-def cell(size=CELL, n=2, wall=1.6, clearance=0.4, cradle=0):
+def cell(size=CELL, n=2, wall=1.6, clearance=0.4, cradle=0, screw=SCREW):
     """A bare cell of `size` as it lies in cradle `cradle` of a holder for `n` cells."""
     d, ln = battery_holder.CELLS[size]
     y = (cradle - 0.5 * (n - 1)) * (d + 2.0 * clearance + wall)
     return (mf.Manifold.cylinder(ln, 0.5 * d, 0.5 * d, 64).rotate((0.0, 90.0, 0.0))
-            .translate((-0.5 * ln, y, wall + 0.5 * d + clearance)))
+            .translate((-0.5 * ln, y, floor(wall, screw) + 0.5 * d + clearance)))
 
 
 def opening(m, y, top, wide):
@@ -87,6 +92,53 @@ def lip(d, c, grip):
         return 0.0
     r = 0.5 * d + c
     return math.sqrt(r * r - (0.5 * d * (1.0 - grip)) ** 2)
+
+
+def sink(size=SCREW):
+    """How deep the countersink of `size` goes below the face it opens into."""
+    hole_d, _socket_d, _head_h, cs_head_d = threads.SCREW_HOLES[size]
+    return 0.5 * (cs_head_d - hole_d)
+
+
+def floor(wall=BASE["wall"], size=SCREW):
+    """How thick the plastic under the cradles is: the wall, or what the head needs to sink in."""
+    return wall if size == "none" else max(wall, sink(size) + battery_holder.FLOOR_UNDER_SINK)
+
+
+def height(d, c, wall, grip, size=SCREW):
+    """How high a holder of `d` cells with `c` play, `wall` walls and `grip` stands over the bed."""
+    return floor(wall, size) + 0.5 * d + c + lip(d, c, grip)
+
+
+def cradle_y(i, n=BASE["count"], d=D, c=BASE["clearance"], wall=BASE["wall"]):
+    """The place in plan where the axis of cradle `i` of `n` lies."""
+    return (i - 0.5 * (n - 1)) * (d + 2.0 * c + wall)
+
+
+def hole_x(d=D, c=BASE["clearance"], ln=L, size=SCREW):
+    """How far from the middle of the holder a mounting hole is, inside the end wall."""
+    r_head = 0.5 * (threads.SCREW_HOLES[size][3] + threads.DEFAULT_HOLE_CLEARANCE)
+    return 0.5 * (ln + 2.0 * c) - r_head - battery_holder.HOLE_ROOM
+
+
+def holes(m, z0=0.02, thick=0.1):
+    """The holes through the floor of `m` near the bed, as the pieces of a thin slab left over."""
+    lo, hi = bbox(m)
+    slab = mf.Manifold.cube([hi[0] - lo[0] - 0.4, hi[1] - lo[1] - 0.4, thick]).translate(
+        (lo[0] + 0.2, lo[1] + 0.2, z0))
+    return (slab - m).decompose()
+
+
+def probe(m, x, y, z0, z1, r=0.3):
+    """How much of a thin rod at `x`, `y`, from `z0` to `z1`, the holder leaves standing."""
+    rod = mf.Manifold.cylinder(z1 - z0, r, r, 32).translate((x, y, z0))
+    return mf.Manifold.batch_boolean([m, rod], mf.OpType.Intersect).volume()
+
+
+def head_disc(x, y, z, size=SCREW):
+    """A disc of the head of `size`, lying on the bottom of the cradle at height `z`."""
+    r = 0.5 * threads.SCREW_HOLES[size][3]
+    return mf.Manifold.cylinder(0.1, r, r, 64).translate((x, y, z - 0.05))
 
 
 @pytest.fixture()
@@ -118,7 +170,7 @@ def test_the_box_round_the_holder_is_the_size_asked():
     assert hi[0] - lo[0] == pytest.approx(L + 2 * c + 2 * t), "the cradle is not the length asked"
     assert hi[1] - lo[1] == pytest.approx(n * (d + 2 * c) + (n + 1) * t), \
         "the cradles are not side by side"
-    assert hi[2] - lo[2] == pytest.approx(t + 0.5 * d + c + lip(d, c, BASE["grip"])), \
+    assert hi[2] - lo[2] == pytest.approx(height(d, c, t, BASE["grip"])), \
         "the block does not stand over the cells"
     assert 0.5 * (lo[0] + hi[0]) == pytest.approx(0.0), "the holder is not centred"
     assert 0.5 * (lo[1] + hi[1]) == pytest.approx(0.0), "the holder is not centred"
@@ -130,8 +182,9 @@ def test_a_grip_of_zero_gives_the_holder_that_is_open_to_the_axis():
     d, c, t = D, BASE["clearance"], BASE["wall"]
     m = make(grip=0.0)
     lo, hi = bbox(m)
-    assert hi[2] - lo[2] == pytest.approx(t + 0.5 * d + c), "grip 0 does not give the old height"
-    wide = opening(m, -0.5 * (d + 2.0 * c + t), t + 0.5 * d + c, d + 2.0 * c)
+    assert hi[2] - lo[2] == pytest.approx(height(d, c, t, 0.0)), \
+        "grip 0 does not give the old height"
+    wide = opening(m, -0.5 * (d + 2.0 * c + t), height(d, c, t, 0.0), d + 2.0 * c)
     assert wide == pytest.approx(d + 2.0 * c, abs=0.05), "the cradle is not open to its axis"
 
 
@@ -141,11 +194,11 @@ def test_the_grip_leaves_an_opening_narrower_than_the_cell():
     for size, d in (("AA", 14.5), ("18650", 18.6)):
         m = make(cell=size)
         lo, hi = bbox(m)
-        assert hi[2] - lo[2] == pytest.approx(t + 0.5 * d + c + lip(d, c, GRIP)), \
+        assert hi[2] - lo[2] == pytest.approx(height(d, c, t, GRIP)), \
             "the block does not stand over the cells"
         for i in range(n):
             y = (i - 0.5 * (n - 1)) * (d + 2.0 * c + t)
-            wide = opening(m, y, t + 0.5 * d + c + lip(d, c, GRIP), d + 2.0 * c)
+            wide = opening(m, y, height(d, c, t, GRIP), d + 2.0 * c)
             assert wide == pytest.approx(d * (1.0 - GRIP), abs=0.05), \
                 f"the opening is {wide:.2f} mm and not {d * (1.0 - GRIP):.2f} mm"
             assert wide < d, f"a cell of {d} mm falls out of an opening of {wide:.2f} mm"
@@ -171,7 +224,7 @@ def test_a_size_that_cannot_be_printed_becomes_the_nearest_one_that_can():
     assert hi[0] - lo[0] == pytest.approx(L + 2 * c + 2 * t)
     assert hi[1] - lo[1] == pytest.approx(battery_holder.COUNT_MAX * (d + 2 * c)
                                           + (battery_holder.COUNT_MAX + 1) * t)
-    assert hi[2] - lo[2] == pytest.approx(t + 0.5 * d + c + lip(d, c, GRIP))
+    assert hi[2] - lo[2] == pytest.approx(height(d, c, t, GRIP))
     one = bbox(battery_holder.battery_holder(cell=CELL, count=0, wall=0.1, clearance=0.0))
     lo, hi = one
     assert hi[1] - lo[1] == pytest.approx(d + 2 * battery_holder.CLEARANCE_MIN
@@ -186,13 +239,86 @@ def test_a_grip_that_is_too_much_or_too_little_becomes_the_nearest_one():
         m = battery_holder.battery_holder(cell=CELL, count=2, wall=t, clearance=c, grip=grip)
         assert m.status() == mf.Error.NoError and not m.is_empty()
         lo, hi = bbox(m)
-        assert hi[2] - lo[2] == pytest.approx(t + 0.5 * d + c + lip(d, c, part)), \
+        assert hi[2] - lo[2] == pytest.approx(height(d, c, t, part)), \
             "the grip is not clamped"
 
 
 def test_a_cell_that_is_not_known_is_refused():
     with pytest.raises(ValueError):
         battery_holder.battery_holder(cell="D")
+
+
+# ------------------------------------------------------------------ mounting holes
+
+@pytest.mark.parametrize("n", (1, 2, 3, 4))
+def test_two_mounting_holes_open_under_the_first_and_the_last_cradle(n):
+    """Two holes, diagonally in the holder, and every one of them in the middle of a cradle."""
+    m = make(count=n)
+    parts = holes(m)
+    assert len(parts) == 2, f"a holder of {n} cells does not have exactly two holes"
+    want = sorted([(-hole_x(), cradle_y(0, n)), (hole_x(), cradle_y(n - 1, n))])
+    got = sorted((0.5 * (lo[0] + hi[0]), 0.5 * (lo[1] + hi[1])) for lo, hi in map(bbox, parts))
+    for (x, y), (hx, hy) in zip(want, got):
+        assert (hx, hy) == pytest.approx((x, y), abs=0.05), "the hole is not under a cradle axis"
+
+
+@pytest.mark.parametrize("n", (1, 2, 3, 4))
+def test_the_holes_go_through_the_floor_and_the_walls_stay_whole(n):
+    f = floor()
+    m = make(count=n)
+    for x, y in ((-hole_x(), cradle_y(0, n)), (hole_x(), cradle_y(n - 1, n))):
+        through = probe(m, x, y, -0.5, f + 0.1)
+        assert through == pytest.approx(0.0, abs=1e-6), "the screw cannot go through"
+    assert probe(m, 0.0, cradle_y(0, n), -0.5, f + 0.1) > 0.0, "the floor is drilled somewhere else"
+    if n % 2 == 0:
+        assert probe(m, hole_x(), 0.0, -0.5, f + 0.1) > 0.0, \
+            "the wall between two cradles is drilled, where no head can sit"
+
+
+@pytest.mark.parametrize("size", battery_holder.SCREWS[1:])
+def test_every_screw_sinks_in_a_floor_that_holds_it(size):
+    c, t = BASE["clearance"], BASE["wall"]
+    m = make(screw=size)
+    lo, hi = bbox(m)
+    assert hi[2] - lo[2] == pytest.approx(height(D, c, t, GRIP, size)), \
+        "the floor is not as thick as the head needs"
+    r_hole = 0.5 * (threads.SCREW_HOLES[size][0] + threads.DEFAULT_HOLE_CLEARANCE)
+    parts = holes(m)
+    assert len(parts) == 2, "the holder does not have exactly two holes"
+    for part in parts:
+        plo, phi = bbox(part)
+        assert phi[0] - plo[0] == pytest.approx(2.0 * r_hole, abs=0.05), \
+            "the countersink cuts through the bottom of the holder"
+
+
+def test_the_screw_head_sinks_below_the_cell():
+    m = make()
+    for x, y in ((-hole_x(), cradle_y(0)), (hole_x(), cradle_y(1))):
+        gap = mf.Manifold.batch_boolean([m, head_disc(x, y, floor())],
+                                        mf.OpType.Intersect).volume()
+        assert gap == pytest.approx(0.0, abs=1e-6), "the head does not sit under the cell"
+    plain = make(screw="none")
+    gap = mf.Manifold.batch_boolean([plain, head_disc(-hole_x(), cradle_y(0),
+                                                      floor(size="none"))],
+                                    mf.OpType.Intersect).volume()
+    assert gap > 0.0, "a holder without screws is countersunk as well"
+
+
+def test_no_screw_leaves_the_floor_alone():
+    c, t = BASE["clearance"], BASE["wall"]
+    m = make(screw="none")
+    assert sum(p.volume() for p in holes(m)) == pytest.approx(0.0, abs=1e-6), "there is a hole"
+    solid = probe(m, -hole_x(), cradle_y(0), -0.5, floor(size="none") + 0.1)
+    assert solid > 0.0, "the floor is drilled although there is no screw"
+    lo, hi = bbox(m)
+    assert hi[2] - lo[2] == pytest.approx(height(D, c, t, GRIP, "none")), \
+        "a holder without holes does not keep the height of the cradles"
+
+
+def test_a_screw_that_is_not_offered_is_refused():
+    for size in ("M5", "3 mm", ""):
+        with pytest.raises(ValueError):
+            battery_holder.battery_holder(cell=CELL, count=2, screw=size)
 
 
 # ------------------------------------------------------------------ in the window
@@ -243,38 +369,44 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
         seen["title"] = dlg.windowTitle()
         seen["start"] = [dlg.cell.currentData(), int(dlg.count.value()),
                          round(dlg.wall.value(), 2), round(dlg.clearance.value(), 2),
-                         round(dlg.grip.value(), 2)]
+                         round(dlg.grip.value(), 2), str(dlg.screw.currentData())]
         seen["spins"] = len(dlg.findChildren(QDoubleSpinBox))
         seen["percent"] = dlg.grip.suffix()
         seen["grip range"] = (int(dlg.grip.minimum()), int(dlg.grip.maximum()))
+        seen["screws"] = [dlg.screw.itemText(i) for i in range(dlg.screw.count())]
+        seen["screw data"] = [dlg.screw.itemData(i) for i in range(dlg.screw.count())]
         dlg.cell.setCurrentIndex(dlg.cell.findData("18650"))
         dlg.count.setValue(3)
         dlg.wall.setValue(2.0)
         dlg.clearance.setValue(0.5)
         dlg.grip.setValue(12.0)
+        dlg.screw.setCurrentIndex(dlg.screw.findData("none"))
         return QDialog.Accepted
 
     monkeypatch.setattr(app_module.QDialog, "exec", fill)
     win.settings.battery_cell, win.settings.battery_count = "AAA", 4
     win.settings.battery_wall, win.settings.battery_clearance = 1.4, 0.3
     win.settings.battery_grip = 0.08
+    win.settings.battery_screw = "M2.5"
     win.battery_holder_dialog()
     assert seen["title"] == "Battery holder"
-    assert seen["start"] == ["AAA", 4, 1.4, 0.3, 8.0]
+    assert seen["start"] == ["AAA", 4, 1.4, 0.3, 8.0, "M2.5"]
     assert seen["spins"] == 3 and seen["percent"] == " %"
     assert seen["grip range"] == (0, 15), "the grip is not 0 to 15 % of the cell"
+    assert seen["screw data"] == list(battery_holder.SCREWS), "the screws are not the ones offered"
+    assert seen["screws"][0] == "None", "the first screw is not the one that drills nothing"
     assert pump_until(lambda: len(win.doc.groups) == 1), "no holder in the model"
     d, ln = battery_holder.CELLS["18650"]
     lo, hi = np.asarray(win.doc.groups[0].bbox(), dtype=float)
     assert hi[0] - lo[0] == pytest.approx(ln + 2 * 0.5 + 2 * 2.0), "the length is not as asked"
-    assert hi[2] - lo[2] == pytest.approx(2.0 + 0.5 * d + 0.5 + lip(d, 0.5, 0.12)), \
+    assert hi[2] - lo[2] == pytest.approx(height(d, 0.5, 2.0, 0.12, "none")), \
         "the grip is not used in the holder"
     assert len(win.doc.groups[0].ents.to_manifold().decompose()) == 1, "the holder is not one part"
     assert win.settings.battery_cell == "18650"
     s = app_module.Settings()
     assert (s.battery_cell, s.battery_count, s.battery_wall, s.battery_clearance,
-            s.battery_grip) == ("18650", 3, pytest.approx(2.0), pytest.approx(0.5),
-                                pytest.approx(0.12))
+            s.battery_grip, s.battery_screw) == ("18650", 3, pytest.approx(2.0),
+                                                 pytest.approx(0.5), pytest.approx(0.12), "none")
 
 
 if __name__ == "__main__":

@@ -655,7 +655,8 @@ class BatteryHolderDialog(QDialog):
     them and under them, and the clearance is the play a cell presses in with: too little and the
     cell does not go in, too much and it rattles in the holder. The grip is how much narrower the
     opening over a cradle is than the cell, so the cell snaps in instead of only lying in its
-    cradle. The values come from Settings and are remembered.
+    cradle. The mounting screws are the flat head screws that fix the holder to a base through the
+    floor, sunk under the cells, or none at all. The values come from Settings and are remembered.
     """
 
     def __init__(self, win):
@@ -694,11 +695,19 @@ class BatteryHolderDialog(QDialog):
         self.grip.setSuffix(" %")
         self.grip.setToolTip(tr("How much narrower the opening over a cradle is than the cell: the "
                                 "cell snaps in behind the lips and cannot fall out"))
+        self.screw = QComboBox()
+        self.screw.addItem(tr("None"), "none")
+        for size in battery_holder.SCREWS[1:]:
+            self.screw.addItem(size, size)
+        self.screw.setCurrentIndex(max(0, self.screw.findData(s.battery_screw)))
+        self.screw.setToolTip(tr("The flat head screws that fix the holder to a base through the "
+                                 "floor, sunk under the cells"))
         lay.addRow(tr("Cell"), self.cell)
         lay.addRow(tr("Count"), self.count)
         lay.addRow(tr("Wall"), self.wall)
         lay.addRow(tr("Clearance"), self.clearance)
         lay.addRow(tr("Grip %"), self.grip)
+        lay.addRow(tr("Mounting screws"), self.screw)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -709,7 +718,8 @@ class BatteryHolderDialog(QDialog):
                 "count": int(self.count.value()),
                 "wall": round(self.wall.value(), 6),
                 "clearance": round(self.clearance.value(), 6),
-                "grip": round(self.grip.value() / 100.0, 6)}
+                "grip": round(self.grip.value() / 100.0, 6),
+                "screw": str(self.screw.currentData())}
 
 
 class StorageBinDialog(QDialog):
