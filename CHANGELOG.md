@@ -3,6 +3,21 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.37 — 2026-11-10
+
+### New
+- **3D Text** (Draw > 3D Text…): type a text, on one or more lines, and it becomes a part of
+  letters in the font, height and depth you choose, bold or not, aligned left, centred or right,
+  standing on the bed.
+
+### Improved
+- **The battery holder grips its cells**: the opening over every cradle is a little narrower than
+  the cell (5 % by default, adjustable under Grip), so the cells snap in and stay in when you turn
+  the holder over.
+
+### Website
+- The manual describes 3D Text and the grip of the battery holder.
+
 ## 0.2.36 — 2026-11-10
 
 ### New
