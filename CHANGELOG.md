@@ -3,6 +3,11 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.38 — 2026-11-10
+
+### Fixed
+- The Linux download is back: version 0.2.37 was only built for Windows. Nothing else changed.
+
 ## 0.2.37 — 2026-11-10
 
 ### New
