@@ -3,6 +3,19 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.36 — 2026-11-10
+
+### New
+- **Print-in-Place Hinge** (Draw > Parts): a hinge that comes off the printer already
+  assembled and turns at once: two leaves flat on the bed, joined by knuckles around one pin
+  with the play you enter. The pin and hole ends are chamfered, so nothing needs support.
+- **Battery Holder** (Draw > Parts): one to eight AA, AAA, 18650, 21700 or CR123A cells side by
+  side in open cradles, with slots in the end walls for spring contacts or wires and holes in
+  the floor for the leads.
+
+### Website
+- The manual and the feature overview describe the hinge and the battery holder.
+
 ## 0.2.35 — 2026-11-10
 
 ### Improved
