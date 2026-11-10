@@ -22,14 +22,14 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QLabel, QLineEdit, QPushButton, QSpinBox, QTextBrowser,
                                QVBoxLayout)
 
-from . import (background, battery_holder, cable_clip, enclosure, gears, hinge, joints, knob,
+from . import (background, battery_holder, bin_rack, cable_clip, enclosure, gears, hinge, joints, knob,
                 label_plate, ops, standoff, storage_bin, text3d, theme, threads)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
-from .part_dialogs import (BatteryHolderDialog, CableClipDialog, HingeDialog, KnobDialog,
+from .part_dialogs import (BatteryHolderDialog, BinRackDialog, CableClipDialog, HingeDialog, KnobDialog,
                            LabelPlateDialog, ProjectBoxDialog, StandoffDialog, StorageBinDialog,
                            Text3DDialog)
 
@@ -658,6 +658,7 @@ class PrintMixin:
         self.settings.bin_cols = int(options["cols"])
         self.settings.bin_rows = int(options["rows"])
         self.settings.bin_label = bool(options["label"])
+        self.settings.bin_hanger = bool(options.get("hanger", False))
         self.settings.save()
         made = self.make_storage_bin_model(options)
         self.setFocus()
@@ -675,6 +676,7 @@ class PrintMixin:
         doc = self.doc
         size = {k: options[k] for k in ("length", "width", "height", "wall", "floor", "radius",
                                         "cols", "rows", "label")}
+        size["hanger"] = bool(options.get("hanger", False))
         bb = doc.model_bbox()
         bx, by, _bz = self.settings.bed_size
 
@@ -699,6 +701,60 @@ class PrintMixin:
             self.view.set_status(tr("Storage bin failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the storage bin…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ bin wall rack
+    def bin_rack_dialog(self):
+        """Draw > Parts > Bin Wall Rack…: a plate on the wall with rails the bins hang on."""
+        dlg = BinRackDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.rack_cols = int(options["cols"])
+        self.settings.rack_rows = int(options["rows"])
+        self.settings.rack_cell_w = float(options["cell_w"])
+        self.settings.rack_cell_h = float(options["cell_h"])
+        self.settings.rack_plate = float(options["plate"])
+        self.settings.rack_screw = str(options["screw"])
+        self.settings.save()
+        made = self.make_bin_rack_model(options)
+        self.setFocus()
+        return made
+
+    def make_bin_rack_model(self, options):
+        """The rack as a printed part, lying on its back: one undo step, next to the model.
+
+        Like the bin it is built in the background, and it lies in the middle of the free bed or
+        10 mm to the right of what is already in the model.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("cols", "rows", "cell_w", "cell_h", "plate", "screw")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the bin wall rack…"))
+            m = bin_rack.bin_rack(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the rack away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Bin wall rack"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Bin wall rack added. Bins hang on it with Wall hook on."))
+
+        def failed(exc):
+            self.view.set_status(tr("Bin wall rack failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the bin wall rack…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ dogbone corners

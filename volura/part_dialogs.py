@@ -1,8 +1,8 @@
 """The dialogs of the printable parts: the gear, the box and the small hardware.
 
 The spur gear, the project box, the knob, the standoff, the label plate, the 3D text, the cable
-clip, the print-in-place hinge, the battery holder and the storage bin. Each one starts at the
-values of Settings and remembers the new ones; the actions that open them and the models they
+clip, the print-in-place hinge, the battery holder, the storage bin and its wall rack. Each one
+starts at the values of Settings and remembers the new ones; the actions that open them and the models they
 build live in `volura/app.py`.
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
                                QFontComboBox, QFormLayout, QLabel, QPlainTextEdit, QSpinBox)
 
-from . import (battery_holder, cable_clip, enclosure, fonts, gears, hinge, knob, label_plate,
+from . import (battery_holder, bin_rack, cable_clip, enclosure, fonts, gears, hinge, knob, label_plate,
                standoff, storage_bin, text3d, threads)
 from .i18n import tr
 
@@ -780,6 +780,11 @@ class StorageBinDialog(QDialog):
         lay.addRow(tr("Columns"), self.cols)
         lay.addRow(tr("Rows"), self.rows)
         lay.addRow("", self.label)
+        self.hanger = QCheckBox(tr("Wall hook"))
+        self.hanger.setChecked(bool(s.bin_hanger))
+        self.hanger.setToolTip(tr("A hook along the top of the back wall and a rib along its "
+                                  "bottom, so the bin hangs on a rail of the bin wall rack"))
+        lay.addRow("", self.hanger)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -794,4 +799,72 @@ class StorageBinDialog(QDialog):
                 "radius": round(self.radius.value(), 6),
                 "cols": int(self.cols.value()),
                 "rows": int(self.rows.value()),
-                "label": bool(self.label.isChecked())}
+                "label": bool(self.label.isChecked()),
+                "hanger": bool(self.hanger.isChecked())}
+
+
+class BinRackDialog(QDialog):
+    """The "Bin Wall Rack…" dialog: a plate on the wall with a rail at the top of every row.
+
+    The columns and rows make the grid and the cell sizes say how much room a bin has in it: a
+    bin with the wall hook that is as high as a row or lower hangs in it without touching the one
+    under it. The plate thickness and the countersunk screws hold it on the wall. The values come
+    from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Bin wall rack"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.cols = QSpinBox()
+        self.cols.setRange(bin_rack.COLS_MIN, bin_rack.COLS_MAX)
+        self.cols.setValue(s.rack_cols)
+        self.cols.setToolTip(tr("How many cells lie next to each other across the rack"))
+        self.rows = QSpinBox()
+        self.rows.setRange(bin_rack.ROWS_MIN, bin_rack.ROWS_MAX)
+        self.rows.setValue(s.rack_rows)
+        self.rows.setToolTip(tr("How many rows of bins hang above each other, each on its own rail"))
+        self.cell_w = spin(bin_rack.CELL_W_MIN, bin_rack.CELL_W_MAX, s.rack_cell_w, 5.0)
+        self.cell_w.setToolTip(tr("The width of a cell: the length of a bin with some room next "
+                                  "to it"))
+        self.cell_h = spin(bin_rack.CELL_H_MIN, bin_rack.CELL_H_MAX, s.rack_cell_h, 5.0)
+        self.cell_h.setToolTip(tr("The height of a row: a bin up to this height hangs in it "
+                                  "without touching the bin under it"))
+        self.plate = spin(bin_rack.PLATE_MIN, bin_rack.PLATE_MAX, s.rack_plate, 0.5)
+        self.plate.setToolTip(tr("The thickness of the plate against the wall"))
+        self.screw = QComboBox()
+        self.screw.addItem(tr("None"), "none")
+        for size in bin_rack.SCREWS[1:]:
+            self.screw.addItem(size, size)
+        self.screw.setCurrentIndex(max(0, self.screw.findData(s.rack_screw)))
+        self.screw.setToolTip(tr("The flat head screws that hold the rack on the wall, two in "
+                                 "every row"))
+        lay.addRow(tr("Columns"), self.cols)
+        lay.addRow(tr("Rows"), self.rows)
+        lay.addRow(tr("Cell width"), self.cell_w)
+        lay.addRow(tr("Row height"), self.cell_h)
+        lay.addRow(tr("Plate"), self.plate)
+        lay.addRow(tr("Screws"), self.screw)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"cols": int(self.cols.value()),
+                "rows": int(self.rows.value()),
+                "cell_w": round(self.cell_w.value(), 6),
+                "cell_h": round(self.cell_h.value(), 6),
+                "plate": round(self.plate.value(), 6),
+                "screw": str(self.screw.currentData())}

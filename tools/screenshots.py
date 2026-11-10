@@ -192,6 +192,39 @@ class Shots:
         self.view_3d()
         self.grab_widget("hinge_and_text", w.view)
 
+    def bin_rack(self):
+        """The bin wall rack standing as on the wall, with storage bins hanging on its rails."""
+        import numpy as np
+        from volura import bin_rack, ops, storage_bin
+        w = self.w
+        self.fresh()
+        rack = bin_rack.bin_rack(cols=3, rows=2, cell_w=85.0, cell_h=50.0, plate=4.0, screw="M4")
+        plate_top = float(rack.bounding_box()[5]) - storage_bin.CLEAT_OUT
+        # the rack lies on its back as it prints; on the wall its front looks along -y
+        up = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
+
+        def stand(m):
+            return m.transform(np.c_[up, np.zeros(3)]).translate((0.0, 0.0, 50.0))
+
+        w.doc.checkpoint()
+        ops.group_from_manifold(w.doc, stand(rack), "#9aa4b1", "Rack")
+        for row, x, cols, colour in ((1, -85.0, 2, "#3fa34d"), (1, 0.0, 1, PART_COLOR),
+                                     (0, 0.0, 3, "#f2c230"), (0, 85.0, 1, "#d23b3b")):
+            b = storage_bin.storage_bin(length=80.0, width=60.0, height=40.0, cols=cols,
+                                        hanger=True)
+            # the back of the bin against the rails, its top edge on the top of the row
+            M = np.array([[1.0, 0.0, 0.0, x],
+                          [0.0, 0.0, 1.0, (row + 1) * 50.0 - 40.0 - 50.0],
+                          [0.0, -1.0, 0.0, plate_top + storage_bin.CLEAT_OUT + 30.0]])
+            ops.group_from_manifold(w.doc, stand(b.transform(M)), colour, "Bin")
+        w.doc.notify()
+        self.view_3d(closer=0.75)
+        w.view.cam.yaw, w.view.cam.pitch = -65.0, 18.0
+        w.view.commit_camera()
+        w.view.update()
+        wait(400)
+        self.grab_widget("bin_rack", w.view)
+
     def test_prints(self):
         w = self.w
         self.fresh()
@@ -263,8 +296,8 @@ class Shots:
         self.grab_menu("menu_laser", w.laser_menu)
         w.set_mode("3d")
 
-    ALL = ("parts", "project_box", "knob", "hinge_and_text", "test_prints", "overhangs", "worksheet",
-           "vent_pattern", "menus")
+    ALL = ("parts", "project_box", "knob", "hinge_and_text", "bin_rack", "test_prints", "overhangs",
+           "worksheet", "vent_pattern", "menus")
 
     def close(self):
         self.w.doc.dirty = False

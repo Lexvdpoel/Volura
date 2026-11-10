@@ -215,6 +215,7 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
 
     monkeypatch.setattr(app_module.QDialog, "exec", fill)
     win.settings.bin_length, win.settings.bin_cols, win.settings.bin_label = 70.0, 2, True
+    win.settings.bin_hanger = False
     win.storage_bin_dialog()
     assert seen["title"] == "Storage bin"
     assert seen["start"] == [70.0, 2, True]

@@ -113,7 +113,13 @@ The interface is available in English and Dutch (*Window > Preferences > General
   compartments by straight dividers of the wall thickness, which stop a millimetre under the top
   edge so you can still reach over them; along the inside of the front wall a ledge of twelve
   millimetres runs at the top, whose underside stands at 45 degrees, so a label lies under it
-  readable and the ledge prints without support
+  readable and the ledge prints without support. With *Wall hook* the back wall gets a hook along
+  the top and a rib along the bottom, so the bin hangs on the wall rack
+- **Bin Wall Rack** (Draw > Parts): a plate for the wall with a grid of cells whose number and
+  size you choose; every row has a rail that leans 45 degrees up, so the hook of a bin drops behind
+  it and the bin hangs anywhere along the row and slides sideways. A bin as high as a row or lower
+  hangs without touching the bin under it, and countersunk holes (M3, M4 or none) hold the rack on
+  the wall. It prints lying on its back without support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

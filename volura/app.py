@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout)
 
-from . import (__version__, background, battery_holder, boxgen, cable_clip, cam, dxf, enclosure,
+from . import (__version__, background, battery_holder, bin_rack, boxgen, cable_clip, cam, dxf, enclosure,
                    errors, fileio, gcode, gears, hinge, i18n, joints, knob, label_plate, linking,
                    nesting, ops, sheet3d, sheettools, svg, spacemouse, standoff, storage_bin,
                    text3d, theme, threads, vector_export, vector_import, workers)
@@ -701,6 +701,35 @@ class Settings:
             self.bin_rows = 1
         self.bin_rows = max(storage_bin.COLS_MIN, min(storage_bin.COLS_MAX, self.bin_rows))
         self.bin_label = self._bool("bin_label", True)
+        self.bin_hanger = self._bool("bin_hanger", False)
+        try:
+            self.rack_cols = int(float(self.q.value("rack_cols", 3)))
+        except (TypeError, ValueError):
+            self.rack_cols = 3
+        self.rack_cols = max(bin_rack.COLS_MIN, min(bin_rack.COLS_MAX, self.rack_cols))
+        try:
+            self.rack_rows = int(float(self.q.value("rack_rows", 2)))
+        except (TypeError, ValueError):
+            self.rack_rows = 2
+        self.rack_rows = max(bin_rack.ROWS_MIN, min(bin_rack.ROWS_MAX, self.rack_rows))
+        try:
+            self.rack_cell_w = float(self.q.value("rack_cell_w", 85.0))
+        except (TypeError, ValueError):
+            self.rack_cell_w = 85.0
+        self.rack_cell_w = max(bin_rack.CELL_W_MIN, min(bin_rack.CELL_W_MAX, self.rack_cell_w))
+        try:
+            self.rack_cell_h = float(self.q.value("rack_cell_h", 50.0))
+        except (TypeError, ValueError):
+            self.rack_cell_h = 50.0
+        self.rack_cell_h = max(bin_rack.CELL_H_MIN, min(bin_rack.CELL_H_MAX, self.rack_cell_h))
+        try:
+            self.rack_plate = float(self.q.value("rack_plate", 4.0))
+        except (TypeError, ValueError):
+            self.rack_plate = 4.0
+        self.rack_plate = max(bin_rack.PLATE_MIN, min(bin_rack.PLATE_MAX, self.rack_plate))
+        self.rack_screw = str(self.q.value("rack_screw", "M4"))
+        if self.rack_screw not in bin_rack.SCREWS:
+            self.rack_screw = "M4"
         try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
@@ -860,6 +889,13 @@ class Settings:
         self.q.setValue("bin_cols", self.bin_cols)
         self.q.setValue("bin_rows", self.bin_rows)
         self.q.setValue("bin_label", self.bin_label)
+        self.q.setValue("bin_hanger", self.bin_hanger)
+        self.q.setValue("rack_cols", self.rack_cols)
+        self.q.setValue("rack_rows", self.rack_rows)
+        self.q.setValue("rack_cell_w", self.rack_cell_w)
+        self.q.setValue("rack_cell_h", self.rack_cell_h)
+        self.q.setValue("rack_plate", self.rack_plate)
+        self.q.setValue("rack_screw", self.rack_screw)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
@@ -1687,6 +1723,13 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                   "whose compartments are made by straight dividers, with a "
                                   "sloped ledge along the inside of the front wall on which a "
                                   "label lies readable"))
+        # ---- bin wall rack
+        self.a_bin_rack = A(tr("Bin Wall Rack…"),
+                            lambda checked=False: self.bin_rack_dialog(), None,
+                            "bin_rack", False,
+                            tr("Add a printable wall rack to the model: a plate with a grid of "
+                               "rails that storage bins with a wall hook hang on, and "
+                               "countersunk holes to screw it to the wall"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -1797,7 +1840,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         parts_menu = sub(tr("&Parts"), m,
                          (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
                           self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
-                          self.a_battery_holder, self.a_storage_bin))
+                          self.a_battery_holder, self.a_storage_bin, self.a_bin_rack))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

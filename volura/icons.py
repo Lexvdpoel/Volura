@@ -287,6 +287,11 @@ SVG = {
                    f'<path d="M9.6 5.5 L9.6 14.6 M14.4 5.5 L14.4 14.6" {N} {S(w=1.4)}/>'
                    f'<path d="M5.2 8.6 L8.3 5.5" {N} stroke="#d23b3b" stroke-width="1.7" '
                    f'stroke-linecap="round"/>',
+    # bin wall rack: a plate on the wall with two rails, and a bin hanging on the upper one
+    "bin_rack": f'<rect x="3" y="2.5" width="18" height="19" rx="1" fill="#eef2f7" {S()}/>'
+                f'<path d="M4.5 7 L19.5 7 M4.5 15 L19.5 15" {N} {S(w=1.8)}/>'
+                f'<path d="M8 8.2 L8 13.2 A1 1 0 0 0 9 14.2 L16 14.2 A1 1 0 0 0 17 13.2 L17 8.2 Z" '
+                f'fill="#cfe0f5" {S(w=1.2)}/>',
     # worksheet to model: a red cut contour rising up as a thick plate
     "to_model": f'<path d="M3 20 L11 16 L21 19 L13 23 Z" {N} stroke="#d23b3b" stroke-width="1.4" '
                 f'stroke-dasharray="2 1.4" stroke-linejoin="round"/>'
