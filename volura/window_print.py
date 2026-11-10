@@ -3,9 +3,9 @@ Volura.
 
 Step 2 of splitting `volura/app.py`: the methods that build or change a printed part moved
 here verbatim, into a plain mixin that `MainWindow` inherits. The spur gear, the project
-box, the knob, the standoff, the label plate and the cable clip, the solid tools and the
-simplify, the mouse ears, the parts on the bed, the screw thread and the screw hole, the
-clearance and the overhang test, the cut & join, the print check and the help.
+box, the knob, the standoff, the label plate, the 3D text, the cable clip, the solid tools
+and the simplify, the mouse ears, the parts on the bed, the screw thread and the screw hole,
+the clearance and the overhang test, the cut & join, the print check and the help.
 
 The methods that ask something with a message box or an input dialog stay in
 `volura/app.py`, together with the actions that call all of this; the window still owns
@@ -23,14 +23,14 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QVBoxLayout)
 
 from . import (background, battery_holder, cable_clip, enclosure, gears, hinge, joints, knob,
-               label_plate, ops, standoff, theme, threads)
+                label_plate, ops, standoff, text3d, theme, threads)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
 from .part_dialogs import (BatteryHolderDialog, CableClipDialog, HingeDialog, KnobDialog,
-                           LabelPlateDialog, ProjectBoxDialog, StandoffDialog)
+                           LabelPlateDialog, ProjectBoxDialog, StandoffDialog, Text3DDialog)
 
 
 TOOL_INFO = [
@@ -400,6 +400,64 @@ class PrintMixin:
             self.view.set_status(tr("Label plate failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the label plate…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ 3D text
+    def text3d_dialog(self):
+        """Draw > 3D Text…: a part that is made of letters."""
+        dlg = Text3DDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.text3d_text = str(options["text"]).strip()
+        self.settings.text3d_family = str(options["family"])
+        self.settings.text3d_height = float(options["height"])
+        self.settings.text3d_depth = float(options["depth"])
+        self.settings.text3d_bold = bool(options["bold"])
+        self.settings.text3d_align = str(options["align"])
+        self.settings.save()
+        made = self.make_text3d_model(options)
+        self.setFocus()
+        return made
+
+    def make_text3d_model(self, options):
+        """The 3D text as a printed part: one undo step, on the bed next to the model.
+
+        The letters are hundreds of contours and several lines are a block of them, so the text
+        is built in the background, like the label plate, and the window keeps responding. It
+        stands on the bed in the middle of the free bed, or on the free place 10 mm to the right
+        of what is already in the model, so a second text does not land in the first one. The
+        group is named after the first line of the text, because that is what the user typed.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("text", "family", "height", "depth", "bold", "align")}
+        name = str(options["text"]).split("\n")[0].strip() or tr("3D Text")
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the 3D text…"))
+            m = text3d.text3d(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the text away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, name)
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("3D text added."))
+
+        def failed(exc):
+            self.view.set_status(tr("3D text failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the 3D text…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ cable clip

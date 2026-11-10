@@ -26,9 +26,9 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, battery_holder, boxgen, cable_clip, cam, dxf, enclosure,
-                  errors, fileio, gcode, gears, hinge, i18n, joints, knob, label_plate, linking,
-                  nesting, ops, sheet3d, sheettools, svg, spacemouse, standoff, theme, threads,
-                  vector_export, vector_import, workers)
+                   errors, fileio, gcode, gears, hinge, i18n, joints, knob, label_plate, linking,
+                   nesting, ops, sheet3d, sheettools, svg, spacemouse, standoff, text3d, theme,
+                   threads, vector_export, vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -42,7 +42,7 @@ from .app_dialogs import (FILAMENT_MATERIALS, ModelInfoDialog, PageDialog,
 from .panels import (EntityInfoPanel, LayerParamsDialog, LayersPanel, MaterialsPanel,
                      OutlinerPanel, PrintCheckPanel, note, swatch)
 from .part_dialogs import (CableClipDialog, HingeDialog, KnobDialog, LabelPlateDialog,
-                           ProjectBoxDialog, SpurGearDialog, StandoffDialog)
+                           ProjectBoxDialog, SpurGearDialog, StandoffDialog, Text3DDialog)
 from .settings import qsettings
 from .sheet_dialogs import (AutoArrangeDialog, BoxJointDialog, DogboneCornersDialog, EXPORT_FILTERS,
                             FitTestDialog, GCODE_DYNAMIC_KEY, GCODE_S_MAX_DEFAULT, GCODE_S_MAX_KEY,
@@ -541,6 +541,23 @@ class Settings:
         except (TypeError, ValueError):
             self.label_hole = 0.0
         self.label_hole = max(0.0, min(label_plate.HOLE_MAX, self.label_hole))
+        self.text3d_text = str(self.q.value("text3d_text", "Volura")).strip() or "Volura"
+        self.text3d_family = str(self.q.value("text3d_family", "")).strip()
+        try:
+            self.text3d_height = float(self.q.value("text3d_height", 10.0))
+        except (TypeError, ValueError):
+            self.text3d_height = 10.0
+        self.text3d_height = max(text3d.HEIGHT_MIN,
+                                 min(text3d.HEIGHT_MAX, self.text3d_height))
+        try:
+            self.text3d_depth = float(self.q.value("text3d_depth", 3.0))
+        except (TypeError, ValueError):
+            self.text3d_depth = 3.0
+        self.text3d_depth = max(text3d.DEPTH_MIN, min(text3d.DEPTH_MAX, self.text3d_depth))
+        self.text3d_bold = self._bool("text3d_bold", False)
+        self.text3d_align = str(self.q.value("text3d_align", "left"))
+        if self.text3d_align not in text3d.ALIGNMENTS:
+            self.text3d_align = "left"
         try:
             self.clip_cable_d = float(self.q.value("clip_cable_d", 6.0))
         except (TypeError, ValueError):
@@ -762,6 +779,12 @@ class Settings:
         self.q.setValue("label_margin", self.label_margin)
         self.q.setValue("label_radius", self.label_radius)
         self.q.setValue("label_hole", self.label_hole)
+        self.q.setValue("text3d_text", self.text3d_text)
+        self.q.setValue("text3d_family", self.text3d_family)
+        self.q.setValue("text3d_height", self.text3d_height)
+        self.q.setValue("text3d_depth", self.text3d_depth)
+        self.q.setValue("text3d_bold", self.text3d_bold)
+        self.q.setValue("text3d_align", self.text3d_align)
         self.q.setValue("clip_cable_d", self.clip_cable_d)
         self.q.setValue("clip_width", self.clip_width)
         self.q.setValue("clip_wall", self.clip_wall)
@@ -1275,6 +1298,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_cone = A(tr("C&one…"), lambda checked=False: self.insert_primitive("cone"))
         self.a_sphere = A(tr("&Sphere…"), lambda checked=False: self.insert_primitive("sphere"))
         self.a_torus = A(tr("&Torus…"), lambda checked=False: self.insert_primitive("torus"))
+        # ---- 3D text
+        self.a_text3d = A(tr("3D Text…"), lambda checked=False: self.text3d_dialog(), None,
+                          "text3d", False,
+                          tr("Add a part made of letters to the model: your text in the font, "
+                             "the height and the depth you choose, standing on the bed"))
 
         self.a_extents = A(tr("Zoom Extents"), self.zoom_extents, ["Ctrl+Shift+E", "Shift+Z"],
                            "zoom_extents")
@@ -1704,7 +1732,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                          (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
                           self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
                           self.a_battery_holder))
-        self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu)
+        self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
+                          self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
                          S["ellipse"], S["arc"], S["centerarc"], S["polygon"], None, S["text"],
                          None, self.a_box_joint, self.a_spur_gear))

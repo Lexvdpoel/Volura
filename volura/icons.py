@@ -68,6 +68,10 @@ SVG = {
                  f'<circle cx="12" cy="12" r="1.6" fill="#2b2b2b"/>',
     "polygon": f'<path d="M12 3 L20 7.5 L20 16.5 L12 21 L4 16.5 L4 7.5 Z" {F} {S()}/>',
     "text": f'<path d="M5 20 L12 4 L19 20 M8 14 L16 14" {N} {S(w=2.2)}/>',
+    # 3D text: a letter with a back face, so it is a part and not a drawing
+    "text3d": f'<path d="M8 19 L14.5 4 L21 19 M10.9 13.5 L18.1 13.5" {N} stroke="#8fa6c3" '
+              f'stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'
+              f'<path d="M3 21 L9.5 6 L16 21 M6.4 15.5 L13.6 15.5" {N} {S(w=2.2)}/>',
     "pushpull": f'<path d="M4 13 L12 17 L20 13 L20 18 L12 22 L4 18 Z" fill="#b8c9de" {S()}/>'
                 f'<path d="M4 13 L12 9 L20 13 L12 17 Z" fill="#e8eef7" {S()}/>'
                 f'<path d="M12 13 L12 2 M8.5 5.5 L12 2 L15.5 5.5" {N} stroke="#d23b3b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',

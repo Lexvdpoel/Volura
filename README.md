@@ -87,6 +87,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Label Plate** (Draw > Parts): a printable tag for a drawer, a box or a keyring:
   up to four lines of text, raised on the plate or engraved into it, on a plate with rounded
   corners and, if you like, a hole for a ring or a screw
+- **3D Text** (Draw): a part made of letters: your text in any font of your computer, several
+  lines, as thick as you like, standing on the bed with the holes of o, a and 8 in it
 - **Cable Clip** (Draw > Parts): a printable clip that keeps a cable, a hose or a bundle
   where it belongs: a ring of the cable diameter with a mouth narrower than the cable, so you push
   the cable in and it stays, on a foot you screw to a wall or under a desk. The clip prints lying

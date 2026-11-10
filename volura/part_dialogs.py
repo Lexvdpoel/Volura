@@ -1,17 +1,18 @@
 """The dialogs of the printable parts: the gear, the box and the small hardware.
 
-The spur gear, the project box, the knob, the standoff, the label plate, the cable
+The spur gear, the project box, the knob, the standoff, the label plate, the 3D text, the cable
 clip, the print-in-place hinge and the battery holder. Each one starts at the values of Settings
 and remembers the new ones; the actions that open them and the models they build live in
 `volura/app.py`.
 """
 from __future__ import annotations
 
-from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-                               QFormLayout, QLabel, QPlainTextEdit, QSpinBox)
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
+                               QFontComboBox, QFormLayout, QLabel, QPlainTextEdit, QSpinBox)
 
-from . import (battery_holder, cable_clip, enclosure, gears, hinge, knob, label_plate, standoff,
-               threads)
+from . import (battery_holder, cable_clip, enclosure, fonts, gears, hinge, knob, label_plate,
+               standoff, text3d, threads)
 from .i18n import tr
 
 
@@ -435,6 +436,74 @@ class LabelPlateDialog(QDialog):
                 "margin": round(self.margin.value(), 6),
                 "radius": round(self.radius.value(), 6),
                 "hole": round(self.hole.value(), 6)}
+
+
+class Text3DDialog(QDialog):
+    """The "3D Text…" dialog: a part that is made of letters.
+
+    Here the text is the part itself, so the dialog starts with the text and how tall its letters
+    are; the height is the height of a capital, which is what text is read by. The depth is how
+    thick the letters are, and since they stand on that side, a shallow text is a plate with a
+    name on it and a deep one is a knob you can grab. Bold strokes read from further away and wear
+    less quickly. The alignment says how the lines of several lines stand under each other; the
+    whole block is centred, because that is where a part is placed. The values come from Settings
+    and are remembered, the text too.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("3D Text"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.text = QPlainTextEdit()
+        self.text.setPlainText(s.text3d_text)
+        self.text.setTabChangesFocus(True)
+        self.text.setToolTip(tr("The text of the part; Enter starts the next line"))
+        self.family = QFontComboBox()
+        self.family.setCurrentFont(QFont(s.text3d_family or fonts.default_family()))
+        self.family.setToolTip(tr("The font of the letters"))
+        self.height = spin(text3d.HEIGHT_MIN, text3d.HEIGHT_MAX, s.text3d_height)
+        self.height.setToolTip(tr("The height of a capital letter, which is what text is read by"))
+        self.depth = spin(text3d.DEPTH_MIN, text3d.DEPTH_MAX, s.text3d_depth)
+        self.depth.setToolTip(tr("How thick the letters are, which is how the part stands "
+                                 "on the bed"))
+        self.bold = QCheckBox(tr("Bold"))
+        self.bold.setChecked(bool(s.text3d_bold))
+        self.bold.setToolTip(tr("Thicker strokes, which read from further away and wear less"))
+        self.align = QComboBox()
+        for label, key in ((tr("Left"), "left"), (tr("Centre"), "centre"),
+                           (tr("Right"), "right")):
+            self.align.addItem(label, key)
+        self.align.setCurrentIndex(max(0, self.align.findData(s.text3d_align)))
+        self.align.setToolTip(tr("How the lines stand under each other"))
+        lay.addRow(tr("Text"), self.text)
+        lay.addRow(tr("Font"), self.family)
+        lay.addRow(tr("Text height"), self.height)
+        lay.addRow(tr("Depth"), self.depth)
+        lay.addRow("", self.bold)
+        lay.addRow(tr("Alignment"), self.align)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"text": self.text.toPlainText(),
+                "family": str(self.family.currentFont().family()),
+                "height": round(self.height.value(), 6),
+                "depth": round(self.depth.value(), 6),
+                "bold": bool(self.bold.isChecked()),
+                "align": str(self.align.currentData())}
 
 
 class CableClipDialog(QDialog):
