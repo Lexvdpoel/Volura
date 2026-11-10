@@ -92,6 +92,12 @@ The interface is available in English and Dutch (*Window > Preferences > General
   the cable in and it stays, on a foot you screw to a wall or under a desk. The clip prints lying
   on its side, so the ring needs no support. Up to twelve clips print in one row that you break
   apart afterwards, on the bed to the right of your model as one undo step
+- **Print-in-Place Hinge** (Draw > Parts): a printable hinge that comes off the printer
+  already assembled: two leaves that lie flat on the bed beside each other, joined by a row of
+  barrels around one pin. Half of the barrels carry the pin, the other half have a hole around it
+  with the play you enter, so the hinge turns as soon as it is off the bed and there is nothing to
+  screw or to glue. The pin ends and the holes end in a chamfer, so nothing needs support, and the
+  number of barrels is odd, so the pin cannot walk out
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

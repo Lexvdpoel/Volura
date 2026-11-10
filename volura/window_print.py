@@ -22,14 +22,14 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QLabel, QLineEdit, QPushButton, QSpinBox, QTextBrowser,
                                QVBoxLayout)
 
-from . import (background, cable_clip, enclosure, gears, joints, knob, label_plate, ops,
+from . import (background, cable_clip, enclosure, gears, hinge, joints, knob, label_plate, ops,
                standoff, theme, threads)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
-from .part_dialogs import (CableClipDialog, KnobDialog, LabelPlateDialog,
+from .part_dialogs import (CableClipDialog, HingeDialog, KnobDialog, LabelPlateDialog,
                            ProjectBoxDialog, StandoffDialog)
 
 
@@ -462,6 +462,67 @@ class PrintMixin:
 
         background.run(self, work, text=tr("Building the cable clips…"), on_done=done,
                        on_error=failed)
+
+    # ------------------------------------------------------------ print-in-place hinge
+    def hinge_dialog(self):
+        """Draw > Parts > Print-in-Place Hinge…: a hinge that prints as one piece and turns."""
+        dlg = HingeDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.hinge_length = float(options["length"])
+        self.settings.hinge_width = float(options["width"])
+        self.settings.hinge_thickness = float(options["thickness"])
+        self.settings.hinge_knuckles = int(options["knuckles"])
+        self.settings.hinge_clearance = float(options["clearance"])
+        self.settings.hinge_pin_d = float(options["pin_d"])
+        self.settings.save()
+        made = self.make_hinge_model(options)
+        self.setFocus()
+        return made
+
+    def make_hinge_model(self, options):
+        """The hinge as a printed part: one undo step, on the bed next to the model.
+
+        The knuckles and the hole in them are a dozen booleans, so the hinge is built in the
+        background, like the cable clips, and the window keeps responding. It lies flat on the bed
+        in the middle of the free bed, or on the free place 10 mm to the right of what is already
+        in the model, so a second hinge does not land in the first one.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("length", "width", "thickness", "knuckles", "clearance",
+                                        "pin_d")}
+        length = float(options["length"])
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the hinge…"))
+            m = hinge.hinge(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the hinge away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color,
+                                        tr("Print-in-place hinge"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Print-in-place hinge of {l} mm added.").format(
+                l=f"{length:g}"))
+
+        def failed(exc):
+            self.view.set_status(tr("Print-in-place hinge failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the hinge…"), on_done=done,
+                       on_error=failed)
+
     # ------------------------------------------------------------ dogbone corners
     def ask_sheet_text(self):
         """Dialog of the 2D text tool: text, font, height and bold."""

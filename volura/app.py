@@ -26,8 +26,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, boxgen, cable_clip, cam, dxf, enclosure, errors, fileio,
-                  gcode, gears, i18n, joints, knob, label_plate, linking, nesting, ops, sheet3d,
-                  sheettools, svg, spacemouse, standoff, theme, threads, vector_export,
+                  gcode, gears, hinge, i18n, joints, knob, label_plate, linking, nesting, ops,
+                  sheet3d, sheettools, svg, spacemouse, standoff, theme, threads, vector_export,
                   vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
@@ -41,7 +41,7 @@ from .app_dialogs import (FILAMENT_MATERIALS, ModelInfoDialog, PageDialog,
                           PreferencesDialog, PRINTERS, ShortcutsPanel, SimplifyDialog)
 from .panels import (EntityInfoPanel, LayerParamsDialog, LayersPanel, MaterialsPanel,
                      OutlinerPanel, PrintCheckPanel, note, swatch)
-from .part_dialogs import (CableClipDialog, KnobDialog, LabelPlateDialog,
+from .part_dialogs import (CableClipDialog, HingeDialog, KnobDialog, LabelPlateDialog,
                            ProjectBoxDialog, SpurGearDialog, StandoffDialog)
 from .settings import qsettings
 from .sheet_dialogs import (AutoArrangeDialog, BoxJointDialog, DogboneCornersDialog, EXPORT_FILTERS,
@@ -578,6 +578,39 @@ class Settings:
             self.clip_count = 1
         self.clip_count = max(cable_clip.COUNT_MIN, min(cable_clip.COUNT_MAX, self.clip_count))
         try:
+            self.hinge_length = float(self.q.value("hinge_length", 40.0))
+        except (TypeError, ValueError):
+            self.hinge_length = 40.0
+        self.hinge_length = max(hinge.LENGTH_MIN, min(hinge.LENGTH_MAX, self.hinge_length))
+        try:
+            self.hinge_width = float(self.q.value("hinge_width", 15.0))
+        except (TypeError, ValueError):
+            self.hinge_width = 15.0
+        self.hinge_width = max(hinge.WIDTH_MIN, min(hinge.WIDTH_MAX, self.hinge_width))
+        try:
+            self.hinge_thickness = float(self.q.value("hinge_thickness", 2.0))
+        except (TypeError, ValueError):
+            self.hinge_thickness = 2.0
+        self.hinge_thickness = max(hinge.THICKNESS_MIN,
+                                   min(hinge.THICKNESS_MAX, self.hinge_thickness))
+        try:
+            self.hinge_knuckles = int(float(self.q.value("hinge_knuckles", 5)))
+        except (TypeError, ValueError):
+            self.hinge_knuckles = 5
+        self.hinge_knuckles = max(hinge.KNUCKLES_MIN,
+                                  min(hinge.KNUCKLES_MAX, self.hinge_knuckles))
+        try:
+            self.hinge_clearance = float(self.q.value("hinge_clearance", 0.3))
+        except (TypeError, ValueError):
+            self.hinge_clearance = 0.3
+        self.hinge_clearance = max(hinge.CLEARANCE_MIN,
+                                   min(hinge.CLEARANCE_MAX, self.hinge_clearance))
+        try:
+            self.hinge_pin_d = float(self.q.value("hinge_pin_d", 3.0))
+        except (TypeError, ValueError):
+            self.hinge_pin_d = 3.0
+        self.hinge_pin_d = max(hinge.PIN_MIN, min(hinge.PIN_MAX, self.hinge_pin_d))
+        try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
             self.tab_count = 4
@@ -709,6 +742,12 @@ class Settings:
         self.q.setValue("clip_base", self.clip_base)
         self.q.setValue("clip_bore", self.clip_bore)
         self.q.setValue("clip_count", self.clip_count)
+        self.q.setValue("hinge_length", self.hinge_length)
+        self.q.setValue("hinge_width", self.hinge_width)
+        self.q.setValue("hinge_thickness", self.hinge_thickness)
+        self.q.setValue("hinge_knuckles", self.hinge_knuckles)
+        self.q.setValue("hinge_clearance", self.hinge_clearance)
+        self.q.setValue("hinge_pin_d", self.hinge_pin_d)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)
@@ -1506,6 +1545,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                               tr("Add printable cable clips to the model: a ring that snaps "
                                  "round a cable and a foot to screw against a wall or under a "
                                  "desk"))
+        # ---- print-in-place hinge
+        self.a_print_hinge = A(tr("Print-in-Place Hinge…"),
+                               lambda checked=False: self.hinge_dialog(), None, "print_hinge",
+                               False,
+                               tr("Add a printable hinge to the model: two leaves that lie flat "
+                                  "on the bed, joined by a row of knuckles around a pin, so it "
+                                  "prints as one piece and turns as soon as it comes off the "
+                                  "printer"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -1615,7 +1662,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                                    self.a_sphere, self.a_torus))
         parts_menu = sub(tr("&Parts"), m,
                          (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
-                          self.a_label_plate, self.a_cable_clip))
+                          self.a_label_plate, self.a_cable_clip, self.a_print_hinge))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
                          S["ellipse"], S["arc"], S["centerarc"], S["polygon"], None, S["text"],

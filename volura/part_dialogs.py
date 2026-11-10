@@ -1,15 +1,16 @@
 """The dialogs of the printable parts: the gear, the box and the small hardware.
 
-The spur gear, the project box, the knob, the standoff, the label plate and the cable
-clip. Each one starts at the values of Settings and remembers the new ones; the actions
-that open them and the models they build live in `volura/app.py`.
+The spur gear, the project box, the knob, the standoff, the label plate, the cable
+clip and the print-in-place hinge. Each one starts at the values of Settings and
+remembers the new ones; the actions that open them and the models they build live in
+`volura/app.py`.
 """
 from __future__ import annotations
 
 from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
                                QFormLayout, QLabel, QPlainTextEdit, QSpinBox)
 
-from . import cable_clip, enclosure, gears, knob, label_plate, standoff, threads
+from . import cable_clip, enclosure, gears, hinge, knob, label_plate, standoff, threads
 from .i18n import tr
 
 
@@ -506,3 +507,70 @@ class CableClipDialog(QDialog):
                 "base": round(self.base.value(), 6),
                 "bore": str(self.size.currentData()),
                 "count": int(self.count.value())}
+
+
+class HingeDialog(QDialog):
+    """The "Print-in-Place Hinge…" dialog: a hinge that prints as one piece and turns at once.
+
+    A hinge is made for something that has to open, so the dialog starts with the leaves: how long
+    the hinge is along the opening and how far and how thick each leaf is. The knuckles are the
+    barrels that turn around one pin; their number is odd, so both ends of the hinge carry the pin
+    and the pin cannot walk out. The clearance is the play between the pin and its hole and between
+    two neighbouring barrels, which is what makes the hinge move once it is off the printer, and
+    the pin is the rod the knuckles turn on. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Print-in-place hinge"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.length = spin(hinge.LENGTH_MIN, hinge.LENGTH_MAX, s.hinge_length)
+        self.length.setToolTip(tr("Along the pin, which is how wide the door, the lid or the "
+                                  "case is"))
+        self.width = spin(hinge.WIDTH_MIN, hinge.WIDTH_MAX, s.hinge_width)
+        self.width.setToolTip(tr("How far one leaf reaches out from the pin, on each side of it"))
+        self.thickness = spin(hinge.THICKNESS_MIN, hinge.THICKNESS_MAX, s.hinge_thickness, 0.2)
+        self.thickness.setToolTip(tr("How thick each leaf is, which is also the wall of its "
+                                     "knuckles"))
+        self.knuckles = QSpinBox()
+        self.knuckles.setRange(hinge.KNUCKLES_MIN, hinge.KNUCKLES_MAX)
+        self.knuckles.setSingleStep(2)
+        self.knuckles.setValue(s.hinge_knuckles if s.hinge_knuckles % 2 else s.hinge_knuckles + 1)
+        self.knuckles.setToolTip(tr("How many barrels there are on the pin: an odd number, so the "
+                                    "pin is held at both ends"))
+        self.clearance = spin(hinge.CLEARANCE_MIN, hinge.CLEARANCE_MAX, s.hinge_clearance, 0.05)
+        self.clearance.setToolTip(tr("The play between the pin and its hole and between two "
+                                     "knuckles: too little freezes the hinge, too much makes it "
+                                     "rattle"))
+        self.pin_d = spin(hinge.PIN_MIN, hinge.PIN_MAX, s.hinge_pin_d)
+        self.pin_d.setToolTip(tr("The rod the knuckles turn on, which prints as one piece with "
+                                 "the leaf that carries it"))
+        lay.addRow(tr("Length"), self.length)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Thickness"), self.thickness)
+        lay.addRow(tr("Knuckles"), self.knuckles)
+        lay.addRow(tr("Clearance"), self.clearance)
+        lay.addRow(tr("Pin diameter"), self.pin_d)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"length": round(self.length.value(), 6),
+                "width": round(self.width.value(), 6),
+                "thickness": round(self.thickness.value(), 6),
+                "knuckles": int(self.knuckles.value()),
+                "clearance": round(self.clearance.value(), 6),
+                "pin_d": round(self.pin_d.value(), 6)}
