@@ -194,7 +194,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
   and the time of the job in the status bar
 - **Model and worksheet together**: right-click a face or sheet > *Laser / Mill* puts it on a layer of
   the worksheet; *Parts to 3D Model* places everything that is cut as a sheet with the sheet thickness
-  in 3D
+  in 3D. Every outline stays linked to its part, and a linked face keeps its face when you turn the
+  part over
 
 ## Installation
 

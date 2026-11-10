@@ -13,7 +13,7 @@ from .geom import (Plane, default_u, extrude_cs, manifold_from_mesh, mesh_arrays
 from .i18n import tr, tr_noop, trn
 from .model import ROOT, Document, Group
 from .vector2d import VPath, polygon_area
-from . import fillet, joints, nesting, workers
+from . import fillet, joints, linking, nesting, workers
 
 DEFAULT_COLOR = "#f2f2f2"
 
@@ -351,6 +351,23 @@ def intersect_faces(doc: Document, items_a, items_b):
 
 # ------------------------------------------------------------- transforms
 
+def transform_link_frames(doc: Document, M3, t, gid):
+    """The face links of one group through the same map as its solid.
+
+    The frame of a link of a face is the plane of that face in world coordinates, so a
+    group that moves or turns takes that plane with it. Left behind, the link reads
+    whatever face lies in the old plane once the solid has turned over.
+    """
+    if not doc.links:
+        return
+    M3, t = np.asarray(M3, dtype=float), np.asarray(t, dtype=float).reshape(3)
+    for l in doc.links:
+        if l.kind != "face" or l.frame is None or int(l.group) != int(gid):
+            continue
+        q = np.asarray(l.frame, dtype=float).reshape(-1)
+        l.frame = linking.frame_to_list(linking.face_frame(M3 @ q[3:6], M3 @ q[0:3] + t))
+
+
 def transform_selection(doc: Document, M3, t, copy=False, items=None):
     """Move/rotate/scale selected groups and loose geometry. Returns new selection."""
     items = doc.selection if items is None else items
@@ -373,6 +390,7 @@ def transform_selection(doc: Document, M3, t, copy=False, items=None):
             new_sel.append(("g", n.id, n.id))
         else:
             g.ents.transform(M3, t)
+            transform_link_frames(doc, M3, t, g.id)
             new_sel.append(("g", g.id, g.id))
     by_ctx = {}
     for k, ctx, i in items:

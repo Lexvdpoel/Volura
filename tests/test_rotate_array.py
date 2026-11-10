@@ -6,6 +6,7 @@ the same angle step, and "/3" divides the angle into 3 equal steps (like SketchU
 import math
 import os
 import sys
+from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,8 +19,39 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import ops  # noqa: E402
 from volura.geom import Plane  # noqa: E402
+from volura.inference import Inference  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
+
+
+class FakeView:
+    """A view that remembers what a tool drew."""
+
+    def __init__(self):
+        self.lines = []
+        self.cam = SimpleNamespace(pixel_size=lambda p: 1.0)
+
+    def draw_lines(self, pts, color, width, stipple=False, on_top=False):
+        self.lines.append((np.asarray(pts, dtype=float), bool(stipple)))
+
+    def draw_strip(self, pts, color, width, on_top=False):
+        pass
+
+    def draw_points(self, pts, color, size):
+        pass
+
+    def add_label(self, point, text):
+        pass
+
+    def draw_inference(self, inf):
+        pass
+
+    def segment_to(self, point):
+        """The single line the tool draws to the point under the cursor."""
+        for pts, stip in self.lines:
+            if len(pts) == 2 and np.allclose(pts[1], point):
+                return stip
+        return None
 
 
 @pytest.fixture()
@@ -101,6 +133,28 @@ def test_rotate_array_divides_the_angle(win):
 
     win.doc.undo()
     assert len(win.doc.groups) == 1, "one undo leaves only the original"
+
+
+def test_the_line_from_the_centre_to_the_cursor_while_the_angle_starts(win):
+    g = spoke(win)
+    tool = win.view.tools["rotate"]
+    tool.reset()
+    tool.items = [("g", g.id, g.id)]
+    tool.inf = Inference("endpoint", np.array([25.0, 8.0, 0.0]))
+    view = FakeView()
+    tool.draw(view)
+    assert view.segment_to(tool.inf.point) is None, "no centre yet, so no line"
+
+    tool.center = np.zeros(3)
+    tool.plane = Plane(np.zeros(3), np.array([0.0, 0, 1]))
+    view = FakeView()
+    tool.draw(view)
+    assert view.segment_to(tool.inf.point) is True, "a stippled line to the start point"
+
+    tool.ref = np.array([1.0, 0, 0])
+    view = FakeView()
+    tool.draw(view)
+    assert view.segment_to(tool.inf.point) is False, "the angle line, as before"
 
 
 def test_parse_array_helper():

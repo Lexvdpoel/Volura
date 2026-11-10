@@ -898,6 +898,26 @@ class SheetMixin:
                                                shape=linking.sorted_loops(pl["loops"]),
                                                thickness=float(pl["thickness"]), frame=None))
 
+    def _face_link_frame(self, link, ents):
+        """The plane of the face a link means once the solid moved or turned.
+
+        `link.frame` is a plane in world coordinates, and after a rotation another face
+        often lies in it: the 40 x 20 top of a box takes the place of the 20 x 10 side
+        that went to the worksheet. The shape of the link says which face it is, so every
+        face of the group is measured in its own plane and the one that is still that
+        shape wins. None when no face is: the linked face itself changed, and the plane
+        the link remembers is the best there is.
+        """
+        for F in ents.F.values():
+            if not F.loops or not F.loops[0]:
+                continue
+            frame = linking.face_frame(F.normal, ents.V[F.loops[0][0]])
+            loops = linking.sorted_loops([linking.to_plane([ents.V[v] for v in loop], frame)
+                                          for loop in F.loops if len(loop) >= 3])
+            if loops and linking.same_shape(link.shape, loops):
+                return frame
+        return None
+
     @staticmethod
     def _link_placement(shape, loops) -> np.ndarray:
         """Where `loops` lie, read from the shape a link last synced.
@@ -933,10 +953,12 @@ class SheetMixin:
         Only the shape travels and every side keeps its own placement: the new shape is put
         where the old one lay by the rigid fit of `linking.placement`. A plate is the only
         kind that may change in 3D; a change of a face outline on the sheet is left where it
-        is with a word about it. When both sides changed, the model wins. A link whose group
-        or paths are gone is dropped. After the links, the vent patterns of the outlines that
-        changed are made again (see `refit_vents`). One undo step for all of that, only when
-        something really changed.
+        is with a word about it. When both sides changed, the model wins. A face link of a
+        solid that turned reads the face with the linked shape again, so a face that came to
+        lie in the old plane does not take its place. A link whose group or paths are gone
+        is dropped. After the links, the vent patterns of the outlines that changed are made
+        again (see `refit_vents`). One undo step for all of that, only when something really
+        changed.
         """
         doc = self.doc
         if not doc.links:
@@ -960,6 +982,11 @@ class SheetMixin:
                 frame = linking.frame_of(l.frame)
                 if frame is not None and man is not None and not man.is_empty():
                     three = linking.sorted_loops(linking.face_shape(man, frame) or [])
+                    if not three or linking.shape_changed(l.shape, three):
+                        found = self._face_link_frame(l, ents)
+                        if found is not None:
+                            l.frame = linking.frame_to_list(found)
+                            three = linking.sorted_loops(linking.face_shape(man, found) or [])
             ch3 = three is not None and linking.shape_changed(l.shape, three)
             ch2 = linking.shape_changed(l.shape, sheet_loops)
             push_sheet = direction in ("to_sheet", "both") and ch3

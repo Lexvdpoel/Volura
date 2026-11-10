@@ -2582,6 +2582,9 @@ class RotateTool(TransformTool):
                 d = pl.u * math.cos(a) + pl.v * math.sin(a)
                 ticks += [c + d * r * 0.88, c + d * r]
             view.draw_lines(ticks, col, 1, on_top=True)
+        if self.center is not None and self.ref is None and self.inf is not None:
+            view.draw_lines([self.center, self.inf.point], (0.2, 0.2, 0.2, 1), 1.5,
+                            stipple=True, on_top=True)
         if self.center is not None and self.ref is not None:
             r = view.cam.pixel_size(self.center) * 60
             view.draw_lines([self.center, self.center + self.ref * r], (0.2, 0.2, 0.2, 1), 1.5,
