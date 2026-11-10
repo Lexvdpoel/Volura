@@ -3,6 +3,21 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.41 — 2026-11-10
+
+### Improved
+- **Cable chain with stops**: a small tab behind every pin runs in an arc-shaped window of the
+  link before it, so a link turns from straight to the bend you enter (20 to 90 degrees) and no
+  further; the other way the chain stays straight and carries itself over a span.
+
+### Fixed
+- Gridfinity bins of more than one square no longer have thin bars across the top of the
+  opening: the stacking lip now runs around the whole bin.
+
+### Website
+- The manual describes the stops of the cable chain and shows the storage bins with their open
+  front and labels on the wall rack.
+
 ## 0.2.40 — 2026-11-10
 
 ### New
