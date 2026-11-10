@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-                               QFontComboBox, QFormLayout, QLabel, QPlainTextEdit, QSpinBox)
+                               QFontComboBox, QFormLayout, QLabel, QLineEdit, QPlainTextEdit,
+                               QSpinBox)
 
 from . import (battery_holder, bin_rack, cable_clip, enclosure, fonts, gears, hinge, knob, label_plate,
                standoff, storage_bin, text3d, threads)
@@ -780,6 +781,13 @@ class StorageBinDialog(QDialog):
         lay.addRow(tr("Columns"), self.cols)
         lay.addRow(tr("Rows"), self.rows)
         lay.addRow("", self.label)
+        self.label_text = QLineEdit(s.bin_label_text)
+        self.label_text.setPlaceholderText(tr("No label"))
+        self.label_text.setToolTip(tr("Text for a printed label that lies flush in the pocket of "
+                                      "the label ledge; leave it empty for no label"))
+        self.label_text.setEnabled(self.label.isChecked())
+        self.label.toggled.connect(self.label_text.setEnabled)
+        lay.addRow(tr("Label text"), self.label_text)
         self.hanger = QCheckBox(tr("Wall hook"))
         self.hanger.setChecked(bool(s.bin_hanger))
         self.hanger.setToolTip(tr("A hook along the top of the back wall and a rib along its "
@@ -800,7 +808,8 @@ class StorageBinDialog(QDialog):
                 "cols": int(self.cols.value()),
                 "rows": int(self.rows.value()),
                 "label": bool(self.label.isChecked()),
-                "hanger": bool(self.hanger.isChecked())}
+                "hanger": bool(self.hanger.isChecked()),
+                "label_text": self.label_text.text().strip()}
 
 
 class BinRackDialog(QDialog):
@@ -856,6 +865,13 @@ class BinRackDialog(QDialog):
         lay.addRow(tr("Row height"), self.cell_h)
         lay.addRow(tr("Plate"), self.plate)
         lay.addRow(tr("Screws"), self.screw)
+        self.panel_cols = QSpinBox()
+        self.panel_cols.setRange(0, bin_rack.COLS_MAX)
+        self.panel_cols.setSpecialValueText(tr("One piece"))
+        self.panel_cols.setValue(s.rack_panel_cols)
+        self.panel_cols.setToolTip(tr("For a rack wider than the bed: panels of this many columns "
+                                      "that slide together with dovetails"))
+        lay.addRow(tr("Columns per panel"), self.panel_cols)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -863,6 +879,7 @@ class BinRackDialog(QDialog):
 
     def options(self) -> dict:
         return {"cols": int(self.cols.value()),
+                "panel_cols": int(self.panel_cols.value()),
                 "rows": int(self.rows.value()),
                 "cell_w": round(self.cell_w.value(), 6),
                 "cell_h": round(self.cell_h.value(), 6),

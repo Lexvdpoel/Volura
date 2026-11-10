@@ -22,6 +22,12 @@ stands at 45 degrees. A label lies against the wall and on the ledge, where you 
 above, and the ledge prints without support, because a face at 45 degrees is what a printer
 carries on its own.
 
+The top of the ledge has a shallow **pocket** for a printed label (`bin_label`): `LABEL_POCKET`
+millimetres deep, from the front wall to `LABEL_LIP` millimetres before the edge of the ledge, so
+the lip that stays holds the label in. The label is a thin plate of the size of the pocket, less
+`LABEL_PLAY` all round, with its text standing on top, so it lies flush in the ledge and only the
+letters stand out.
+
 The **wall hook** hangs the bin on the wall rack of `volura/bin_rack.py`: along the outside of the
 back wall a cleat of `CLEAT_THICK` millimetres runs at the top and reaches `CLEAT_OUT − CLEAT_PLAY`
 millimetres out, down at 45 degrees, so it drops behind a rail of the rack, whose face leans the
@@ -36,6 +42,7 @@ import numpy as np
 
 from . import enclosure
 from .geom import Plane, extrude_cs
+from .i18n import tr
 
 #: the smallest bin that is worth printing and the largest that still fits on a bed
 LENGTH_MIN, LENGTH_MAX = 20.0, 300.0
@@ -51,6 +58,18 @@ RADIUS_MIN, RADIUS_MAX = 0.0, 20.0
 COLS_MIN, COLS_MAX = 1, 10
 #: mm of ledge along the front wall, on which a printed label lies flat and stays readable
 LABEL_DEPTH = 12.0
+#: mm deep the pocket in the top of the ledge is, and the thickness of the label plate in it
+LABEL_POCKET = 0.8
+#: mm of ledge that stays whole along the inside, the lip that holds the label in its pocket
+LABEL_LIP = 2.5
+#: mm of room all round the label in its pocket
+LABEL_PLAY = 0.2
+#: mm that the letters stand on the label
+LABEL_RELIEF = 0.6
+#: mm that the letters stay from the edge of the label
+LABEL_EDGE = 1.0
+#: mm across the narrowest pocket that is still worth a label
+LABEL_NARROWEST = 4.0
 #: mm that the dividers stay under the top edge, so you can reach over them into the bin
 DIVIDER_DROP = 1.0
 #: mm past the top of the walls, so a cut leaves no skin behind
@@ -102,6 +121,63 @@ def _hanger(y_back, x_lo, x_hi, top) -> mf.Manifold:
     return extrude_cs(mf.CrossSection([hook, rib]), FRONT, x_lo, x_hi)
 
 
+def _ledge_depth(inner_w, H, f) -> float:
+    """How deep the ledge is: never deeper than half the inside or the height of the bin."""
+    return min(LABEL_DEPTH, 0.5 * inner_w, H - f)
+
+
+def _pocket(inner_l, inner_w, depth):
+    """The pocket in the ledge as (length, width, y of its front side), or None when the ledge
+    leaves too little room for a label."""
+    wide = depth - LABEL_LIP
+    if wide < LABEL_NARROWEST or inner_l < LABEL_NARROWEST:
+        return None
+    return inner_l, wide, -0.5 * inner_w
+
+
+def label_size(length=80, width=60, height=40, wall=1.6, floor=1.2):
+    """(length, width) of the label that fits the pocket of this bin, or None when it has none."""
+    L = _clamp(length, LENGTH_MIN, LENGTH_MAX)
+    W = _clamp(width, WIDTH_MIN, WIDTH_MAX)
+    H = _clamp(height, HEIGHT_MIN, HEIGHT_MAX)
+    t = _clamp(wall, WALL_MIN, WALL_MAX)
+    f = _clamp(floor, FLOOR_MIN, FLOOR_MAX)
+    inner_l, inner_w = L - 2.0 * t, W - 2.0 * t
+    pocket = _pocket(inner_l, inner_w, _ledge_depth(inner_w, H, f))
+    if pocket is None:
+        return None
+    return pocket[0] - 2.0 * LABEL_PLAY, pocket[1] - 2.0 * LABEL_PLAY
+
+
+def bin_label(text, length=80, width=60, height=40, wall=1.6, floor=1.2, family=None,
+              bold=True) -> mf.Manifold:
+    """The label for the pocket of a bin of these sizes: a plate with `text` standing on it.
+
+    The plate is `LABEL_POCKET` millimetres thick, so it lies flush in the ledge, and as large as
+    the pocket less `LABEL_PLAY` all round. The letters stand `LABEL_RELIEF` millimetres on it,
+    as high as fits and made smaller when a long text would run over the edge; they stay
+    `LABEL_EDGE` millimetres from it. The label lies on `z = 0`, centred on the origin, and the
+    text reads along the length of the bin. A bin without room for a pocket, or a text without
+    letters, is refused with a ValueError.
+    """
+    from . import text3d           # the letters need the fonts, which only this part does
+    size = label_size(length, width, height, wall, floor)
+    if size is None:
+        raise ValueError(tr("this bin has no room for a label"))
+    lx, ly = size
+    letters = text3d.text3d(text, family, height=max(text3d.HEIGHT_MIN, 0.6 * ly),
+                            depth=LABEL_RELIEF + MARGIN, bold=bold, align="centre")
+    lo, hi = np.asarray(letters.bounding_box()[:3]), np.asarray(letters.bounding_box()[3:])
+    room = (lx - 2.0 * LABEL_EDGE, ly - 2.0 * LABEL_EDGE)
+    k = min(1.0, room[0] / (hi[0] - lo[0]), room[1] / (hi[1] - lo[1]))
+    letters = letters.scale((k, k, 1.0))
+    lo, hi = np.asarray(letters.bounding_box()[:3]), np.asarray(letters.bounding_box()[3:])
+    letters = letters.translate((-0.5 * (lo[0] + hi[0]), -0.5 * (lo[1] + hi[1]),
+                                 LABEL_POCKET - MARGIN - lo[2]))
+    plate = mf.Manifold.cube([lx, ly, LABEL_POCKET]).translate((-0.5 * lx, -0.5 * ly, 0.0))
+    return plate + letters
+
+
 def storage_bin(length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4,
                 cols=1, rows=1, label=True, hanger=False) -> mf.Manifold:
     """A printable open-top box with `cols` by `rows` compartments and a ledge for a label.
@@ -145,7 +221,7 @@ def storage_bin(length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4,
         y = -0.5 * inner_w + j * inner_w / nr
         add.append(mf.Manifold.cube([inner_l + t, t, top - f])
                    .translate((-0.5 * (inner_l + t), y - 0.5 * t, f)))
-    depth = min(LABEL_DEPTH, 0.5 * inner_w, H - f)   # the ledge is never deeper than the bin is wide
+    depth = _ledge_depth(inner_w, H, f)
     if label and depth > 0.0:
         add.append(_ledge(-0.5 * inner_w, t, -0.5 * (inner_l + t), 0.5 * (inner_l + t), H, depth))
     body = block - cavity
@@ -153,6 +229,12 @@ def storage_bin(length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4,
         # nothing may stand outside the outline, so what goes back in is clipped to the block
         extra = mf.Manifold.batch_boolean(add, mf.OpType.Add)
         body = body + mf.Manifold.batch_boolean([extra, block], mf.OpType.Intersect)
+    pocket = _pocket(inner_l, inner_w, depth) if label else None
+    if pocket is not None:
+        # the pocket for the label, in the top of the ledge and against the front wall
+        lx, ly, y0 = pocket
+        body = body - mf.Manifold.cube([lx, ly, LABEL_POCKET + MARGIN]).translate(
+            (-0.5 * lx, y0, H - LABEL_POCKET))
     # the bin stands on the bed as it prints: centred in plan, with the floor on z = 0
     bb = np.asarray(body.bounding_box(), dtype=float)
     body = body.translate((-0.5 * (bb[0] + bb[3]), -0.5 * (bb[1] + bb[4]), -bb[2]))

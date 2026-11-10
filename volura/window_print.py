@@ -659,6 +659,7 @@ class PrintMixin:
         self.settings.bin_rows = int(options["rows"])
         self.settings.bin_label = bool(options["label"])
         self.settings.bin_hanger = bool(options.get("hanger", False))
+        self.settings.bin_label_text = str(options.get("label_text", ""))
         self.settings.save()
         made = self.make_storage_bin_model(options)
         self.setFocus()
@@ -677,6 +678,7 @@ class PrintMixin:
         size = {k: options[k] for k in ("length", "width", "height", "wall", "floor", "radius",
                                         "cols", "rows", "label")}
         size["hanger"] = bool(options.get("hanger", False))
+        text = str(options.get("label_text", "") or "").strip() if size["label"] else ""
         bb = doc.model_bbox()
         bx, by, _bz = self.settings.bed_size
 
@@ -688,14 +690,30 @@ class PrintMixin:
             lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
             mid = 0.5 * (lo + hi)
             x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
-            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+            m = m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+            if not text:
+                return m, None
+            # the label lies on the bed in front of the bin, along its length
+            report(0.7, tr("Building the label…"))
+            label = storage_bin.bin_label(text, **{k: size[k] for k in (
+                "length", "width", "height", "wall", "floor")})
+            b = np.asarray(m.bounding_box(), dtype=float)
+            c = np.asarray(label.bounding_box(), dtype=float)
+            return m, label.translate((0.5 * (b[0] + b[3]) - 0.5 * (c[0] + c[3]),
+                                       b[1] - 10.0 - c[4], -c[2]))
 
-        def done(m):
-            doc.checkpoint()                # one undo takes the bin away again
+        def done(made):
+            m, label = made
+            doc.checkpoint()                # one undo takes the bin (and its label) away again
             g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Storage bin"))
-            doc.set_selection([("g", g.id, g.id)])
+            sel = [("g", g.id, g.id)]
+            if label is not None:
+                lg = ops.group_from_manifold(doc, label, self.settings.current_color, tr("Label"))
+                sel.append(("g", lg.id, lg.id))
+            doc.set_selection(sel)
             doc.notify()
-            self.view.set_status(tr("Storage bin added."))
+            self.view.set_status(tr("Storage bin added.") if label is None
+                                 else tr("Storage bin and its label added."))
 
         def failed(exc):
             self.view.set_status(tr("Storage bin failed: {error}").format(error=exc))
@@ -717,39 +735,55 @@ class PrintMixin:
         self.settings.rack_cell_h = float(options["cell_h"])
         self.settings.rack_plate = float(options["plate"])
         self.settings.rack_screw = str(options["screw"])
+        self.settings.rack_panel_cols = int(options.get("panel_cols", 0))
         self.settings.save()
         made = self.make_bin_rack_model(options)
         self.setFocus()
         return made
 
     def make_bin_rack_model(self, options):
-        """The rack as a printed part, lying on its back: one undo step, next to the model.
+        """The rack as printed parts, lying on their backs: one undo step, next to the model.
 
-        Like the bin it is built in the background, and it lies in the middle of the free bed or
+        Like the bin it is built in the background. A rack in panels gives one part per panel,
+        10 mm apart from left to right; the row of them lies in the middle of the free bed or
         10 mm to the right of what is already in the model.
         """
         self.set_mode("3d")
         doc = self.doc
         size = {k: options[k] for k in ("cols", "rows", "cell_w", "cell_h", "plate", "screw")}
+        size["panel_cols"] = int(options.get("panel_cols", 0))
         bb = doc.model_bbox()
         bx, by, _bz = self.settings.bed_size
 
         def work(report):
             report(0.1, tr("Building the bin wall rack…"))
-            m = bin_rack.bin_rack(**size)
-            if m.status() != mf.Error.NoError or m.is_empty():
-                raise ValueError(tr("the result is not a valid volume"))
-            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
-            mid = 0.5 * (lo + hi)
-            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
-            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+            panels = bin_rack.bin_rack_panels(**size)
+            for m in panels:
+                if m.status() != mf.Error.NoError or m.is_empty():
+                    raise ValueError(tr("the result is not a valid volume"))
+            boxes = [np.asarray(m.bounding_box(), dtype=float) for m in panels]
+            wide = sum(b[3] - b[0] for b in boxes) + 10.0 * (len(boxes) - 1)
+            x = (0.5 * bx - 0.5 * wide) if bb is None else float(bb[1][0]) + 10.0
+            placed = []
+            for m, b in zip(panels, boxes):
+                placed.append(m.translate((x - b[0], 0.5 * by - 0.5 * (b[1] + b[4]), -b[2])))
+                x += b[3] - b[0] + 10.0
+            return placed
 
-        def done(m):
+        def done(panels):
             doc.checkpoint()                # one undo takes the rack away again
-            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Bin wall rack"))
-            doc.set_selection([("g", g.id, g.id)])
+            groups = []
+            for i, m in enumerate(panels):
+                name = (tr("Bin wall rack") if len(panels) == 1
+                        else tr("Bin wall rack {n}").format(n=i + 1))
+                groups.append(ops.group_from_manifold(doc, m, self.settings.current_color, name))
+            doc.set_selection([("g", g.id, g.id) for g in groups])
             doc.notify()
-            self.view.set_status(tr("Bin wall rack added. Bins hang on it with Wall hook on."))
+            if len(panels) == 1:
+                self.view.set_status(tr("Bin wall rack added. Bins hang on it with Wall hook on."))
+            else:
+                self.view.set_status(tr("Bin wall rack added in {n} panels that slide together. "
+                                        "Bins hang on it with Wall hook on.").format(n=len(panels)))
 
         def failed(exc):
             self.view.set_status(tr("Bin wall rack failed: {error}").format(error=exc))

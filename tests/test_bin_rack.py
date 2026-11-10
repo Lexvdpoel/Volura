@@ -170,6 +170,69 @@ def test_a_bin_as_high_as_a_row_still_fits():
     assert common(rack, low) == pytest.approx(0.0, abs=1e-6)
 
 
+# ------------------------------------------------------------------ stops and panels
+
+def test_a_bin_slid_to_the_end_of_a_rail_hits_the_stop():
+    hook_end = 0.5 * BIN["length"] - BIN.get("radius", 4.0)      # the hook stops at the corner
+    x = -(1.5 * RACK["cell_w"]) + hook_end - 1.0                  # 1 mm past the end of the rail
+    rack, b = hung(x=x)
+    assert common(rack, b) > 1.0, "the bin slides off the end of the rail"
+    rack, b = hung(x=x, rack=dict(RACK, stops=False))
+    assert common(rack, b) == pytest.approx(0.0, abs=1e-6)
+
+
+def test_the_columns_are_shared_over_the_panels():
+    assert bin_rack.panel_columns(5, 2) == [2, 2, 1]
+    assert bin_rack.panel_columns(4, 2) == [2, 2]
+    assert bin_rack.panel_columns(3, 0) == [3]
+    assert bin_rack.panel_columns(3, 3) == [3]
+
+
+def panels(cols=4, panel_cols=2):
+    """The panels of a rack, placed next to each other the way they slide together."""
+    kw = dict(RACK, cols=cols)
+    kw.pop("stops", None)
+    parts = bin_rack.bin_rack_panels(panel_cols=panel_cols, **kw)
+    placed, x = [], 0.0
+    for n, m in zip(bin_rack.panel_columns(cols, panel_cols), parts):
+        placed.append(m.translate((x + 0.5 * n * RACK["cell_w"], 0.0, 0.0)))
+        x += n * RACK["cell_w"]
+    return placed
+
+
+def test_every_panel_is_one_piece_with_its_screw_holes():
+    parts = bin_rack.bin_rack_panels(panel_cols=2, **dict(RACK, cols=5))
+    assert len(parts) == 3
+    assert all(len(m.decompose()) == 1 for m in parts)
+    assert [m.genus() for m in parts] == [4, 4, 2]
+
+
+def test_the_panels_slide_together_without_going_into_each_other():
+    a, b = panels()
+    assert common(a, b) == pytest.approx(0.0, abs=1e-6)
+    assert common(a, b.translate((0.0, 0.0, 1.0))) == pytest.approx(0.0, abs=1e-6), \
+        "the panel does not slide in from the front"
+
+
+def test_the_dovetails_hold_the_panels_together_along_the_wall():
+    a, b = panels()
+    assert common(a, b.translate((1.0, 0.0, 0.0))) > 1.0, "the panels pull apart sideways"
+    assert common(a, b.translate((0.0, 1.0, 0.0))) > 1.0, "the panels slide apart up the wall"
+
+
+def test_only_the_outer_ends_of_a_rack_in_panels_have_stops():
+    a, b = panels()
+    seam = 2 * RACK["cell_w"]
+    y_top = RACK["cell_h"] - 0.5 * RACK["rows"] * RACK["cell_h"]
+    top = bbox(a)[1][2]
+    # just next to the seam, on the rail level where a stop would be: nothing in the way
+    probe = mf.Manifold.cube([2.0 * bin_rack.STOP_LONG, 2.0, 1.0]).translate(
+        (seam - bin_rack.STOP_LONG, y_top - 3.0, top - 1.5))
+    assert common(a, probe) + common(b, probe) == pytest.approx(0.0, abs=1e-6)
+    outer = probe.translate((-seam, 0.0, 0.0))
+    assert common(a, outer) > 0.0, "the outer end has no stop"
+
+
 # ------------------------------------------------------------------ the interface
 
 def test_the_rack_follows_the_bin_in_parts(win):
@@ -210,6 +273,20 @@ def test_the_bin_dialog_has_the_wall_hook(win, monkeypatch):
     assert hi[1] - lo[1] > win.settings.bin_width, "the bin has no hook"
     assert app_module.Settings().bin_hanger is True
     win.settings.bin_hanger = False           # the other tests make bins without a hook
+    win.settings.save()
+
+
+def test_a_rack_in_panels_is_a_part_per_panel(win, monkeypatch):
+    def fill(dlg):
+        dlg.cols.setValue(4)
+        dlg.panel_cols.setValue(2)
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", fill)
+    win.bin_rack_dialog()
+    assert pump_until(lambda: len(win.doc.groups) == 2), "not a part per panel"
+    assert len(win.doc.undo_stack) == 1, "the panels are not one undo step"
+    win.settings.rack_panel_cols = 0          # the other tests make a rack in one piece
     win.settings.save()
 
 

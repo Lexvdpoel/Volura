@@ -19,6 +19,15 @@ The **screw holes** hold the rack on the wall: in every row, halfway the free ba
 one hole in the first and one in the last column (one in the middle with a single column), with a
 90 degree countersink on the front, so a flat head screw sinks into the plate and a bin hangs flat
 against it. With `screw = "none"` the plate has no holes, for a rack that is glued or taped.
+
+A **stop** closes both ends of every rail: a block as high as the hook, so a bin that is slid
+along the rail stays on it.
+
+A rack wider than the bed is printed in **panels** (`bin_rack_panels`): a panel of a few columns,
+with dovetails in its plate where it meets the next one. The right edge of a panel carries a tab
+in every row and the left edge of the next one the socket it slides into from the front, with
+`DOVETAIL_PLAY` millimetre of room, so the panels lock together in the plane of the wall and the
+rails run on over the seam as one. Only the two outer ends of the whole rack get a stop.
 """
 from __future__ import annotations
 
@@ -45,6 +54,12 @@ SCREWS = ("none", "M3", "M4")
 PLATE_UNDER_SINK = 0.6
 #: mm into the plate that a rail starts, so the two are one piece instead of only touching
 MARGIN = 0.5
+#: mm along a rail that the stop at its end is long
+STOP_LONG = 3.0
+#: mm that a dovetail reaches into the next panel, and its width at the seam and at its end
+DOVETAIL_DEEP, DOVETAIL_NECK, DOVETAIL_WIDE = 6.0, 8.0, 12.0
+#: mm of room all round a dovetail in its socket, so two printed panels slide together
+DOVETAIL_PLAY = 0.2
 
 
 def _clamp(value, lo, hi):
@@ -87,7 +102,39 @@ def screw_places(cols=3, rows=2, cell_w=85.0, cell_h=50.0) -> list:
     return [(x, j * h + 0.5 * band) for j in range(nr) for x in xs]
 
 
-def bin_rack(cols=3, rows=2, cell_w=85.0, cell_h=50.0, plate=4.0, screw="M4") -> mf.Manifold:
+def _stop(x_lo, y_top, plate) -> mf.Manifold:
+    """The block that closes a rail at `x_lo`: from the plate to the front of the rail, and from
+    the foot of the rail up to the top of its row, where the hook of a bin would slide past."""
+    y0 = y_top - rail_height()
+    return mf.Manifold.cube([STOP_LONG, y_top - y0, CLEAT_OUT + MARGIN]).translate(
+        (x_lo, y0, plate - MARGIN))
+
+
+def _dovetail(x_seam, y, plate, play=0.0, z_extra=0.0) -> mf.Manifold:
+    """A dovetail from the seam at `x_seam` into the panel on its right, at height `y`.
+
+    Narrow at the seam and wide at its end, so the two panels cannot be pulled apart along the
+    wall. With `play` it is the socket: that much larger all round and a little longer, and
+    `z_extra` lets the socket go through the plate past both faces.
+    """
+    n, wd = 0.5 * DOVETAIL_NECK + play, 0.5 * DOVETAIL_WIDE + play
+    lo = -MARGIN if play == 0.0 else -MARGIN - play
+    loop = [[x_seam + lo, y - n], [x_seam + DOVETAIL_DEEP + play, y - wd],
+            [x_seam + DOVETAIL_DEEP + play, y + wd], [x_seam + lo, y + n]]
+    return mf.Manifold.extrude(mf.CrossSection([loop]), plate + 2.0 * z_extra).translate(
+        (0.0, 0.0, -z_extra))
+
+
+def joint_places(rows=2, cell_h=50.0) -> list:
+    """The height of the dovetail in every row: halfway the free band, like the screw holes."""
+    nr = _count(rows, ROWS_MIN, ROWS_MAX)
+    h = _clamp(cell_h, CELL_H_MIN, CELL_H_MAX)
+    band = h - rail_height()
+    return [j * h + 0.5 * band for j in range(nr)]
+
+
+def bin_rack(cols=3, rows=2, cell_w=85.0, cell_h=50.0, plate=4.0, screw="M4",
+             join_left=False, join_right=False, stops=True) -> mf.Manifold:
     """A plate of `cols` by `rows` cells with a rail at the top of every row, for hanging bins.
 
     The plate is `cols cell_w` by `rows cell_h` millimetres and `plate` millimetres thick and lies
@@ -97,9 +144,13 @@ def bin_rack(cols=3, rows=2, cell_w=85.0, cell_h=50.0, plate=4.0, screw="M4") ->
     screw holes are countersunk on the front for a flat head `screw`, one of `SCREWS`, and the
     plate is made thick enough for the countersink.
 
-    The result is centred on the origin in plan. The sizes are kept within their own bounds, so a
-    rack that cannot be printed becomes the nearest one that can; a screw that is not in `SCREWS`
-    is refused with a ValueError.
+    `join_left` cuts the dovetail sockets in the left edge and `join_right` puts the dovetail tabs
+    on the right edge, for a panel of a rack that is printed in parts; an end that is not joined
+    gets a stop on every rail when `stops` is on.
+
+    The plate is centred on the origin in plan, also when tabs stick out of its right edge. The
+    sizes are kept within their own bounds, so a rack that cannot be printed becomes the nearest
+    one that can; a screw that is not in `SCREWS` is refused with a ValueError.
     """
     size = str(screw)
     if size not in SCREWS:
@@ -116,11 +167,44 @@ def bin_rack(cols=3, rows=2, cell_w=85.0, cell_h=50.0, plate=4.0, screw="M4") ->
     width, height = nc * w, nr * h
 
     body = mf.Manifold.cube([width, height, p])
-    rails = [_rail((j + 1) * h, 0.0, width, p) for j in range(nr)]
-    body = mf.Manifold.batch_boolean([body] + rails, mf.OpType.Add)
+    add = [_rail((j + 1) * h, 0.0, width, p) for j in range(nr)]
+    if stops:
+        for j in range(nr):
+            if not join_left:
+                add.append(_stop(0.0, (j + 1) * h, p))
+            if not join_right:
+                add.append(_stop(width - STOP_LONG, (j + 1) * h, p))
+    if join_right:
+        add += [_dovetail(width, y, p) for y in joint_places(nr, h)]
+    body = mf.Manifold.batch_boolean([body] + add, mf.OpType.Add)
+    if join_left:
+        sockets = [_dovetail(0.0, y, p, DOVETAIL_PLAY, MARGIN) for y in joint_places(nr, h)]
+        body = body - mf.Manifold.batch_boolean(sockets, mf.OpType.Add)
     if size != "none":
         for x, y in screw_places(nc, nr, w, h):
             body = threads.screw_hole(body, (x, y, p), (0.0, 0.0, -1.0), p, size, "countersink")
-    # centred in plan, with the side against the wall on the bed
-    bb = np.asarray(body.bounding_box(), dtype=float)
-    return body.translate((-0.5 * (bb[0] + bb[3]), -0.5 * (bb[1] + bb[4]), -bb[2]))
+    # the plate centred in plan, with the side against the wall on the bed
+    return body.translate((-0.5 * width, -0.5 * height, 0.0))
+
+
+def panel_columns(cols=3, panel_cols=0) -> list:
+    """How many columns every panel gets: `panel_cols` each and the rest in the last one, or all
+    of them in one panel when `panel_cols` is 0 or not smaller than `cols`."""
+    nc = _count(cols, COLS_MIN, COLS_MAX)
+    k = int(panel_cols)
+    if k <= 0 or k >= nc:
+        return [nc]
+    return [k] * (nc // k) + ([nc % k] if nc % k else [])
+
+
+def bin_rack_panels(cols=3, rows=2, cell_w=85.0, cell_h=50.0, plate=4.0, screw="M4",
+                    panel_cols=0, stops=True) -> list:
+    """The rack in panels of `panel_cols` columns, from left to right, each centred on the origin.
+
+    Every panel is a `bin_rack` of its own columns, joined to its neighbours by dovetails, so the
+    panels together are the rack of `cols` columns; a panel lies on the bed as it prints.
+    """
+    counts = panel_columns(cols, panel_cols)
+    last = len(counts) - 1
+    return [bin_rack(n, rows, cell_w, cell_h, plate, screw, join_left=i > 0,
+                     join_right=i < last, stops=stops) for i, n in enumerate(counts)]

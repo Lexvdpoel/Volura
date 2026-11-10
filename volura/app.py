@@ -702,6 +702,7 @@ class Settings:
         self.bin_rows = max(storage_bin.COLS_MIN, min(storage_bin.COLS_MAX, self.bin_rows))
         self.bin_label = self._bool("bin_label", True)
         self.bin_hanger = self._bool("bin_hanger", False)
+        self.bin_label_text = str(self.q.value("bin_label_text", "") or "")
         try:
             self.rack_cols = int(float(self.q.value("rack_cols", 3)))
         except (TypeError, ValueError):
@@ -727,6 +728,11 @@ class Settings:
         except (TypeError, ValueError):
             self.rack_plate = 4.0
         self.rack_plate = max(bin_rack.PLATE_MIN, min(bin_rack.PLATE_MAX, self.rack_plate))
+        try:
+            self.rack_panel_cols = int(float(self.q.value("rack_panel_cols", 0)))
+        except (TypeError, ValueError):
+            self.rack_panel_cols = 0
+        self.rack_panel_cols = max(0, min(bin_rack.COLS_MAX, self.rack_panel_cols))
         self.rack_screw = str(self.q.value("rack_screw", "M4"))
         if self.rack_screw not in bin_rack.SCREWS:
             self.rack_screw = "M4"
@@ -890,12 +896,14 @@ class Settings:
         self.q.setValue("bin_rows", self.bin_rows)
         self.q.setValue("bin_label", self.bin_label)
         self.q.setValue("bin_hanger", self.bin_hanger)
+        self.q.setValue("bin_label_text", self.bin_label_text)
         self.q.setValue("rack_cols", self.rack_cols)
         self.q.setValue("rack_rows", self.rack_rows)
         self.q.setValue("rack_cell_w", self.rack_cell_w)
         self.q.setValue("rack_cell_h", self.rack_cell_h)
         self.q.setValue("rack_plate", self.rack_plate)
         self.q.setValue("rack_screw", self.rack_screw)
+        self.q.setValue("rack_panel_cols", self.rack_panel_cols)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)

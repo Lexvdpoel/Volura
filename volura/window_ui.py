@@ -20,7 +20,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QMenu
 
-from . import i18n, ops, theme
+from . import background, i18n, ops, theme
 from .i18n import tr, tr_noop, trn
 from .model import LOCKED_MSG, ROOT
 from .panels import swatch
@@ -653,15 +653,35 @@ class UiMixin:
         self.doc.set_selection([("g", g.id, g.id)] if g else [])
         self.doc.notify()
 
-    def explode_group(self):
+    def explode_group(self, wait=False):
+        """Edit > Explode Group: the selected groups become loose geometry, one undo step.
+
+        Merging a large solid into the loose geometry takes a while, so it runs in the
+        background with a progress bar that can be cancelled; the document only changes when
+        it is done.
+        """
         groups = self.unlocked(self.doc.selected_groups())
         if not groups:
             return
-        self.doc.checkpoint()
-        for g in groups:
-            ops.explode(self.doc, g)
-        self.doc.selection = []
-        self.doc.notify()
+        doc = self.doc
+        ids = [g.id for g in groups]
+
+        def work(report):
+            return ops.exploded_root(doc, groups, report)
+
+        def done(root):
+            doc.checkpoint()
+            doc.root.load_state(root.state())
+            for gid in ids:
+                doc.remove_group(gid)
+            doc.selection = []
+            doc.notify()
+
+        def failed(exc):
+            self.hint.setText(tr("Explode failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Exploding…"), on_done=done, on_error=failed,
+                       wait=wait)
 
     def edit_group(self):
         groups = self.doc.selected_groups()

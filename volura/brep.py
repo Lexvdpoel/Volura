@@ -2017,8 +2017,13 @@ class Entities:
             # non planar: split into triangles (soft edges), like SketchUp's auto-fold
             self._fold_face(f)
 
-    def merge_from(self, other, M3=None, t=None, hint=None):
-        """Copy all geometry of another Entities into this one (sticky)."""
+    def merge_from(self, other, M3=None, t=None, hint=None, progress=None):
+        """Copy all geometry of another Entities into this one (sticky).
+
+        ``progress(fraction)`` is called now and then with how far the merge is (0..1): the
+        faces, then the edges, then the planes that are rebuilt, which is where a large solid
+        spends its time.
+        """
         M3 = np.eye(3) if M3 is None else np.asarray(M3, dtype=float)
         t = np.zeros(3) if t is None else np.asarray(t, dtype=float)
         mirror = np.linalg.det(M3) < 0
@@ -2029,7 +2034,18 @@ class Entities:
             pl = canon_plane(Plane(M3 @ pl.origin + t, normalize(nm @ pl.n)))
             planes.setdefault(plane_key(pl), pl)
         covs = {k: self.coverage(pl, self.faces_in_plane(pl)) for k, pl in planes.items()}
+        total = max(1, len(other.F) + len(other.E) + len(planes))
+        every = max(1, total // 100)
+        step = 0
+
+        def tick():
+            nonlocal step
+            step += 1
+            if progress is not None and step % every == 0:
+                progress(step / total)
+
         for f, face in other.F.items():
+            tick()
             pl = other.face_plane(f)
             pl = canon_plane(Plane(M3 @ pl.origin + t, normalize(nm @ pl.n)))
             k = plane_key(pl)
@@ -2038,12 +2054,14 @@ class Entities:
             sign = 1 if np.dot(normalize(nm @ face.normal), target.n) > 0 else -1
             covs[k].append(self.cov_entry(polys, sign, face.color))
         for e, (a, b) in other.E.items():
+            tick()
             al, _ = self.add_segment(M3 @ other.V[a] + t, M3 @ other.V[b] + t)
             if e in other.soft:
                 self.soft.update(al)
             if e in other.hidden_e:
                 self.hidden_e.update(al)
         for k, pl in planes.items():
+            tick()
             self.rebuild_plane(pl, covs[k], hint=hint)
         self._cleanup_vertices()
         self.touch()

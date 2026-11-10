@@ -98,6 +98,28 @@ def explode(doc: Document, g: Group):
     doc.remove_group(g.id)
 
 
+def exploded_root(doc: Document, groups, report=None):
+    """The loose geometry as it is after exploding `groups` into it, as a new Entities.
+
+    The document is not changed, so this can run in the background while the window waits;
+    the caller puts the result in place and removes the groups. Locked groups are left out.
+    ``report(fraction, text)`` hears how far it is, group by group and inside a group.
+    """
+    out = doc.root.copy()
+    todo = [g for g in groups if not g.locked]
+    for i, g in enumerate(todo):
+        sub = g.ents.copy()
+        for f in list(sub.F):
+            if sub.F[f].color is None:
+                sub.set_face_color(f, g.color)
+        text = tr("Exploding {name}…").format(name=g.name)
+        if report is not None:
+            report(i / len(todo), text)
+        out.merge_from(sub, progress=None if report is None else
+                       (lambda frac, i=i, text=text: report((i + frac) / len(todo), text)))
+    return out
+
+
 def group_from_manifold(doc: Document, man, color, name=None):
     return doc.add_group(Entities.from_manifold(man), color, name)
 

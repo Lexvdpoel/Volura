@@ -215,7 +215,7 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
 
     monkeypatch.setattr(app_module.QDialog, "exec", fill)
     win.settings.bin_length, win.settings.bin_cols, win.settings.bin_label = 70.0, 2, True
-    win.settings.bin_hanger = False
+    win.settings.bin_hanger, win.settings.bin_label_text = False, ""
     win.storage_bin_dialog()
     assert seen["title"] == "Storage bin"
     assert seen["start"] == [70.0, 2, True]
@@ -228,6 +228,72 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
     s = app_module.Settings()
     assert (s.bin_length, s.bin_width, s.bin_cols, s.bin_rows, s.bin_label) == (
         pytest.approx(100.0), pytest.approx(50.0), 3, 2, False)
+
+
+# ------------------------------------------------------------------ the label
+
+def in_pocket(label, kw=BASE):
+    """The label laid in the pocket of the ledge, against the front wall."""
+    inner_w = kw["width"] - 2.0 * kw["wall"]
+    _lx, ly = storage_bin.label_size(kw["length"], kw["width"], kw["height"], kw["wall"],
+                                     kw["floor"])
+    return label.translate((0.0, -0.5 * inner_w + storage_bin.LABEL_PLAY + 0.5 * ly,
+                            kw["height"] - storage_bin.LABEL_POCKET))
+
+
+def label_of(text="Screws M3"):
+    return storage_bin.bin_label(text, **{k: BASE[k] for k in (
+        "length", "width", "height", "wall", "floor")})
+
+
+def test_the_ledge_has_a_pocket_for_the_label():
+    lx, ly = storage_bin.label_size()
+    assert lx == pytest.approx(BASE["length"] - 2.0 * BASE["wall"] - 2.0 * storage_bin.LABEL_PLAY)
+    assert ly == pytest.approx(storage_bin.LABEL_DEPTH - storage_bin.LABEL_LIP
+                               - 2.0 * storage_bin.LABEL_PLAY)
+    plate = mf.Manifold.cube([lx, ly, storage_bin.LABEL_POCKET]).translate(
+        (-0.5 * lx, -0.5 * ly, 0.0))
+    assert gap(make(label=True), in_pocket(plate)) == pytest.approx(0.0, abs=1e-6), \
+        "the pocket is not there"
+
+
+def test_the_label_lies_flush_in_the_pocket_and_the_lip_holds_it():
+    label = label_of()
+    assert len(label.decompose()) == 1, "the letters are not one piece with the plate"
+    lo, hi = bbox(label)
+    assert hi[2] - lo[2] == pytest.approx(storage_bin.LABEL_POCKET + storage_bin.LABEL_RELIEF)
+    placed = in_pocket(label)
+    m = make(label=True)
+    assert gap(m, placed) == pytest.approx(0.0, abs=1e-6), "the label does not fit"
+    assert gap(m, placed.translate((0.0, 0.5, 0.0))) > 1.0, "the lip does not hold the label"
+
+
+def test_a_long_text_stays_on_the_label():
+    lx, ly = storage_bin.label_size()
+    lo, hi = bbox(label_of("A very long text that never fits on one small label"))
+    assert hi[0] - lo[0] == pytest.approx(lx) and hi[1] - lo[1] == pytest.approx(ly)
+
+
+def test_a_bin_without_room_for_a_pocket_has_no_label():
+    narrow = dict(length=80.0, width=20.0, height=40.0, wall=5.0, floor=1.2)
+    assert storage_bin.label_size(**narrow) is None
+    with pytest.raises(ValueError):
+        storage_bin.bin_label("Bits", **narrow)
+
+
+def test_the_dialog_makes_the_label_with_the_bin(win, monkeypatch):
+    def fill(dlg):
+        dlg.label.setChecked(True)
+        dlg.label_text.setText("Screws")
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", fill)
+    win.settings.bin_hanger = False
+    win.storage_bin_dialog()
+    assert pump_until(lambda: len(win.doc.groups) == 2), "no label next to the bin"
+    assert app_module.Settings().bin_label_text == "Screws"
+    win.settings.bin_label_text = ""             # the other tests make a bin without a label
+    win.settings.save()
 
 
 if __name__ == "__main__":
