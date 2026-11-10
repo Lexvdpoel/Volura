@@ -13,7 +13,9 @@ one volume of the size it says, a bin drops into a plate without touching it but
 a bin of two by two stands on a plate of three by three where the grid puts it and not half a
 square beside it, a bin stands in the lip of the bin under it, and the plastic the magnet pockets
 cut out is the plastic of four magnets per square. A size that cannot be printed becomes the
-nearest one that can.
+nearest one that can. A finger scoop stands in the corner between the floor and the front wall and
+a label shelf under the top of the back wall, and a bin with both is still one volume of the size
+it says, that stands in the lip of the bin under it.
 
 Run with:  python -m pytest tests/test_gridfinity.py
 """
@@ -137,6 +139,43 @@ def test_sizes_that_cannot_be_printed_become_the_nearest_that_can():
         [GRID, 10 * GRID])
 
 
+def test_the_finger_scoop_fills_the_corner_between_the_floor_and_the_front_wall():
+    plain = gridfinity.gridfinity_bin(1, 1, 3)
+    scooped = gridfinity.gridfinity_bin(1, 1, 3, scoop=True)
+    inner = gridfinity.CELL - 2.0 * 1.2
+    floor = gridfinity.BASE_HEIGHT + 1.0
+    corner = mf.Manifold.cube([1.0, 1.0, 1.0]).translate((-0.5, -0.5 * inner + 1.5, floor + 0.5))
+    assert overlap(plain, corner) < FIT
+    assert overlap(scooped, corner) == pytest.approx(corner.volume(), rel=1e-3), "no scoop"
+    middle = mf.Manifold.cube([1.0, 1.0, 1.0]).translate((-0.5, -0.5, floor + 0.5))
+    assert overlap(scooped, middle) < FIT, "the scoop runs over the whole floor"
+
+
+def test_the_label_shelf_stands_under_the_top_of_the_back_wall():
+    plain = gridfinity.gridfinity_bin(1, 1, 3)
+    tabbed = gridfinity.gridfinity_bin(1, 1, 3, label=True)
+    inner, H = gridfinity.CELL - 2.0 * 1.2, 3 * UNIT
+    under = mf.Manifold.cube([1.0, 1.0, 1.0]).translate((-0.5, 0.5 * inner - 5.5, H - 2.5))
+    assert overlap(plain, under) < FIT
+    assert overlap(tabbed, under) == pytest.approx(under.volume(), rel=1e-3), "no label shelf"
+    d = gridfinity.LABEL_DEPTH
+    far = mf.Manifold.cube([inner - 6.0, inner - d - 5.5, d - 1.0]).translate(
+        (-0.5 * (inner - 6.0), -0.5 * inner + 3.0, H - d))
+    assert overlap(tabbed, far) < FIT, "the shelf hangs over the opening"
+
+
+def test_a_bin_with_a_scoop_and_a_label_shelf_still_stands_in_the_lip():
+    m = gridfinity.gridfinity_bin(2, 1, 3, divisions=2, scoop=True, label=True)
+    assert m.status() == mf.Error.NoError and len(m.decompose()) == 1
+    assert span(m) == pytest.approx([2 * GRID - 0.5, GRID - 0.5, 3 * UNIT + 4.4])
+    assert overlap(m, m.translate((0.0, 0.0, 3 * UNIT))) < FIT
+    assert overlap(m, m.translate((0.0, 0.0, 3 * UNIT - 0.5))) > 1.0, "nothing carries the bin"
+    floor = gridfinity.BASE_HEIGHT + 1.0
+    divider = mf.Manifold.cube([1.0, 1.0, 1.0]).translate((-0.5, -0.5, floor + 0.5))
+    assert overlap(m, divider) == pytest.approx(divider.volume(), rel=1e-3), \
+        "the divider does not reach the floor"
+
+
 # ------------------------------------------------------------------ the interface
 
 def test_the_dialog_builds_a_baseplate_and_remembers_it(monkeypatch, tmp_path):
@@ -173,6 +212,45 @@ def test_the_dialog_builds_a_baseplate_and_remembers_it(monkeypatch, tmp_path):
         assert labels.index("Gridfinity") == labels.index("Cable Chain") + 1
     finally:
         w.settings.grid_kind = "bin"
+        w.settings.save()
+        w.doc.dirty = False
+        w.close()
+
+
+def test_the_dialog_greys_out_and_remembers_the_scoop_and_the_label_shelf(monkeypatch, tmp_path):
+    import time
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtWidgets import QApplication, QDialog
+    app = QApplication.instance() or QApplication(sys.argv[:1])
+    import volura.app as app_module
+    monkeypatch.setattr(app_module.errors, "log_dir", lambda: str(tmp_path))
+    w = app_module.MainWindow()
+    w.doc.dirty = False
+    QCoreApplication.processEvents()
+
+    def fill(dlg):
+        dlg.kind.setCurrentIndex(dlg.kind.findData("baseplate"))
+        assert not dlg.scoop.isEnabled(), "a baseplate has no finger scoop"
+        assert not dlg.label.isEnabled(), "a baseplate has no label shelf"
+        dlg.kind.setCurrentIndex(dlg.kind.findData("bin"))
+        assert dlg.scoop.isEnabled() and dlg.label.isEnabled(), "a bin has both of them"
+        dlg.scoop.setChecked(True)
+        dlg.label.setChecked(True)
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", fill)
+    try:
+        w.gridfinity_dialog()
+        deadline = time.monotonic() + 20.0
+        while not w.doc.groups and time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(0.005)
+        assert len(w.doc.groups) == 1, "no bin in the model"
+        s = app_module.Settings()
+        assert (s.grid_scoop, s.grid_label) == (True, True)
+    finally:
+        w.settings.grid_scoop = w.settings.grid_label = False
         w.settings.save()
         w.doc.dirty = False
         w.close()

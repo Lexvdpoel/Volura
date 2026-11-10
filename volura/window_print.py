@@ -739,7 +739,8 @@ class PrintMixin:
             self.setFocus()
             return None
         options = dlg.options()
-        for key in ("kind", "cols", "rows", "units", "divisions", "lip", "magnets"):
+        for key in ("kind", "cols", "rows", "units", "divisions", "lip", "magnets", "scoop",
+                    "label"):
             setattr(self.settings, "grid_" + key, options[key])
         self.settings.save()
         made = self.make_gridfinity_model(options)
@@ -761,7 +762,8 @@ class PrintMixin:
             else:
                 m = gridfinity.gridfinity_bin(options["cols"], options["rows"], options["units"],
                                               divisions=options["divisions"], lip=options["lip"],
-                                              magnets=options["magnets"])
+                                              magnets=options["magnets"],
+                                              scoop=options["scoop"], label=options["label"])
             if m.status() != mf.Error.NoError or m.is_empty():
                 raise ValueError(tr("the result is not a valid volume"))
             lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])

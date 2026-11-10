@@ -135,7 +135,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Gridfinity** (Draw > Parts): bins and baseplates of the open Gridfinity storage grid of
   42 mm, so they fit what others print for it. A bin covers the columns and rows you choose, is a
   number of 7 mm units high, has compartments, a stacking lip and magnet holes if you want; a
-  baseplate carries a grid of the size you choose. Bins drop into the plate and stand on each other
+  baseplate carries a grid of the size you choose. Bins drop into the plate and stand on each
+  other. A bin can have a finger scoop, the rounding between the floor and the inside of the front
+  wall so you slide small parts out with a finger, and a label shelf under the top of the inside of
+  the back wall, at 45 degrees, in which a printed label stands
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

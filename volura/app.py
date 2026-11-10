@@ -786,6 +786,8 @@ class Settings:
             setattr(self, key, max(lo, min(hi, value)))
         self.grid_lip = self._bool("grid_lip", True)
         self.grid_magnets = self._bool("grid_magnets", False)
+        self.grid_scoop = self._bool("grid_scoop", False)
+        self.grid_label = self._bool("grid_label", False)
         self.rack_screw = str(self.q.value("rack_screw", "M4"))
         if self.rack_screw not in bin_rack.SCREWS:
             self.rack_screw = "M4"
@@ -966,7 +968,7 @@ class Settings:
         self.q.setValue("chain_links", self.chain_links)
         self.q.setValue("chain_bend", self.chain_bend)
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
-                    "grid_lip", "grid_magnets"):
+                    "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
             self.q.setValue(key, getattr(self, key))
         self.q.setValue("rack_panel_cols", self.rack_panel_cols)
         self.q.setValue("tab_count", self.tab_count)

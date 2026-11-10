@@ -843,8 +843,9 @@ class GridfinityDialog(QDialog):
     """The "Gridfinity…" dialog: a bin or a baseplate of the open storage grid of 42 mm.
 
     The kind says which part, the columns and rows how many squares of the grid it covers; a bin
-    also has its height in units of 7 mm, its compartments, the stacking lip and the magnet
-    pockets. What only a bin has is greyed out for a baseplate. The values come from Settings and
+    also has its height in units of 7 mm, its compartments, the stacking lip, the magnet pockets,
+    the finger scoop in the front and the shelf for a label in the back. What only a bin has is
+    greyed out for a baseplate. The values come from Settings and
     are remembered.
     """
 
@@ -880,6 +881,15 @@ class GridfinityDialog(QDialog):
         self.magnets.setChecked(bool(s.grid_magnets))
         self.magnets.setToolTip(tr("Four pockets of 6.5 by 2.4 mm in the bottom of every foot, for "
                                    "magnets that hold the bin on a steel plate"))
+        self.label = QCheckBox(tr("Label shelf"))
+        self.label.setChecked(bool(s.grid_label))
+        self.label.setToolTip(tr("A shelf under the top of the inside of the back wall, at "
+                                 "45 degrees, so a printed label stands in the bin and you read it "
+                                 "from the front"))
+        self.scoop = QCheckBox(tr("Finger scoop"))
+        self.scoop.setChecked(bool(s.grid_scoop))
+        self.scoop.setToolTip(tr("A rounding between the floor and the inside of the front wall, so "
+                                 "you slide small parts out with a finger"))
         lay.addRow(tr("Part"), self.kind)
         lay.addRow(tr("Columns"), self.cols)
         lay.addRow(tr("Rows"), self.rows)
@@ -887,6 +897,8 @@ class GridfinityDialog(QDialog):
         lay.addRow(tr("Compartments"), self.divisions)
         lay.addRow("", self.lip)
         lay.addRow("", self.magnets)
+        lay.addRow("", self.scoop)
+        lay.addRow("", self.label)
         self.kind.currentIndexChanged.connect(self._kind_changed)
         self._kind_changed()
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -896,7 +908,7 @@ class GridfinityDialog(QDialog):
 
     def _kind_changed(self, *_):
         is_bin = self.kind.currentData() == "bin"
-        for w in (self.units, self.divisions, self.lip, self.magnets):
+        for w in (self.units, self.divisions, self.lip, self.magnets, self.scoop, self.label):
             w.setEnabled(is_bin)
 
     def options(self) -> dict:
@@ -906,7 +918,9 @@ class GridfinityDialog(QDialog):
                 "units": int(self.units.value()),
                 "divisions": int(self.divisions.value()),
                 "lip": bool(self.lip.isChecked()),
-                "magnets": bool(self.magnets.isChecked())}
+                "magnets": bool(self.magnets.isChecked()),
+                "scoop": bool(self.scoop.isChecked()),
+                "label": bool(self.label.isChecked())}
 
 
 class CableChainDialog(QDialog):

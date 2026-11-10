@@ -25,6 +25,14 @@ below the top edge, so you can still reach over them. With `magnets` the bottom 
 four round pockets, in which a magnet is glued flush, which is what keeps a bin on a steel shelf
 and what holds a plate to a machine bed.
 
+Two things make a bin easier to use. The **finger scoop** is a quarter-round fillet in the corner
+between the floor and the inside of the front wall, over the whole inside length, so a small part
+that lies flat is caught with a finger and slid out. The **label tab** is a shelf under the top of
+the inside of the back wall, of `LABEL_DEPTH` millimetres, whose underside leans 45 degrees down
+to the wall so it prints without support; a printed label stands against the wall under it and is
+read from the front. Both are clipped to the inside, so a bin with them is the same size outside
+and still stacks and stands on a plate.
+
 The **stacking lip** on top of the wall is the top of a baseplate hole again, `LIP_HEIGHT`
 millimetres high and standing on the wall, around the whole bin rather than around every square,
 so nothing crosses the opening of a bin of more squares: the bin above drops into it with its
@@ -38,6 +46,7 @@ import manifold3d as mf
 import numpy as np
 
 from . import enclosure
+from .geom import Plane, extrude_cs
 
 #: mm from the centre of one square of the grid to the centre of the next
 GRID = 42.0
@@ -92,6 +101,12 @@ WALL_MIN, WALL_MAX = 0.8, 3.0
 FLOOR_MIN, FLOOR_MAX = 0.6, 3.0
 #: one open compartment, and the most compartments that leave room to pick something out
 DIV_MIN, DIV_MAX = 1, 8
+#: mm of the finger scoop between the floor and the front wall, and of the label tab under the top
+#: of the back wall; both become less in a bin that is too low or too narrow to hold them
+SCOOP_RADIUS, LABEL_DEPTH = 12.0, 12.0
+#: the vertical plane across the bin, whose local x, y, z are the world y, z, x: the scoop and the
+#: label tab are drawn in that plane and drawn out along the length of the bin
+FRONT = Plane((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
 
 
 def _clamp(value, lo, hi):
@@ -174,8 +189,37 @@ def _cells(cols, rows):
             for i in range(cols) for j in range(rows)]
 
 
+def _scoop(inner_l, inner_w, bottom, H) -> mf.Manifold:
+    """The finger scoop along the inside of the front wall: a quarter-round fillet between the
+    floor and the wall, over the whole inside length, so small parts slide out with a finger.
+
+    It is the block of `r` by `r` in the corner less a cylinder of `r` along the length, centred
+    where that block touches the wall and the floor, so the rounding runs into both tangentially
+    and there is no step left for a part to catch on.
+    """
+    r = min(SCOOP_RADIUS, 0.5 * (H - bottom))
+    y0 = -0.5 * inner_w
+    block = mf.Manifold.cube([inner_l, r, r]).translate((-0.5 * inner_l, y0, bottom))
+    axis = extrude_cs(mf.CrossSection.circle(r, SEGMENTS), FRONT,
+                      -0.5 * inner_l, 0.5 * inner_l).translate((0.0, y0 + r, bottom + r))
+    return block - axis
+
+
+def _label_tab(inner_l, inner_w, H) -> mf.Manifold:
+    """The label tab along the inside of the back wall: a shelf of `d` millimetres under the top
+    of the wall, over the whole inside length, against which a printed label stands.
+
+    The triangle in the y-z plane has its top on the top of the wall and its underside at
+    45 degrees down to the wall, so it prints without support.
+    """
+    d = min(LABEL_DEPTH, 0.5 * inner_w)
+    y1 = 0.5 * inner_w
+    loop = [[y1, H - d], [y1, H], [y1 - d, H]]
+    return extrude_cs(mf.CrossSection([loop]), FRONT, -0.5 * inner_l, 0.5 * inner_l)
+
+
 def gridfinity_bin(cols=1, rows=1, units=3, wall=1.2, floor=1.0, divisions=1, lip=True,
-                   magnets=False) -> mf.Manifold:
+                   magnets=False, scoop=False, label=False) -> mf.Manifold:
     """A Gridfinity bin of `cols` by `rows` squares and `units` height units, as one closed volume.
 
     The bin is `GRID * cols − BIN_GAP` by `GRID * rows − BIN_GAP` millimetres and
@@ -188,7 +232,12 @@ def gridfinity_bin(cols=1, rows=1, units=3, wall=1.2, floor=1.0, divisions=1, li
     `LIP_HEIGHT` millimetres of stacking lip, so a bin of the same grid stands on it and the bin
     is that much taller than `units * HEIGHT_UNIT`. With `magnets` the bottom of every foot gets
     four pockets of `MAGNET_DIA` by `MAGNET_DEPTH`, for the magnets that hold a bin to a steel
-    shelf.
+    shelf. With `scoop` a quarter-round fillet of `SCOOP_RADIUS` millimetres stands in the corner
+    between the floor and the inside of the front wall, or half the depth of the inside when the
+    bin is too low for that, so you slide small parts out with a finger. With `label` a tab of
+    `LABEL_DEPTH` millimetres runs along the inside of the back wall under the top edge, its
+    underside at 45 degrees, so a printed label stands against the wall and is read from the front.
+    Both are clipped to the inside, so neither sticks out of the bin or changes its size.
 
     The result is centred on the origin in plan and stands on `z = 0`. The sizes are kept within
     their own bounds, so a bin that cannot be printed becomes the nearest one that can.
@@ -210,8 +259,9 @@ def gridfinity_bin(cols=1, rows=1, units=3, wall=1.2, floor=1.0, divisions=1, li
     # the inside, up to the top of the wall: with a lip the wall top stays whole, because the lip
     # leans out over the opening and the foot of the bin above comes down into it
     inner_l, inner_w = L - 2.0 * t, W - 2.0 * t
-    cut = [_box(inner_l, inner_w, max(OUTER_RADIUS - t, 0.0),
-                H - bottom + (0.0 if lip else MARGIN), bottom)]
+    room = _box(inner_l, inner_w, max(OUTER_RADIUS - t, 0.0),
+                H - bottom + (0.0 if lip else MARGIN), bottom)
+    cut = [room]
     if lip:
         # the lip: the top of a plate hole again, standing on the wall, around the whole bin,
         # so nothing of it crosses the opening between two squares
@@ -219,14 +269,24 @@ def gridfinity_bin(cols=1, rows=1, units=3, wall=1.2, floor=1.0, divisions=1, li
         cut.append(_cell_cutter(PLATE_CHAMFER, H - drop, above=MARGIN, length=L, width=W))
     body = body - mf.Manifold.batch_boolean(cut, mf.OpType.Add)
 
-    # what stands in the bin again: the dividers, which stop under the top of the wall
+    # what stands in the bin again: the dividers, which stop under the top of the wall, and the
+    # scoop and the label tab, which are added with them and clipped to the inside together
     add = []
     for i in range(1, nd):
         x = -0.5 * inner_l + i * inner_l / nd
         add.append(mf.Manifold.cube([t, inner_w, H - DIVIDER_DROP - bottom])
                    .translate((x - 0.5 * t, -0.5 * inner_w, bottom)))
+    if scoop:
+        add.append(_scoop(inner_l, inner_w, bottom, H))
+    if label:
+        add.append(_label_tab(inner_l, inner_w, H))
     if add:
-        body = body + mf.Manifold.batch_boolean(add, mf.OpType.Add)
+        # nothing may stand outside the bin, so what goes back in is clipped to the inside, grown
+        # into the wall by MARGIN so it fuses with the wall instead of only resting against it
+        extra = mf.Manifold.batch_boolean(add, mf.OpType.Add)
+        clip = _box(inner_l + 2.0 * MARGIN, inner_w + 2.0 * MARGIN,
+                    max(OUTER_RADIUS - t, 0.0) + MARGIN, H - bottom, bottom)
+        body = body + mf.Manifold.batch_boolean([extra, clip], mf.OpType.Intersect)
     if magnets:
         # the pockets for the magnets, in the bottom of every foot, flush with the bed
         r, d = 0.5 * MAGNET_DIA, MAGNET_DEPTH
