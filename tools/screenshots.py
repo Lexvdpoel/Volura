@@ -173,6 +173,25 @@ class Shots:
         self.grab_widget("knob", w.view)
         self.grab_dialog("dialog_knob", m.KnobDialog(w))
 
+    def hinge_and_text(self):
+        """The print-in-place hinge, the battery holder and 3D text."""
+        from volura.part_dialogs import BatteryHolderDialog, HingeDialog, Text3DDialog
+        w = self.w
+        self.fresh()
+        battery = BatteryHolderDialog(w).options()
+        battery.update(cell="AA", count=3)
+        text = Text3DDialog(w).options()
+        text.update(text="Volura")
+        for colour, make, options in (
+                ("#3fa34d", w.make_battery_holder_model, battery),     # the tallest at the back
+                (PART_COLOR, w.make_hinge_model, HingeDialog(w).options()),
+                ("#d23b3b", w.make_text3d_model, text)):
+            w.settings.current_color = colour
+            self.build(make, options)
+        w.settings.current_color = PART_COLOR
+        self.view_3d()
+        self.grab_widget("hinge_and_text", w.view)
+
     def test_prints(self):
         w = self.w
         self.fresh()
@@ -244,7 +263,7 @@ class Shots:
         self.grab_menu("menu_laser", w.laser_menu)
         w.set_mode("3d")
 
-    ALL = ("parts", "project_box", "knob", "test_prints", "overhangs", "worksheet",
+    ALL = ("parts", "project_box", "knob", "hinge_and_text", "test_prints", "overhangs", "worksheet",
            "vent_pattern", "menus")
 
     def close(self):
