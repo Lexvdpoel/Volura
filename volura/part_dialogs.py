@@ -584,8 +584,9 @@ class BatteryHolderDialog(QDialog):
     usual types and the cradles are built around the diameter and the length that belong to it. The
     count is how many cells stand side by side, the wall is the plastic between the cradles, around
     them and under them, and the clearance is the play a cell presses in with: too little and the
-    cell does not go in, too much and it rattles in the holder. The values come from Settings and
-    are remembered.
+    cell does not go in, too much and it rattles in the holder. The grip is how much narrower the
+    opening over a cradle is than the cell, so the cell snaps in instead of only lying in its
+    cradle. The values come from Settings and are remembered.
     """
 
     def __init__(self, win):
@@ -618,10 +619,17 @@ class BatteryHolderDialog(QDialog):
                               s.battery_clearance, 0.05)
         self.clearance.setToolTip(tr("The play around a cell: too little and it does not press in, "
                                      "too much and it rattles in the holder"))
+        self.grip = spin(100.0 * battery_holder.GRIP_MIN, 100.0 * battery_holder.GRIP_MAX,
+                         100.0 * s.battery_grip, 1.0)
+        self.grip.setDecimals(0)
+        self.grip.setSuffix(" %")
+        self.grip.setToolTip(tr("How much narrower the opening over a cradle is than the cell: the "
+                                "cell snaps in behind the lips and cannot fall out"))
         lay.addRow(tr("Cell"), self.cell)
         lay.addRow(tr("Count"), self.count)
         lay.addRow(tr("Wall"), self.wall)
         lay.addRow(tr("Clearance"), self.clearance)
+        lay.addRow(tr("Grip %"), self.grip)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -631,4 +639,5 @@ class BatteryHolderDialog(QDialog):
         return {"cell": str(self.cell.currentData()),
                 "count": int(self.count.value()),
                 "wall": round(self.wall.value(), 6),
-                "clearance": round(self.clearance.value(), 6)}
+                "clearance": round(self.clearance.value(), 6),
+                "grip": round(self.grip.value() / 100.0, 6)}

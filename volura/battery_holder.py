@@ -10,21 +10,27 @@ pressed into the block from above and the block holds them by friction, so a pac
 The **cradles** are what the cells lie in: `count` horizontal half cylinders side by side, each
 `d + 2 clearance` millimetres across and `L + 2 clearance` millimetres long (`d` and `L` are the
 diameter and the length of the cell), cut out of the top of the block with their axis one cradle
-radius plus `wall` millimetres above the bed. The top of the block stands on that axis, so every
-cradle is open at the top and the cell is pushed in from above; the play all round the cell is
-`clearance`, which is what holds the cell and still lets it out again.
+radius plus `wall` millimetres above the bed. The block stands so far over the cells that the
+opening between the two lips over a cradle is `d * (1 - grip)` millimetres across: narrower than
+the cell, whatever the clearance, so the cell presses past the lips and snaps in and does not fall
+out when the holder is turned over. With `grip = 0` the top stands on the axis, the cradle is open
+all the way to it and the cell only lies in it. The play all round the cell is `clearance`.
 
 The **walls** are what holds the holder together: `wall` millimetres between the cradles, around
 them and under them, so the block is `L + 2 clearance + 2 wall` millimetres long,
-`count (d + 2 clearance) + (count + 1) wall` millimetres wide and `wall + r` millimetres high, with
-`r` the radius of a cradle.
+`count (d + 2 clearance) + (count + 1) wall` millimetres wide and `wall + r + h` millimetres high,
+with `r` the radius of a cradle and `h` the height above the axis on which a cradle has narrowed to
+`d * (1 - grip)`.
 
 The **contacts** are where the wires come in: at both ends of every cradle a vertical slot of
-`SLOT_WIDE` millimetres goes through the end wall, `0.8 d` millimetres tall, for a spring contact
-or a wire, and at each end of the holder one hole of `WIRE_HOLE` millimetres goes through the floor,
-in the middle of the width, so a lead can come up from under the cells.
+`SLOT_WIDE` millimetres goes through the end wall, from `0.4 d` under the axis of the cell up to the
+top of the block, for a spring contact or a wire, and at each end of the holder one hole of
+`WIRE_HOLE` millimetres goes through the floor, in the middle of the width, so a lead can come up
+from under the cells.
 """
 from __future__ import annotations
+
+import math
 
 import manifold3d as mf
 import numpy as np
@@ -40,6 +46,9 @@ COUNT_MIN, COUNT_MAX = 1, 8
 WALL_MIN, WALL_MAX = 1.2, 4.0
 #: the least play a cell still presses in with and the most that still holds it
 CLEARANCE_MIN, CLEARANCE_MAX = 0.1, 1.0
+#: how much narrower the opening over a cradle is than the cell, as a part of the cell diameter:
+#: 0 leaves the cradle open to its axis, and at the most the cell snaps in and cannot fall out
+GRIP_MIN, GRIP_MAX = 0.0, 0.15
 #: mm across the slot in the end wall, which is what a spring contact sits in
 SLOT_WIDE = 1.0
 #: the slot as a part of the cell diameter, so a contact reaches the cell without touching it
@@ -72,42 +81,51 @@ def _cradle(x0, x1, r, y, z) -> mf.Manifold:
         .translate((x0, y, z))
 
 
-def battery_holder(cell="AA", count=2, wall=1.6, clearance=0.4) -> mf.Manifold:
+def battery_holder(cell="AA", count=2, wall=1.6, clearance=0.4, grip=0.05) -> mf.Manifold:
     """A printable holder that keeps `count` cells of `cell` side by side.
 
     The holder is a block of `L + 2 clearance + 2 wall` by `count (d + 2 clearance) + (count + 1)
-    wall` millimetres and `wall + r` millimetres high, in which `count` cradles of `d + 2
+    wall` millimetres and `wall + r + h` millimetres high, in which `count` cradles of `d + 2
     clearance` millimetres across are cut out of the top, `L + 2 clearance` millimetres long, with
     their axis `wall + r` millimetres above the bed (`d` and `L` are the diameter and the length of
-    the cell and `r` is `0.5 d + clearance`). The top of the block stands on that axis, so a cradle
-    is open at the top and the cell presses in from above with `clearance` millimetres of play all
-    round it, while `wall` millimetres of plastic stay between the cradles, around them and under
-    them. At both ends of every cradle a slot goes through the end wall for a spring contact or a
-    wire, and at each end of the holder a hole of `WIRE_HOLE` millimetres goes through the floor.
+    the cell and `r` is `0.5 d + clearance`). The block stands `h` millimetres over that axis, and
+    `h` is the height on which a cradle has narrowed to `d * (1 - grip)` millimetres across, so the
+    opening between the two lips over a cradle is that much narrower than the cell, whatever the
+    clearance, and the cell presses past the lips and snaps in; `grip = 0` puts the top on the axis,
+    which leaves the cradle open and the cell only lying in it. The cell has `clearance` millimetres
+    of play all round it, while `wall` millimetres of plastic stay between the cradles, around them
+    and under them. At both ends of every cradle a slot goes through the end wall for a spring
+    contact or a wire, and at each end of the holder a hole of `WIRE_HOLE` millimetres goes through
+    the floor.
 
     The result is centred on the origin in plan and stands on `z = 0`. `count` is kept within
-    `COUNT_MIN` to `COUNT_MAX` and `wall` and `clearance` within their own bounds; a cell that is
-    not in `CELLS` is refused with a ValueError.
+    `COUNT_MIN` to `COUNT_MAX` and `wall`, `clearance` and `grip` within their own bounds; a cell
+    that is not in `CELLS` is refused with a ValueError.
     """
     d, ln = _cell(cell)
     n = max(COUNT_MIN, min(COUNT_MAX, int(count)))
     t = _clamp(wall, WALL_MIN, WALL_MAX)
     c = _clamp(clearance, CLEARANCE_MIN, CLEARANCE_MAX)
+    g = _clamp(grip, GRIP_MIN, GRIP_MAX)
     r = 0.5 * d + c                       # the cradle: the cell with room all round it
     x_len = ln + 2.0 * c + 2.0 * t        # the cell, its play and an end wall on both sides
     y_len = n * 2.0 * r + (n + 1) * t     # the cradles and a wall between and around them
-    top = t + r                           # the top of the block stands on the axis of the cells
+    axis = t + r                          # the cells lie with their axis on this height
+    # how far the block has to stand over the axis for the lips to leave an opening of d * (1 - g)
+    lip = 0.0 if g <= GRIP_MIN else math.sqrt(r * r - (0.5 * d * (1.0 - g)) ** 2)
+    top = axis + lip                      # the block stands over the cells, which is what grips them
 
     # the slot through the end wall, open at the top, for a spring contact or a wire
     slot_in = 0.5 * (ln + 2.0 * c) - MARGIN       # just inside the cradle
     slot_out = 0.5 * x_len + MARGIN               # just past the outside of the end wall
+    slot_low = axis - 0.5 * SLOT_PART * d         # at the height of the cell
     cut = []
     for i in range(n):
         y = (i - 0.5 * (n - 1)) * (2.0 * r + t)
         # the cradle stops short of the end walls, which is what keeps the cell from walking out
-        cut.append(_cradle(-0.5 * (ln + 2.0 * c), 0.5 * (ln + 2.0 * c), r, y, top))
-        slot = mf.Manifold.cube([slot_out - slot_in, SLOT_WIDE, SLOT_PART * d]).translate(
-            (slot_in, y - 0.5 * SLOT_WIDE, top - 0.5 * SLOT_PART * d))
+        cut.append(_cradle(-0.5 * (ln + 2.0 * c), 0.5 * (ln + 2.0 * c), r, y, axis))
+        slot = mf.Manifold.cube([slot_out - slot_in, SLOT_WIDE, top + MARGIN - slot_low]).translate(
+            (slot_in, y - 0.5 * SLOT_WIDE, slot_low))
         cut.append(slot)
         cut.append(slot.translate((-slot_in - slot_out, 0.0, 0.0)))
     for side in (-1.0, 1.0):

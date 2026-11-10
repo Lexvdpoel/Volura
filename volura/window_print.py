@@ -535,6 +535,7 @@ class PrintMixin:
         self.settings.battery_count = int(options["count"])
         self.settings.battery_wall = float(options["wall"])
         self.settings.battery_clearance = float(options["clearance"])
+        self.settings.battery_grip = float(options["grip"])
         self.settings.save()
         made = self.make_battery_holder_model(options)
         self.setFocus()
@@ -550,7 +551,7 @@ class PrintMixin:
         """
         self.set_mode("3d")
         doc = self.doc
-        size = {k: options[k] for k in ("cell", "count", "wall", "clearance")}
+        size = {k: options[k] for k in ("cell", "count", "wall", "clearance", "grip")}
         cell, n = str(options["cell"]), int(options["count"])
         bb = doc.model_bbox()
         bx, by, _bz = self.settings.bed_size

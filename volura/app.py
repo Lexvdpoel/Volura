@@ -632,6 +632,12 @@ class Settings:
         self.battery_clearance = max(battery_holder.CLEARANCE_MIN,
                                      min(battery_holder.CLEARANCE_MAX, self.battery_clearance))
         try:
+            self.battery_grip = float(self.q.value("battery_grip", 0.05))
+        except (TypeError, ValueError):
+            self.battery_grip = 0.05
+        self.battery_grip = max(battery_holder.GRIP_MIN,
+                                min(battery_holder.GRIP_MAX, self.battery_grip))
+        try:
             self.tab_count = int(float(self.q.value("tab_count", 4)))
         except (TypeError, ValueError):
             self.tab_count = 4
@@ -773,6 +779,7 @@ class Settings:
         self.q.setValue("battery_count", self.battery_count)
         self.q.setValue("battery_wall", self.battery_wall)
         self.q.setValue("battery_clearance", self.battery_clearance)
+        self.q.setValue("battery_grip", self.battery_grip)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
         self.q.setValue("tab_outer_only", self.tab_outer_only)

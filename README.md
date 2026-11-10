@@ -101,7 +101,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Battery Holder** (Draw > Parts): a printable block that keeps one to eight round cells
   side by side, of the cell you choose: AA, AAA, 18650, 21700 or CR123A. Every cell lies in a
   cradle that is open at the top, with the play you enter all round it, so the cell lies in
-  from above. A slot through the end wall at both ends of every cradle takes
+  from above, and the opening over a cradle is narrower than the cell by the grip you enter, so the
+  cell snaps in and cannot fall out. A slot through the end wall at both ends of every cradle takes
   a spring contact or a wire, and a hole through the floor lets the lead come up from under the
   cells
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the

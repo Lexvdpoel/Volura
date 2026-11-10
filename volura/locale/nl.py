@@ -1651,6 +1651,8 @@ TRANSLATIONS = {
     'How many cells stand side by side in the holder': 'Hoeveel cellen naast elkaar in de houder staan',
     'The plastic between the cradles, around them and under them': 'Het plastic tussen de vakken, eromheen en eronder',
     'The play around a cell: too little and it does not press in, too much and it rattles in the holder': 'De speling rond een cel: te weinig en hij gaat er niet in, te veel en hij rammelt in de houder',
+    'Grip %': 'Klemming %',
+    'How much narrower the opening over a cradle is than the cell: the cell snaps in behind the lips and cannot fall out': 'Hoeveel smaller de opening boven een vak is dan de cel: de cel klikt achter de randen vast en kan er niet uitvallen',
     'Building the battery holder…': 'Batterijhouder opbouwen…',
     '{n} cell holder for {cell} added.': 'Houder voor {n} {cell}-cel toegevoegd.',
     'Holder for {n} {cell} cells added.': 'Houder voor {n} {cell}-cellen toegevoegd.',
