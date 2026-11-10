@@ -16,22 +16,23 @@ to `DIVIDER_DROP` millimetre below the top edge. They are lower than the walls o
 can pick something out over the divider without lifting the bin, while nothing climbs on its own
 from one compartment into the next.
 
-The **label ledge** is where the name goes: along the inside of the front wall a ledge of
-`LABEL_DEPTH` millimetres runs the whole length at the top, and its underside is one plane that
-stands at 45 degrees. A label lies against the wall and on the ledge, where you read it from
-above, and the ledge prints without support, because a face at 45 degrees is what a printer
-carries on its own.
+An **open front** lets you reach in from the front, also when bins stand on each other: from
+half the height up the front wall is gone and the side walls run back at 45 degrees to the top,
+so the bin is open at the front like a parts bin on a shelf. The slope starts no lower than
+leaves the back of the rim at least half the bin deep, so a bin on top still stands on it.
 
-The top of the ledge has a shallow **pocket** for a printed label (`bin_label`): `LABEL_POCKET`
-millimetres deep, from the front wall to `LABEL_LIP` millimetres before the edge of the ledge, so
-the lip that stays holds the label in. The label is a thin plate of the size of the pocket, less
-`LABEL_PLAY` all round, with its text standing on top, and the pocket is as deep as the plate and
-the letters together, so even the letters stay under the top edge and a bin stands on it.
+The **label slot** is where the name goes, facing forward: a dovetail slot in the outside of the
+front wall, open at the top of that wall, into which a printed label (`bin_label`) slides from
+above. The slot is `LABEL_POCKET` millimetres deep, as deep as the plate of the label and its
+letters together, so the letters end flush with the front, and it widens at 45 degrees behind
+the letters, so the plate cannot fall out forwards. The front wall is made thicker on the inside
+behind the slot, with an underside at 45 degrees, so it prints without support.
 
 A **stacking** bin has a foot: the lowest `STACK_FOOT` millimetres of the outside step in to the
 opening of a bin of the same size, less `STACK_PLAY` all round, so it drops into the bin under it
-and cannot slide off. The foot stays behind the label ledge of the bin under it and its dividers
-stop that much lower, so nothing is in its way; the floor inside starts on top of the foot.
+and cannot slide off. The foot stays behind the thicker front wall of the bin under it and its
+dividers stop that much lower, so nothing is in its way; the floor inside starts on top of the
+foot.
 
 The **wall hook** hangs the bin on the wall rack of `volura/bin_rack.py`: along the outside of the
 back wall a cleat of `CLEAT_THICK` millimetres runs at the top and reaches `CLEAT_OUT − CLEAT_PLAY`
@@ -61,24 +62,28 @@ FLOOR_MIN, FLOOR_MAX = 0.6, 5.0
 RADIUS_MIN, RADIUS_MAX = 0.0, 20.0
 #: the fewest compartment in a row and the most that still leaves room to pick something out
 COLS_MIN, COLS_MAX = 1, 10
-#: mm of ledge along the front wall, on which a printed label lies flat and stays readable
+#: mm of the highest label: a name you read from a step away, not a sign
 LABEL_DEPTH = 12.0
-#: mm of plate under the letters of a label
+#: mm of the lowest label that is still worth a slot
+LABEL_LOWEST = 6.0
+#: mm of plate under the letters of a label, which is also how far the slot widens behind them
 LABEL_THICK = 0.8
-#: mm of ledge that stays whole along the inside, the lip that holds the label in its pocket
-LABEL_LIP = 2.5
-#: mm of room all round the label in its pocket
+#: mm of room all round the label in its slot
 LABEL_PLAY = 0.2
 #: mm that the letters stand on the label
 LABEL_RELIEF = 0.6
-#: mm deep the pocket in the top of the ledge is: the label with its letters, flush with the top
+#: mm deep the slot in the front wall is: the label with its letters, flush with the front
 LABEL_POCKET = LABEL_THICK + LABEL_RELIEF
+#: mm that the front wall is thicker on the inside behind the slot
+LABEL_PAD = 1.6
+#: mm of front wall under the slot and beside it, so the slot does not break out
+LABEL_RIM = 2.0
+#: how much of the bin, from the back, the rim keeps at full height with an open front
+SCOOP_KEEP = 0.5
 #: mm high the foot of a stacking bin is, and the room it has in the opening of the bin under it
 STACK_FOOT, STACK_PLAY = 3.0, 0.3
 #: mm that the letters stay from the edge of the label
 LABEL_EDGE = 1.0
-#: mm across the narrowest pocket that is still worth a label
-LABEL_NARROWEST = 4.0
 #: mm that the dividers stay under the top edge, so you can reach over them into the bin
 DIVIDER_DROP = 1.0
 #: mm past the top of the walls, so a cut leaves no skin behind
@@ -105,15 +110,53 @@ def _count(n):
     return max(COLS_MIN, min(COLS_MAX, int(n)))
 
 
-def _ledge(y_wall, into, x_lo, x_hi, top, depth) -> mf.Manifold:
-    """The label ledge along the inside of the front wall at `y_wall`, drawn from `x_lo` to `x_hi`.
+def _scoop_start(H, W, bottom) -> float:
+    """The height where the open front starts: half the bin, or higher when the slope would
+    leave too little of the rim at the back for a bin on top to stand on."""
+    return max(0.5 * H, H - (1.0 - SCOOP_KEEP) * W, bottom + 1.0)
 
-    The underside runs from `top − depth` at the wall up to `top` at `depth` millimetres into the
-    bin, so it stands at 45 degrees, and it reaches `into` millimetres into the wall, so the ledge
-    is one piece with it instead of only touching it.
-    """
-    loop = [[y_wall - into, top - depth - into], [y_wall + depth, top], [y_wall - into, top]]
+
+def _scoop(W, H, z0, x_lo, x_hi) -> mf.Manifold:
+    """What the open front cuts away: everything over the 45 degree line that rises from the
+    front at `z0` to the back, from `x_lo` to `x_hi`."""
+    y_front = -0.5 * W
+    loop = [[y_front - 2.0, z0 - 2.0], [y_front + (H + 1.0 - z0), H + 1.0], [y_front - 2.0, H + 1.0]]
     return extrude_cs(mf.CrossSection([loop]), FRONT, x_lo, x_hi)
+
+
+def _slot(L, W, H, wall, radius, bottom, scoop):
+    """The label slot as (width at the front, height, top), or None when the front has no room.
+
+    The slot is as wide as the flat part of the front allows, less the widening behind the
+    letters and `LABEL_RIM` on each side, and as high as `LABEL_DEPTH` or the front wall allows;
+    its top is the top of the front wall, where the label slides in.
+    """
+    top = _scoop_start(H, W, bottom) if scoop else H
+    wide = L - 2.0 * max(radius, wall) - 2.0 * LABEL_THICK - 2.0 * LABEL_RIM
+    high = min(LABEL_DEPTH, top - bottom - LABEL_RIM - LABEL_PAD)
+    if wide < 2.0 * LABEL_LOWEST or high < LABEL_LOWEST:
+        return None
+    return wide, high, top
+
+
+def _slot_cut(W, a, z_lo, z_hi) -> mf.Manifold:
+    """The dovetail slot in the outside of the front wall: `a` wide at the front for the letters,
+    then 45 degrees wider behind them for the plate, from `z_lo` up through `z_hi`."""
+    y0, R, T = -0.5 * W, LABEL_RELIEF, LABEL_THICK
+    h = 0.5 * a
+    loop = [[-h, y0 - 1.0], [h, y0 - 1.0], [h, y0 + R], [h + T, y0 + R + T],
+            [-h - T, y0 + R + T], [-h, y0 + R]]
+    return mf.Manifold.extrude(mf.CrossSection([loop]), z_hi - z_lo).translate((0.0, 0.0, z_lo))
+
+
+def _slot_pad(W, wall, a, z_lo, z_hi) -> mf.Manifold:
+    """The front wall made `LABEL_PAD` thicker on the inside behind the slot, from below `z_lo`
+    to `z_hi`; its underside stands at 45 degrees, so it prints without support."""
+    y_in = -0.5 * W + wall
+    loop = [[y_in - MARGIN, z_lo - LABEL_PAD - MARGIN], [y_in + LABEL_PAD, z_lo],
+            [y_in + LABEL_PAD, z_hi], [y_in - MARGIN, z_hi]]
+    x = 0.5 * a + LABEL_THICK + LABEL_RIM
+    return extrude_cs(mf.CrossSection([loop]), FRONT, -x, x)
 
 
 def _hanger(y_back, x_lo, x_hi, top, bottom=0.0) -> mf.Manifold:
@@ -132,47 +175,38 @@ def _hanger(y_back, x_lo, x_hi, top, bottom=0.0) -> mf.Manifold:
     return extrude_cs(mf.CrossSection([hook, rib]), FRONT, x_lo, x_hi)
 
 
-def _ledge_depth(inner_w, H, f) -> float:
-    """How deep the ledge is: never deeper than half the inside or the height of the bin."""
-    return min(LABEL_DEPTH, 0.5 * inner_w, H - f)
+def label_size(length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4.0, scoop=True,
+               stack=False):
+    """(width, height) of the front of the label that fits the slot of this bin, or None.
 
-
-def _pocket(inner_l, inner_w, depth):
-    """The pocket in the ledge as (length, width, y of its front side), or None when the ledge
-    leaves too little room for a label."""
-    wide = depth - LABEL_LIP
-    if wide < LABEL_NARROWEST or inner_l < LABEL_NARROWEST:
-        return None
-    return inner_l, wide, -0.5 * inner_w
-
-
-def label_size(length=80, width=60, height=40, wall=1.6, floor=1.2):
-    """(length, width) of the label that fits the pocket of this bin, or None when it has none."""
+    The plate behind the letters is `2 LABEL_THICK` wider, the widening of the dovetail.
+    """
     L = _clamp(length, LENGTH_MIN, LENGTH_MAX)
     W = _clamp(width, WIDTH_MIN, WIDTH_MAX)
     H = _clamp(height, HEIGHT_MIN, HEIGHT_MAX)
     t = _clamp(wall, WALL_MIN, WALL_MAX)
     f = _clamp(floor, FLOOR_MIN, FLOOR_MAX)
-    inner_l, inner_w = L - 2.0 * t, W - 2.0 * t
-    pocket = _pocket(inner_l, inner_w, _ledge_depth(inner_w, H, f))
-    if pocket is None:
+    r = min(_clamp(radius, RADIUS_MIN, RADIUS_MAX), 0.5 * min(L, W))
+    slot = _slot(L, W, H, t, r, (STACK_FOOT if stack else 0.0) + f, scoop)
+    if slot is None:
         return None
-    return pocket[0] - 2.0 * LABEL_PLAY, pocket[1] - 2.0 * LABEL_PLAY
+    return slot[0] - 2.0 * LABEL_PLAY, slot[1] - LABEL_PLAY
 
 
-def bin_label(text, length=80, width=60, height=40, wall=1.6, floor=1.2, family=None,
-              bold=True) -> mf.Manifold:
-    """The label for the pocket of a bin of these sizes: a plate with `text` standing on it.
+def bin_label(text, length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4.0,
+              scoop=True, stack=False, family=None, bold=True) -> mf.Manifold:
+    """The label for the slot of a bin of these sizes: a plate with `text` standing on it.
 
-    The plate is `LABEL_THICK` millimetres thick and as large as the pocket less `LABEL_PLAY` all
-    round, so with its letters it lies flush in the ledge. The letters stand `LABEL_RELIEF` on it,
-    as high as fits and made smaller when a long text would run over the edge; they stay
-    `LABEL_EDGE` millimetres from it. The label lies on `z = 0`, centred on the origin, and the
-    text reads along the length of the bin. A bin without room for a pocket, or a text without
-    letters, is refused with a ValueError.
+    The plate is `LABEL_THICK` millimetres thick, as high as the slot less `LABEL_PLAY` and, like
+    the slot, wider at the back than at the front, with its sides at 45 degrees, so it slides in
+    from the top and cannot fall out forwards. The letters stand `LABEL_RELIEF` on it, as high as
+    fits and made smaller when a long text would run over the edge; they stay `LABEL_EDGE`
+    millimetres from it. The label lies on its back on `z = 0`, centred on the origin, and prints
+    without support. A bin without room for a slot, or a text without letters, is refused with a
+    ValueError.
     """
     from . import text3d           # the letters need the fonts, which only this part does
-    size = label_size(length, width, height, wall, floor)
+    size = label_size(length, width, height, wall, floor, radius, scoop, stack)
     if size is None:
         raise ValueError(tr("this bin has no room for a label"))
     lx, ly = size
@@ -185,21 +219,27 @@ def bin_label(text, length=80, width=60, height=40, wall=1.6, floor=1.2, family=
     lo, hi = np.asarray(letters.bounding_box()[:3]), np.asarray(letters.bounding_box()[3:])
     letters = letters.translate((-0.5 * (lo[0] + hi[0]), -0.5 * (lo[1] + hi[1]),
                                  LABEL_THICK - MARGIN - lo[2]))
-    plate = mf.Manifold.cube([lx, ly, LABEL_THICK]).translate((-0.5 * lx, -0.5 * ly, 0.0))
+    # the plate: wide at the back on the bed, narrower at the front under the letters
+    back, front = 0.5 * lx + LABEL_THICK, 0.5 * lx
+    side = [[-back, 0.0], [back, 0.0], [front, LABEL_THICK], [-front, LABEL_THICK]]
+    plate = extrude_cs(mf.CrossSection([side]), Plane((0.0, 0.0, 0.0), (0.0, -1.0, 0.0),
+                                                      (1.0, 0.0, 0.0)), -0.5 * ly, 0.5 * ly)
     return plate + letters
 
 
 def storage_bin(length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4,
-                cols=1, rows=1, label=True, hanger=False, stack=False) -> mf.Manifold:
-    """A printable open-top box with `cols` by `rows` compartments and a ledge for a label.
+                cols=1, rows=1, label=True, hanger=False, stack=False,
+                scoop=False) -> mf.Manifold:
+    """A printable open-top box with `cols` by `rows` compartments and a slot for a label.
 
     The bin is `length` by `width` millimetres and `height` millimetres high, with walls of `wall`
     and a floor of `floor`, and its vertical corners are rounded with `radius` outside and
     `radius − wall` inside. `cols` columns along the length and `rows` rows along the width are
     made by straight dividers of `wall` millimetres, which stand on the floor and stop
-    `DIVIDER_DROP` millimetre below the top edge. With `label` the inside of the front wall carries
-    a ledge of `LABEL_DEPTH` millimetres at the top, whose underside stands at 45 degrees, so a
-    label lies under it and the ledge prints without support. With `hanger` the back wall carries
+    `DIVIDER_DROP` millimetre below the top edge. With `label` the front wall carries the slot a
+    printed label slides into, facing forward. With `scoop` the front is open from half the height
+    up, the side walls running back at 45 degrees (see the top of this file). With `hanger` the
+    back wall carries
     the hook and the rib that hang the bin on the wall rack of `volura/bin_rack.py`; they stick
     out behind the bin, so the box round the bin is then deeper than `width`. With `stack` the
     bottom gets the foot that drops into a bin of the same size under it (see the top of this
@@ -225,7 +265,7 @@ def storage_bin(length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4,
     cavity = mf.Manifold.extrude(enclosure.rounded_rect(inner_l, inner_w, inner_r),
                                  H - bottom + MARGIN).translate((0.0, 0.0, bottom))
 
-    # what stands in the bin again: the dividers, and along the front wall the ledge for a label;
+    # what stands in the bin again: the dividers, and behind the label slot a thicker front wall;
     # the dividers of a stacking bin stay under the foot of the bin that stands in it
     add = []
     top = H - DIVIDER_DROP - foot
@@ -238,24 +278,27 @@ def storage_bin(length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4,
         y = -0.5 * inner_w + j * inner_w / nr
         add.append(mf.Manifold.cube([inner_l + t, t, top - f])
                    .translate((-0.5 * (inner_l + t), y - 0.5 * t, f)))
-    depth = _ledge_depth(inner_w, H, f)
-    if label and depth > 0.0:
-        add.append(_ledge(-0.5 * inner_w, t, -0.5 * (inner_l + t), 0.5 * (inner_l + t), H, depth))
+    slot = _slot(L, W, H, t, r, bottom, scoop) if label else None
+    if slot is not None:
+        a, high, slot_top = slot
+        add.append(_slot_pad(W, t, a, slot_top - high, slot_top))
     body = block - cavity
     if add:
         # nothing may stand outside the outline, so what goes back in is clipped to the block
         extra = mf.Manifold.batch_boolean(add, mf.OpType.Add)
         body = body + mf.Manifold.batch_boolean([extra, block], mf.OpType.Intersect)
-    pocket = _pocket(inner_l, inner_w, depth) if label else None
-    if pocket is not None:
-        # the pocket for the label, in the top of the ledge and against the front wall
-        lx, ly, y0 = pocket
-        body = body - mf.Manifold.cube([lx, ly, LABEL_POCKET + MARGIN]).translate(
-            (-0.5 * lx, y0, H - LABEL_POCKET))
+    if slot is not None:
+        # the slot for the label, open at the top of the front wall, where the label slides in
+        body = body - _slot_cut(W, a, slot_top - high, H + 1.0)
+    if scoop:
+        # the open front: everything over the 45 degree line from halfway the front to the back
+        body = body - _scoop(W, H, _scoop_start(H, W, bottom), -0.5 * L - 1.0, 0.5 * L + 1.0)
     if stack:
-        # the foot: the opening of the bin under it, less the play, and behind its label ledge
+        # the foot: the opening of the bin under it, less the play, and behind the thicker front
+        # wall of that bin when it reaches up to where the foot comes
         lx = inner_l - 2.0 * STACK_PLAY
-        y_lo = -0.5 * inner_w + STACK_PLAY + (depth if label and depth > 0.0 else 0.0)
+        pad_high = slot is not None and slot[2] > H - foot - STACK_PLAY
+        y_lo = -0.5 * inner_w + STACK_PLAY + (LABEL_PAD if pad_high else 0.0)
         y_hi = 0.5 * inner_w - STACK_PLAY
         rr = max(0.0, min(inner_r - STACK_PLAY, 0.5 * lx, 0.5 * (y_hi - y_lo)))
         sole = mf.Manifold.extrude(enclosure.rounded_rect(lx, y_hi - y_lo, rr),

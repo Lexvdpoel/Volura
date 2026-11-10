@@ -206,17 +206,31 @@ class Shots:
         def stand(m):
             return m.transform(np.c_[up, np.zeros(3)]).translate((0.0, 0.0, 50.0))
 
+        size = dict(length=80.0, width=60.0, height=40.0, wall=1.6, floor=1.2, radius=4.0)
+        a, high, top = storage_bin._slot(80.0, 60.0, 40.0, 1.6, 4.0, 1.2, True)
+
+        def in_slot(label):
+            """The label, printed on its back, stood up in the slot with its letters forward."""
+            upright = label.transform(np.array([[1.0, 0.0, 0.0, 0.0], [0.0, 0.0, -1.0, 0.0],
+                                                [0.0, 1.0, 0.0, 0.0]]))
+            b = np.asarray(upright.bounding_box(), dtype=float)
+            return upright.translate((0.0, -30.0 + storage_bin.LABEL_POCKET - b[4],
+                                      top - high - b[2]))
+
         w.doc.checkpoint()
         ops.group_from_manifold(w.doc, stand(rack), "#9aa4b1", "Rack")
-        for row, x, cols, colour in ((1, -85.0, 2, "#3fa34d"), (1, 0.0, 1, PART_COLOR),
-                                     (0, 0.0, 3, "#f2c230"), (0, 85.0, 1, "#d23b3b")):
-            b = storage_bin.storage_bin(length=80.0, width=60.0, height=40.0, cols=cols,
-                                        hanger=True)
+        for row, x, cols, colour, text in ((1, -85.0, 2, "#3fa34d", "Bits"),
+                                           (1, 0.0, 1, PART_COLOR, "M3"),
+                                           (0, 0.0, 3, "#f2c230", "Nuts"),
+                                           (0, 85.0, 1, "#d23b3b", "Fuses")):
+            b = storage_bin.storage_bin(**size, cols=cols, hanger=True, scoop=True)
+            label = in_slot(storage_bin.bin_label(text, **size))
             # the back of the bin against the rails, its top edge on the top of the row
             M = np.array([[1.0, 0.0, 0.0, x],
                           [0.0, 0.0, 1.0, (row + 1) * 50.0 - 40.0 - 50.0],
                           [0.0, -1.0, 0.0, plate_top + storage_bin.CLEAT_OUT + 30.0]])
             ops.group_from_manifold(w.doc, stand(b.transform(M)), colour, "Bin")
+            ops.group_from_manifold(w.doc, stand(label.transform(M)), "#f2f2f2", "Label")
         w.doc.notify()
         self.view_3d(closer=0.75)
         w.view.cam.yaw, w.view.cam.pitch = -65.0, 18.0

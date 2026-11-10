@@ -713,6 +713,7 @@ class Settings:
         self.bin_label = self._bool("bin_label", True)
         self.bin_hanger = self._bool("bin_hanger", False)
         self.bin_stack = self._bool("bin_stack", False)
+        self.bin_scoop = self._bool("bin_scoop", True)
         self.bin_label_text = str(self.q.value("bin_label_text", "") or "")
         try:
             self.rack_cols = int(float(self.q.value("rack_cols", 3)))
@@ -931,6 +932,7 @@ class Settings:
         self.q.setValue("bin_label", self.bin_label)
         self.q.setValue("bin_hanger", self.bin_hanger)
         self.q.setValue("bin_stack", self.bin_stack)
+        self.q.setValue("bin_scoop", self.bin_scoop)
         self.q.setValue("bin_label_text", self.bin_label_text)
         self.q.setValue("rack_cols", self.rack_cols)
         self.q.setValue("rack_rows", self.rack_rows)
@@ -1767,9 +1769,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                lambda checked=False: self.storage_bin_dialog(), None,
                                "storage_bin", False,
                                tr("Add a printable storage bin to the model: an open-top box "
-                                  "whose compartments are made by straight dividers, with a "
-                                  "sloped ledge along the inside of the front wall on which a "
-                                  "label lies readable"))
+                                  "whose compartments are made by straight dividers, open at "
+                                  "the front so you reach in when bins stand on each other, "
+                                  "with a slot in the front for a label"))
         # ---- bin wall rack
         self.a_bin_rack = A(tr("Bin Wall Rack…"),
                             lambda checked=False: self.bin_rack_dialog(), None,

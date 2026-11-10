@@ -666,6 +666,7 @@ class PrintMixin:
         self.settings.bin_label = bool(options["label"])
         self.settings.bin_hanger = bool(options.get("hanger", False))
         self.settings.bin_stack = bool(options.get("stack", False))
+        self.settings.bin_scoop = bool(options.get("scoop", False))
         self.settings.bin_label_text = str(options.get("label_text", ""))
         self.settings.save()
         made = self.make_storage_bin_model(options)
@@ -686,6 +687,7 @@ class PrintMixin:
                                         "cols", "rows", "label")}
         size["hanger"] = bool(options.get("hanger", False))
         size["stack"] = bool(options.get("stack", False))
+        size["scoop"] = bool(options.get("scoop", False))
         text = str(options.get("label_text", "") or "").strip() if size["label"] else ""
         bb = doc.model_bbox()
         bx, by, _bz = self.settings.bed_size
@@ -704,7 +706,7 @@ class PrintMixin:
             # the label lies on the bed in front of the bin, along its length
             report(0.7, tr("Building the label…"))
             label = storage_bin.bin_label(text, **{k: size[k] for k in (
-                "length", "width", "height", "wall", "floor")})
+                "length", "width", "height", "wall", "floor", "radius", "scoop", "stack")})
             b = np.asarray(m.bounding_box(), dtype=float)
             c = np.asarray(label.bounding_box(), dtype=float)
             return m, label.translate((0.5 * (b[0] + b[3]) - 0.5 * (c[0] + c[3]),

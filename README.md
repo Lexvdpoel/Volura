@@ -113,13 +113,13 @@ The interface is available in English and Dutch (*Window > Preferences > General
   the head sinks below the cell
 - **Storage Bin** (Draw > Parts): a printable open-top box whose inside is divided into
   compartments by straight dividers of the wall thickness, which stop a millimetre under the top
-  edge so you can still reach over them; along the inside of the front wall a ledge of twelve
-  millimetres runs at the top, whose underside stands at 45 degrees, so a label lies under it
-  readable and the ledge prints without support. With a *Label text* the bin comes with a thin
-  label that lies flush in a pocket in the top of the ledge, held in by a lip. With *Wall hook* the
-  back wall gets a hook along the top and a rib along the bottom, so the bin hangs on the wall rack.
-  A *Stackable* bin has a foot that drops into a bin of the same size, so bins stand on each
-  other without sliding off; the dividers and the label stay out of its way
+  edge so you can still reach over them. With *Open front* the front is open from half the height
+  up and the side walls run back at 45 degrees, so you reach in also when bins stand on each
+  other. A dovetail slot in the front wall takes a printed label that slides in from above, facing
+  forward; with a *Label text* the bin comes with that label, its letters flush with the front.
+  With *Wall hook* the back wall gets a hook along the top and a rib along the bottom, so the bin
+  hangs on the wall rack. A *Stackable* bin has a foot that drops into a bin of the same size, so
+  bins stand on each other without sliding off
 - **Bin Wall Rack** (Draw > Parts): a plate for the wall with a grid of cells whose number and
   size you choose; every row has a rail that leans 45 degrees up, so the hook of a bin drops behind
   it and the bin hangs anywhere along the row and slides sideways. A bin as high as a row or lower

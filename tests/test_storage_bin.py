@@ -1,14 +1,14 @@
-"""Storage bins: a printed open-top box with compartments and a ledge for a label.
+"""Storage bins: a printed open-top box with compartments and a slot for a label.
 
 `storage_bin.storage_bin` gives the bin as one closed volume that stands on `z = 0` and is centred
 on the origin in plan: walls of `wall` and a floor of `floor`, rounded vertical corners, and
-`cols` by `rows` compartments made by straight dividers that stop just under the top edge. Along
-the inside of the front wall a ledge of twelve millimetres runs at the top, whose underside stands
-at 45 degrees, so a label lies under it readable and the ledge prints without support.
+`cols` by `rows` compartments made by straight dividers that stop just under the top edge. The
+front can be open from half the height up, and the front wall carries a dovetail slot into which
+a printed label slides from above, facing forward.
 
 These tests weigh a bin against what it promises: it is one volume that stands on the bed, the box
 round it is the size asked for, a compartment is empty above the floor, a divider stands where two
-compartments meet, and the ledge is plastic that is not there without it. A size that cannot be
+compartments meet, the open front is open, and the label sits in its slot. A size that cannot be
 printed becomes the nearest one that can. The place in the interface is checked too (Parts right
 after the battery holder, one part in one undo step, and the dialog that remembers its values).
 
@@ -131,13 +131,29 @@ def test_a_divider_stands_where_two_compartments_meet():
     assert gap(make(rows=3), box) > 1000.0, "there is no divider between the rows"
 
 
-def test_the_label_ledge_is_plastic_that_is_only_there_with_the_label():
-    plain, ledged = make(), make(label=True)
-    assert ledged.volume() > plain.volume(), "the ledge adds nothing"
-    # against the front wall, a centimetre below the top edge: empty without the ledge
-    place = mf.Manifold.cube([20.0, 2.5, 4.0]).translate((-10.0, -27.5, 34.0))
-    assert gap(plain, place) == pytest.approx(0.0, abs=1e-6), "the plain bin has a ledge"
-    assert gap(ledged, place) > 100.0, "the ledge does not lie along the inside of the front wall"
+def test_the_open_front_is_open_from_half_the_height():
+    closed, open_ = make(), make(scoop=True)
+    # in front, just over half the height: the front wall of a closed bin, nothing in an open one
+    front = mf.Manifold.cube([20.0, 1.0, 4.0]).translate((-10.0, -30.0, 22.0))
+    assert gap(closed, front) > 50.0
+    assert gap(open_, front) == pytest.approx(0.0, abs=1e-6), "the front is not open"
+    # under half the height the front wall stays, and the back keeps its full height
+    low = front.translate((0.0, 0.0, -10.0))
+    assert gap(open_, low) > 50.0, "the front wall is gone below half the height"
+    back = mf.Manifold.cube([20.0, 1.0, 2.0]).translate((-10.0, 29.0, 37.5))
+    assert gap(open_, back) > 30.0, "the back lost its height"
+    assert bbox(open_)[1][2] == pytest.approx(BASE["height"])
+
+
+def test_the_side_walls_run_back_at_45_degrees():
+    m = make(scoop=True)
+    side = 0.5 * BASE["length"] - 0.5 * BASE["wall"]      # in the middle of a side wall
+    for z in (25.0, 30.0, 35.0):
+        y = -0.5 * BASE["width"] + (z - 20.0)           # the 45 degree line from halfway the front
+        before = mf.Manifold.cube([0.4, 0.4, 0.4]).translate((side - 0.2, y - 1.5, z - 0.2))
+        after = mf.Manifold.cube([0.4, 0.4, 0.4]).translate((side - 0.2, y + 1.0, z - 0.2))
+        assert gap(m, before) == pytest.approx(0.0, abs=1e-6), f"wall in front of the slope at {z}"
+        assert gap(m, after) > 0.0, f"no wall behind the slope at {z}"
 
 
 def test_a_size_that_cannot_be_printed_becomes_the_nearest_one_that_can():
@@ -232,53 +248,60 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
 
 # ------------------------------------------------------------------ the label
 
-def in_pocket(label, kw=BASE):
-    """The label laid in the pocket of the ledge, against the front wall."""
-    inner_w = kw["width"] - 2.0 * kw["wall"]
-    _lx, ly = storage_bin.label_size(kw["length"], kw["width"], kw["height"], kw["wall"],
-                                     kw["floor"])
-    return label.translate((0.0, -0.5 * inner_w + storage_bin.LABEL_PLAY + 0.5 * ly,
-                            kw["height"] - storage_bin.LABEL_POCKET))
+LABEL_KW = ("length", "width", "height", "wall", "floor", "radius")
 
 
-def label_of(text="Screws M3"):
-    return storage_bin.bin_label(text, **{k: BASE[k] for k in (
-        "length", "width", "height", "wall", "floor")})
+def label_of(text="Screws M3", **kw):
+    return storage_bin.bin_label(text, **{k: BASE[k] for k in LABEL_KW}, **kw)
 
 
-def test_the_ledge_has_a_pocket_for_the_label():
-    lx, ly = storage_bin.label_size()
-    assert lx == pytest.approx(BASE["length"] - 2.0 * BASE["wall"] - 2.0 * storage_bin.LABEL_PLAY)
-    assert ly == pytest.approx(storage_bin.LABEL_DEPTH - storage_bin.LABEL_LIP
-                               - 2.0 * storage_bin.LABEL_PLAY)
-    plate = mf.Manifold.cube([lx, ly, storage_bin.LABEL_POCKET]).translate(
-        (-0.5 * lx, -0.5 * ly, 0.0))
-    assert gap(make(label=True), in_pocket(plate)) == pytest.approx(0.0, abs=1e-6), \
-        "the pocket is not there"
+def in_slot(label, scoop=True, stack=False):
+    """The label, printed on its back, stood up in the slot with its letters to the front."""
+    a, high, top = storage_bin._slot(BASE["length"], BASE["width"], BASE["height"], BASE["wall"],
+                                     BASE["radius"],
+                                     (storage_bin.STACK_FOOT if stack else 0.0) + BASE["floor"],
+                                     scoop)
+    up = label.transform(np.array([[1.0, 0.0, 0.0, 0.0], [0.0, 0.0, -1.0, 0.0],
+                                   [0.0, 1.0, 0.0, 0.0]]))
+    lo, hi = bbox(up)
+    return up.translate((0.0, -0.5 * BASE["width"] + storage_bin.LABEL_POCKET - hi[1],
+                         top - high - lo[2]))
 
 
-def test_the_label_lies_flush_in_the_pocket_and_the_lip_holds_it():
-    label = label_of()
+@pytest.mark.parametrize("scoop", [True, False])
+def test_the_label_slides_into_its_slot_and_cannot_fall_out_forwards(scoop):
+    label = label_of(scoop=scoop)
     assert len(label.decompose()) == 1, "the letters are not one piece with the plate"
     lo, hi = bbox(label)
     assert hi[2] - lo[2] == pytest.approx(storage_bin.LABEL_THICK + storage_bin.LABEL_RELIEF)
-    placed = in_pocket(label)
-    m = make(label=True)
-    assert gap(m, placed) == pytest.approx(0.0, abs=1e-6), "the label does not fit"
-    assert gap(m, placed.translate((0.0, 0.5, 0.0))) > 1.0, "the lip does not hold the label"
+    m = make(label=True, scoop=scoop)
+    placed = in_slot(label, scoop)
+    assert gap(m, placed) == pytest.approx(0.0, abs=1e-3), "the label does not fit its slot"
+    assert bbox(placed)[0][1] == pytest.approx(-0.5 * BASE["width"]), "the letters are not flush"
+    assert gap(m, placed.translate((0.0, -0.5, 0.0))) > 1.0, "the label falls out forwards"
+    assert gap(m, placed.translate((0.5, 0.0, 0.0))) > 0.0, "the label moves sideways"
+    assert gap(m, placed.translate((0.0, 0.0, 2.0))) == pytest.approx(0.0, abs=1e-3), \
+        "the label does not slide out at the top"
+
+
+def test_the_bin_keeps_its_size_with_the_slot():
+    for kw in (dict(label=True), dict(label=True, scoop=True)):
+        lo, hi = bbox(make(**kw))
+        assert (hi - lo) == pytest.approx([BASE["length"], BASE["width"], BASE["height"]])
 
 
 def test_a_long_text_stays_on_the_label():
-    lx, ly = storage_bin.label_size()
+    lx, ly = storage_bin.label_size(**{k: BASE[k] for k in LABEL_KW})
     lo, hi = bbox(label_of("A very long text that never fits on one small label"))
-    assert hi[0] - lo[0] == pytest.approx(lx) and hi[1] - lo[1] == pytest.approx(ly)
+    assert hi[0] - lo[0] == pytest.approx(lx + 2.0 * storage_bin.LABEL_THICK)
+    assert hi[1] - lo[1] == pytest.approx(ly)
 
 
-def test_a_bin_without_room_for_a_pocket_has_no_label():
-    narrow = dict(length=80.0, width=20.0, height=40.0, wall=5.0, floor=1.2)
-    assert storage_bin.label_size(**narrow) is None
+def test_a_bin_without_room_for_a_slot_has_no_label():
+    low = dict(length=80.0, width=60.0, height=10.0, wall=1.6, floor=1.2)
+    assert storage_bin.label_size(**low) is None
     with pytest.raises(ValueError):
-        storage_bin.bin_label("Bits", **narrow)
+        storage_bin.bin_label("Bits", **low)
 
 
 def test_the_dialog_makes_the_label_with_the_bin(win, monkeypatch):
@@ -306,7 +329,8 @@ def stacked(**kw):
 
 
 @pytest.mark.parametrize("kw", [{}, dict(cols=3, rows=2, label=True),
-                                dict(cols=2, label=True, hanger=True)])
+                                dict(cols=2, label=True, hanger=True),
+                                dict(cols=3, label=True, scoop=True)])
 def test_a_stacking_bin_stands_in_the_one_under_it(kw):
     low, up = stacked(**kw)
     assert len(low.decompose()) == 1
@@ -322,11 +346,12 @@ def test_a_stacking_bin_cannot_slide_off():
         assert gap(low, up.translate(d)) > 1.0, f"the bin slides {d}"
 
 
-def test_the_label_stays_under_the_bin_on_top():
-    low, up = stacked(label=True)
-    label = in_pocket(label_of())
-    assert gap(low, label) == pytest.approx(0.0, abs=1e-6)
-    assert gap(up, label) == pytest.approx(0.0, abs=1e-6), "the letters press on the bin above"
+@pytest.mark.parametrize("scoop", [True, False])
+def test_the_label_stays_clear_of_the_bin_on_top(scoop):
+    low, up = stacked(label=True, scoop=scoop)
+    label = in_slot(label_of(scoop=scoop, stack=True), scoop, stack=True)
+    assert gap(low, label) == pytest.approx(0.0, abs=1e-3)
+    assert gap(up, label) == pytest.approx(0.0, abs=1e-6), "the bin on top presses on the label"
 
 
 if __name__ == "__main__":

@@ -782,10 +782,15 @@ class StorageBinDialog(QDialog):
         self.rows.setRange(storage_bin.COLS_MIN, storage_bin.COLS_MAX)
         self.rows.setValue(s.bin_rows)
         self.rows.setToolTip(tr("How many compartments lie next to each other along the width"))
-        self.label = QCheckBox(tr("Label ledge"))
+        self.scoop = QCheckBox(tr("Open front"))
+        self.scoop.setChecked(bool(s.bin_scoop))
+        self.scoop.setToolTip(tr("From half the height up the front is open and the side walls "
+                                 "run back at 45 degrees, so you reach in also when bins stand "
+                                 "on each other"))
+        self.label = QCheckBox(tr("Label slot"))
         self.label.setChecked(bool(s.bin_label))
-        self.label.setToolTip(tr("A sloped ledge along the inside of the front wall, on which a "
-                                 "label lies readable; it prints without support"))
+        self.label.setToolTip(tr("A slot in the front wall into which a printed label slides "
+                                 "from above, facing forward"))
         lay.addRow(tr("Length"), self.length)
         lay.addRow(tr("Width"), self.width)
         lay.addRow(tr("Height"), self.height)
@@ -794,11 +799,12 @@ class StorageBinDialog(QDialog):
         lay.addRow(tr("Radius"), self.radius)
         lay.addRow(tr("Columns"), self.cols)
         lay.addRow(tr("Rows"), self.rows)
+        lay.addRow("", self.scoop)
         lay.addRow("", self.label)
         self.label_text = QLineEdit(s.bin_label_text)
         self.label_text.setPlaceholderText(tr("No label"))
-        self.label_text.setToolTip(tr("Text for a printed label that lies flush in the pocket of "
-                                      "the label ledge; leave it empty for no label"))
+        self.label_text.setToolTip(tr("Text for a printed label that slides into the slot in "
+                                      "the front; leave it empty for no label"))
         self.label_text.setEnabled(self.label.isChecked())
         self.label.toggled.connect(self.label_text.setEnabled)
         lay.addRow(tr("Label text"), self.label_text)
@@ -829,6 +835,7 @@ class StorageBinDialog(QDialog):
                 "label": bool(self.label.isChecked()),
                 "hanger": bool(self.hanger.isChecked()),
                 "stack": bool(self.stack.isChecked()),
+                "scoop": bool(self.scoop.isChecked()),
                 "label_text": self.label_text.text().strip()}
 
 
