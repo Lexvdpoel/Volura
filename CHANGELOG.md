@@ -3,6 +3,15 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.35 — 2026-11-10
+
+### Improved
+- **The singular when there is one**: messages such as "1 cable clip added" no longer say
+  "1 cable clips", in English and in Dutch.
+- The program's code is split into smaller parts (the dialogs, the panels, the worksheet,
+  3D printing and the controls each in their own module), which makes it easier to
+  maintain. Nothing changes in how Volura works.
+
 ## 0.2.34 — 2026-11-09
 
 ### New
