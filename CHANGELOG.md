@@ -3,6 +3,44 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.39 — 2026-11-10
+
+### New
+- **Storage Bin** (Draw > Parts): an open-top box of the outside size you enter, with rounded
+  corners, compartments made by straight dividers and a sloped label ledge along the front wall
+  that prints without support. With a label text the bin comes with a thin label that lies flush
+  in a pocket in the ledge. A bin can get a wall hook, and it can be stackable: a foot drops into
+  a bin of the same size, so bins stand on each other without sliding off.
+- **Bin Wall Rack** (Draw > Parts): a plate for the wall with a grid of rails that bins with the
+  wall hook hang on, anywhere along a row. You choose the columns, rows and cell size; two
+  countersunk holes per row hold it on the wall, and a stop closes the ends of every rail. A
+  rack wider than the bed comes in panels that slide together with dovetails.
+- **Cable Chain** (Draw > Parts): a drag chain printed in one piece, the links already in each
+  other on their pins, for the inside width and height your cables need.
+- **Circuit boards in the project box**: pick an Arduino Uno or Mega or a Raspberry Pi 4 / 5,
+  Zero or Pico, and the floor gets a standoff with a pilot hole under every mounting hole.
+
+### Improved
+- **Battery holder**: two countersunk mounting holes (M2.5, M3, M4 or none) in the middle of the
+  first and the last cradle, diagonally across the holder, also for an even number of cells.
+- **Vent patterns follow their outline**: a vent pattern is made again for its outline when that
+  outline changes shape, also on a plate that is linked to the model.
+- **Linked faces follow what is cut into them**: a pocket, a blind hole, a notch or a cut-off
+  corner made in 3D now comes to the linked outline on the worksheet.
+- **Explode Group** is much faster for a group that touches no loose geometry (a sphere of 4608
+  faces in a fifth of a second instead of 49 seconds), and otherwise shows a progress bar with
+  Cancel.
+
+### Fixed
+- The Rotate tool shows a dotted line from the centre to the point you are about to pick.
+- A linked face keeps its own face when the part is turned, instead of the face that came to lie
+  where it was.
+
+### Website
+- The manual describes the storage bin, its label and stacking, the bin wall rack, the cable
+  chain, the board standoffs and the new mounting holes of the battery holder, with a picture of
+  bins hanging on the rack.
+
 ## 0.2.38 — 2026-11-10
 
 ### Fixed
