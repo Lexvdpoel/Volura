@@ -1103,6 +1103,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             self.view.announce()
         self._show_layers_panel(want == "2d")
         if changed:
+            self.refit_vents()        # a grille fits its outline again, also without a link
             self.sync_links("to_sheet" if want == "2d" else "to_model")
         return changed
 

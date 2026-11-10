@@ -16,7 +16,7 @@ from . import __version__
 from .brep import Entities, Face
 from .geom import Plane, manifold_from_mesh, merge_mesh, mesh_arrays
 from .i18n import tr
-from .linking import Link
+from .linking import Link, Vent
 from .model import ROOT, Document, Group, Guide
 from .mesh_formats import STL_RECORD, read_mesh, read_stl  # noqa: F401 (read_stl: API)
 from .ops import id_color, print_parts, union_all
@@ -92,6 +92,7 @@ def save_document(doc: Document, path):
         "next_guide_id": doc.next_guide_id,
         "sheet": doc.sheet.to_json(),
         "links": [l.to_dict() for l in doc.links],
+        "vents": [v.to_dict() for v in doc.vents],
     }
     files = {"document.json": json.dumps(data)}
     atomic_write(path, lambda tmp: write_zip(tmp, files))
@@ -119,6 +120,7 @@ def load_document(doc: Document, path):
                                          1 + max([0] + [g.id for g in doc.guides]))
         doc.load_sheet(Drawing.from_json(data.get("sheet") or {}))   # old files have no sheet
     doc.links = [Link.from_dict(d) for d in data.get("links") or []]   # nor links
+    doc.vents = [Vent.from_dict(d) for d in data.get("vents") or []]   # nor vent patterns
     doc.path = path
     doc.dirty = False
 

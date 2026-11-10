@@ -24,6 +24,10 @@ the sheet.
 The loops that travel through a link are always in their own 2D frame (the plane of the
 face, or the bottom face of the plate), never in world or sheet coordinates, so the
 placement of either side is never part of the comparison.
+
+A vent pattern that was cut into one of those outlines is remembered the same way, as a
+`Vent`: the outline it was made for and the holes it gave, so the pattern can be made
+again when the outline of the panel changes.
 """
 from __future__ import annotations
 
@@ -165,6 +169,31 @@ def shape_changed(old, new, tol=1e-3, allow_mirror=True) -> bool:
         return True
     fit = fit_rigid(old, new, allow_mirror=allow_mirror)
     return fit is not None and fit[1] > tol
+
+
+def _edge_lengths(loop) -> np.ndarray:
+    """The lengths of the segments of a loop, sorted: its shape without its placement."""
+    d = np.roll(loop, -1, axis=0) - loop
+    return np.sort(np.hypot(d[:, 0], d[:, 1]))
+
+
+def find_loop(loop, loops, tol=1e-3) -> int:
+    """The index in `loops` of the loop that is the same shape as `loop`, or -1.
+
+    One `same_shape` is one fit, and the loops that are looked through are often all alike
+    - the holes of a grille, the copies of one shape - so the number of points and the
+    lengths of the segments decide first which loops can still be alike. Only those are
+    fitted, which is what keeps a search over a whole worksheet a short one.
+    """
+    a = _loop(loop)
+    d = _edge_lengths(a)
+    for i, b in enumerate(loops):
+        q = _loop(b)
+        if len(q) != len(a) or float(np.max(np.abs(_edge_lengths(q) - d))) > tol:
+            continue
+        if same_shape([a], [q], tol=tol):
+            return i
+    return -1
 
 
 def sorted_loops(loops) -> list:
@@ -469,6 +498,17 @@ def face_shape(manifold, frame):
     return loops or None
 
 
+def _loops_json(loops) -> list:
+    """The loops as the plain numbers a file keeps, rounded to the decimals above."""
+    return [[[round(float(x), JSON_DECIMALS), round(float(y), JSON_DECIMALS)]
+             for x, y in np.asarray(l, dtype=float).reshape(-1, 2)] for l in loops]
+
+
+def _loops_of(v) -> list:
+    """Loops as they come back from a file: (n, 2) arrays."""
+    return [np.asarray(l, dtype=float).reshape(-1, 2) for l in (v or [])]
+
+
 # --------------------------------------------------------------------------
 #  what a link remembers
 # --------------------------------------------------------------------------
@@ -500,9 +540,7 @@ class Link:
     def to_dict(self) -> dict:
         """Plain values only, so a link goes into a file as it is."""
         return {"src": int(self.src), "group": int(self.group), "kind": str(self.kind),
-                "shape": [[[round(float(x), JSON_DECIMALS), round(float(y), JSON_DECIMALS)]
-                           for x, y in np.asarray(l, dtype=float).reshape(-1, 2)]
-                          for l in self.shape],
+                "shape": _loops_json(self.shape),
                 "thickness": None if self.thickness is None
                 else round(float(self.thickness), JSON_DECIMALS),
                 "frame": None if self.frame is None
@@ -514,6 +552,50 @@ class Link:
         thickness, frame = d.get("thickness"), d.get("frame")
         return Link(int(d.get("src", 0)), int(d.get("group", 0)),
                     kind if kind in KINDS else "plate",
-                    [np.asarray(l, dtype=float).reshape(-1, 2) for l in (d.get("shape") or [])],
+                    _loops_of(d.get("shape")),
                     None if thickness is None else float(thickness),
                     None if not frame else [float(c) for c in frame])
+
+
+# --------------------------------------------------------------------------
+#  what a vent pattern remembers
+# --------------------------------------------------------------------------
+
+@dataclass
+class Vent:
+    """One vent pattern the worksheet remembers, so it can be made again.
+
+    A grille is cut for the outline it lies in, so an outline that changes shape leaves
+    its holes cut off or sticking out. `src` is the source number of that outline on the
+    worksheet and `shape`, `size`, `web` and `margin` the options the pattern was made
+    with, which are the defaults of `volura/boxgen.py` when a file says nothing.
+
+    `outline` is the outer loop the pattern was made for and `holes` the holes it gave,
+    both in the `sorted_loops` form and in their own plane, never in the placement of the
+    sheet. That is what makes the pattern recognisable again: `shape_changed` compares the
+    outline with the loop that is there now and `same_shape` finds the holes back,
+    wherever the panel was moved to or turned into on the way.
+    """
+
+    src: int
+    shape: str = "hex"
+    size: float = 6.0
+    web: float = 2.0
+    margin: float = 3.0
+    outline: list = field(default_factory=list)
+    holes: list = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        """Plain values only, so a vent goes into a file as it is."""
+        return {"src": int(self.src), "shape": str(self.shape),
+                "size": round(float(self.size), JSON_DECIMALS),
+                "web": round(float(self.web), JSON_DECIMALS),
+                "margin": round(float(self.margin), JSON_DECIMALS),
+                "outline": _loops_json(self.outline), "holes": _loops_json(self.holes)}
+
+    @staticmethod
+    def from_dict(d) -> "Vent":
+        return Vent(int(d.get("src", 0)), str(d.get("shape", "hex")),
+                    float(d.get("size", 6.0)), float(d.get("web", 2.0)),
+                    float(d.get("margin", 3.0)),
+                    _loops_of(d.get("outline")), _loops_of(d.get("holes")))

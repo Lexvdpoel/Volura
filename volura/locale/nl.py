@@ -1657,6 +1657,8 @@ TRANSLATIONS = {
     'First select the parts or the outlines that are linked.': 'Selecteer eerst de onderdelen of contouren die gekoppeld zijn.',
     '{n} link removed.': '{n} koppeling verwijderd.',
     '{n} links removed.': '{n} koppelingen verwijderd.',
+    '{n} vent pattern fitted to its new outline.': '{n} gatenrooster aangepast aan het nieuwe contour.',
+    '{n} vent patterns fitted to their new outlines.': '{n} gatenroosters aangepast aan de nieuwe contouren.',
     'Battery Holder…': 'Batterijhouder…',
     'Battery holder': 'Batterijhouder',
     'Add a printable battery holder to the model: a block with an open cradle per cell, so the cells press in from above and the wires come through the slots in the end walls and the holes in the floor': 'Printbare batterijhouder aan het model toevoegen: een blok met een open vak per cel, zodat je de cellen van boven erin drukt en de draden door de sleuven in de eindwanden en de gaten in de bodem naar boven komen',

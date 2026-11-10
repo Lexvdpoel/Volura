@@ -358,7 +358,10 @@ class SheetMixin:
         """The holes on the cut layer of the worksheet: one undo step, all of them selected.
 
         Every hole gets the source number of the contour, so clicking the panel, moving it
-        and arranging the sheet take the grille along with the panel it is cut in.
+        and arranging the sheet take the grille along with the panel it is cut in. The
+        pattern is remembered for that contour (see `refit_vents`), so it is made again when
+        the outline changes; a second pattern in the same contour replaces the first one,
+        whose holes go with it.
         """
         found = self.vent_outline()
         if found is None:
@@ -383,16 +386,128 @@ class SheetMixin:
         for pts in holes:
             drawing.add_path(pts, closed=True, layer=layer, src=1)
         self.doc.checkpoint()
+        old = self._vent_of(outline_src)
+        if old is not None:
+            self._drop_vent_holes(old)              # the grille it replaces goes first
         added = sheet.merge(drawing)
         if outline_src:
             for p in added:
                 p.src = outline_src
+            self._remember_vent(outline_src, outline_pts, holes, options)
         self.doc.notify()
         self.sheet_view.set_selection(added)
         self.sheet_view._refresh_outside(announce=False)
         self.hint.setText(trn("{n} hole added.", "{n} holes added.", len(added))
                           .format(n=len(added)))
         return added
+
+    def _vent_of(self, src):
+        """What the worksheet remembers of the vent pattern in `src`, or None."""
+        return next((v for v in self.doc.vents if int(v.src) == int(src)), None)
+
+    def _remember_vent(self, src, outline, holes, options) -> None:
+        """The vent pattern of one contour, kept so it can be made again for a new outline."""
+        vent = linking.Vent(src=int(src), shape=str(options["shape"]), size=float(options["size"]),
+                            web=float(options["web"]), margin=float(options["margin"]),
+                            outline=linking.sorted_loops([outline]),
+                            holes=linking.sorted_loops(holes))
+        self.doc.vents = [v for v in self.doc.vents if int(v.src) != int(src)] + [vent]
+
+    def refit_vents(self, checkpoint=True, announce=True) -> int:
+        """The vent patterns made again for an outline that changed shape; returns how many.
+
+        A grille keeps its holes where they were, so a panel that grows or shrinks leaves
+        them cut off or sticking out. Here the pattern is made again for the outline as it
+        is now, with the shape, size, web and margin it was made with: the holes of the
+        pattern go and new ones come, while a hole you drew yourself stays. When the outline
+        belongs to a linked plate, the plate is rebuilt from the worksheet too, so the model
+        gets the new grille. A vent whose contour left the worksheet is dropped.
+        """
+        doc = self.doc
+        if not doc.vents:
+            return 0
+        present = {int(p.src) for p in doc.sheet.paths}
+        keep, refit = [], []
+        for v in doc.vents:
+            if int(v.src) not in present:
+                continue                            # the contour is gone, so the grille is
+            loops = self._link_sheet_loops(v.src)   # the largest loop is the outline
+            if loops and linking.shape_changed(v.outline, [loops[0]]):
+                refit.append((v, loops[0]))
+            else:
+                keep.append(v)
+        if not refit and len(keep) == len(doc.vents):
+            return 0
+        if checkpoint:
+            doc.checkpoint()
+        doc.vents = keep + [v for v, _outer in refit]
+        for v, outer in refit:
+            self._refit_vent(v, outer)
+        doc.notify()
+        if self.mode == "2d":
+            self.sheet_view._refresh_outside(announce=False)
+        else:
+            self.view.update()
+        if refit and announce:
+            self.hint.setText(trn("{n} vent pattern fitted to its new outline.",
+                                  "{n} vent patterns fitted to their new outlines.", len(refit))
+                              .format(n=len(refit)))
+        return len(refit)
+
+    def _refit_vent(self, vent, outer) -> None:
+        """One vent pattern made again for `outer`, the outline as it lies on the worksheet."""
+        try:
+            holes = boxgen.vent_pattern(outer, shape=vent.shape, size=vent.size,
+                                        web=vent.web, margin=vent.margin)
+        except Exception as e:                      # the generator must never crash
+            errors.log_exception(note=f"the vent pattern: {e}")
+            return
+        gone = self._drop_vent_holes(vent)
+        sheet = self.doc.sheet
+        first = gone[0] if gone else None
+        layer = (first.layer if first is not None
+                 else sheet.default_layer("cut") or default_layer_names("cut")[0])
+        for q in holes:
+            sheet.add_path(q, closed=True, layer=layer,
+                           filled=bool(first.filled) if first is not None else False,
+                           rule=first.rule if first is not None else "nonzero", src=vent.src)
+        vent.outline = linking.sorted_loops([outer])
+        vent.holes = linking.sorted_loops(holes)
+        self._refit_vent_plate(vent)
+
+    def _drop_vent_holes(self, vent) -> list:
+        """The paths of the holes a vent pattern made, off the worksheet; other holes stay.
+
+        The holes are matched where they lie, one path per hole, and `linking.find_loop`
+        says nothing about where a loop is or which way it runs, so a hole is recognised
+        even after the panel was moved or mirrored on the sheet. A hole you drew yourself is
+        no hole of the pattern and stays.
+        """
+        left = list(vent.holes)
+        keep, gone = [], []
+        for p in self.doc.sheet.paths:
+            hit = -1
+            if int(p.src) == int(vent.src) and p.closed and len(p.pts) >= 3:
+                hit = linking.find_loop(p.pts, left)
+            if hit < 0:
+                keep.append(p)
+            else:
+                gone.append(p)
+                del left[hit]
+        self.doc.sheet.paths = keep
+        return gone
+
+    def _refit_vent_plate(self, vent) -> None:
+        """The linked plate of a refitted contour rebuilt from the worksheet, holes included."""
+        link = next((l for l in self.doc.links if int(l.src) == int(vent.src)
+                     and l.kind == "plate"), None)
+        if link is None:
+            return
+        ents = self._link_ents(link)
+        man = ents.to_manifold() if ents is not None else None
+        plate = linking.plate_of(man) if (man is not None and not man.is_empty()) else None
+        if plate is not None:
+            self._link_plate_from_sheet(link, self._link_sheet_loops(vent.src), plate)
 
     # ------------------------------------------------------------ fit test
     def fit_test_dialog(self):
@@ -783,6 +898,33 @@ class SheetMixin:
                                                shape=linking.sorted_loops(pl["loops"]),
                                                thickness=float(pl["thickness"]), frame=None))
 
+    @staticmethod
+    def _link_placement(shape, loops) -> np.ndarray:
+        """Where `loops` lie, read from the shape a link last synced.
+
+        `linking.placement` for the whole shape; when the loops no longer match it as a
+        whole - a grille that got more holes, or one that went - the outline is still the
+        outline, and that alone says where the shape is, so the sheet keeps its place and
+        the plate keeps its own.
+        """
+        fit = linking.fit_rigid(shape, loops)
+        if fit is None and len(shape) > 1 and len(loops) > 1:
+            fit = linking.fit_rigid([shape[0]], [loops[0]])
+        return np.eye(3) if fit is None else fit[0]
+
+    def _link_plate_from_sheet(self, link, sheet_loops, plate) -> None:
+        """The plate of `link` rebuilt from the loops on the worksheet, where it stands in 3D."""
+        new = linking.place(linking.place(sheet_loops,
+                                          linking.invert(self._link_placement(link.shape,
+                                                                              sheet_loops))),
+                            self._link_placement(link.shape, linking.sorted_loops(plate["loops"])))
+        solid = linking.plate_solid(new, plate["frame"],
+                                    link.thickness if link.thickness else plate["thickness"])
+        g = self.doc.group(int(link.group))
+        if g is not None:
+            g.ents = Entities.from_manifold(solid)
+        link.shape = linking.sorted_loops(new)
+
     def sync_links(self, direction="both", announce_empty=False) -> int:
         """Carry a shape that changed on one side to the other; returns how many moved.
 
@@ -792,11 +934,13 @@ class SheetMixin:
         where the old one lay by the rigid fit of `linking.placement`. A plate is the only
         kind that may change in 3D; a change of a face outline on the sheet is left where it
         is with a word about it. When both sides changed, the model wins. A link whose group
-        or paths are gone is dropped. One undo step, only when something really changed.
+        or paths are gone is dropped. After the links, the vent patterns of the outlines that
+        changed are made again (see `refit_vents`). One undo step for all of that, only when
+        something really changed.
         """
         doc = self.doc
         if not doc.links:
-            if announce_empty and direction == "both":
+            if not self.refit_vents() and announce_empty and direction == "both":
                 self.hint.setText(tr("Nothing to update."))
             return 0
         live = {int(g.id) for g in doc.groups} | {ROOT}
@@ -837,24 +981,18 @@ class SheetMixin:
                 doc.links = alive
             for l, three, sheet_loops in to_sheet:
                 self._replace_sheet_src(int(l.src),
-                                        linking.place(three, linking.placement(l.shape, sheet_loops)))
+                                        linking.place(three, self._link_placement(l.shape,
+                                                                                  sheet_loops)))
                 l.shape = three
             for l, sheet_loops, plate in to_model:
-                new = linking.place(linking.place(sheet_loops,
-                                                  linking.invert(linking.placement(l.shape, sheet_loops))),
-                                    linking.placement(l.shape, linking.sorted_loops(plate["loops"])))
-                solid = linking.plate_solid(new, plate["frame"],
-                                            l.thickness if l.thickness else plate["thickness"])
-                g = doc.group(int(l.group))
-                if g is not None:
-                    g.ents = Entities.from_manifold(solid)
-                l.shape = linking.sorted_loops(new)
+                self._link_plate_from_sheet(l, sheet_loops, plate)
             doc.notify()
             if self.mode == "2d":
                 self.sheet_view._refresh_outside(announce=False)
             else:
                 self.view.update()
         updated = len(to_sheet) + len(to_model)
+        refitted = self.refit_vents(checkpoint=not changed)
         if both:
             self.hint.setText(trn("Both sides changed: the model won for {n} link.",
                                   "Both sides changed: the model won for {n} links.", both)
@@ -865,7 +1003,7 @@ class SheetMixin:
         elif face_only:
             self.hint.setText(tr("This link only goes from 3D to 2D: a change on the worksheet "
                                  "is not put back in the model."))
-        elif announce_empty and direction == "both":
+        elif not refitted and announce_empty and direction == "both":
             self.hint.setText(tr("Nothing to update."))
         return updated
 
