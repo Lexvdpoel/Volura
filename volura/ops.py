@@ -103,7 +103,9 @@ def exploded_root(doc: Document, groups, report=None):
 
     The document is not changed, so this can run in the background while the window waits;
     the caller puts the result in place and removes the groups. Locked groups are left out.
-    ``report(fraction, text)`` hears how far it is, group by group and inside a group.
+    ``report(fraction, text)`` hears how far it is, group by group and inside a group. A group
+    that lies apart from the loose geometry is copied in as it is, which is quick; only a group
+    that touches it is merged face by face.
     """
     out = doc.root.copy()
     todo = [g for g in groups if not g.locked]
@@ -115,6 +117,9 @@ def exploded_root(doc: Document, groups, report=None):
         text = tr("Exploding {name}…").format(name=g.name)
         if report is not None:
             report(i / len(todo), text)
+        if out.apart_from(sub):
+            out.append_apart(sub)
+            continue
         out.merge_from(sub, progress=None if report is None else
                        (lambda frac, i=i, text=text: report((i + frac) / len(todo), text)))
     return out

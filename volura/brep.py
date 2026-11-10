@@ -2066,6 +2066,38 @@ class Entities:
         self._cleanup_vertices()
         self.touch()
 
+    def apart_from(self, other, gap=10 * TOL) -> bool:
+        """True when the boxes round this geometry and `other` are more than `gap` apart, or
+        one of them is empty: then no vertex, edge or face of one can touch the other."""
+        a, b = self.bbox(), other.bbox()
+        if a is None or b is None:
+            return True
+        return bool(np.any(a[0] > b[1] + gap) or np.any(b[0] > a[1] + gap))
+
+    def append_apart(self, other):
+        """Copy the geometry of `other` into this one as it is, for geometry that lies apart.
+
+        `merge_from` fits every face into the faces already in its plane and every edge into
+        the edges it crosses, which is what costs the time on a large solid. Geometry that is
+        apart from this one (see `apart_from`) has nothing to fit into, so here its vertices,
+        edges and faces only get new ids and the lookup tables are built once for all of it.
+        """
+        off = self.next_id
+        V, E, F = dict(self.V), dict(self.E), dict(self.F)
+        for v, p in other.V.items():
+            V[v + off] = p
+        for e, (a, b) in other.E.items():
+            E[e + off] = (a + off, b + off)
+        for f, face in other.F.items():
+            F[f + off] = _face(tuple(tuple(v + off for v in loop) for loop in face.loops),
+                               face.normal, face.color)
+        soft = self.soft | {e + off for e in other.soft}
+        hidden = (self.hidden_f | {f + off for f in other.hidden_f},
+                  self.hidden_e | {e + off for e in other.hidden_e})
+        self.load_state((V, E, F, soft, off + other.next_id, hidden))
+        self._changed()
+        self.touch()
+
     def extract(self, fids, eids):
         """New Entities with the given faces and edges (plus face edges)."""
         out = Entities()
