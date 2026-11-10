@@ -158,7 +158,10 @@ def finger_edge(length, t, finger_w, male, kerf=0.0, ends="tooth") -> np.ndarray
     else:
         spans, x = [], 0.0                                            # recesses narrower
         for a, b in teeth:
-            a, b = a + 0.5 * k, b - 0.5 * k
+            # only where a finger of the other side comes in: a recess that runs to the end of
+            # the edge stays there, or a sliver of kerf / 2 is left over at the corner
+            a = a + 0.5 * k if a > 1e-9 else a
+            b = b - 0.5 * k if b < L - 1e-9 else b
             if a > x:
                 spans.append((x, a))
             x = max(x, b)
