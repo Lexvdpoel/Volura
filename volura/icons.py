@@ -287,6 +287,10 @@ SVG = {
                    f'<path d="M9.6 5.5 L9.6 14.6 M14.4 5.5 L14.4 14.6" {N} {S(w=1.4)}/>'
                    f'<path d="M5.2 8.6 L8.3 5.5" {N} stroke="#d23b3b" stroke-width="1.7" '
                    f'stroke-linecap="round"/>',
+    # gridfinity: a baseplate of four squares, with a bin standing in one of them
+    "gridfinity": f'<path d="M2.5 13 L21.5 13 L21.5 21 L2.5 21 Z" fill="#eef2f7" {S()}/>'
+                  f'<path d="M12 13 L12 21 M2.5 17 L21.5 17" {N} {S(w=1.2)}/>'
+                  f'<path d="M4 4 L11 4 L11 15 L4 15 Z" fill="#cfe0f5" {S(w=1.4)}/>',
     # cable chain: three links in a gentle bend, with a pin in each joint
     "cable_chain": f'<path d="M2.5 9 L8.5 7.5 L9.5 12 L3.5 13.5 Z M8.5 7.5 L14.5 7.5 L14.5 12 '
                    f'L9.5 12 M14.5 7.5 L20 10 L18.2 14.2 L14.5 12" fill="#cfe0f5" {S(w=1.4)}/>'

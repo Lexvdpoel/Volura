@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QVBoxLayout)
 
 from . import (background, battery_holder, bin_rack, cable_chain, cable_clip, enclosure, gears,
-               hinge, joints, knob, label_plate, ops, standoff, storage_bin, text3d, theme,
+               gridfinity, hinge, joints, knob, label_plate, ops, standoff, storage_bin, text3d, theme,
                threads)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
@@ -31,7 +31,7 @@ from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
 from .part_dialogs import (BatteryHolderDialog, BinRackDialog, CableChainDialog,
-                           CableClipDialog, HingeDialog, KnobDialog, LabelPlateDialog,
+                           CableClipDialog, GridfinityDialog, HingeDialog, KnobDialog, LabelPlateDialog,
                            ProjectBoxDialog, StandoffDialog, StorageBinDialog, Text3DDialog)
 
 
@@ -729,6 +729,58 @@ class PrintMixin:
             self.view.set_status(tr("Storage bin failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the storage bin…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ gridfinity
+    def gridfinity_dialog(self):
+        """Draw > Parts > Gridfinity…: a bin or a baseplate of the open storage grid."""
+        dlg = GridfinityDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("kind", "cols", "rows", "units", "divisions", "lip", "magnets"):
+            setattr(self.settings, "grid_" + key, options[key])
+        self.settings.save()
+        made = self.make_gridfinity_model(options)
+        self.setFocus()
+        return made
+
+    def make_gridfinity_model(self, options):
+        """The bin or the baseplate as a printed part: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        kind = options["kind"]
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the Gridfinity part…"))
+            if kind == "baseplate":
+                m = gridfinity.gridfinity_baseplate(options["cols"], options["rows"])
+            else:
+                m = gridfinity.gridfinity_bin(options["cols"], options["rows"], options["units"],
+                                              divisions=options["divisions"], lip=options["lip"],
+                                              magnets=options["magnets"])
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the part away again
+            name = tr("Gridfinity baseplate") if kind == "baseplate" else tr("Gridfinity bin")
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, name)
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("{name} added.").format(name=name))
+
+        def failed(exc):
+            self.view.set_status(tr("Gridfinity failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the Gridfinity part…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ cable chain

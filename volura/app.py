@@ -26,7 +26,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, battery_holder, bin_rack, boxgen, cable_chain,
-               cable_clip, cam, dxf, enclosure, errors, fileio, gcode, gears, hinge, i18n,
+               cable_clip, cam, dxf, enclosure, errors, fileio, gcode, gears, gridfinity, hinge,
+               i18n,
                joints, knob, label_plate, linking, nesting, ops, sheet3d, sheettools, svg,
                spacemouse, standoff, storage_bin, text3d, theme, threads, vector_export,
                vector_import, workers)
@@ -766,6 +767,20 @@ class Settings:
         except (TypeError, ValueError):
             self.chain_links = 10
         self.chain_links = max(cable_chain.LINKS_MIN, min(cable_chain.LINKS_MAX, self.chain_links))
+        self.grid_kind = str(self.q.value("grid_kind", "bin") or "bin")
+        if self.grid_kind not in ("bin", "baseplate"):
+            self.grid_kind = "bin"
+        for key, default, lo, hi in (("grid_cols", 2, gridfinity.COLS_MIN, gridfinity.COLS_MAX),
+                                     ("grid_rows", 1, gridfinity.COLS_MIN, gridfinity.COLS_MAX),
+                                     ("grid_units", 3, gridfinity.UNITS_MIN, gridfinity.UNITS_MAX),
+                                     ("grid_divisions", 1, gridfinity.DIV_MIN, gridfinity.DIV_MAX)):
+            try:
+                value = int(float(self.q.value(key, default)))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        self.grid_lip = self._bool("grid_lip", True)
+        self.grid_magnets = self._bool("grid_magnets", False)
         self.rack_screw = str(self.q.value("rack_screw", "M4"))
         if self.rack_screw not in bin_rack.SCREWS:
             self.rack_screw = "M4"
@@ -944,6 +959,9 @@ class Settings:
         self.q.setValue("chain_height", self.chain_height)
         self.q.setValue("chain_wall", self.chain_wall)
         self.q.setValue("chain_links", self.chain_links)
+        for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
+                    "grid_lip", "grid_magnets"):
+            self.q.setValue(key, getattr(self, key))
         self.q.setValue("rack_panel_cols", self.rack_panel_cols)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
@@ -1786,6 +1804,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                tr("Add a printable cable chain to the model: links that are "
                                   "printed in one piece, already in each other, and turn on "
                                   "their pins"))
+        # ---- gridfinity
+        self.a_gridfinity = A(tr("Gridfinity…"), lambda checked=False: self.gridfinity_dialog(),
+                              None, "gridfinity", False,
+                              tr("Add a Gridfinity bin or baseplate to the model: the open "
+                                 "storage grid of 42 mm, whose bins stand on any Gridfinity "
+                                 "baseplate and on each other"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -1897,7 +1921,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                          (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
                           self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
                           self.a_battery_holder, self.a_storage_bin, self.a_bin_rack,
-                          self.a_cable_chain))
+                          self.a_cable_chain, self.a_gridfinity))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

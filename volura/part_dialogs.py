@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QSpinBox)
 
 from . import (battery_holder, bin_rack, cable_chain, cable_clip, enclosure, fonts, gears,
-               hinge, knob, label_plate, standoff, storage_bin, text3d, threads)
+               gridfinity, hinge, knob, label_plate, standoff, storage_bin, text3d, threads)
 from .i18n import tr
 
 
@@ -837,6 +837,76 @@ class StorageBinDialog(QDialog):
                 "stack": bool(self.stack.isChecked()),
                 "scoop": bool(self.scoop.isChecked()),
                 "label_text": self.label_text.text().strip()}
+
+
+class GridfinityDialog(QDialog):
+    """The "Gridfinity…" dialog: a bin or a baseplate of the open storage grid of 42 mm.
+
+    The kind says which part, the columns and rows how many squares of the grid it covers; a bin
+    also has its height in units of 7 mm, its compartments, the stacking lip and the magnet
+    pockets. What only a bin has is greyed out for a baseplate. The values come from Settings and
+    are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Gridfinity"))
+        lay = QFormLayout(self)
+
+        def count(lo, hi, value, tip):
+            sp = QSpinBox()
+            sp.setRange(lo, hi)
+            sp.setValue(int(value))
+            sp.setToolTip(tip)
+            return sp
+
+        self.kind = QComboBox()
+        self.kind.addItem(tr("Bin"), "bin")
+        self.kind.addItem(tr("Baseplate"), "baseplate")
+        self.kind.setCurrentIndex(max(0, self.kind.findData(s.grid_kind)))
+        self.cols = count(gridfinity.COLS_MIN, gridfinity.COLS_MAX, s.grid_cols,
+                          tr("How many squares of 42 mm across"))
+        self.rows = count(gridfinity.COLS_MIN, gridfinity.COLS_MAX, s.grid_rows,
+                          tr("How many squares of 42 mm deep"))
+        self.units = count(gridfinity.UNITS_MIN, gridfinity.UNITS_MAX, s.grid_units,
+                           tr("The height of the bin in units of 7 mm, the foot included"))
+        self.divisions = count(gridfinity.DIV_MIN, gridfinity.DIV_MAX, s.grid_divisions,
+                               tr("How many compartments the bin has along its length"))
+        self.lip = QCheckBox(tr("Stacking lip"))
+        self.lip.setChecked(bool(s.grid_lip))
+        self.lip.setToolTip(tr("A lip on top of the wall, in which the foot of a bin above stands"))
+        self.magnets = QCheckBox(tr("Magnet holes"))
+        self.magnets.setChecked(bool(s.grid_magnets))
+        self.magnets.setToolTip(tr("Four pockets of 6.5 by 2.4 mm in the bottom of every foot, for "
+                                   "magnets that hold the bin on a steel plate"))
+        lay.addRow(tr("Part"), self.kind)
+        lay.addRow(tr("Columns"), self.cols)
+        lay.addRow(tr("Rows"), self.rows)
+        lay.addRow(tr("Height units"), self.units)
+        lay.addRow(tr("Compartments"), self.divisions)
+        lay.addRow("", self.lip)
+        lay.addRow("", self.magnets)
+        self.kind.currentIndexChanged.connect(self._kind_changed)
+        self._kind_changed()
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def _kind_changed(self, *_):
+        is_bin = self.kind.currentData() == "bin"
+        for w in (self.units, self.divisions, self.lip, self.magnets):
+            w.setEnabled(is_bin)
+
+    def options(self) -> dict:
+        return {"kind": str(self.kind.currentData()),
+                "cols": int(self.cols.value()),
+                "rows": int(self.rows.value()),
+                "units": int(self.units.value()),
+                "divisions": int(self.divisions.value()),
+                "lip": bool(self.lip.isChecked()),
+                "magnets": bool(self.magnets.isChecked())}
 
 
 class CableChainDialog(QDialog):

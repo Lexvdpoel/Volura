@@ -131,6 +131,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   piece: the links lie in a row, already in each other, with 0.3 mm of room around every pin and
   between the plates, so the chain comes off the bed and bends. Enter the inside width and height
   for the cables, the wall and the number of links; the chain has no stops and bends both ways
+- **Gridfinity** (Draw > Parts): bins and baseplates of the open Gridfinity storage grid of
+  42 mm, so they fit what others print for it. A bin covers the columns and rows you choose, is a
+  number of 7 mm units high, has compartments, a stacking lip and magnet holes if you want; a
+  baseplate carries a grid of the size you choose. Bins drop into the plate and stand on each other
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is
