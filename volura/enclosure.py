@@ -26,6 +26,11 @@ so it is cut away around every post.
 With `vents` the two long walls get **vent slots**: `vents` vertical slots through each wall,
 evenly spaced and centred along the length, that stop below where the lip of the lid comes
 down, so the lid never covers them and the air inside the box can change.
+
+With `board` the floor gets **board standoffs**: one round standoff with a pilot hole under
+every mounting hole of a common circuit board (`BOARDS`), `board_height` millimetres high, so
+the board is screwed down with its parts clear of the floor. The board lies in the middle of
+the box, along its length, or turned a quarter when it only fits that way.
 """
 from __future__ import annotations
 
@@ -55,6 +60,20 @@ VENT_MIN_H, VENTS_MAX = 3.0, 20
 #: the room a slot keeps from the inside corners: from a post when there is one, from the
 #: rounding of the corner when there is none
 VENT_POST_CLEAR, VENT_CORNER_CLEAR = 2.0, 3.0
+#: common circuit boards: the size of the board, its mounting holes from the corner with the
+#: first hole of the drawing (x along the length), and the screw that goes through them
+BOARDS = {
+    "Arduino Uno": (68.6, 53.3, ((14.0, 2.5), (15.3, 50.7), (66.1, 7.6), (66.1, 35.5)), "M3"),
+    "Arduino Mega": (101.6, 53.3, ((14.0, 2.5), (15.3, 50.7), (66.1, 7.6), (66.1, 35.5),
+                                   (90.2, 50.7), (96.5, 2.5)), "M3"),
+    "Raspberry Pi 4 / 5": (85.0, 56.0, ((3.5, 3.5), (61.5, 3.5), (3.5, 52.5), (61.5, 52.5)),
+                           "M2.5"),
+    "Raspberry Pi Zero": (65.0, 30.0, ((3.5, 3.5), (61.5, 3.5), (3.5, 26.5), (61.5, 26.5)),
+                          "M2.5"),
+    "Raspberry Pi Pico": (51.0, 21.0, ((2.0, 4.8), (2.0, 16.2), (49.0, 4.8), (49.0, 16.2)), "M2"),
+}
+#: mm of standoff under a board: the lowest that keeps the pins under it off the floor
+BOARD_HEIGHT_MIN, BOARD_HEIGHT_MAX = 2.0, 30.0
 
 
 def rounded_rect(length, width, radius) -> mf.CrossSection:
@@ -94,9 +113,30 @@ def _vent_slots(centres, height, z, depth) -> mf.Manifold:
          .translate((x - 0.5 * VENT_WIDTH, -0.5 * depth, z)) for x in centres], mf.OpType.Add)
 
 
+def board_places(board, length, width) -> list:
+    """The mounting holes of `board` in a box of `length` by `width` inside, centred on the origin.
+
+    The board lies in the middle along the length of the box, or turned a quarter when only
+    that way fits; a board that fits neither way, or one that is not in `BOARDS`, is refused
+    with a ValueError.
+    """
+    if board not in BOARDS:
+        raise ValueError(tr("unknown board {board}").format(board=board))
+    bl, bw, holes, _screw = BOARDS[board]
+    L, W = float(length), float(width)
+    if bl <= L and bw <= W:
+        return [(x - 0.5 * bl, y - 0.5 * bw) for x, y in holes]
+    if bw <= L and bl <= W:
+        # a quarter turn: the length of the board along the width of the box
+        return [(0.5 * bw - y, x - 0.5 * bl) for x, y in holes]
+    raise ValueError(tr("The {board} ({l:g} x {w:g} mm) does not fit in this box.")
+                     .format(board=board, l=bl, w=bw))
+
+
 def project_box(length=80, width=50, height=30, wall=2.0, floor=2.0, radius=3.0,
                 lid=2.0, lip=3.0, clearance=0.2,
-                screws=None, vents=0) -> tuple[mf.Manifold, mf.Manifold]:
+                screws=None, vents=0, board=None,
+                board_height=5.0) -> tuple[mf.Manifold, mf.Manifold]:
     """A printed enclosure with a fitting lid: the base and the lid, side by side on the bed.
 
     `length`, `width` and `height` are the **inside** of the box, what the electronics need;
@@ -109,7 +149,8 @@ def project_box(length=80, width=50, height=30, wall=2.0, floor=2.0, radius=3.0,
     `screws` is None or "" for a box without posts, or one of `threads.SCREW_HOLES`: then the
     base gets a round post in every inside corner and the lid a clearance hole above it.
     `vents` is the number of slots cut through each of the two long walls, 0 for a box with
-    closed walls.
+    closed walls. `board` is None or "" for an empty floor, or one of `BOARDS`: then a standoff
+    of `board_height` millimetres with a pilot hole stands under every mounting hole of it.
 
     Both parts stand on `z = 0` and are centred on the origin in plan. The base is the tray
     with its open top up; the lid is flipped for printing, so its flat top lies on the bed
@@ -145,6 +186,12 @@ def project_box(length=80, width=50, height=30, wall=2.0, floor=2.0, radius=3.0,
     post_d = POST_OVER_SCREW * nominal
     if size and post_d > 0.5 * min(L, W):
         raise ValueError(tr("The screw posts do not fit in this box."))
+    board = str(board or "").strip()
+    places = board_places(board, L, W) if board else []
+    board_h = float(board_height)
+    if places and not (BOARD_HEIGHT_MIN <= board_h <= BOARD_HEIGHT_MAX and board_h < H):
+        raise ValueError(tr("The board standoffs must be {lo:g} to {hi:g} mm and lower than "
+                            "the box.").format(lo=BOARD_HEIGHT_MIN, hi=BOARD_HEIGHT_MAX))
     n_vents = int(vents or 0)
     if n_vents < 0 or n_vents > VENTS_MAX:
         raise ValueError(tr("the number of vent slots must be 0 to {max}")
@@ -167,6 +214,14 @@ def project_box(length=80, width=50, height=30, wall=2.0, floor=2.0, radius=3.0,
         base = base + _cylinders(centres, post_h, 0.5 * post_d, f) \
             - _cylinders(centres, post_h - POST_FLOOR + 1.0,
                          0.5 * PILOT_OVER_SCREW * nominal, f + POST_FLOOR)
+
+    if places:
+        # a standoff under every mounting hole of the board, as wide as a corner post for the
+        # same screw and with the same pilot hole, so a self-tapping screw holds the board
+        b_nominal = float(BOARDS[board][3][1:])
+        base = base + _cylinders(places, board_h, 0.5 * POST_OVER_SCREW * b_nominal, f) \
+            - _cylinders(places, board_h + 1.0, 0.5 * PILOT_OVER_SCREW * b_nominal,
+                         f + min(POST_FLOOR, 0.5 * board_h))
 
     # the vent slots go straight through both long walls, so the air in the box can change;
     # they stop where the lip of the lid comes down, and the lid itself is not touched

@@ -390,10 +390,10 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
     win.settings.box3d_height, win.settings.box3d_wall = 25.0, 1.6
     win.settings.box3d_floor, win.settings.box3d_radius = 1.5, 4.0
     win.settings.box3d_lid, win.settings.box3d_lip = 2.5, 4.0
-    win.settings.box3d_clearance = 0.3
+    win.settings.box3d_clearance, win.settings.box3d_board_height = 0.3, 5.0
     win.project_box_dialog()
     assert seen["title"] == "Project Box"
-    assert seen["start"] == [70.0, 45.0, 25.0, 1.6, 1.5, 4.0, 2.5, 4.0, 0.3]
+    assert seen["start"] == [70.0, 45.0, 25.0, 1.6, 1.5, 4.0, 2.5, 4.0, 0.3, 5.0]
     assert pump_until(lambda: len(win.doc.groups) == 2), "no box in the model"
     lo, hi = np.asarray(win.doc.groups[0].bbox(), dtype=float)
     assert hi[0] - lo[0] == pytest.approx(100.0 + 2 * 3.0), "the length is not as asked"

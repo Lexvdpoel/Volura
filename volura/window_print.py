@@ -22,16 +22,17 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QLabel, QLineEdit, QPushButton, QSpinBox, QTextBrowser,
                                QVBoxLayout)
 
-from . import (background, battery_holder, bin_rack, cable_clip, enclosure, gears, hinge, joints, knob,
-                label_plate, ops, standoff, storage_bin, text3d, theme, threads)
+from . import (background, battery_holder, bin_rack, cable_chain, cable_clip, enclosure, gears,
+               hinge, joints, knob, label_plate, ops, standoff, storage_bin, text3d, theme,
+               threads)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
-from .part_dialogs import (BatteryHolderDialog, BinRackDialog, CableClipDialog, HingeDialog, KnobDialog,
-                           LabelPlateDialog, ProjectBoxDialog, StandoffDialog, StorageBinDialog,
-                           Text3DDialog)
+from .part_dialogs import (BatteryHolderDialog, BinRackDialog, CableChainDialog,
+                           CableClipDialog, HingeDialog, KnobDialog, LabelPlateDialog,
+                           ProjectBoxDialog, StandoffDialog, StorageBinDialog, Text3DDialog)
 
 
 TOOL_INFO = [
@@ -165,6 +166,8 @@ class PrintMixin:
         self.settings.box3d_clearance = float(options["clearance"])
         self.settings.box3d_screws = str(options.get("screws", "") or "")
         self.settings.box3d_vents = int(options.get("vents", 0) or 0)
+        self.settings.box3d_board = str(options.get("board", "") or "")
+        self.settings.box3d_board_height = float(options.get("board_height", 5.0))
         self.settings.save()
         made = self.make_project_box_model(options)
         self.setFocus()
@@ -185,6 +188,8 @@ class PrintMixin:
                                                "radius", "lid", "lip", "clearance")}
         screws = str(options.get("screws", "") or "")
         vents = int(options.get("vents", 0) or 0)
+        board = str(options.get("board", "") or "")
+        board_height = float(options.get("board_height", 5.0))
         bb = doc.model_bbox()
         bx, by, _bz = self.settings.bed_size
         gap = 10.0                                  # mm of bed between the two parts
@@ -193,7 +198,8 @@ class PrintMixin:
 
         def work(report):
             report(0.1, tr("Building the project box…"))
-            base, lid = enclosure.project_box(**size, screws=screws, vents=vents)
+            base, lid = enclosure.project_box(**size, screws=screws, vents=vents, board=board,
+                                              board_height=board_height)
             for m in (base, lid):
                 if m.status() != mf.Error.NoError or m.is_empty():
                     raise ValueError(tr("the result is not a valid volume"))
@@ -659,6 +665,7 @@ class PrintMixin:
         self.settings.bin_rows = int(options["rows"])
         self.settings.bin_label = bool(options["label"])
         self.settings.bin_hanger = bool(options.get("hanger", False))
+        self.settings.bin_stack = bool(options.get("stack", False))
         self.settings.bin_label_text = str(options.get("label_text", ""))
         self.settings.save()
         made = self.make_storage_bin_model(options)
@@ -678,6 +685,7 @@ class PrintMixin:
         size = {k: options[k] for k in ("length", "width", "height", "wall", "floor", "radius",
                                         "cols", "rows", "label")}
         size["hanger"] = bool(options.get("hanger", False))
+        size["stack"] = bool(options.get("stack", False))
         text = str(options.get("label_text", "") or "").strip() if size["label"] else ""
         bb = doc.model_bbox()
         bx, by, _bz = self.settings.bed_size
@@ -719,6 +727,54 @@ class PrintMixin:
             self.view.set_status(tr("Storage bin failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the storage bin…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ cable chain
+    def cable_chain_dialog(self):
+        """Draw > Parts > Cable Chain…: a drag chain printed in one piece."""
+        dlg = CableChainDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.chain_width = float(options["width"])
+        self.settings.chain_height = float(options["height"])
+        self.settings.chain_wall = float(options["wall"])
+        self.settings.chain_links = int(options["links"])
+        self.settings.save()
+        made = self.make_cable_chain_model(options)
+        self.setFocus()
+        return made
+
+    def make_cable_chain_model(self, options):
+        """The chain as one printed part of loose links: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("width", "height", "wall", "links")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the cable chain…"))
+            m = cable_chain.cable_chain(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the chain away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Cable chain"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Cable chain of {n} links added.").format(n=size["links"]))
+
+        def failed(exc):
+            self.view.set_status(tr("Cable chain failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the cable chain…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ bin wall rack

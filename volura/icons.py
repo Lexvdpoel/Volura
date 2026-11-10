@@ -287,6 +287,11 @@ SVG = {
                    f'<path d="M9.6 5.5 L9.6 14.6 M14.4 5.5 L14.4 14.6" {N} {S(w=1.4)}/>'
                    f'<path d="M5.2 8.6 L8.3 5.5" {N} stroke="#d23b3b" stroke-width="1.7" '
                    f'stroke-linecap="round"/>',
+    # cable chain: three links in a gentle bend, with a pin in each joint
+    "cable_chain": f'<path d="M2.5 9 L8.5 7.5 L9.5 12 L3.5 13.5 Z M8.5 7.5 L14.5 7.5 L14.5 12 '
+                   f'L9.5 12 M14.5 7.5 L20 10 L18.2 14.2 L14.5 12" fill="#cfe0f5" {S(w=1.4)}/>'
+                   f'<circle cx="9" cy="9.8" r="1" fill="#d23b3b"/>'
+                   f'<circle cx="14.5" cy="9.8" r="1" fill="#d23b3b"/>',
     # bin wall rack: a plate on the wall with two rails, and a bin hanging on the upper one
     "bin_rack": f'<rect x="3" y="2.5" width="18" height="19" rx="1" fill="#eef2f7" {S()}/>'
                 f'<path d="M4.5 7 L19.5 7 M4.5 15 L19.5 15" {N} {S(w=1.8)}/>'

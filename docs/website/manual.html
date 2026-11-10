@@ -211,6 +211,7 @@ volura</code></pre>
       <li><b>Lip</b>: the underside of the lid carries a ring as thick as the wall, which goes into the opening with the clearance you chose, 0.2 mm by default; the question starts at the clearance of the screw holes, the one your printer already proved.</li>
       <li><b>Screws</b>: with a screw size the base gets a round post with a blind pilot hole in every inside corner and the lid a clearance hole above it; the lip steps around those posts, so the lid still slides down and you screw it on.</li>
       <li><b>Vent slots</b>: the two long walls get that many vertical slots through them, evenly spaced and centred along the length, from 3 mm above the floor to 3 mm below the height at which the lip comes down, so the air can change while the lid never covers a slot; the slots stay clear of the posts.</li>
+      <li><b>Circuit board</b>: pick an Arduino Uno or Mega, a Raspberry Pi 4 / 5, Zero or Pico, and a standoff with a pilot hole stands under every mounting hole of it, as high as you enter, so the board is screwed down with its pins clear of the floor. The board lies in the middle of the box, turned a quarter when it only fits that way.</li>
       <li><b>On the bed</b>: base and lid are built in the background and land side by side, the lid flipped over, so its flat top lies on the bed and its lip stands up in the air and neither part needs support.</li>
     </ul>
     <ul lang="nl">
@@ -219,6 +220,7 @@ volura</code></pre>
       <li><b>Opstaande rand</b>: de onderkant van het deksel heeft een ring zo dik als de wand, die met de speling die je koos (standaard 0,2 mm) in de opening gaat; de vraag begint bij die van de schroefgaten, die je printer al bewezen heeft.</li>
       <li><b>Schroeven</b>: bij een schroefmaat krijgt de doos in elke binnenhoek een ronde zuil met een blind voorboorgat en het deksel daarboven een doorvoergat; de rand maakt ruimte rond die zuilen, zodat het deksel nog steeds naar beneden schuift en je het vastdraait.</li>
       <li><b>Ventilatiesleuven</b>: de beide lange wanden krijgen dat aantal verticale sleuven door de wand, gelijkmatig verdeeld en gecentreerd over de lengte, van 3 mm boven de bodem tot 3 mm onder de hoogte waar de rand neerkomt, zodat de lucht kan veranderen terwijl het deksel nooit een sleuf afdekt; de sleuven blijven vrij van de zuilen.</li>
+      <li><b>Printplaat</b>: kies een Arduino Uno of Mega, een Raspberry Pi 4 / 5, Zero of Pico, en onder elk bevestigingsgat staat een afstandsbus met een voorboorgat, zo hoog als je invult, zodat de printplaat vastgeschroefd wordt met de pinnen vrij van de bodem. De printplaat ligt in het midden van de doos, een kwartslag gedraaid als hij alleen zo past.</li>
       <li><b>Op het bed</b>: doos en deksel worden op de achtergrond gebouwd en komen naast elkaar te staan, met het deksel omgekeerd, zodat zijn platte bovenkant op het bed ligt en de rand in de lucht staat en geen van beide support nodig heeft.</li>
     </ul>
     <p class="note" lang="en">One undo takes the box and the lid away again.</p>
@@ -375,12 +377,14 @@ volura</code></pre>
       <li><b>Label ledge</b>: along the inside of the front wall a ledge of twelve millimetres runs at the top, and its underside stands at 45 degrees, so the ledge prints without support.</li>
       <li><b>Label text</b>: the top of the ledge has a shallow pocket, and with a text the bin comes with a thin label that lies flush in it, the letters standing out. A lip along the inside holds the label in; a long text is made smaller until it fits.</li>
       <li><b>Wall hook</b>: a hook along the top of the back wall and a rib along the bottom, so the bin hangs on the wall rack.</li>
+      <li><b>Stackable</b>: the lowest 3 mm of the bin step in to the opening of a bin of the same size, so it drops into the bin under it and cannot slide off; the dividers stop lower and the label lies flush, so nothing is in the way of the foot.</li>
     </ul>
     <ul lang="nl">
       <li><b>Vakken</b>: de kolommen en rijen die je invult gemaakt worden door rechte tussenschotten van de wanddikte, die een millimeter onder de bovenrand ophouden zodat je er toch overheen kunt.</li>
       <li><b>Labelrand</b>: langs de binnenkant van de voorwand loopt bovenaan een rand van twaalf millimeter, en zijn onderkant staat onder 45 graden, dus die rand print zonder support.</li>
       <li><b>Labeltekst</b>: de bovenkant van de rand heeft een ondiepe uitsparing, en met een tekst krijgt de bak een dun label dat daar vlak in ligt, met de letters erop. Een randje aan de binnenkant houdt het label vast; een lange tekst wordt kleiner gemaakt tot hij past.</li>
       <li><b>Wandhaak</b>: een haak langs de bovenkant van de achterwand en een ribbe langs de onderkant, zodat de bak aan het wandrek hangt.</li>
+      <li><b>Stapelbaar</b>: de onderste 3 mm van de bak springen in tot de opening van een bak van dezelfde maat, zodat hij in de bak eronder valt en er niet af kan schuiven; de tussenschotten stoppen lager en het label ligt vlak, zodat niets de voet in de weg zit.</li>
     </ul>
     <h3><span lang="en">Bin wall rack</span><span lang="nl">Wandrek voor opbergbakken</span></h3>
     <p lang="en">A plate for the wall with a rail in every row, on which storage bins with the wall hook hang. You choose the grid: how many cells across, how many rows, and how wide and high a cell is.</p>
@@ -402,6 +406,21 @@ volura</code></pre>
       <li><b>Panelen</b>: een rek dat breder is dan het bed print in panelen van het aantal kolommen dat je kiest. Zwaluwstaarten in de plaat schuiven er van voren in en houden de panelen op één lijn, de rails lopen door over de naad, en alleen de twee buitenste uiteinden hebben een stop die een bak op de rail houdt.</li>
     </ul>
     <figure class="shots"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/bin_rack.png" alt="A bin wall rack with storage bins hanging on its rails" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/bin_rack.png" alt="Een wandrek met opbergbakken die aan de rails hangen" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"></figure>
+    <h3><span lang="en">Cable chain</span><span lang="nl">Kabelrups</span></h3>
+    <p lang="en">A drag chain that guides the cables of a moving axis, printed in one piece: the links come off the bed already in each other and turn on their pins.</p>
+    <p lang="nl">Een kabelrups die de kabels van een bewegende as geleidt, in één stuk geprint: de schakels komen al in elkaar van het bed en draaien op hun pennen.</p>
+    <p class="where" lang="en">Where: <b>Draw &gt; Parts &gt; Cable Chain…</b></p>
+    <p class="where" lang="nl">Waar: <b>Tekenen &gt; Onderdelen &gt; Kabelrups…</b></p>
+    <ul lang="en">
+      <li><b>Sizes</b>: the inside width and height are the room for the cables; the wall is the plastic of the side plates and the cross bars, and the pitch of the links follows from the height.</li>
+      <li><b>Printing in place</b>: every link has a narrow front with a pin on each side that turns in the wide rear of the link before it, with 0.3 mm of room all round, so print it without support and bend it loose once.</li>
+      <li><b>No stops</b>: the links bend both ways; a chain that has to stay up over a long span needs a guide under it.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Maten</b>: de binnenbreedte en -hoogte zijn de ruimte voor de kabels; de wand is het plastic van de zijplaten en de dwarsbalken, en de steek van de schakels volgt uit de hoogte.</li>
+      <li><b>In één keer geprint</b>: elke schakel heeft een smal voordeel met aan elke kant een pen die draait in het brede achterdeel van de schakel ervoor, met 0,3 mm ruimte rondom, dus print hem zonder support en buig hem één keer los.</li>
+      <li><b>Geen aanslagen</b>: de schakels buigen beide kanten op; een rups die over een lange afstand omhoog moet blijven, heeft een geleider eronder nodig.</li>
+    </ul>
     <h3><span lang="en">Spur gear</span><span lang="nl">Tandwiel</span></h3>
     <p lang="en">An involute gear to print, standing on the bed as a part of the thickness you enter, with the bore through it.</p>
     <p lang="nl">Een evolvent tandwiel om te printen, dat als onderdeel met de opgegeven dikte op het bed staat, met het asgat erdoor.</p>

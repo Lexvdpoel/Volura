@@ -261,7 +261,7 @@ def test_the_label_lies_flush_in_the_pocket_and_the_lip_holds_it():
     label = label_of()
     assert len(label.decompose()) == 1, "the letters are not one piece with the plate"
     lo, hi = bbox(label)
-    assert hi[2] - lo[2] == pytest.approx(storage_bin.LABEL_POCKET + storage_bin.LABEL_RELIEF)
+    assert hi[2] - lo[2] == pytest.approx(storage_bin.LABEL_THICK + storage_bin.LABEL_RELIEF)
     placed = in_pocket(label)
     m = make(label=True)
     assert gap(m, placed) == pytest.approx(0.0, abs=1e-6), "the label does not fit"
@@ -294,6 +294,39 @@ def test_the_dialog_makes_the_label_with_the_bin(win, monkeypatch):
     assert app_module.Settings().bin_label_text == "Screws"
     win.settings.bin_label_text = ""             # the other tests make a bin without a label
     win.settings.save()
+
+
+# ------------------------------------------------------------------ stacking
+
+def stacked(**kw):
+    """Two stacking bins, the upper one with its foot in the opening of the lower one."""
+    low = make(stack=True, **kw)
+    up = make(stack=True, **kw).translate((0.0, 0.0, BASE["height"] - storage_bin.STACK_FOOT))
+    return low, up
+
+
+@pytest.mark.parametrize("kw", [{}, dict(cols=3, rows=2, label=True),
+                                dict(cols=2, label=True, hanger=True)])
+def test_a_stacking_bin_stands_in_the_one_under_it(kw):
+    low, up = stacked(**kw)
+    assert len(low.decompose()) == 1
+    lo, hi = bbox(make(stack=True, **dict(kw, hanger=False)))
+    assert hi[2] - lo[2] == pytest.approx(BASE["height"]), "the foot makes the bin higher"
+    assert gap(low, up) == pytest.approx(0.0, abs=1e-6), "the foot runs into the bin under it"
+    assert gap(low, up.translate((0.0, 0.0, -0.1))) > 1.0, "the bin does not rest on the rim"
+
+
+def test_a_stacking_bin_cannot_slide_off():
+    low, up = stacked()
+    for d in ((0.5, 0.0, 0.0), (0.0, 0.5, 0.0), (-0.5, 0.0, 0.0), (0.0, -0.5, 0.0)):
+        assert gap(low, up.translate(d)) > 1.0, f"the bin slides {d}"
+
+
+def test_the_label_stays_under_the_bin_on_top():
+    low, up = stacked(label=True)
+    label = in_pocket(label_of())
+    assert gap(low, label) == pytest.approx(0.0, abs=1e-6)
+    assert gap(up, label) == pytest.approx(0.0, abs=1e-6), "the letters press on the bin above"
 
 
 if __name__ == "__main__":

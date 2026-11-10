@@ -72,7 +72,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
   screw size the base also gets a post in every corner with a pilot hole and the lid a
   clearance hole above it, so the lid screws on, and with vent slots the two long walls get
   vertical slots through them, evenly spaced and centred, so the air inside the box can
-  change. Base and lid land side by side on the bed, the lid flipped over so both print
+  change. Pick a circuit board (Arduino Uno or Mega, Raspberry Pi 4 / 5, Zero or Pico) and the
+  floor gets a standoff with a pilot hole under every mounting hole of it, the board in the
+  middle of the box. Base and lid land side by side on the bed, the lid flipped over so both print
   without support
 - **Knob** (Draw > Parts): a printable thumb knob that turns on a bolt or a shaft: the
   diameter and the height, the grip of the rim (knurled ribs, rounded lobes or smooth) and the
@@ -115,7 +117,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
   millimetres runs at the top, whose underside stands at 45 degrees, so a label lies under it
   readable and the ledge prints without support. With a *Label text* the bin comes with a thin
   label that lies flush in a pocket in the top of the ledge, held in by a lip. With *Wall hook* the
-  back wall gets a hook along the top and a rib along the bottom, so the bin hangs on the wall rack
+  back wall gets a hook along the top and a rib along the bottom, so the bin hangs on the wall rack.
+  A *Stackable* bin has a foot that drops into a bin of the same size, so bins stand on each
+  other without sliding off; the dividers and the label stay out of its way
 - **Bin Wall Rack** (Draw > Parts): a plate for the wall with a grid of cells whose number and
   size you choose; every row has a rail that leans 45 degrees up, so the hook of a bin drops behind
   it and the bin hangs anywhere along the row and slides sideways. A bin as high as a row or lower
@@ -123,6 +127,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   the wall, and a stop closes both ends of every rail. It prints lying on its back without support;
   a rack wider than the bed comes in panels of the columns you choose, which slide together with
   dovetails
+- **Cable Chain** (Draw > Parts): a drag chain for the cables of a moving axis, printed in one
+  piece: the links lie in a row, already in each other, with 0.3 mm of room around every pin and
+  between the plates, so the chain comes off the bed and bends. Enter the inside width and height
+  for the cables, the wall and the number of links; the chain has no stops and bends both ways
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

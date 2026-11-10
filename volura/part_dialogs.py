@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QFontComboBox, QFormLayout, QLabel, QLineEdit, QPlainTextEdit,
                                QSpinBox)
 
-from . import (battery_holder, bin_rack, cable_clip, enclosure, fonts, gears, hinge, knob, label_plate,
-               standoff, storage_bin, text3d, threads)
+from . import (battery_holder, bin_rack, cable_chain, cable_clip, enclosure, fonts, gears,
+               hinge, knob, label_plate, standoff, storage_bin, text3d, threads)
 from .i18n import tr
 
 
@@ -168,6 +168,18 @@ class ProjectBoxDialog(QDialog):
         lay.addRow(tr("Clearance"), self.clearance)
         lay.addRow(tr("Screws"), self.screws)
         lay.addRow(tr("Vent slots"), self.vents)
+        self.board = QComboBox()
+        self.board.addItem(tr("None"), "")
+        for name in enclosure.BOARDS:
+            self.board.addItem(name, name)
+        self.board.setCurrentIndex(max(0, self.board.findData(s.box3d_board)))
+        self.board.setToolTip(tr("Standoffs on the floor under the mounting holes of this "
+                                 "board, so it is screwed down"))
+        self.board_height = spin(enclosure.BOARD_HEIGHT_MIN, enclosure.BOARD_HEIGHT_MAX,
+                                 s.box3d_board_height)
+        self.board_height.setToolTip(tr("How high the board stands above the floor"))
+        lay.addRow(tr("Circuit board"), self.board)
+        lay.addRow(tr("Board standoffs"), self.board_height)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -184,7 +196,9 @@ class ProjectBoxDialog(QDialog):
                 "lip": round(self.lip.value(), 6),
                 "clearance": round(self.clearance.value(), 6),
                 "screws": str(self.screws.currentData() or ""),
-                "vents": int(self.vents.value())}
+                "vents": int(self.vents.value()),
+                "board": str(self.board.currentData() or ""),
+                "board_height": round(self.board_height.value(), 6)}
 
 
 class KnobDialog(QDialog):
@@ -793,6 +807,11 @@ class StorageBinDialog(QDialog):
         self.hanger.setToolTip(tr("A hook along the top of the back wall and a rib along its "
                                   "bottom, so the bin hangs on a rail of the bin wall rack"))
         lay.addRow("", self.hanger)
+        self.stack = QCheckBox(tr("Stackable"))
+        self.stack.setChecked(bool(s.bin_stack))
+        self.stack.setToolTip(tr("A foot under the bin that drops into a bin of the same size, so "
+                                 "the bins stand on each other without sliding off"))
+        lay.addRow("", self.stack)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
@@ -809,7 +828,57 @@ class StorageBinDialog(QDialog):
                 "rows": int(self.rows.value()),
                 "label": bool(self.label.isChecked()),
                 "hanger": bool(self.hanger.isChecked()),
+                "stack": bool(self.stack.isChecked()),
                 "label_text": self.label_text.text().strip()}
+
+
+class CableChainDialog(QDialog):
+    """The "Cable Chain…" dialog: a drag chain printed in one piece.
+
+    The width and the height are the inside, the room for the cables; the wall is the plastic of
+    the plates and the bars, and the links say how long the chain is. The values come from
+    Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Cable chain"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.width = spin(cable_chain.WIDTH_MIN, cable_chain.WIDTH_MAX, s.chain_width, 1.0)
+        self.width.setToolTip(tr("The room for the cables, across the chain"))
+        self.height = spin(cable_chain.HEIGHT_MIN, cable_chain.HEIGHT_MAX, s.chain_height, 1.0)
+        self.height.setToolTip(tr("The room for the cables, from bar to bar"))
+        self.wall = spin(cable_chain.WALL_MIN, cable_chain.WALL_MAX, s.chain_wall, 0.2)
+        self.wall.setToolTip(tr("The plastic of the side plates and the cross bars"))
+        self.links = QSpinBox()
+        self.links.setRange(cable_chain.LINKS_MIN, cable_chain.LINKS_MAX)
+        self.links.setValue(s.chain_links)
+        self.links.setToolTip(tr("How many links the chain has"))
+        lay.addRow(tr("Inside width"), self.width)
+        lay.addRow(tr("Inside height"), self.height)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Links"), self.links)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def options(self) -> dict:
+        return {"width": round(self.width.value(), 6),
+                "height": round(self.height.value(), 6),
+                "wall": round(self.wall.value(), 6),
+                "links": int(self.links.value())}
 
 
 class BinRackDialog(QDialog):

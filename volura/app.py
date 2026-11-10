@@ -25,10 +25,11 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout)
 
-from . import (__version__, background, battery_holder, bin_rack, boxgen, cable_clip, cam, dxf, enclosure,
-                   errors, fileio, gcode, gears, hinge, i18n, joints, knob, label_plate, linking,
-                   nesting, ops, sheet3d, sheettools, svg, spacemouse, standoff, storage_bin,
-                   text3d, theme, threads, vector_export, vector_import, workers)
+from . import (__version__, background, battery_holder, bin_rack, boxgen, cable_chain,
+               cable_clip, cam, dxf, enclosure, errors, fileio, gcode, gears, hinge, i18n,
+               joints, knob, label_plate, linking, nesting, ops, sheet3d, sheettools, svg,
+               spacemouse, standoff, storage_bin, text3d, theme, threads, vector_export,
+               vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -429,6 +430,15 @@ class Settings:
         except (TypeError, ValueError):
             self.box3d_vents = 0
         self.box3d_vents = max(0, min(enclosure.VENTS_MAX, self.box3d_vents))
+        self.box3d_board = str(self.q.value("box3d_board", "") or "")
+        if self.box3d_board not in enclosure.BOARDS:
+            self.box3d_board = ""
+        try:
+            self.box3d_board_height = float(self.q.value("box3d_board_height", 5.0))
+        except (TypeError, ValueError):
+            self.box3d_board_height = 5.0
+        self.box3d_board_height = max(enclosure.BOARD_HEIGHT_MIN,
+                                      min(enclosure.BOARD_HEIGHT_MAX, self.box3d_board_height))
         try:
             self.knob_diameter = float(self.q.value("knob_diameter", 30.0))
         except (TypeError, ValueError):
@@ -702,6 +712,7 @@ class Settings:
         self.bin_rows = max(storage_bin.COLS_MIN, min(storage_bin.COLS_MAX, self.bin_rows))
         self.bin_label = self._bool("bin_label", True)
         self.bin_hanger = self._bool("bin_hanger", False)
+        self.bin_stack = self._bool("bin_stack", False)
         self.bin_label_text = str(self.q.value("bin_label_text", "") or "")
         try:
             self.rack_cols = int(float(self.q.value("rack_cols", 3)))
@@ -733,6 +744,27 @@ class Settings:
         except (TypeError, ValueError):
             self.rack_panel_cols = 0
         self.rack_panel_cols = max(0, min(bin_rack.COLS_MAX, self.rack_panel_cols))
+        try:
+            self.chain_width = float(self.q.value("chain_width", 20.0))
+        except (TypeError, ValueError):
+            self.chain_width = 20.0
+        self.chain_width = max(cable_chain.WIDTH_MIN, min(cable_chain.WIDTH_MAX, self.chain_width))
+        try:
+            self.chain_height = float(self.q.value("chain_height", 15.0))
+        except (TypeError, ValueError):
+            self.chain_height = 15.0
+        self.chain_height = max(cable_chain.HEIGHT_MIN,
+                                min(cable_chain.HEIGHT_MAX, self.chain_height))
+        try:
+            self.chain_wall = float(self.q.value("chain_wall", 2.0))
+        except (TypeError, ValueError):
+            self.chain_wall = 2.0
+        self.chain_wall = max(cable_chain.WALL_MIN, min(cable_chain.WALL_MAX, self.chain_wall))
+        try:
+            self.chain_links = int(float(self.q.value("chain_links", 10)))
+        except (TypeError, ValueError):
+            self.chain_links = 10
+        self.chain_links = max(cable_chain.LINKS_MIN, min(cable_chain.LINKS_MAX, self.chain_links))
         self.rack_screw = str(self.q.value("rack_screw", "M4"))
         if self.rack_screw not in bin_rack.SCREWS:
             self.rack_screw = "M4"
@@ -837,6 +869,8 @@ class Settings:
         self.q.setValue("box3d_clearance", self.box3d_clearance)
         self.q.setValue("box3d_screws", self.box3d_screws)
         self.q.setValue("box3d_vents", self.box3d_vents)
+        self.q.setValue("box3d_board", self.box3d_board)
+        self.q.setValue("box3d_board_height", self.box3d_board_height)
         self.q.setValue("knob_diameter", self.knob_diameter)
         self.q.setValue("knob_height", self.knob_height)
         self.q.setValue("knob_grip", self.knob_grip)
@@ -896,6 +930,7 @@ class Settings:
         self.q.setValue("bin_rows", self.bin_rows)
         self.q.setValue("bin_label", self.bin_label)
         self.q.setValue("bin_hanger", self.bin_hanger)
+        self.q.setValue("bin_stack", self.bin_stack)
         self.q.setValue("bin_label_text", self.bin_label_text)
         self.q.setValue("rack_cols", self.rack_cols)
         self.q.setValue("rack_rows", self.rack_rows)
@@ -903,6 +938,10 @@ class Settings:
         self.q.setValue("rack_cell_h", self.rack_cell_h)
         self.q.setValue("rack_plate", self.rack_plate)
         self.q.setValue("rack_screw", self.rack_screw)
+        self.q.setValue("chain_width", self.chain_width)
+        self.q.setValue("chain_height", self.chain_height)
+        self.q.setValue("chain_wall", self.chain_wall)
+        self.q.setValue("chain_links", self.chain_links)
         self.q.setValue("rack_panel_cols", self.rack_panel_cols)
         self.q.setValue("tab_count", self.tab_count)
         self.q.setValue("tab_width", self.tab_width)
@@ -1738,6 +1777,13 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                             tr("Add a printable wall rack to the model: a plate with a grid of "
                                "rails that storage bins with a wall hook hang on, and "
                                "countersunk holes to screw it to the wall"))
+        # ---- cable chain
+        self.a_cable_chain = A(tr("Cable Chain…"),
+                               lambda checked=False: self.cable_chain_dialog(), None,
+                               "cable_chain", False,
+                               tr("Add a printable cable chain to the model: links that are "
+                                  "printed in one piece, already in each other, and turn on "
+                                  "their pins"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -1848,7 +1894,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         parts_menu = sub(tr("&Parts"), m,
                          (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
                           self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
-                          self.a_battery_holder, self.a_storage_bin, self.a_bin_rack))
+                          self.a_battery_holder, self.a_storage_bin, self.a_bin_rack,
+                          self.a_cable_chain))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

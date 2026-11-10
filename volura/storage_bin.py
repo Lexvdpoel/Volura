@@ -25,8 +25,13 @@ carries on its own.
 The top of the ledge has a shallow **pocket** for a printed label (`bin_label`): `LABEL_POCKET`
 millimetres deep, from the front wall to `LABEL_LIP` millimetres before the edge of the ledge, so
 the lip that stays holds the label in. The label is a thin plate of the size of the pocket, less
-`LABEL_PLAY` all round, with its text standing on top, so it lies flush in the ledge and only the
-letters stand out.
+`LABEL_PLAY` all round, with its text standing on top, and the pocket is as deep as the plate and
+the letters together, so even the letters stay under the top edge and a bin stands on it.
+
+A **stacking** bin has a foot: the lowest `STACK_FOOT` millimetres of the outside step in to the
+opening of a bin of the same size, less `STACK_PLAY` all round, so it drops into the bin under it
+and cannot slide off. The foot stays behind the label ledge of the bin under it and its dividers
+stop that much lower, so nothing is in its way; the floor inside starts on top of the foot.
 
 The **wall hook** hangs the bin on the wall rack of `volura/bin_rack.py`: along the outside of the
 back wall a cleat of `CLEAT_THICK` millimetres runs at the top and reaches `CLEAT_OUT − CLEAT_PLAY`
@@ -58,14 +63,18 @@ RADIUS_MIN, RADIUS_MAX = 0.0, 20.0
 COLS_MIN, COLS_MAX = 1, 10
 #: mm of ledge along the front wall, on which a printed label lies flat and stays readable
 LABEL_DEPTH = 12.0
-#: mm deep the pocket in the top of the ledge is, and the thickness of the label plate in it
-LABEL_POCKET = 0.8
+#: mm of plate under the letters of a label
+LABEL_THICK = 0.8
 #: mm of ledge that stays whole along the inside, the lip that holds the label in its pocket
 LABEL_LIP = 2.5
 #: mm of room all round the label in its pocket
 LABEL_PLAY = 0.2
 #: mm that the letters stand on the label
 LABEL_RELIEF = 0.6
+#: mm deep the pocket in the top of the ledge is: the label with its letters, flush with the top
+LABEL_POCKET = LABEL_THICK + LABEL_RELIEF
+#: mm high the foot of a stacking bin is, and the room it has in the opening of the bin under it
+STACK_FOOT, STACK_PLAY = 3.0, 0.3
 #: mm that the letters stay from the edge of the label
 LABEL_EDGE = 1.0
 #: mm across the narrowest pocket that is still worth a label
@@ -107,17 +116,19 @@ def _ledge(y_wall, into, x_lo, x_hi, top, depth) -> mf.Manifold:
     return extrude_cs(mf.CrossSection([loop]), FRONT, x_lo, x_hi)
 
 
-def _hanger(y_back, x_lo, x_hi, top) -> mf.Manifold:
+def _hanger(y_back, x_lo, x_hi, top, bottom=0.0) -> mf.Manifold:
     """The hook and the rib on the outside of the back wall at `y_back`, from `x_lo` to `x_hi`.
 
     The hook hangs from the top edge, `CLEAT_THICK` high, and reaches `CLEAT_OUT − CLEAT_PLAY` out
     and as far down, so its underside lies at 45 degrees on the face of a rail of the rack. The rib
-    along the bottom reaches out as far, so the bin hangs upright instead of tilting to the wall.
+    along the bottom reaches out as far, so the bin hangs upright instead of tilting to the wall;
+    it starts at `bottom`, which is above the foot of a stacking bin.
     """
     out, t, inset = CLEAT_OUT - CLEAT_PLAY, CLEAT_THICK, MARGIN
     hook = [[y_back - inset, top - t + inset], [y_back + out, top - t - out],
             [y_back + out, top - out], [y_back - inset, top]]
-    rib = [[y_back - inset, 0.0], [y_back + out, 0.0], [y_back + out, t], [y_back - inset, t]]
+    rib = [[y_back - inset, bottom], [y_back + out, bottom], [y_back + out, bottom + t],
+           [y_back - inset, bottom + t]]
     return extrude_cs(mf.CrossSection([hook, rib]), FRONT, x_lo, x_hi)
 
 
@@ -153,8 +164,8 @@ def bin_label(text, length=80, width=60, height=40, wall=1.6, floor=1.2, family=
               bold=True) -> mf.Manifold:
     """The label for the pocket of a bin of these sizes: a plate with `text` standing on it.
 
-    The plate is `LABEL_POCKET` millimetres thick, so it lies flush in the ledge, and as large as
-    the pocket less `LABEL_PLAY` all round. The letters stand `LABEL_RELIEF` millimetres on it,
+    The plate is `LABEL_THICK` millimetres thick and as large as the pocket less `LABEL_PLAY` all
+    round, so with its letters it lies flush in the ledge. The letters stand `LABEL_RELIEF` on it,
     as high as fits and made smaller when a long text would run over the edge; they stay
     `LABEL_EDGE` millimetres from it. The label lies on `z = 0`, centred on the origin, and the
     text reads along the length of the bin. A bin without room for a pocket, or a text without
@@ -173,13 +184,13 @@ def bin_label(text, length=80, width=60, height=40, wall=1.6, floor=1.2, family=
     letters = letters.scale((k, k, 1.0))
     lo, hi = np.asarray(letters.bounding_box()[:3]), np.asarray(letters.bounding_box()[3:])
     letters = letters.translate((-0.5 * (lo[0] + hi[0]), -0.5 * (lo[1] + hi[1]),
-                                 LABEL_POCKET - MARGIN - lo[2]))
-    plate = mf.Manifold.cube([lx, ly, LABEL_POCKET]).translate((-0.5 * lx, -0.5 * ly, 0.0))
+                                 LABEL_THICK - MARGIN - lo[2]))
+    plate = mf.Manifold.cube([lx, ly, LABEL_THICK]).translate((-0.5 * lx, -0.5 * ly, 0.0))
     return plate + letters
 
 
 def storage_bin(length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4,
-                cols=1, rows=1, label=True, hanger=False) -> mf.Manifold:
+                cols=1, rows=1, label=True, hanger=False, stack=False) -> mf.Manifold:
     """A printable open-top box with `cols` by `rows` compartments and a ledge for a label.
 
     The bin is `length` by `width` millimetres and `height` millimetres high, with walls of `wall`
@@ -190,7 +201,9 @@ def storage_bin(length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4,
     a ledge of `LABEL_DEPTH` millimetres at the top, whose underside stands at 45 degrees, so a
     label lies under it and the ledge prints without support. With `hanger` the back wall carries
     the hook and the rib that hang the bin on the wall rack of `volura/bin_rack.py`; they stick
-    out behind the bin, so the box round the bin is then deeper than `width`.
+    out behind the bin, so the box round the bin is then deeper than `width`. With `stack` the
+    bottom gets the foot that drops into a bin of the same size under it (see the top of this
+    file); the bin stays `height` high and its inside starts on top of the foot.
 
     The result is centred on the origin in plan and stands on `z = 0`. The sizes are kept within
     their own bounds and the radius within half the smallest side, so a bin that cannot be printed
@@ -206,13 +219,17 @@ def storage_bin(length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4,
     inner_l, inner_w = L - 2.0 * t, W - 2.0 * t
     inner_r = max(r - t, 0.5)                  # the inside follows the corner, so the wall stays even
 
+    foot = STACK_FOOT if stack else 0.0
+    bottom = foot + f                          # where the inside starts: on the foot, if any
     block = mf.Manifold.extrude(enclosure.rounded_rect(L, W, r), H)
     cavity = mf.Manifold.extrude(enclosure.rounded_rect(inner_l, inner_w, inner_r),
-                                 H - f + MARGIN).translate((0.0, 0.0, f))
+                                 H - bottom + MARGIN).translate((0.0, 0.0, bottom))
 
-    # what stands in the bin again: the dividers, and along the front wall the ledge for a label
+    # what stands in the bin again: the dividers, and along the front wall the ledge for a label;
+    # the dividers of a stacking bin stay under the foot of the bin that stands in it
     add = []
-    top = H - DIVIDER_DROP
+    top = H - DIVIDER_DROP - foot
+    f = bottom
     for i in range(1, nc):
         x = -0.5 * inner_l + i * inner_l / nc
         add.append(mf.Manifold.cube([t, inner_w + t, top - f])
@@ -235,6 +252,17 @@ def storage_bin(length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4,
         lx, ly, y0 = pocket
         body = body - mf.Manifold.cube([lx, ly, LABEL_POCKET + MARGIN]).translate(
             (-0.5 * lx, y0, H - LABEL_POCKET))
+    if stack:
+        # the foot: the opening of the bin under it, less the play, and behind its label ledge
+        lx = inner_l - 2.0 * STACK_PLAY
+        y_lo = -0.5 * inner_w + STACK_PLAY + (depth if label and depth > 0.0 else 0.0)
+        y_hi = 0.5 * inner_w - STACK_PLAY
+        rr = max(0.0, min(inner_r - STACK_PLAY, 0.5 * lx, 0.5 * (y_hi - y_lo)))
+        sole = mf.Manifold.extrude(enclosure.rounded_rect(lx, y_hi - y_lo, rr),
+                                   foot + 2.0 * MARGIN).translate((0.0, 0.5 * (y_lo + y_hi), -MARGIN))
+        slab = mf.Manifold.cube([L + 2.0, W + 2.0, foot + MARGIN]).translate(
+            (-0.5 * L - 1.0, -0.5 * W - 1.0, -MARGIN))
+        body = body - (slab - sole)
     # the bin stands on the bed as it prints: centred in plan, with the floor on z = 0
     bb = np.asarray(body.bounding_box(), dtype=float)
     body = body.translate((-0.5 * (bb[0] + bb[3]), -0.5 * (bb[1] + bb[4]), -bb[2]))
@@ -242,5 +270,5 @@ def storage_bin(length=80, width=60, height=40, wall=1.6, floor=1.2, radius=4,
         # on the flat part of the back wall, so the hook does not stick out of a rounded corner
         x_flat = 0.5 * L - max(r, t)
         if x_flat > 0.0:
-            body = body + _hanger(0.5 * W, -x_flat, x_flat, H)
+            body = body + _hanger(0.5 * W, -x_flat, x_flat, H, foot)
     return body
