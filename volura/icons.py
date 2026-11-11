@@ -287,6 +287,12 @@ SVG = {
                    f'<path d="M9.6 5.5 L9.6 14.6 M14.4 5.5 L14.4 14.6" {N} {S(w=1.4)}/>'
                    f'<path d="M5.2 8.6 L8.3 5.5" {N} stroke="#d23b3b" stroke-width="1.7" '
                    f'stroke-linecap="round"/>',
+    # pegboard hook: a board with holes, and a hook hanging on it
+    "pegboard": f'<rect x="2.5" y="2.5" width="8" height="19" fill="#eef2f7" {S()}/>'
+                f'<circle cx="6.5" cy="7" r="1" {N} {S(w=1.2)}/>'
+                f'<circle cx="6.5" cy="17" r="1" {N} {S(w=1.2)}/>'
+                f'<path d="M10.5 9 L13 9 L13 17 L20 17 L20 13" {N} stroke="#3b7dd8" '
+                f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     # gridfinity: a baseplate of four squares, with a bin standing in one of them
     "gridfinity": f'<path d="M2.5 13 L21.5 13 L21.5 21 L2.5 21 Z" fill="#eef2f7" {S()}/>'
                   f'<path d="M12 13 L12 21 M2.5 17 L21.5 17" {N} {S(w=1.2)}/>'

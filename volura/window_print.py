@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QVBoxLayout)
 
 from . import (background, battery_holder, bin_rack, cable_chain, cable_clip, enclosure, gears,
-               gridfinity, hinge, joints, knob, label_plate, ops, standoff, storage_bin, text3d, theme,
+               gridfinity, hinge, pegboard, joints, knob, label_plate, ops, standoff, storage_bin, text3d, theme,
                threads)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
@@ -31,7 +31,7 @@ from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
 from .part_dialogs import (BatteryHolderDialog, BinRackDialog, CableChainDialog,
-                           CableClipDialog, GridfinityDialog, HingeDialog, KnobDialog, LabelPlateDialog,
+                           CableClipDialog, GridfinityDialog, HingeDialog, PegboardDialog, KnobDialog, LabelPlateDialog,
                            ProjectBoxDialog, StandoffDialog, StorageBinDialog, Text3DDialog)
 
 
@@ -729,6 +729,52 @@ class PrintMixin:
             self.view.set_status(tr("Storage bin failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the storage bin…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ pegboard
+    def pegboard_dialog(self):
+        """Draw > Parts > Pegboard Hook…: a hook, a shelf or a tool holder for a pegboard."""
+        dlg = PegboardDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("kind", "width", "reach", "board", "size"):
+            setattr(self.settings, "peg_" + key, options[key])
+        self.settings.save()
+        made = self.make_pegboard_model(options)
+        self.setFocus()
+        return made
+
+    def make_pegboard_model(self, options):
+        """The part as printed, lying on its side: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("kind", "width", "reach", "board", "size")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the pegboard part…"))
+            m = pegboard.pegboard_part(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the part away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Pegboard hook"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Pegboard part added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Pegboard part failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the pegboard part…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ gridfinity

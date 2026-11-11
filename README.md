@@ -139,6 +139,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
   other. A bin can have a finger scoop, the rounding between the floor and the inside of the front
   wall so you slide small parts out with a finger, and a label shelf under the top of the inside of
   the back wall, at 45 degrees, in which a printed label stands
+- **Pegboard Hook** (Draw > Parts): a hook, a shelf with a brace or a holder for a tool, for a
+  pegboard of 1/4 inch holes at 1 inch. It hangs on an upper peg that hooks behind the board and
+  rests on a lower one, and it prints lying on its side without support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

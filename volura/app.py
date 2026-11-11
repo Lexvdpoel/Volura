@@ -25,10 +25,9 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout)
 
-from . import (__version__, background, battery_holder, bin_rack, boxgen, cable_chain,
-               cable_clip, cam, dxf, enclosure, errors, fileio, gcode, gears, gridfinity, hinge,
-               i18n,
-               joints, knob, label_plate, linking, nesting, ops, sheet3d, sheettools, svg,
+from . import (__version__, background, battery_holder, bin_rack, boxgen, cable_chain, cable_clip,
+               cam, dxf, enclosure, errors, fileio, gcode, gears, gridfinity, hinge, i18n, joints,
+               knob, label_plate, linking, nesting, ops, pegboard, sheet3d, sheettools, svg,
                spacemouse, standoff, storage_bin, text3d, theme, threads, vector_export,
                vector_import, workers)
 from .brep import Entities
@@ -785,6 +784,19 @@ class Settings:
                 value = default
             setattr(self, key, max(lo, min(hi, value)))
         self.grid_lip = self._bool("grid_lip", True)
+        self.peg_kind = str(self.q.value("peg_kind", "hook") or "hook")
+        if self.peg_kind not in pegboard.KINDS:
+            self.peg_kind = "hook"
+        for key, default, lo, hi in (
+                ("peg_width", pegboard.WIDTH_DEFAULT, pegboard.WIDTH_MIN, pegboard.WIDTH_MAX),
+                ("peg_reach", pegboard.REACH_DEFAULT, pegboard.REACH_MIN, pegboard.REACH_MAX),
+                ("peg_board", pegboard.BOARD, pegboard.BOARD_MIN, pegboard.BOARD_MAX),
+                ("peg_size", pegboard.SIZE_DEFAULT, pegboard.SIZE_MIN, pegboard.SIZE_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
         self.grid_magnets = self._bool("grid_magnets", False)
         self.grid_scoop = self._bool("grid_scoop", False)
         self.grid_label = self._bool("grid_label", False)
@@ -967,6 +979,8 @@ class Settings:
         self.q.setValue("chain_wall", self.chain_wall)
         self.q.setValue("chain_links", self.chain_links)
         self.q.setValue("chain_bend", self.chain_bend)
+        for key in ("peg_kind", "peg_width", "peg_reach", "peg_board", "peg_size"):
+            self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
             self.q.setValue(key, getattr(self, key))
@@ -1818,6 +1832,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                               tr("Add a Gridfinity bin or baseplate to the model: the open "
                                  "storage grid of 42 mm, whose bins stand on any Gridfinity "
                                  "baseplate and on each other"))
+        # ---- pegboard
+        self.a_pegboard = A(tr("Pegboard Hook…"), lambda checked=False: self.pegboard_dialog(),
+                            None, "pegboard", False,
+                            tr("Add a hook, a shelf or a tool holder for a pegboard of 1/4 inch "
+                               "holes at 1 inch: it hangs on two pegs and prints on its side"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -1929,7 +1948,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                          (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
                           self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
                           self.a_battery_holder, self.a_storage_bin, self.a_bin_rack,
-                          self.a_cable_chain, self.a_gridfinity))
+                          self.a_cable_chain, self.a_gridfinity, self.a_pegboard))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

@@ -13,7 +13,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QSpinBox)
 
 from . import (battery_holder, bin_rack, cable_chain, cable_clip, enclosure, fonts, gears,
-               gridfinity, hinge, knob, label_plate, standoff, storage_bin, text3d, threads)
+               gridfinity, hinge, knob, label_plate, pegboard, standoff, storage_bin, text3d,
+               threads)
 from .i18n import tr
 
 
@@ -837,6 +838,65 @@ class StorageBinDialog(QDialog):
                 "stack": bool(self.stack.isChecked()),
                 "scoop": bool(self.scoop.isChecked()),
                 "label_text": self.label_text.text().strip()}
+
+
+class PegboardDialog(QDialog):
+    """The "Pegboard Hook…" dialog: a hook, a shelf or a tool holder for a pegboard.
+
+    The kind says which part, the width how thick it prints, the reach how far it stands out of
+    the board and the board how thick the pegboard is; a holder also takes the size of the tool
+    it holds, greyed out for the other kinds. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Pegboard hook"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.kind = QComboBox()
+        for kind, label in (("hook", tr("Hook")), ("shelf", tr("Shelf")),
+                            ("holder", tr("Tool holder"))):
+            self.kind.addItem(label, kind)
+        self.kind.setCurrentIndex(max(0, self.kind.findData(s.peg_kind)))
+        self.width = spin(pegboard.WIDTH_MIN, pegboard.WIDTH_MAX, s.peg_width, 1.0)
+        self.width.setToolTip(tr("How thick the part is, which is the height it prints"))
+        self.reach = spin(pegboard.REACH_MIN, pegboard.REACH_MAX, s.peg_reach, 5.0)
+        self.reach.setToolTip(tr("How far the part stands out of the board"))
+        self.board = spin(pegboard.BOARD_MIN, pegboard.BOARD_MAX, s.peg_board, 0.5)
+        self.board.setToolTip(tr("The thickness of the pegboard, so the upper peg hooks behind it"))
+        self.size = spin(pegboard.SIZE_MIN, pegboard.SIZE_MAX, s.peg_size, 1.0)
+        self.size.setToolTip(tr("The tool the holder takes, across"))
+        lay.addRow(tr("Part"), self.kind)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Reach"), self.reach)
+        lay.addRow(tr("Board"), self.board)
+        lay.addRow(tr("Tool size"), self.size)
+        self.kind.currentIndexChanged.connect(self._kind_changed)
+        self._kind_changed()
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+
+    def _kind_changed(self, *_):
+        self.size.setEnabled(self.kind.currentData() == "holder")
+
+    def options(self) -> dict:
+        return {"kind": str(self.kind.currentData()),
+                "width": round(self.width.value(), 6),
+                "reach": round(self.reach.value(), 6),
+                "board": round(self.board.value(), 6),
+                "size": round(self.size.value(), 6)}
 
 
 class GridfinityDialog(QDialog):
