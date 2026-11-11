@@ -300,6 +300,13 @@ SVG = {
            f'<circle cx="12" cy="12" r="1.6" fill="#3b7dd8"/>'
            f'<path d="M12 4.5 L12 19.5 M4.5 12 L19.5 12" {N} stroke="#3b7dd8" '
            f'stroke-width="1.2"/>',
+    # desk grommet: a flange on the desk top, a sleeve through the hole, a cable out of the lid
+    "grommet": f'<path d="M2.5 11.5 L21.5 11.5" {N} stroke="#9a9a9a" stroke-width="1.6"/>'
+               f'<path d="M8.5 11.5 L8.5 21.5 L15.5 21.5 L15.5 11.5" fill="#eef2f7" {S()}/>'
+               f'<ellipse cx="12" cy="8.5" rx="9.5" ry="3.4" fill="#eef2f7" {S()}/>'
+               f'<ellipse cx="12" cy="8.5" rx="4.6" ry="1.7" fill="#fff" {S(w=1.2)}/>'
+               f'<path d="M12 6.8 L12 3.4 Q12 2 14.2 2 L17.5 2" {N} stroke="#3b7dd8" '
+               f'stroke-width="2" stroke-linecap="round"/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

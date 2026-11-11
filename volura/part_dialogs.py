@@ -14,8 +14,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 
 from . import (battery_holder, bin_rack, cable_chain, cable_clip, enclosure, fan_guard, fonts,
                gears,
-               gridfinity, hinge, hose_adapter, knob, label_plate, pegboard, standoff, storage_bin,
-               text3d, threads)
+               gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, standoff,
+               storage_bin, text3d, threads)
 from .i18n import tr
 
 
@@ -992,6 +992,77 @@ class FanGuardDialog(QDialog):
         return {"fan": int(self.fan.currentData()), "pattern": str(self.pattern.currentData()),
                 "thickness": round(self.thickness.value(), 6),
                 "bar": round(self.bar.value(), 6), "gap": round(self.gap.value(), 6)}
+
+
+class GrommetDialog(QDialog):
+    """The "Desk Grommet…" dialog: a cable pass-through for a hole in a desk top.
+
+    The hole in the desk and the thickness of the desk top give the sleeve that goes into it; the
+    flange says how far the grommet comes out past the hole and the wall how thick that sleeve is.
+    The lid closes the hole off and its slot is how far in from the rim the cables reach. Under
+    the fields the sleeve, the bore and the lid the grommet will have. The values come from
+    Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Desk grommet"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(0.5)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.hole = spin(grommet.HOLE_MIN, grommet.HOLE_MAX, s.grommet_hole)
+        self.hole.setSingleStep(5.0)
+        self.hole.setToolTip(tr("The diameter of the hole in the desk"))
+        self.desk = spin(grommet.DESK_MIN, grommet.DESK_MAX, s.grommet_desk)
+        self.desk.setToolTip(tr("How thick the desk top is"))
+        self.flange = spin(grommet.FLANGE_MIN, grommet.FLANGE_MAX, s.grommet_flange)
+        self.flange.setToolTip(tr("How far the flange comes out past the hole"))
+        self.wall = spin(grommet.WALL_MIN, grommet.WALL_MAX, s.grommet_wall)
+        self.wall.setToolTip(tr("The plastic of the sleeve"))
+        self.slot = spin(0.0, 0.5 * grommet.HOLE_MAX, s.grommet_slot)
+        self.slot.setToolTip(tr("How far in from the rim of the lid the cables reach"))
+        self.lid = QCheckBox(tr("A lid with a slot for the cables"))
+        self.lid.setChecked(bool(s.grommet_lid))
+        self.info = QLabel()
+        lay.addRow(tr("Hole"), self.hole)
+        lay.addRow(tr("Desk top"), self.desk)
+        lay.addRow(tr("Flange"), self.flange)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Slot"), self.slot)
+        lay.addRow("", self.lid)
+        lay.addRow("", self.info)
+        for w in (self.hole, self.desk, self.flange, self.wall, self.slot):
+            w.valueChanged.connect(self._changed)
+        self.lid.toggled.connect(self._changed)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._changed()
+
+    def _changed(self, *_):
+        s = grommet.sizes(**self.options())
+        if s["lid"]:
+            self.info.setText(tr("Sleeve {d:g} by {l:g} mm, bore {b:g} mm, lid {c:g} mm")
+                              .format(d=s["sleeve_d"], l=s["sleeve_len"], b=s["bore_d"],
+                                      c=s["lid_d"]))
+        else:
+            self.info.setText(tr("Sleeve {d:g} by {l:g} mm, bore {b:g} mm")
+                              .format(d=s["sleeve_d"], l=s["sleeve_len"], b=s["bore_d"]))
+
+    def options(self) -> dict:
+        return {"hole": round(self.hole.value(), 6), "desk": round(self.desk.value(), 6),
+                "flange": round(self.flange.value(), 6), "wall": round(self.wall.value(), 6),
+                "slot": round(self.slot.value(), 6), "lid": self.lid.isChecked()}
 
 
 class HoseAdapterDialog(QDialog):

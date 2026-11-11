@@ -149,6 +149,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Fan Guard** (Draw > Parts): a guard for a square fan of 40 to 140 mm, with the screw holes of
   the fan at their standard spacing and a grille of rings, spokes or a grid; rings and a grid
   leave no opening wider than you enter, so fingers stay out
+- **Desk Grommet** (Draw > Parts): a cable pass-through for a hole of 20 to 120 mm in a desk top:
+  a flange that lies on the desk, a sleeve with crush ribs that stays in the hole and a lid with a
+  slot that drops into the flange and prints next to it. It prints flange down without support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

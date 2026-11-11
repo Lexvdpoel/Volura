@@ -26,8 +26,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, battery_holder, bin_rack, boxgen, cable_chain, cable_clip,
-               cam, dxf, enclosure, errors, fan_guard, fileio, gcode, gears, gridfinity, hinge,
-               hose_adapter,
+               cam, dxf, enclosure, errors, fan_guard, fileio, gcode, gears, gridfinity, grommet,
+               hinge, hose_adapter,
                i18n, joints, knob, label_plate, linking, nesting, ops, pegboard, sheet3d, sheettools,
                svg,
                spacemouse, standoff, storage_bin, text3d, theme, threads, vector_export,
@@ -834,6 +834,18 @@ class Settings:
                 value = default
             setattr(self, key, max(lo, min(hi, value)))
         for key, default, lo, hi in (
+                ("grommet_hole", 60.0, grommet.HOLE_MIN, grommet.HOLE_MAX),
+                ("grommet_desk", 25.0, grommet.DESK_MIN, grommet.DESK_MAX),
+                ("grommet_flange", 8.0, grommet.FLANGE_MIN, grommet.FLANGE_MAX),
+                ("grommet_wall", 2.0, grommet.WALL_MIN, grommet.WALL_MAX),
+                ("grommet_slot", 20.0, 0.0, 0.5 * grommet.HOLE_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        self.grommet_lid = self._bool("grommet_lid", True)
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1029,6 +1041,9 @@ class Settings:
         for key in ("hose_d1", "hose_d2", "hose_wall", "hose_barbs", "hose_straight"):
             self.q.setValue(key, getattr(self, key))
         for key in ("fan_size", "fan_pattern", "fan_thickness", "fan_bar", "fan_gap"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("grommet_hole", "grommet_desk", "grommet_flange", "grommet_wall",
+                    "grommet_slot", "grommet_lid"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -1901,6 +1916,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                              tr("Add a guard for a square fan of 40 to 140 mm: a plate with the "
                                 "screw holes of the fan and a grille of rings, spokes or a grid "
                                 "over the blades"))
+        # ---- desk grommet
+        self.a_grommet = A(tr("Desk Grommet…"), lambda checked=False: self.grommet_dialog(),
+                           None, "grommet", False,
+                           tr("Add a cable pass-through for a hole in a desk top: a flange that "
+                              "lies on the desk, a ribbed sleeve in the hole and a lid with a "
+                              "slot for the cables"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2013,7 +2034,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
                           self.a_battery_holder, self.a_storage_bin, self.a_bin_rack,
                           self.a_cable_chain, self.a_gridfinity, self.a_pegboard,
-                          self.a_hose_adapter, self.a_fan_guard))
+                          self.a_hose_adapter, self.a_fan_guard, self.a_grommet))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

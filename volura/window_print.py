@@ -24,16 +24,16 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 
 from . import (background, battery_holder, bin_rack, cable_chain, cable_clip, enclosure,
                fan_guard, gears,
-               gridfinity, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard, standoff,
-               storage_bin, text3d, theme, threads)
+               gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard,
+               standoff, storage_bin, text3d, theme, threads)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
 from .part_dialogs import (BatteryHolderDialog, BinRackDialog, CableChainDialog,
-                           CableClipDialog, FanGuardDialog, GridfinityDialog, HingeDialog,
-                           HoseAdapterDialog,
+                           CableClipDialog, FanGuardDialog, GridfinityDialog, GrommetDialog,
+                           HingeDialog, HoseAdapterDialog,
                            KnobDialog, LabelPlateDialog, PegboardDialog, ProjectBoxDialog,
                            StandoffDialog, StorageBinDialog, Text3DDialog)
 
@@ -828,6 +828,52 @@ class PrintMixin:
             self.view.set_status(tr("Fan guard failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the fan guard…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ desk grommet
+    def grommet_dialog(self):
+        """Draw > Parts > Desk Grommet…: a cable pass-through for a hole in a desk top."""
+        dlg = GrommetDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("hole", "desk", "flange", "wall", "slot", "lid"):
+            setattr(self.settings, "grommet_" + key, options[key])
+        self.settings.save()
+        made = self.make_grommet_model(options)
+        self.setFocus()
+        return made
+
+    def make_grommet_model(self, options):
+        """The grommet with its lid on the bed as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("hole", "desk", "flange", "wall", "slot", "lid")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the desk grommet…"))
+            m = grommet.grommet(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the grommet away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Desk grommet"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Desk grommet added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Desk grommet failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the desk grommet…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter
