@@ -157,6 +157,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
   the inner face, a rounded inner corner and a gusset rib over 40 % of the shorter leg at both
   ends of the width; it prints on its side, so the layer lines run round the bend and nothing
   needs support
+- **Zip-Tie Mount** (Draw > Parts): a cable-tie anchor with a base plate of 12 to 40 mm that lies
+  against the surface and one screw through its middle; the tie slides through a tunnel in the
+  bridge over it, one tunnel or two that cross so the tie can go either way, and the head of the
+  screw ends in the floor of that tunnel so the tie lies flat over it. The tunnel closes on a roof
+  of 45 degrees, so the mount prints without support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

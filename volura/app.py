@@ -31,8 +31,8 @@ from . import (__version__, background, battery_holder, bin_rack, boxgen, bracke
                label_plate, linking,
                nesting, ops, pegboard, sheet3d, sheettools,
                svg,
-               spacemouse, standoff, storage_bin, text3d, theme, threads, vector_export,
-               vector_import, workers)
+               spacemouse, standoff, storage_bin, text3d, theme, threads, tie_mount,
+               vector_export, vector_import, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -878,6 +878,25 @@ class Settings:
         self.bracket_countersink = self._bool("bracket_countersink", True)
         self.bracket_gussets = self._bool("bracket_gussets", True)
         for key, default, lo, hi in (
+                ("tie_mount_base", 20.0, tie_mount.BASE_MIN, tie_mount.BASE_MAX),
+                ("tie_mount_tie_width", 5.0, tie_mount.TIE_W_MIN, tie_mount.TIE_W_MAX),
+                ("tie_mount_tie_thick", 1.5, tie_mount.TIE_T_MIN, tie_mount.TIE_T_MAX),
+                ("tie_mount_height", 6.0, 2.0, tie_mount.HEIGHT_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        try:
+            ways = int(self.q.value("tie_mount_ways", 2))
+        except (TypeError, ValueError):
+            ways = 2
+        self.tie_mount_ways = max(tie_mount.WAYS_MIN, min(tie_mount.WAYS_MAX, ways))
+        self.tie_mount_screw = str(self.q.value("tie_mount_screw", "M4"))
+        if self.tie_mount_screw not in tie_mount.SCREWS:
+            self.tie_mount_screw = "M4"
+        self.tie_mount_countersink = self._bool("tie_mount_countersink", True)
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1081,6 +1100,10 @@ class Settings:
         for key in ("bracket_leg_a", "bracket_leg_b", "bracket_width", "bracket_thickness",
                     "bracket_fillet", "bracket_holes", "bracket_screw", "bracket_countersink",
                     "bracket_gussets"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("tie_mount_base", "tie_mount_tie_width", "tie_mount_tie_thick",
+                    "tie_mount_height", "tie_mount_screw", "tie_mount_countersink",
+                    "tie_mount_ways"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -1972,6 +1995,13 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                            tr("Add an L-shaped angle bracket with screw holes in both legs: it "
                               "prints on its side, so the layer lines run round the bend, and "
                               "gussets and a rounded inner corner make that bend strong"))
+        # ---- zip-tie mount
+        self.a_tie_mount = A(tr("Zip-Tie Mount…"),
+                             lambda checked=False: self.tie_mount_dialog(), None, "tie_mount",
+                             False,
+                             tr("Add a cable-tie anchor with one screw through its base: the tie "
+                                "slides through a tunnel in the bridge over it, and the head of "
+                                "the screw ends in the floor of that tunnel"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2088,7 +2118,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
                           self.a_battery_holder, self.a_storage_bin, self.a_bin_rack,
                           self.a_cable_chain, self.a_gridfinity, self.a_pegboard,
-                          self.a_hose_adapter, self.a_fan_guard, self.a_grommet, self.a_bracket))
+                          self.a_hose_adapter, self.a_fan_guard, self.a_grommet, self.a_bracket,
+                          self.a_tie_mount))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

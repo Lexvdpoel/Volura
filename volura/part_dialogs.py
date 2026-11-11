@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 from . import (battery_holder, bin_rack, bracket, cable_chain, cable_clip, enclosure, fan_guard,
                fonts, gears,
                gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, standoff,
-               storage_bin, text3d, threads)
+               storage_bin, text3d, threads, tie_mount)
 from .i18n import tr
 
 
@@ -1154,6 +1154,85 @@ class BracketDialog(QDialog):
                 "countersink": self.countersink.isChecked(),
                 "gussets": self.gussets.isChecked(),
                 "fillet": round(self.fillet.value(), 6)}
+
+
+class TieMountDialog(QDialog):
+    """The "Zip-Tie Mount…" dialog: a cable-tie anchor that is screwed onto a surface.
+
+    The base plate says how big the part that lies against the surface is, and the two sizes of the
+    tie how big the tunnel is that it slides through; the screw and whether its head sinks say how
+    the mount is fastened, and the ways whether the tie can go either way. Under the fields the
+    tunnel, the bridge and the height the mount really stands, because a low one is made as tall as
+    the roof over the tunnel needs. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Zip-tie mount"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(0.5)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.base = spin(tie_mount.BASE_MIN, tie_mount.BASE_MAX, s.tie_mount_base)
+        self.base.setSingleStep(2.0)
+        self.base.setToolTip(tr("How big the plate is that lies against the surface"))
+        self.tie_width = spin(tie_mount.TIE_W_MIN, tie_mount.TIE_W_MAX, s.tie_mount_tie_width)
+        self.tie_width.setToolTip(tr("How wide the cable tie that slides through it is"))
+        self.tie_thick = spin(tie_mount.TIE_T_MIN, tie_mount.TIE_T_MAX, s.tie_mount_tie_thick)
+        self.tie_thick.setToolTip(tr("How thick the cable tie that slides through it is"))
+        self.height = spin(2.0, tie_mount.HEIGHT_MAX, s.tie_mount_height)
+        self.height.setToolTip(tr("How high the mount stands on the bed, roof over the tunnel"))
+        self.screw = QComboBox()
+        for size in tie_mount.SCREWS:
+            self.screw.addItem(size, size)
+        self.screw.setCurrentIndex(max(0, self.screw.findData(s.tie_mount_screw)))
+        self.screw.setToolTip(tr("The screw that fastens the mount to the surface"))
+        self.countersink = QCheckBox(tr("The head sinks into the floor of the tunnel"))
+        self.countersink.setChecked(bool(s.tie_mount_countersink))
+        self.ways = QSpinBox()
+        self.ways.setRange(tie_mount.WAYS_MIN, tie_mount.WAYS_MAX)
+        self.ways.setValue(int(s.tie_mount_ways))
+        self.ways.setToolTip(tr("One tunnel for the tie, or two that cross so it can go either way"))
+        self.info = QLabel()
+        lay.addRow(tr("Base plate"), self.base)
+        lay.addRow(tr("Tie width"), self.tie_width)
+        lay.addRow(tr("Tie thickness"), self.tie_thick)
+        lay.addRow(tr("Height"), self.height)
+        lay.addRow(tr("Screw"), self.screw)
+        lay.addRow("", self.countersink)
+        lay.addRow(tr("Ways"), self.ways)
+        lay.addRow("", self.info)
+        for w in (self.base, self.tie_width, self.tie_thick, self.height):
+            w.valueChanged.connect(self._changed)
+        self.screw.currentIndexChanged.connect(self._changed)
+        self.countersink.toggled.connect(self._changed)
+        self.ways.valueChanged.connect(self._changed)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._changed()
+
+    def _changed(self, *_):
+        s = tie_mount.sizes(**self.options())
+        self.info.setText(tr("Tunnel {w:g} × {h:g} mm, bridge {b:g} mm, {z:g} mm high")
+                          .format(w=s["slot_w"], h=s["slot_h"], b=s["bridge"], z=s["height"]))
+
+    def options(self) -> dict:
+        return {"base": round(self.base.value(), 6),
+                "tie_width": round(self.tie_width.value(), 6),
+                "tie_thick": round(self.tie_thick.value(), 6),
+                "height": round(self.height.value(), 6),
+                "screw": str(self.screw.currentData()),
+                "countersink": self.countersink.isChecked(), "ways": int(self.ways.value())}
 
 
 class HoseAdapterDialog(QDialog):

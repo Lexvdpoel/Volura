@@ -313,6 +313,12 @@ SVG = {
                f'<path d="M8.5 16 L14 16 L8.5 10.5 Z" fill="#cfe0f5" {S(w=1.2)}/>'
                f'<circle cx="6.2" cy="6" r="1.7" fill="#fff" {S(w=1.2)}/>'
                f'<circle cx="17.5" cy="18.7" r="1.7" fill="#fff" {S(w=1.2)}/>',
+    # zip-tie mount: a bridge on a base plate, a tunnel through it and a screw in the middle
+    "tie_mount": f'<rect x="2.5" y="15.5" width="19" height="4.5" rx="1.5" fill="#eef2f7" {S()}/>'
+                 f'<rect x="6.5" y="4.5" width="11" height="11" rx="1.5" fill="#cfe0f5" {S()}/>'
+                 f'<path d="M4 13.4 L20 13.4 L20 11.2 L12 8.4 L4 11.2 Z" fill="#fff" {S(w=1.2)}/>'
+                 f'<path d="M12 4.5 L12 8.4" {N} stroke="#3b7dd8" stroke-width="2" '
+                 f'stroke-linecap="round"/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

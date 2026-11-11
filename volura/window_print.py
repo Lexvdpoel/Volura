@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 from . import (background, battery_holder, bin_rack, bracket, cable_chain, cable_clip,
                enclosure, fan_guard, gears,
                gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard,
-               standoff, storage_bin, text3d, theme, threads)
+               standoff, storage_bin, text3d, theme, threads, tie_mount)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
@@ -35,7 +35,7 @@ from .part_dialogs import (BatteryHolderDialog, BinRackDialog, BracketDialog, Ca
                            CableClipDialog, FanGuardDialog, GridfinityDialog, GrommetDialog,
                            HingeDialog, HoseAdapterDialog,
                            KnobDialog, LabelPlateDialog, PegboardDialog, ProjectBoxDialog,
-                           StandoffDialog, StorageBinDialog, Text3DDialog)
+                           StandoffDialog, StorageBinDialog, Text3DDialog, TieMountDialog)
 
 
 TOOL_INFO = [
@@ -923,6 +923,53 @@ class PrintMixin:
             self.view.set_status(tr("Corner bracket failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the corner bracket…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ zip-tie mount
+    def tie_mount_dialog(self):
+        """Draw > Parts > Zip-Tie Mount…: a cable-tie anchor that is screwed onto a surface."""
+        dlg = TieMountDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("base", "tie_width", "tie_thick", "height", "screw", "countersink", "ways"):
+            setattr(self.settings, "tie_mount_" + key, options[key])
+        self.settings.save()
+        made = self.make_tie_mount_model(options)
+        self.setFocus()
+        return made
+
+    def make_tie_mount_model(self, options):
+        """The mount on the bed as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("base", "tie_width", "tie_thick", "height", "screw",
+                                        "countersink", "ways")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the zip-tie mount…"))
+            m = tie_mount.tie_mount(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the mount away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Zip-tie mount"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Zip-tie mount added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Zip-tie mount failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the zip-tie mount…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter
