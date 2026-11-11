@@ -3,6 +3,33 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.42 — 2026-11-11
+
+### New
+- **Pegboard hooks, shelves and tool holders** (Draw > Parts): parts that hang on a standard
+  pegboard with 1/4 inch holes at a 1 inch pitch, with the width, reach and size you choose.
+- **Linked faces work both ways**: a hole or a vent pattern drawn on the worksheet inside the
+  outline of a linked face is cut through the wall under that face, and a hole deleted on the
+  worksheet closes again in the model. A corner or notch cut off the outline is cut out of the
+  wall, and an edge moved outwards builds the wall on, as thick as the wall beside it. It all
+  feels like working on one part: one undo step brings everything back.
+- **Go to Linked Part / Go to Linked Outline**: a linked outline shows a small chain mark on the
+  worksheet; right-click it to select its part (or face) in 3D, or right-click the part or its
+  linked face to find the outline on the worksheet again.
+
+### Improved
+- **Gridfinity bins** can have a finger scoop at the front and a label shelf at the back.
+
+### Fixed
+- The finger-joint box no longer shows short protruding lines at the corners of its side
+  panels: the kerf narrowing at the ends of an edge left thin slivers there.
+- A face whose outline is a rectangle is no longer read mirrored between the worksheet and the
+  model, so holes drawn on the worksheet land on the right side of the wall.
+
+### Website
+- The manual describes the pegboard parts, the Gridfinity scoop and label shelf, how linked
+  faces carry holes and outline changes back to the model, and the link mark and its menus.
+
 ## 0.2.41 — 2026-11-10
 
 ### Improved
