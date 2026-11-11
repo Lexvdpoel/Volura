@@ -26,7 +26,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, battery_holder, bin_rack, boxgen, cable_chain, cable_clip,
-               cam, dxf, enclosure, errors, fileio, gcode, gears, gridfinity, hinge, hose_adapter,
+               cam, dxf, enclosure, errors, fan_guard, fileio, gcode, gears, gridfinity, hinge,
+               hose_adapter,
                i18n, joints, knob, label_plate, linking, nesting, ops, pegboard, sheet3d, sheettools,
                svg,
                spacemouse, standoff, storage_bin, text3d, theme, threads, vector_export,
@@ -815,6 +816,23 @@ class Settings:
             barbs = 3
         self.hose_barbs = max(hose_adapter.BARBS_MIN, min(hose_adapter.BARBS_MAX, barbs))
         self.hose_straight = self._bool("hose_straight", False)
+        try:
+            fan = int(self.q.value("fan_size", 80))
+        except (TypeError, ValueError):
+            fan = 80
+        self.fan_size = fan if fan in fan_guard.FANS else 80
+        self.fan_pattern = str(self.q.value("fan_pattern", "rings") or "rings")
+        if self.fan_pattern not in fan_guard.PATTERNS:
+            self.fan_pattern = "rings"
+        for key, default, lo, hi in (
+                ("fan_thickness", 2.0, fan_guard.THICK_MIN, fan_guard.THICK_MAX),
+                ("fan_bar", 1.6, fan_guard.BAR_MIN, fan_guard.BAR_MAX),
+                ("fan_gap", 4.0, fan_guard.GAP_MIN, fan_guard.GAP_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
         for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
@@ -1009,6 +1027,8 @@ class Settings:
                     "peg_rows", "peg_standoff"):
             self.q.setValue(key, getattr(self, key))
         for key in ("hose_d1", "hose_d2", "hose_wall", "hose_barbs", "hose_straight"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("fan_size", "fan_pattern", "fan_thickness", "fan_bar", "fan_gap"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -1875,6 +1895,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                 tr("Add a reducer between two hoses, with barbs or plain ends "
                                    "and a collar between them: it prints upright without "
                                    "support"))
+        # ---- fan guard
+        self.a_fan_guard = A(tr("Fan Guard…"), lambda checked=False: self.fan_guard_dialog(),
+                             None, "fan", False,
+                             tr("Add a guard for a square fan of 40 to 140 mm: a plate with the "
+                                "screw holes of the fan and a grille of rings, spokes or a grid "
+                                "over the blades"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -1987,7 +2013,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
                           self.a_battery_holder, self.a_storage_bin, self.a_bin_rack,
                           self.a_cable_chain, self.a_gridfinity, self.a_pegboard,
-                          self.a_hose_adapter))
+                          self.a_hose_adapter, self.a_fan_guard))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

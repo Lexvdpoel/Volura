@@ -12,7 +12,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QFontComboBox, QFormLayout, QLabel, QLineEdit, QPlainTextEdit,
                                QSpinBox)
 
-from . import (battery_holder, bin_rack, cable_chain, cable_clip, enclosure, fonts, gears,
+from . import (battery_holder, bin_rack, cable_chain, cable_clip, enclosure, fan_guard, fonts,
+               gears,
                gridfinity, hinge, hose_adapter, knob, label_plate, pegboard, standoff, storage_bin,
                text3d, threads)
 from .i18n import tr
@@ -924,6 +925,73 @@ class PegboardDialog(QDialog):
                 "size": round(self.size.value(), 6),
                 "cols": int(self.cols.value()), "rows": int(self.rows.value()),
                 "standoff": round(self.standoff.value(), 6)}
+
+
+class FanGuardDialog(QDialog):
+    """The "Fan Guard…" dialog: a grille for a square fan of a standard size.
+
+    The fan size gives the plate and the spacing of the screw holes; the grille is rings,
+    spokes or a grid, of bars as wide as `bar` with openings of `gap`, on a plate as thick as
+    asked. Under the fields how much of the blade circle stays open. The values come from
+    Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Fan guard"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(0.2)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.fan = QComboBox()
+        for size in sorted(fan_guard.FANS):
+            self.fan.addItem(f"{size} mm", size)
+        self.fan.setCurrentIndex(max(0, self.fan.findData(int(s.fan_size))))
+        self.pattern = QComboBox()
+        for name, label in (("rings", tr("Rings")), ("spokes", tr("Spokes")),
+                            ("grid", tr("Grid"))):
+            self.pattern.addItem(label, name)
+        self.pattern.setCurrentIndex(max(0, self.pattern.findData(s.fan_pattern)))
+        self.thickness = spin(fan_guard.THICK_MIN, fan_guard.THICK_MAX, s.fan_thickness)
+        self.bar = spin(fan_guard.BAR_MIN, fan_guard.BAR_MAX, s.fan_bar)
+        self.bar.setToolTip(tr("The width of every bar of the grille"))
+        self.gap = spin(fan_guard.GAP_MIN, fan_guard.GAP_MAX, s.fan_gap)
+        self.gap.setToolTip(tr("The widest opening of rings or a grid: what keeps fingers out"))
+        self.info = QLabel()
+        lay.addRow(tr("Fan"), self.fan)
+        lay.addRow(tr("Grille"), self.pattern)
+        lay.addRow(tr("Thickness"), self.thickness)
+        lay.addRow(tr("Bar"), self.bar)
+        lay.addRow(tr("Opening"), self.gap)
+        lay.addRow("", self.info)
+        self.fan.currentIndexChanged.connect(self._changed)
+        self.pattern.currentIndexChanged.connect(self._changed)
+        for w in (self.thickness, self.bar, self.gap):
+            w.valueChanged.connect(self._changed)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._changed()
+
+    def _changed(self, *_):
+        s = fan_guard.sizes(**self.options())
+        whole = 3.141592653589793 * (0.5 * s["opening"]) ** 2
+        self.info.setText(tr("Screw holes {d:g} mm apart, {p:.0f} % open")
+                          .format(d=s["hole_spacing"], p=100.0 * s["open_area"] / whole))
+
+    def options(self) -> dict:
+        return {"fan": int(self.fan.currentData()), "pattern": str(self.pattern.currentData()),
+                "thickness": round(self.thickness.value(), 6),
+                "bar": round(self.bar.value(), 6), "gap": round(self.gap.value(), 6)}
 
 
 class HoseAdapterDialog(QDialog):

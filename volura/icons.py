@@ -293,6 +293,13 @@ SVG = {
                 f'<circle cx="6.5" cy="17" r="1" {N} {S(w=1.2)}/>'
                 f'<path d="M10.5 9 L13 9 L13 17 L20 17 L20 13" {N} stroke="#3b7dd8" '
                 f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    # fan guard: a square plate with screw holes and rings over the blades
+    "fan": f'<rect x="2.5" y="2.5" width="19" height="19" rx="3" fill="#eef2f7" {S()}/>'
+           f'<circle cx="12" cy="12" r="7.5" {N} {S()}/>'
+           f'<circle cx="12" cy="12" r="4.5" {N} stroke="#3b7dd8" stroke-width="1.4"/>'
+           f'<circle cx="12" cy="12" r="1.6" fill="#3b7dd8"/>'
+           f'<path d="M12 4.5 L12 19.5 M4.5 12 L19.5 12" {N} stroke="#3b7dd8" '
+           f'stroke-width="1.2"/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

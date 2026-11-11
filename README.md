@@ -146,6 +146,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Hose Adapter** (Draw > Parts): a reducer between two hoses of the inside diameters you enter,
   with barbs that grip each hose or plain ends for push-on tube, and a collar the hoses stop
   against. It prints upright without support and keeps its wall all the way round the water way
+- **Fan Guard** (Draw > Parts): a guard for a square fan of 40 to 140 mm, with the screw holes of
+  the fan at their standard spacing and a grille of rings, spokes or a grid; rings and a grid
+  leave no opening wider than you enter, so fingers stay out
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

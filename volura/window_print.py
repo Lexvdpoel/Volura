@@ -22,7 +22,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QLabel, QLineEdit, QPushButton, QSpinBox, QTextBrowser,
                                QVBoxLayout)
 
-from . import (background, battery_holder, bin_rack, cable_chain, cable_clip, enclosure, gears,
+from . import (background, battery_holder, bin_rack, cable_chain, cable_clip, enclosure,
+               fan_guard, gears,
                gridfinity, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard, standoff,
                storage_bin, text3d, theme, threads)
 from .app_dialogs import SimplifyDialog
@@ -31,7 +32,8 @@ from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
 from .part_dialogs import (BatteryHolderDialog, BinRackDialog, CableChainDialog,
-                           CableClipDialog, GridfinityDialog, HingeDialog, HoseAdapterDialog,
+                           CableClipDialog, FanGuardDialog, GridfinityDialog, HingeDialog,
+                           HoseAdapterDialog,
                            KnobDialog, LabelPlateDialog, PegboardDialog, ProjectBoxDialog,
                            StandoffDialog, StorageBinDialog, Text3DDialog)
 
@@ -779,6 +781,53 @@ class PrintMixin:
             self.view.set_status(tr("Pegboard part failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the pegboard part…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ fan guard
+    def fan_guard_dialog(self):
+        """Draw > Parts > Fan Guard…: a grille for a square fan."""
+        dlg = FanGuardDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.fan_size = options["fan"]
+        for key in ("pattern", "thickness", "bar", "gap"):
+            setattr(self.settings, "fan_" + key, options[key])
+        self.settings.save()
+        made = self.make_fan_guard_model(options)
+        self.setFocus()
+        return made
+
+    def make_fan_guard_model(self, options):
+        """The guard lying flat as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("fan", "pattern", "thickness", "bar", "gap")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the fan guard…"))
+            m = fan_guard.fan_guard(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the guard away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Fan guard"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Fan guard added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Fan guard failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the fan guard…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter
