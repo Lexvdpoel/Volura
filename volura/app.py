@@ -792,7 +792,9 @@ class Settings:
                 ("peg_width", pegboard.WIDTH_DEFAULT, pegboard.WIDTH_MIN, pegboard.WIDTH_MAX),
                 ("peg_reach", pegboard.REACH_DEFAULT, pegboard.REACH_MIN, pegboard.REACH_MAX),
                 ("peg_board", pegboard.BOARD, pegboard.BOARD_MIN, pegboard.BOARD_MAX),
-                ("peg_size", pegboard.SIZE_DEFAULT, pegboard.SIZE_MIN, pegboard.SIZE_MAX)):
+                ("peg_size", pegboard.SIZE_DEFAULT, pegboard.SIZE_MIN, pegboard.SIZE_MAX),
+                ("peg_standoff", pegboard.STANDOFF_DEFAULT, pegboard.STANDOFF_MIN,
+                 pegboard.STANDOFF_MAX)):
             try:
                 value = float(self.q.value(key, default))
             except (TypeError, ValueError):
@@ -813,6 +815,14 @@ class Settings:
             barbs = 3
         self.hose_barbs = max(hose_adapter.BARBS_MIN, min(hose_adapter.BARBS_MAX, barbs))
         self.hose_straight = self._bool("hose_straight", False)
+        for key, default, lo, hi in (
+                ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
+                ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
+            try:
+                value = int(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
         self.grid_magnets = self._bool("grid_magnets", False)
         self.grid_scoop = self._bool("grid_scoop", False)
         self.grid_label = self._bool("grid_label", False)
@@ -995,7 +1005,8 @@ class Settings:
         self.q.setValue("chain_wall", self.chain_wall)
         self.q.setValue("chain_links", self.chain_links)
         self.q.setValue("chain_bend", self.chain_bend)
-        for key in ("peg_kind", "peg_width", "peg_reach", "peg_board", "peg_size"):
+        for key in ("peg_kind", "peg_width", "peg_reach", "peg_board", "peg_size", "peg_cols",
+                    "peg_rows", "peg_standoff"):
             self.q.setValue(key, getattr(self, key))
         for key in ("hose_d1", "hose_d2", "hose_wall", "hose_barbs", "hose_straight"):
             self.q.setValue(key, getattr(self, key))
@@ -1852,10 +1863,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                  "storage grid of 42 mm, whose bins stand on any Gridfinity "
                                  "baseplate and on each other"))
         # ---- pegboard
-        self.a_pegboard = A(tr("Pegboard Hook…"), lambda checked=False: self.pegboard_dialog(),
+        self.a_pegboard = A(tr("Pegboard…"), lambda checked=False: self.pegboard_dialog(),
                             None, "pegboard", False,
-                            tr("Add a hook, a shelf or a tool holder for a pegboard of 1/4 inch "
-                               "holes at 1 inch: it hangs on two pegs and prints on its side"))
+                            tr("Add a pegboard of 1/4 inch holes at 1 inch, or a hook, a shelf or "
+                               "a tool holder that hangs on it on two pegs and prints on its "
+                               "side"))
         # ---- hose adapter
         self.a_hose_adapter = A(tr("Hose Adapter…"),
                                 lambda checked=False: self.hose_adapter_dialog(), None, "hose",

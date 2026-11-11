@@ -139,9 +139,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   other. A bin can have a finger scoop, the rounding between the floor and the inside of the front
   wall so you slide small parts out with a finger, and a label shelf under the top of the inside of
   the back wall, at 45 degrees, in which a printed label stands
-- **Pegboard Hook** (Draw > Parts): a hook, a shelf with a brace or a holder for a tool, for a
-  pegboard of 1/4 inch holes at 1 inch. It hangs on an upper peg that hooks behind the board and
-  rests on a lower one, and it prints lying on its side without support
+- **Pegboard** (Draw > Parts): a pegboard of 1/4 inch holes at 1 inch with a rim and screw bosses
+  that hold it off the wall, and hooks, shelves with a brace and upright tool holders for it. A part
+  hangs on a straight upper peg that rises through the board, so its own weight keeps it on, and
+  rests on a lower one; everything prints without support
 - **Hose Adapter** (Draw > Parts): a reducer between two hoses of the inside diameters you enter,
   with barbs that grip each hose or plain ends for push-on tube, and a collar the hoses stop
   against. It prints upright without support and keeps its wall all the way round the water way

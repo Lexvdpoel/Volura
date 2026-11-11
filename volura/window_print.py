@@ -734,13 +734,13 @@ class PrintMixin:
 
     # ------------------------------------------------------------ pegboard
     def pegboard_dialog(self):
-        """Draw > Parts > Pegboard Hook…: a hook, a shelf or a tool holder for a pegboard."""
+        """Draw > Parts > Pegboard…: the board, or a hook, a shelf or a tool holder for it."""
         dlg = PegboardDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
             return None
         options = dlg.options()
-        for key in ("kind", "width", "reach", "board", "size"):
+        for key in ("kind", "width", "reach", "board", "size", "cols", "rows", "standoff"):
             setattr(self.settings, "peg_" + key, options[key])
         self.settings.save()
         made = self.make_pegboard_model(options)
@@ -748,10 +748,13 @@ class PrintMixin:
         return made
 
     def make_pegboard_model(self, options):
-        """The part as printed, lying on its side: one undo step, next to the model."""
+        """The part as printed - on its side, or a board face down: one undo step, next to the
+        model."""
         self.set_mode("3d")
         doc = self.doc
-        size = {k: options[k] for k in ("kind", "width", "reach", "board", "size")}
+        size = {k: options[k] for k in ("kind", "width", "reach", "board", "size", "cols", "rows",
+                                        "standoff") if k in options}
+        name = tr("Pegboard") if options["kind"] == "board" else tr("Pegboard hook")
         bb = doc.model_bbox()
         bx, by, _bz = self.settings.bed_size
 
@@ -767,7 +770,7 @@ class PrintMixin:
 
         def done(m):
             doc.checkpoint()                # one undo takes the part away again
-            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Pegboard hook"))
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, name)
             doc.set_selection([("g", g.id, g.id)])
             doc.notify()
             self.view.set_status(tr("Pegboard part added."))

@@ -841,17 +841,19 @@ class StorageBinDialog(QDialog):
 
 
 class PegboardDialog(QDialog):
-    """The "Pegboard Hook…" dialog: a hook, a shelf or a tool holder for a pegboard.
+    """The "Pegboard…" dialog: the board itself, or a hook, a shelf or a tool holder for it.
 
-    The kind says which part, the width how thick it prints, the reach how far it stands out of
-    the board and the board how thick the pegboard is; a holder also takes the size of the tool
-    it holds, greyed out for the other kinds. The values come from Settings and are remembered.
+    The kind says which part. For a part that hangs, the width is how thick it prints, the reach
+    how far it stands out of the board and the board how thick the pegboard is; a holder also
+    takes the size of the tool it holds. The board itself takes its holes across and down, its
+    thickness and how far it stands off the wall. What a kind does not use is greyed out. The
+    values come from Settings and are remembered.
     """
 
     def __init__(self, win):
         super().__init__(win)
         s = win.settings
-        self.setWindowTitle(tr("Pegboard hook"))
+        self.setWindowTitle(tr("Pegboard"))
         lay = QFormLayout(self)
 
         def spin(lo, hi, value, step):
@@ -865,7 +867,7 @@ class PegboardDialog(QDialog):
 
         self.kind = QComboBox()
         for kind, label in (("hook", tr("Hook")), ("shelf", tr("Shelf")),
-                            ("holder", tr("Tool holder"))):
+                            ("holder", tr("Tool holder")), ("board", tr("Board"))):
             self.kind.addItem(label, kind)
         self.kind.setCurrentIndex(max(0, self.kind.findData(s.peg_kind)))
         self.width = spin(pegboard.WIDTH_MIN, pegboard.WIDTH_MAX, s.peg_width, 1.0)
@@ -873,14 +875,32 @@ class PegboardDialog(QDialog):
         self.reach = spin(pegboard.REACH_MIN, pegboard.REACH_MAX, s.peg_reach, 5.0)
         self.reach.setToolTip(tr("How far the part stands out of the board"))
         self.board = spin(pegboard.BOARD_MIN, pegboard.BOARD_MAX, s.peg_board, 0.5)
-        self.board.setToolTip(tr("The thickness of the pegboard, so the upper peg hooks behind it"))
+        self.board.setToolTip(tr("The thickness of the pegboard, so the upper peg rises through it as "
+                                 "steeply as the hole allows"))
         self.size = spin(pegboard.SIZE_MIN, pegboard.SIZE_MAX, s.peg_size, 1.0)
         self.size.setToolTip(tr("The tool the holder takes, across"))
+
+        def count(lo, hi, value):
+            sp = QSpinBox()
+            sp.setRange(lo, hi)
+            sp.setValue(int(value))
+            return sp
+
+        self.cols = count(pegboard.COLS_MIN, pegboard.COLS_MAX, s.peg_cols)
+        self.cols.setToolTip(tr("Holes across the board, one inch apart"))
+        self.rows = count(pegboard.ROWS_MIN, pegboard.ROWS_MAX, s.peg_rows)
+        self.rows.setToolTip(tr("Holes down the board, one inch apart"))
+        self.standoff = spin(pegboard.STANDOFF_MIN, pegboard.STANDOFF_MAX, s.peg_standoff, 1.0)
+        self.standoff.setToolTip(tr("How far the board stands off the wall, room for the pegs "
+                                    "behind it"))
         lay.addRow(tr("Part"), self.kind)
         lay.addRow(tr("Width"), self.width)
         lay.addRow(tr("Reach"), self.reach)
         lay.addRow(tr("Board"), self.board)
         lay.addRow(tr("Tool size"), self.size)
+        lay.addRow(tr("Columns"), self.cols)
+        lay.addRow(tr("Rows"), self.rows)
+        lay.addRow(tr("Off the wall"), self.standoff)
         self.kind.currentIndexChanged.connect(self._kind_changed)
         self._kind_changed()
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -889,14 +909,21 @@ class PegboardDialog(QDialog):
         lay.addRow(bb)
 
     def _kind_changed(self, *_):
-        self.size.setEnabled(self.kind.currentData() == "holder")
+        kind = self.kind.currentData()
+        for w in (self.width, self.reach):
+            w.setEnabled(kind != "board")
+        self.size.setEnabled(kind == "holder")
+        for w in (self.cols, self.rows, self.standoff):
+            w.setEnabled(kind == "board")
 
     def options(self) -> dict:
         return {"kind": str(self.kind.currentData()),
                 "width": round(self.width.value(), 6),
                 "reach": round(self.reach.value(), 6),
                 "board": round(self.board.value(), 6),
-                "size": round(self.size.value(), 6)}
+                "size": round(self.size.value(), 6),
+                "cols": int(self.cols.value()), "rows": int(self.rows.value()),
+                "standoff": round(self.standoff.value(), 6)}
 
 
 class HoseAdapterDialog(QDialog):
