@@ -230,7 +230,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Model and worksheet together**: right-click a face or sheet > *Laser / Mill* puts it on a layer of
   the worksheet; *Parts to 3D Model* places everything that is cut as a sheet with the sheet thickness
   in 3D. Every outline stays linked to its part: a linked face keeps its face when you turn the part
-  over, and a pocket, a blind hole, a notch or a corner you cut into that face comes to the worksheet
+  over, and a pocket, a blind hole, a notch or a corner you cut into that face comes to the worksheet.
+  The holes go back too: a hole or a vent pattern drawn in a linked face is cut through that wall,
+  and a hole deleted on the worksheet closes again in the model
 
 ## Installation
 

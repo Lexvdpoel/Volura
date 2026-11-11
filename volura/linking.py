@@ -42,6 +42,11 @@ JSON_DECIMALS = 6      # lossless to 1e-6 mm, the same convention as the workshe
 CLOSE_TOL = 1e-4       # mm: a closing point this close to the start point is a duplicate
 CLEAN_TOL = 1e-6       # mm: points closer together than this add nothing to the shape
 AXIS_TOL = 1e-9        # 1 - cos between two face normals: still the same direction
+FACE_TOL = 1e-2        # mm: a piece of wall this close to the plane of the face touches it
+HOLE_OUT = 1.0         # mm: a hole is cut starting this far outside the face
+HOLE_PAST = 0.5        # mm: and ending this far below the bottom of the wall it meets
+HOLE_RING = 1.5        # mm: the ring around a hole that measures the wall next to it
+HOLE_FUSE = 0.01       # mm: a hole that is closed is filled this much wider, so it fuses
 MAX_AXES = 8           # face directions that are tried as the axis of a plate
 TIE_TOL = 1e-6         # relative: two thicknesses this close are the same plate
 SLICE_EPS = 1e-3       # fraction of the thickness: how far inside a plate a check slice is
@@ -577,6 +582,118 @@ def face_region(manifold, frame, tol=1e-4, ref=None):
     if not loops:
         return None
     return _region_of(loops, ref)
+
+
+# --------------------------------------------------------------------------
+#  the holes of a linked face
+# --------------------------------------------------------------------------
+
+def _grown(loop, delta):
+    """The loop `loop` grown by `delta` mm, as its outer loop; None when nothing is left."""
+    cs = mf.CrossSection([_loop(loop)], mf.FillRule.NonZero).offset(   # either way round
+        float(delta), mf.JoinType.Round, 2.0)
+    if cs.is_empty():
+        return None
+    q = [_clean(p) for p in cs.to_polygons()]
+    return max(q, key=lambda p: abs(polygon_area(p))) if q else None
+
+
+def find_hole(hole, holes, tol=0.5) -> int:
+    """The index in `holes` of the hole at the same place as `hole`, or -1.
+
+    `find_loop` asks whether two loops are the same shape wherever they lie, which is right
+    for an outline that moved; the holes of one face are compared where they are, because the
+    equal holes of a grille are all the same shape. A hole matches when its middle is within
+    `tol` mm and its area within ten per cent.
+    """
+    a = _loop(hole)
+    area = abs(polygon_area(a))
+    mid = a.mean(axis=0)
+    best, best_d = -1, float(tol)
+    for i, b in enumerate(holes):
+        q = _loop(b)
+        if not len(q):
+            continue
+        d = float(np.hypot(*(q.mean(axis=0) - mid)))
+        other = abs(polygon_area(q))
+        if d <= best_d and abs(other - area) <= 0.1 * max(area, other):
+            best, best_d = i, d
+    return best
+
+
+def ring(hole, width) -> list:
+    """The band of `width` mm around `hole`: the hole grown by `width`, the hole itself its hole."""
+    outer = _grown(hole, width)
+    return [] if outer is None else [outer, _loop(hole)]
+
+
+def wall_depth(manifold, frame, loops, tol=FACE_TOL):
+    """How deep the material of `manifold` reaches under the plane of `frame` at `loops`.
+
+    The loops are filled and extruded from just above the plane to the far side of the
+    solid, and the piece of the solid in that prism that touches the plane is the wall
+    under them: its bottom is the depth, in millimetres below the plane. None when
+    nothing of the solid touches the plane there, which is a hole in the air.
+
+    The prism is as long as the bounding box of the solid along the normal, so it reaches
+    through every wall the loops come over; only the piece that starts at the face counts,
+    which is what keeps a hole in the front wall of a hollow box out of the back wall.
+    """
+    if manifold is None or manifold.is_empty() or not loops:
+        return None
+    o, u, v, n = frame
+    lo, hi = np.asarray(manifold.bounding_box(), dtype=float).reshape(2, 3)
+    reach = float(np.abs(hi - lo) @ np.abs(n))
+    prism = plate_solid(loops, (o - reach * n, u, v, n), reach + HOLE_OUT)
+    if prism.is_empty():
+        return None
+    best = None
+    for piece in mf.Manifold.batch_boolean([manifold, prism], mf.OpType.Intersect).decompose():
+        if piece.volume() <= 1e-9:
+            continue
+        z = (np.asarray(piece.to_mesh().vert_properties, dtype=float)[:, :3] - o) @ n
+        top, bottom = float(z.max()), float(z.min())
+        if top < -tol:
+            continue                        # this piece does not reach the face
+        if best is None or top > best[0]:
+            best = (top, bottom)
+    if best is None or best[1] >= 0.0:
+        return None
+    return -best[1]
+
+
+def cut_face_hole(manifold, frame, hole):
+    """`manifold` with `hole` cut through the wall under the plane of `frame`.
+
+    The cut starts `HOLE_OUT` mm outside the face and ends `HOLE_PAST` mm below the bottom
+    of the wall it meets there, so it goes through that wall and stops in the empty space
+    behind it instead of also cutting the wall on the far side. A hole that touches no
+    material at the face is left where it is.
+    """
+    depth = wall_depth(manifold, frame, [hole])
+    if depth is None:
+        return manifold
+    o, u, v, n = frame
+    return manifold - plate_solid([hole], (o - (depth + HOLE_PAST) * n, u, v, n),
+                                  HOLE_OUT + depth + HOLE_PAST)
+
+
+def fill_face_hole(manifold, frame, hole):
+    """`manifold` with `hole` closed by plastic as deep as the wall around it.
+
+    The depth is measured in a ring around the hole, since the hole itself is empty there,
+    and the fill is the hole grown by a little so it fuses with that wall. What is already
+    solid is filled with nothing, so a hole that went right through a plate closes through
+    the plate and a pocket that only went in 3 mm closes those 3 mm.
+    """
+    depth = wall_depth(manifold, frame, ring(hole, HOLE_RING))
+    if depth is None or depth <= 0.0:
+        return manifold
+    grown = _grown(hole, HOLE_FUSE)
+    if grown is None:
+        return manifold
+    o, u, v, n = frame
+    return manifold + plate_solid([grown], (o - depth * n, u, v, n), depth)
 
 
 def _loops_json(loops) -> list:
