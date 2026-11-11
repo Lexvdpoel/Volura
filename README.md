@@ -152,6 +152,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Desk Grommet** (Draw > Parts): a cable pass-through for a hole of 20 to 120 mm in a desk top:
   a flange that lies on the desk, a sleeve with crush ribs that stays in the hole and a lid with a
   slot that drops into the flange and prints next to it. It prints flange down without support
+- **Corner Bracket** (Draw > Parts): an L-shaped angle bracket with legs of 15 to 150 mm and up to
+  three screw holes in each of them, driven in from the inside of the L so a flat head sinks into
+  the inner face, a rounded inner corner and a gusset rib over 40 % of the shorter leg at both
+  ends of the width; it prints on its side, so the layer lines run round the bend and nothing
+  needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

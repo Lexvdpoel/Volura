@@ -307,6 +307,12 @@ SVG = {
                f'<ellipse cx="12" cy="8.5" rx="4.6" ry="1.7" fill="#fff" {S(w=1.2)}/>'
                f'<path d="M12 6.8 L12 3.4 Q12 2 14.2 2 L17.5 2" {N} stroke="#3b7dd8" '
                f'stroke-width="2" stroke-linecap="round"/>',
+    # corner bracket: an L with a hole in each leg and a rib against the inner corner
+    "bracket": f'<path d="M4 2.5 L4 21.5 L21.5 21.5 L21.5 16 L8.5 16 L8.5 2.5 Z" '
+               f'fill="#eef2f7" {S()}/>'
+               f'<path d="M8.5 16 L14 16 L8.5 10.5 Z" fill="#cfe0f5" {S(w=1.2)}/>'
+               f'<circle cx="6.2" cy="6" r="1.7" fill="#fff" {S(w=1.2)}/>'
+               f'<circle cx="17.5" cy="18.7" r="1.7" fill="#fff" {S(w=1.2)}/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

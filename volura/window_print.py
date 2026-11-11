@@ -22,8 +22,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QLabel, QLineEdit, QPushButton, QSpinBox, QTextBrowser,
                                QVBoxLayout)
 
-from . import (background, battery_holder, bin_rack, cable_chain, cable_clip, enclosure,
-               fan_guard, gears,
+from . import (background, battery_holder, bin_rack, bracket, cable_chain, cable_clip,
+               enclosure, fan_guard, gears,
                gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard,
                standoff, storage_bin, text3d, theme, threads)
 from .app_dialogs import SimplifyDialog
@@ -31,7 +31,7 @@ from .brep import Entities
 from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
-from .part_dialogs import (BatteryHolderDialog, BinRackDialog, CableChainDialog,
+from .part_dialogs import (BatteryHolderDialog, BinRackDialog, BracketDialog, CableChainDialog,
                            CableClipDialog, FanGuardDialog, GridfinityDialog, GrommetDialog,
                            HingeDialog, HoseAdapterDialog,
                            KnobDialog, LabelPlateDialog, PegboardDialog, ProjectBoxDialog,
@@ -875,6 +875,54 @@ class PrintMixin:
             self.view.set_status(tr("Desk grommet failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the desk grommet…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ corner bracket
+    def bracket_dialog(self):
+        """Draw > Parts > Corner Bracket…: an L-shaped angle bracket with screw holes."""
+        dlg = BracketDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("leg_a", "leg_b", "width", "thickness", "holes", "screw", "countersink",
+                    "gussets", "fillet"):
+            setattr(self.settings, "bracket_" + key, options[key])
+        self.settings.save()
+        made = self.make_bracket_model(options)
+        self.setFocus()
+        return made
+
+    def make_bracket_model(self, options):
+        """The bracket on the bed as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("leg_a", "leg_b", "width", "thickness", "holes", "screw",
+                                        "countersink", "gussets", "fillet")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the corner bracket…"))
+            m = bracket.bracket(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the bracket away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Corner bracket"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Corner bracket added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Corner bracket failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the corner bracket…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter

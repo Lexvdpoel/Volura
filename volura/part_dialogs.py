@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QFontComboBox, QFormLayout, QLabel, QLineEdit, QPlainTextEdit,
                                QSpinBox)
 
-from . import (battery_holder, bin_rack, cable_chain, cable_clip, enclosure, fan_guard, fonts,
-               gears,
+from . import (battery_holder, bin_rack, bracket, cable_chain, cable_clip, enclosure, fan_guard,
+               fonts, gears,
                gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, standoff,
                storage_bin, text3d, threads)
 from .i18n import tr
@@ -1063,6 +1063,97 @@ class GrommetDialog(QDialog):
         return {"hole": round(self.hole.value(), 6), "desk": round(self.desk.value(), 6),
                 "flange": round(self.flange.value(), 6), "wall": round(self.wall.value(), 6),
                 "slot": round(self.slot.value(), 6), "lid": self.lid.isChecked()}
+
+
+class BracketDialog(QDialog):
+    """The "Corner Bracket…" dialog: an L-shaped angle bracket with screw holes in both legs.
+
+    The two legs and the width say how big the bracket is and the thickness how thick each leg
+    is; the holes in each leg, the screw and whether its head sinks say how it is fastened, and
+    the inner radius and the gussets how much stronger the bend is made. Under the fields the
+    hole it drills and the number of holes each leg really gets, because a short leg takes fewer.
+    The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Corner bracket"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(0.5)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.leg_a = spin(bracket.LEG_MIN, bracket.LEG_MAX, s.bracket_leg_a)
+        self.leg_a.setSingleStep(5.0)
+        self.leg_a.setToolTip(tr("How long the first leg is, measured on the outside"))
+        self.leg_b = spin(bracket.LEG_MIN, bracket.LEG_MAX, s.bracket_leg_b)
+        self.leg_b.setSingleStep(5.0)
+        self.leg_b.setToolTip(tr("How long the other leg is, measured on the outside"))
+        self.width = spin(bracket.WIDTH_MIN, bracket.WIDTH_MAX, s.bracket_width)
+        self.width.setSingleStep(5.0)
+        self.width.setToolTip(tr("How wide the bracket is, which is how high it stands on the bed"))
+        self.thickness = spin(bracket.THICK_MIN, bracket.THICK_MAX, s.bracket_thickness)
+        self.thickness.setToolTip(tr("How thick each of the two legs is"))
+        self.holes = QSpinBox()
+        self.holes.setRange(bracket.HOLES_MIN, bracket.HOLES_MAX)
+        self.holes.setValue(int(s.bracket_holes))
+        self.holes.setToolTip(tr("How many screw holes there are in each leg"))
+        self.screw = QComboBox()
+        for size in bracket.SCREWS:
+            self.screw.addItem(size, size)
+        self.screw.setCurrentIndex(max(0, self.screw.findData(s.bracket_screw)))
+        self.screw.setToolTip(tr("The screw that goes through the holes"))
+        self.countersink = QCheckBox(tr("The head sinks into the inside of the leg"))
+        self.countersink.setChecked(bool(s.bracket_countersink))
+        self.gussets = QCheckBox(tr("Gussets"))
+        self.gussets.setToolTip(tr("A rib in the inner corner at both ends of the width"))
+        self.gussets.setChecked(bool(s.bracket_gussets))
+        self.fillet = spin(0.0, bracket.FILLET_MAX * bracket.THICK_MAX, s.bracket_fillet)
+        self.fillet.setToolTip(tr("The radius of the inner corner, which is what makes it strong"))
+        self.info = QLabel()
+        lay.addRow(tr("Leg A"), self.leg_a)
+        lay.addRow(tr("Leg B"), self.leg_b)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Thickness"), self.thickness)
+        lay.addRow(tr("Holes"), self.holes)
+        lay.addRow(tr("Screw"), self.screw)
+        lay.addRow("", self.countersink)
+        lay.addRow("", self.gussets)
+        lay.addRow(tr("Inner radius"), self.fillet)
+        lay.addRow("", self.info)
+        for w in (self.leg_a, self.leg_b, self.width, self.thickness, self.fillet):
+            w.valueChanged.connect(self._changed)
+        self.holes.valueChanged.connect(self._changed)
+        self.screw.currentIndexChanged.connect(self._changed)
+        self.countersink.toggled.connect(self._changed)
+        self.gussets.toggled.connect(self._changed)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._changed()
+
+    def _changed(self, *_):
+        s = bracket.sizes(**self.options())
+        self.info.setText(tr("Hole {d:g} mm, {a} in leg A, {b} in leg B, gusset {g:g} mm")
+                          .format(d=s["hole_d"], a=len(s["holes_a"]), b=len(s["holes_b"]),
+                                  g=s["gusset"]))
+
+    def options(self) -> dict:
+        return {"leg_a": round(self.leg_a.value(), 6), "leg_b": round(self.leg_b.value(), 6),
+                "width": round(self.width.value(), 6),
+                "thickness": round(self.thickness.value(), 6),
+                "holes": int(self.holes.value()), "screw": str(self.screw.currentData()),
+                "countersink": self.countersink.isChecked(),
+                "gussets": self.gussets.isChecked(),
+                "fillet": round(self.fillet.value(), 6)}
 
 
 class HoseAdapterDialog(QDialog):

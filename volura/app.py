@@ -25,9 +25,10 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout)
 
-from . import (__version__, background, battery_holder, bin_rack, boxgen, cable_chain, cable_clip,
-               cam, dxf, enclosure, errors, fan_guard, fileio, gcode, gears, gridfinity, grommet,
-               hinge, hose_adapter, i18n, joints, keyschemes, knob, label_plate, linking,
+from . import (__version__, background, battery_holder, bin_rack, boxgen, bracket, cable_chain,
+               cable_clip, cam, dxf, enclosure, errors, fan_guard, fileio, gcode, gears,
+               gridfinity, grommet, hinge, hose_adapter, i18n, joints, keyschemes, knob,
+               label_plate, linking,
                nesting, ops, pegboard, sheet3d, sheettools,
                svg,
                spacemouse, standoff, storage_bin, text3d, theme, threads, vector_export,
@@ -856,6 +857,27 @@ class Settings:
             setattr(self, key, max(lo, min(hi, value)))
         self.grommet_lid = self._bool("grommet_lid", True)
         for key, default, lo, hi in (
+                ("bracket_leg_a", 40.0, bracket.LEG_MIN, bracket.LEG_MAX),
+                ("bracket_leg_b", 40.0, bracket.LEG_MIN, bracket.LEG_MAX),
+                ("bracket_width", 20.0, bracket.WIDTH_MIN, bracket.WIDTH_MAX),
+                ("bracket_thickness", 4.0, bracket.THICK_MIN, bracket.THICK_MAX),
+                ("bracket_fillet", 4.0, 0.0, bracket.FILLET_MAX * bracket.THICK_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        try:
+            holes = int(self.q.value("bracket_holes", 2))
+        except (TypeError, ValueError):
+            holes = 2
+        self.bracket_holes = max(bracket.HOLES_MIN, min(bracket.HOLES_MAX, holes))
+        self.bracket_screw = str(self.q.value("bracket_screw", "M4"))
+        if self.bracket_screw not in bracket.SCREWS:
+            self.bracket_screw = "M4"
+        self.bracket_countersink = self._bool("bracket_countersink", True)
+        self.bracket_gussets = self._bool("bracket_gussets", True)
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1055,6 +1077,10 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("grommet_hole", "grommet_desk", "grommet_flange", "grommet_wall",
                     "grommet_slot", "grommet_lid"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("bracket_leg_a", "bracket_leg_b", "bracket_width", "bracket_thickness",
+                    "bracket_fillet", "bracket_holes", "bracket_screw", "bracket_countersink",
+                    "bracket_gussets"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -1940,6 +1966,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                            tr("Add a cable pass-through for a hole in a desk top: a flange that "
                               "lies on the desk, a ribbed sleeve in the hole and a lid with a "
                               "slot for the cables"))
+        # ---- corner bracket
+        self.a_bracket = A(tr("Corner Bracket…"), lambda checked=False: self.bracket_dialog(),
+                           None, "bracket", False,
+                           tr("Add an L-shaped angle bracket with screw holes in both legs: it "
+                              "prints on its side, so the layer lines run round the bend, and "
+                              "gussets and a rounded inner corner make that bend strong"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2056,7 +2088,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
                           self.a_battery_holder, self.a_storage_bin, self.a_bin_rack,
                           self.a_cable_chain, self.a_gridfinity, self.a_pegboard,
-                          self.a_hose_adapter, self.a_fan_guard, self.a_grommet))
+                          self.a_hose_adapter, self.a_fan_guard, self.a_grommet, self.a_bracket))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
