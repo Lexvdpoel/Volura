@@ -180,6 +180,12 @@ The interface is available in English and Dutch (*Window > Preferences > General
   weight, filament length and cost of all the closed parts together
 - **Preferences** (Window) with circle segments and a Shortcuts page like in SketchUp: search,
   commands per menu, add or remove a shortcut and reset everything
+- **Keyboard and mouse scheme** (*Window > Preferences > General*): **SketchUp** (what Volura does
+  now) or **Fusion**, for people who know Autodesk Fusion. There Push/Pull answers to E and Q,
+  Offset to O, Fillet to F and the Tape Measure to I, Zoom Extents also to F6, Orbit, Pan, Zoom,
+  Rotate and Scale have no letter, and the middle mouse button pans (with Shift it orbits). The
+  shortcuts you changed yourself stay as they are and Reset All goes back to the keys of the
+  scheme you chose
 - A welcome screen at startup (Help > Welcome to Volura), which can be turned off
 - Export:
   - **STL**: all (or the selected) parts merged into one watertight object
@@ -370,6 +376,11 @@ too.
 | Alt+X | X-ray | | |
 
 Middle mouse button = orbit, Shift + middle mouse button = pan, scroll wheel = zoom towards the cursor.
+
+The table is the **SketchUp** scheme. Under *Window > Preferences > General > Keyboard and mouse*
+there is also the **Fusion** scheme, for people who know Autodesk Fusion: Push/Pull on E and Q,
+Offset on O, Fillet on F, Tape Measure on I and Zoom Extents also on F6, no letter for Orbit, Pan,
+Zoom, Rotate and Scale, and the middle mouse button pans (Shift + middle = orbit).
 
 ## Multicolor print in 4 steps
 

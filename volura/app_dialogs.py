@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QSpinBox, QStackedWidget, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
 
-from . import background, i18n, ops, theme
+from . import background, i18n, keyschemes, ops, theme
 from .i18n import tr, tr_noop
 from .panels import note
 from .tools import format_length, set_length_precision
@@ -436,6 +436,15 @@ class PreferencesDialog(PageDialog):
                                     "does not have it)."))
         form.addRow(tr("Language"), self.language)
         form.addRow(note(tr("Takes effect after restarting Volura.")))
+        self.scheme = QComboBox()
+        self.scheme.addItem(tr("SketchUp (default)"), keyschemes.SKETCHUP)
+        self.scheme.addItem(tr("Fusion"), keyschemes.FUSION_SCHEME)
+        self.scheme.setCurrentIndex(max(0, self.scheme.findData(self.win.settings.key_scheme)))
+        self.scheme.setToolTip(tr("The keys of the commands and what the middle mouse button "
+                                  "does in the 3D view."))
+        form.addRow(tr("Keyboard and mouse:"), self.scheme)
+        form.addRow(note(tr("Fusion has the keys and the middle mouse button of Autodesk "
+                            "Fusion; the shortcuts you changed yourself stay as they are.")))
         self.add_page(page)
 
     def _build_looks(self):
@@ -526,6 +535,8 @@ class PreferencesDialog(PageDialog):
         s.spacemouse = self.sm_on.isChecked()
         theme_changed = s.theme != self.theme.currentData()
         s.theme = self.theme.currentData()
+        scheme = keyschemes.scheme_of(str(self.scheme.currentData() or keyschemes.SKETCHUP))
+        scheme_changed = s.key_scheme != scheme
         # the language is read once at startup (i18n.saved_choice), so it applies after a restart
         s.q.setValue(i18n.SETTINGS_KEY, str(self.language.currentData() or i18n.SYSTEM))
         s.save()
@@ -534,6 +545,8 @@ class PreferencesDialog(PageDialog):
             self.win.apply_theme()
         if sm_changed:
             self.win.start_spacemouse()
+        if scheme_changed:
+            self.win.set_key_scheme(scheme)
         self.win.view.tools["circle"].segments = s.circle_segments
         self.win.view.update()
         self.win.view.update_overhang_status()
@@ -643,7 +656,7 @@ class ShortcutsPanel(QWidget):
         return True
 
     def restore_all(self, checked=False):
-        """Reset All: back to the shortcuts Volura ships with."""
+        """Reset All: back to the defaults of the scheme that is on."""
         self.win.restore_shortcuts()
         self.reload()
 

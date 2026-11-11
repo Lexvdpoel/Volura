@@ -17,10 +17,10 @@ import os
 
 import numpy as np
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QKeySequence
+from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QMenu
 
-from . import background, i18n, ops, theme
+from . import background, i18n, keyschemes, ops, theme
 from .i18n import tr, tr_noop, trn
 from .model import LOCKED_MSG, ROOT
 from .panels import swatch
@@ -112,6 +112,7 @@ MOVED_COMMANDS = {
 # of the settings keys (shown translated)
 OTHER_COMMANDS = tr_noop("Other")
 SOURCE_TEXT = "source_text"   # QAction property: the English text, when tr() can't tell
+TIP_BASE = "tip_base"         # QAction property: the help text of a tool, without its key
 
 
 # The Entity Info panel of the Default Tray; the Tray knows it by its translated title.
@@ -239,13 +240,27 @@ class UiMixin:
         return [str(v) for v in value if str(v).strip()]
 
     def load_shortcuts(self):
-        """Remember the defaults, then put the shortcuts from QSettings on the actions."""
+        """Remember the defaults of the chosen scheme, then put the stored shortcuts on
+        the actions.
+
+        The shortcuts the actions were built with are the SketchUp defaults; every
+        scheme makes its own list of them (`keyschemes`), and what the user changed in
+        Preferences > Shortcuts goes over that list."""
         paths = self.command_paths()
-        self._default_shortcuts = {p: self.sequence_texts(a) for p, a in paths.items()}
-        taken = {}
-        for a in paths.values():
-            for text in self.sequence_texts(a):
-                taken.setdefault(text, a)
+        self._base_shortcuts = {p: self.sequence_texts(a) for p, a in paths.items()}
+        self._default_shortcuts = keyschemes.scheme_defaults(self.settings.key_scheme,
+                                                             self._base_shortcuts)
+        self._apply_scheme_shortcuts()
+
+    def _apply_scheme_shortcuts(self):
+        """The defaults of the scheme that is on, with what the user stored over them."""
+        paths = self.command_paths()
+        for path, a in paths.items():
+            a.setShortcuts([QKeySequence(t) for t in self._default_shortcuts.get(path, [])])
+        self._apply_stored_shortcuts(paths)
+
+    def _stored_shortcuts(self, paths):
+        """{command path: [key texts]} of the shortcuts the user changed themselves."""
         stored = {}
         q = qsettings()
         keys = [k for k in q.allKeys() if k.startswith(SHORTCUTS_KEY)]
@@ -264,18 +279,47 @@ class UiMixin:
             if new not in stored:
                 stored[new] = value
                 q.setValue(SHORTCUTS_KEY + new, value)
-        for path in stored:                   # first let go of what those commands use now
-            a = paths[path]
-            for text in self.sequence_texts(a):
-                if taken.get(text) is a:
-                    del taken[text]
-            a.setShortcuts([])
+        return stored
+
+    def _apply_stored_shortcuts(self, paths):
+        """The shortcuts of the user, over the defaults that are on the actions now.
+
+        A stored key goes to the command it is stored for: a command that only has it
+        through its defaults gives it up, so a key of the user is never lost."""
+        stored = self._stored_shortcuts(paths)
+        wanted = {t for texts in stored.values() for t in texts}
+        taken = {}
+        for path, a in paths.items():
+            if path in stored:            # this one gets the list of the user below
+                a.setShortcuts([])
+                continue
+            texts = [t for t in self.sequence_texts(a) if t not in wanted]
+            a.setShortcuts([QKeySequence(t) for t in texts])
+            for t in texts:
+                taken.setdefault(t, a)
         for path, texts in stored.items():    # then hand out the stored ones
             a = paths[path]
             keep = [t for t in texts if taken.get(t) in (None, a)]
             for t in keep:
                 taken[t] = a
             a.setShortcuts([QKeySequence(t) for t in keep])
+
+    def set_key_scheme(self, scheme):
+        """Preferences > General > Keyboard and mouse: the keys and the middle button.
+
+        Every command that has no shortcut of the user gets the default of the new
+        scheme; the ones that have one keep it. The tips of the tools and the help
+        follow, because both show the keys the actions have now.
+        """
+        scheme = keyschemes.scheme_of(scheme)
+        self._default_shortcuts = keyschemes.scheme_defaults(scheme, self._base_shortcuts)
+        self._apply_scheme_shortcuts()
+        self.view.middle_pans = scheme == keyschemes.FUSION_SCHEME
+        self.refresh_tool_tips()
+        if self.settings.key_scheme != scheme:
+            self.settings.key_scheme = scheme
+            self.settings.save()
+        return scheme
 
     def store_shortcuts(self, action, texts):
         """Keep the user's shortcut list in QSettings; a default list is not stored."""
@@ -312,7 +356,7 @@ class UiMixin:
         return True
 
     def restore_shortcuts(self):
-        """Preferences > Shortcuts > Reset All: back to the shortcuts Volura ships with."""
+        """Preferences > Shortcuts > Reset All: back to the keys of the scheme that is on."""
         q = qsettings()
         for key in q.allKeys():
             if key.startswith(SHORTCUTS_KEY):
@@ -321,6 +365,20 @@ class UiMixin:
         defaults = getattr(self, "_default_shortcuts", {})
         for path, a in self.command_paths().items():
             a.setShortcuts([QKeySequence(t) for t in defaults.get(path, [])])
+
+    def tool_tip(self, action, base):
+        """The help text of a tool, with the key it answers to now behind it."""
+        action.setProperty(TIP_BASE, base)
+        keys = self.shortcut_text(action)
+        action.setToolTip(base + (f" ({keys})" if keys else ""))
+
+    def refresh_tool_tips(self):
+        """The tips that end in a key follow the shortcuts of their action, so a scheme
+        that changes the keys also changes what the status bar says about a tool."""
+        for a in self.findChildren(QAction):
+            base = a.property(TIP_BASE)
+            if base:
+                self.tool_tip(a, base)
 
     # ------------------------------------------------------------ theme
     def apply_theme(self):

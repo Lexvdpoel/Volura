@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
 
 from . import (__version__, background, battery_holder, bin_rack, boxgen, cable_chain, cable_clip,
                cam, dxf, enclosure, errors, fan_guard, fileio, gcode, gears, gridfinity, grommet,
-               hinge, hose_adapter,
-               i18n, joints, knob, label_plate, linking, nesting, ops, pegboard, sheet3d, sheettools,
+               hinge, hose_adapter, i18n, joints, keyschemes, knob, label_plate, linking,
+               nesting, ops, pegboard, sheet3d, sheettools,
                svg,
                spacemouse, standoff, storage_bin, text3d, theme, threads, vector_export,
                vector_import, workers)
@@ -62,8 +62,8 @@ from .vector2d import (SHEET_SPACING, Drawing, MILL_OPS, OP_LABELS, VPath, _tran
 from .viewport import (FACE_STYLES, HIDDENLINE, MONOCHROME, SHADED, WIREFRAME, Viewport)
 from .window_print import PANEL_PRINT_CHECK, PrintMixin, TOOL_INFO
 from .window_sheet import SheetMixin
-from .window_ui import (MOVED_COMMANDS, OTHER_COMMANDS, PANEL_INFO,
-                        SHORTCUTS_KEY, SOURCE_TEXT, UiMixin, clean_text,
+from .window_ui import (MOVED_COMMANDS, OTHER_COMMANDS, PANEL_INFO, SHORTCUTS_KEY,
+                        SOURCE_TEXT, TIP_BASE, UiMixin, clean_text,
                         source_text_of, translation_tables)
 
 # The tools of the 2D worksheet; their keys only work in 2D, because in 3D M, Q, S and
@@ -135,23 +135,31 @@ class ModeSwitch(QToolButton):
 
 
 SHEET_TOOL_INFO = [
-    # name in volura.sheettools, label (English, translated at use), help text
-    ("select", tr_noop("Select"), tr("Click a line or drag a box (Space)")),
-    ("move", tr_noop("Move"), tr("Click a base point and a target, or type a distance (M)")),
-    ("rotate", tr_noop("Turn"), tr("Click a center and type an angle in degrees (Q)")),
-    ("scale", tr_noop("Scale"), tr("Drag from the center or type a factor (S)")),
-    ("line", tr_noop("Line"), tr("Click points; click the start point to close (L)")),
-    ("rectangle", tr_noop("Rectangle"), tr("Click two corners or type 30;20 (R)")),
+    # name in volura.sheettools, label (English, translated at use), help text; the key a
+    # tool answers to comes behind the text, from SHEET_TOOL_KEYS (the worksheet has its
+    # keys in sheetview.SHEET_KEYS, so its actions have none of their own)
+    ("select", tr_noop("Select"), tr("Click a line or drag a box")),
+    ("move", tr_noop("Move"), tr("Click a base point and a target, or type a distance")),
+    ("rotate", tr_noop("Turn"), tr("Click a center and type an angle in degrees")),
+    ("scale", tr_noop("Scale"), tr("Drag from the center or type a factor")),
+    ("line", tr_noop("Line"), tr("Click points; click the start point to close")),
+    ("rectangle", tr_noop("Rectangle"), tr("Click two corners or type 30;20")),
     ("roundrect", tr_noop("Rounded Rectangle"),
-     tr("Rectangle with rounded corners, type the radius with r (N)")),
-    ("circle", tr_noop("Circle"), tr("Click or type the center and radius (C)")),
-    ("ellipse", tr_noop("Ellipse"), tr("Click the center and drag the two semi-axes (E)")),
-    ("arc", tr_noop("Arc"), tr("Arc through three points (A)")),
-    ("centerarc", tr_noop("Arc Around Center"), tr("Center, radius and angle of the arc (B)")),
-    ("polygon", tr_noop("Polygon"), tr("Center and radius; type the number of sides like 6s (P)")),
-    ("text", tr_noop("Text"), tr("Place the outlines of text on the worksheet (T)")),
-    ("offset", tr_noop("Offset"), tr("Move a closed outline inward or outward (F)")),
+     tr("Rectangle with rounded corners, type the radius with r")),
+    ("circle", tr_noop("Circle"), tr("Click or type the center and radius")),
+    ("ellipse", tr_noop("Ellipse"), tr("Click the center and drag the two semi-axes")),
+    ("arc", tr_noop("Arc"), tr("Arc through three points")),
+    ("centerarc", tr_noop("Arc Around Center"), tr("Center, radius and angle of the arc")),
+    ("polygon", tr_noop("Polygon"), tr("Center and radius; type the number of sides like 6s")),
+    ("text", tr_noop("Text"), tr("Place the outlines of text on the worksheet")),
+    ("offset", tr_noop("Offset"), tr("Move a closed outline inward or outward")),
 ]
+
+#: the key each worksheet tool answers to, shown behind its help text; the same in every
+#: keyboard scheme, because the worksheet keeps its own keys
+SHEET_TOOL_KEYS = {"select": "Space", "move": "M", "rotate": "Q", "scale": "S", "line": "L",
+                   "rectangle": "R", "roundrect": "N", "circle": "C", "ellipse": "E",
+                   "arc": "A", "centerarc": "B", "polygon": "P", "text": "T", "offset": "F"}
 
 # The panels of the Default Tray. The Tray knows a panel by its translated title (that is
 # what it shows); these English names are the stable keys in the code, used through tr().
@@ -196,6 +204,8 @@ class Settings:
         self.theme = str(self.q.value("theme", theme.SYSTEM))
         if self.theme not in dict(theme.CHOICES):
             self.theme = theme.SYSTEM
+        self.key_scheme = keyschemes.scheme_of(
+            str(self.q.value("key_scheme", keyschemes.SKETCHUP)))
         self.spacemouse = self._bool("spacemouse", True)
         try:
             self.spacemouse_speed = float(self.q.value("spacemouse_speed", 1.0))
@@ -900,6 +910,7 @@ class Settings:
         self.q.setValue("check_updates", self.check_updates)
         self.q.setValue("ask_simplify_import", self.ask_simplify_import)
         self.q.setValue("theme", self.theme)
+        self.q.setValue("key_scheme", self.key_scheme)
         self.q.setValue("spacemouse", self.spacemouse)
         self.q.setValue("spacemouse_speed", self.spacemouse_speed)
         self.q.setValue("face_style", self.face_style)
@@ -1217,6 +1228,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self._build_toolbars()
         self._build_docks()
         self.load_shortcuts()
+        self.view.middle_pans = self.settings.key_scheme == keyschemes.FUSION_SCHEME
 
         self.doc.changed.connect(self.on_doc_changed)
         self.doc.selection_changed.connect(self.on_selection_changed)
@@ -1440,7 +1452,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             a.setShortcuts([QKeySequence(k) for k in keys])
         if checkable:
             a.setCheckable(True)
-        a.setToolTip(f"{tip or text}" + (f" ({', '.join(keys)})" if keys else ""))
+        self.tool_tip(a, tip or text)     # the key behind the text is the one it has now
         a.triggered.connect(slot)
         self.addAction(a)
         return a
@@ -1448,15 +1460,16 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
     def stub(self, text, shortcut=None, icon_name=None):
         """Disabled placeholder action for a SketchUp feature Volura does not have yet."""
         a = self.act(text, lambda checked=False: None, shortcut, icon_name)
+        a.setProperty(TIP_BASE, "")       # no key behind it: there is nothing to call
         a.setToolTip(tr("Not available yet"))
         a.setStatusTip(tr("Not available yet"))
         a.setEnabled(False)
         return a
 
-    def tool_act(self, text, name, shortcut=None, icon_name=None):
+    def tool_act(self, text, name, shortcut=None, icon_name=None, tip=None):
         """Action that selects a drawing tool; also reachable as self.tool_actions[name]."""
         a = self.act(text, lambda checked=False, n=name: self.set_tool(n), shortcut, icon_name,
-                     checkable=True)
+                     checkable=True, tip=tip)
         self.tool_actions[name] = a
         return a
 
@@ -1655,10 +1668,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
                             None, "cut_join", False,
                             tr("Cut the model at a plane and make pins, holes or a dovetail"))
-        self.a_fillet = self.tool_act(tr("Fillet"), "fillet", None, "fillet")
-        self.a_fillet.setToolTip(tr("Click edges and type a radius: a convex or concave rounding"))
-        self.a_chamfer = self.tool_act(tr("Chamfer"), "chamfer", None, "chamfer")
-        self.a_chamfer.setToolTip(tr("Click edges and type a distance: a bevel along the edge"))
+        self.a_fillet = self.tool_act(
+            tr("Fillet"), "fillet", None, "fillet",
+            tr("Click edges and type a radius: a convex or concave rounding"))
+        self.a_chamfer = self.tool_act(
+            tr("Chamfer"), "chamfer", None, "chamfer",
+            tr("Click edges and type a distance: a bevel along the edge"))
         self.a_elephant = A(tr("Elephant Foot Chamfer…"),
                             lambda checked=False: self.elephant_foot_chamfer(), None, None, False,
                             tr("A small chamfer along the bottom edges, so the first printed "
@@ -1948,6 +1963,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         a = self.act(label, lambda checked=False, n=name: self.sheet_view.set_tool(n), None,
                      name, checkable=True, tip=tip)
         self.sheet_tool_actions[name] = a
+        key = SHEET_TOOL_KEYS.get(name)
+        if tip and key:
+            a.setProperty(TIP_BASE, "")   # not from the action's shortcuts: it has none
+            a.setToolTip(f"{tip} ({key})")
         return a
 
     def _build_menus(self):

@@ -63,15 +63,16 @@ TOOL_INFO = [
 PANEL_PRINT_CHECK = tr_noop("Print Check")
 
 
-#: Help > Keyboard Shortcuts; {rows} are the rows of the tools with a shortcut
+#: Help > Keyboard Shortcuts; {rows} are the tools with a shortcut, {mouse}, {eraser} and
+#: {pushpull} say what the scheme that is on now does with those
 HELP_HTML = tr_noop("""
 <h2>Volura - how it works</h2>
 <p>Volura works like SketchUp: draw a flat face and make a volume of it with <b>Push/Pull</b>.</p>
 <ol>
 <li>Draw edges with Line (L), Rectangle (R), Circle (C) or Polygon. A closed shape becomes a face.</li>
-<li>Edges split each other, a line across a face splits the face; with the Eraser (E) you erase edges
+<li>Edges split each other, a line across a face splits the face; with the Eraser{eraser} you erase edges
 (or parts of them) and faces are merged again.</li>
-<li>Push/Pull (P) works on every face or part of a face: up = add, down = recess or hole.
+<li>Push/Pull{pushpull} works on every face or part of a face: up = add, down = recess or hole.
 Type a distance and Enter; the direction follows your mouse.</li>
 <li>Select a shape (triple-click) and make a <b>group</b> of it (G): every group is a separate
 printable part with its own color. Double-click a group to edit it.</li>
@@ -83,7 +84,7 @@ export as 3MF.</li>
 <table cellpadding="3">{rows}
 <tr><td><b>A</b></td><td>2 Point Arc (in Draw &gt; Arcs also Arc, 3 Point Arc and Pie)</td></tr>
 <tr><td><b>Shift+Z</b></td><td>Zoom Extents</td></tr>
-<tr><td><b>Middle mouse button</b></td><td>Orbit, with Shift: pan. Scroll wheel: zoom</td></tr>
+<tr><td><b>Middle mouse button</b></td><td>{mouse}. Scroll wheel: zoom</td></tr>
 <tr><td><b>Arrow keys</b></td><td>Lock an axis (right = red/X, left = green/Y, up = blue/Z)</td></tr>
 <tr><td><b>Shift</b> (hold)</td><td>Lock the current direction</td></tr>
 <tr><td><b>Ctrl</b></td><td>Move/rotate: copy. Push/Pull: new start face</td></tr>
@@ -1991,9 +1992,20 @@ class PrintMixin:
         dlg.exec()
 
     def show_help(self):
-        rows = "".join(f"<tr><td><b>{sc}</b></td><td>{tr(label)}</td></tr>"
-                       for _, label, _, sc in TOOL_INFO if sc)
-        html = tr(HELP_HTML).format(rows=rows)
+        """Help > Keyboard Shortcuts: the keys of the scheme that is on now."""
+        rows = "".join(
+            f"<tr><td><b>{self.shortcut_text(self.tool_actions[name])}</b></td>"
+            f"<td>{tr(label)}</td></tr>"
+            for name, label, _icon, _key in TOOL_INFO
+            if self.sequence_texts(self.tool_actions[name]))
+        eraser = self.shortcut_text(self.tool_actions["eraser"])
+        pushpull = self.shortcut_text(self.tool_actions["pushpull"])
+        html = tr(HELP_HTML).format(
+            rows=rows,
+            mouse=tr("Pan, with Shift: orbit") if self.view.middle_pans
+            else tr("Orbit, with Shift: pan"),
+            eraser=f" ({eraser})" if eraser else "",
+            pushpull=f" ({pushpull})" if pushpull else "")
         dlg = QDialog(self)
         dlg.setWindowTitle(tr("Volura Help"))
         dlg.resize(700, 640)

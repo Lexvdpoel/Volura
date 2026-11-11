@@ -310,6 +310,7 @@ class Viewport(QOpenGLWidget):
         self._overhang_hint = ""      # the overhang count the status bar shows, "" when none
         self._drag = None
         self._last = None
+        self.middle_pans = False        # the Fusion scheme pans with the middle button
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumSize(320, 240)
@@ -1256,7 +1257,8 @@ class Viewport(QOpenGLWidget):
         pos = e.position()
         self._last = pos
         if e.button() == Qt.MiddleButton:
-            self._drag = "pan" if e.modifiers() & Qt.ShiftModifier else "orbit"
+            shift = bool(e.modifiers() & Qt.ShiftModifier)
+            self._drag = "orbit" if shift == self.middle_pans else "pan"
             self.setCursor(icons.cursor("pan" if self._drag == "pan" else "orbit"))
             return
         if e.button() == Qt.RightButton:
