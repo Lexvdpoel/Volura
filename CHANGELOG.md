@@ -3,6 +3,34 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.43 — 2026-11-11
+
+### New
+- **Export to STEP** (File > Export > CAD Model (STEP)): the parts as solids for Fusion,
+  FreeCAD, SolidWorks or Onshape, with real flat faces: a box is six faces and a hole is a hole
+  in its face, not a fan of triangles. Every part is its own named body; a hollow part keeps its
+  hollow. (GitHub #2)
+- **Fusion keys and mouse** (Window > Preferences > General > Keyboard and mouse): next to the
+  SketchUp keys there is now a Fusion scheme, with Push/Pull on E and Q, Offset on O, Fillet on F,
+  the Tape Measure on I, Zoom Extents also on F6, and the middle mouse button panning (with Shift
+  it orbits). Shortcuts you changed yourself stay as they are. (GitHub #1)
+- **Hose adapter** (Draw > Parts): a reducer between two hoses or a hose and a fitting, with
+  barbs, that prints upright without support.
+- **Fan guard** (Draw > Parts): a grille for a square fan of 40 to 140 mm with the screw holes
+  at their standard spacing, as rings, spokes or a grid.
+- **Desk grommet** (Draw > Parts): a cable pass-through for a hole of 20 to 120 mm in a desk top,
+  with crush ribs on the sleeve and a lid with a cable slot; it prints flange down without
+  support.
+
+### Improved
+- **Pegboard**: the board itself can be printed too (holes, a back rim and screw bosses), the
+  pegs are narrow enough for the holes and rise so they lock behind the board, and the tool
+  holder is an upright ring that is open at the top.
+
+### Website
+- The manual describes the STEP export, the keyboard schemes, the hose adapter, the fan guard,
+  the desk grommet and the pegboard board.
+
 ## 0.2.42 — 2026-11-11
 
 ### New
