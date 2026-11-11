@@ -14,12 +14,14 @@ rotation (and reflection, since mirroring is allowed on the sheet) plus translat
 carries one set of loops onto the other, and the residual of that fit.
 
 Shape goes 3D to 2D for every linked face, because the outline of a face is always well
-defined. The other way only works for a *plate*: a prism with two parallel faces at the
-distance of the thickness and side walls perpendicular to them, which is exactly what
-`volura/sheet3d.py` puts on the model. `plate_of` recognises such a solid and returns
-its frame, its thickness and the outline of its bottom face; `plate_solid` is the
-inverse. A solid that is not a plate keeps its shape in 3D and only sends an outline to
-the sheet.
+defined. The other way works for a *plate* as a whole: a prism with two parallel faces at
+the distance of the thickness and side walls perpendicular to them, which is exactly what
+`volura/sheet3d.py` puts on the model. `plate_of` recognises such a solid and returns its
+frame, its thickness and the outline of its bottom face; `plate_solid` is the inverse. A
+solid that is not a plate keeps its shape in 3D, but what is drawn on its linked face does
+go back into it: holes are cut through the wall under the face and closed again, and an
+outline that changed is cut out of that wall or built on it - piece by piece, as deep as
+the wall happens to be there.
 
 The loops that travel through a link are always in their own 2D frame (the plane of the
 face, or the bottom face of the plate), never in world or sheet coordinates, so the
@@ -47,6 +49,9 @@ HOLE_OUT = 1.0         # mm: a hole is cut starting this far outside the face
 HOLE_PAST = 0.5        # mm: and ending this far below the bottom of the wall it meets
 HOLE_RING = 1.5        # mm: the ring around a hole that measures the wall next to it
 HOLE_FUSE = 0.01       # mm: a hole that is closed is filled this much wider, so it fuses
+OUTLINE_BAND = 2.0     # mm: the band of the old face that measures the wall beside new plastic
+OUTLINE_FIT = 1e-3     # mm²: an overlap of two outlines this small is no overlap at all
+OUTLINE_SNAP = 0.01    # mm: two corners of an outline this close are the same corner
 MAX_AXES = 8           # face directions that are tried as the axis of a plate
 TIE_TOL = 1e-6         # relative: two thicknesses this close are the same plate
 SLICE_EPS = 1e-3       # fraction of the thickness: how far inside a plate a check slice is
@@ -533,6 +538,12 @@ def _flat_triangles(manifold, frame, tol) -> list:
     return [np.ascontiguousarray(q[:, :2]) for q in t[keep]]
 
 
+def _regions_of(loops) -> list:
+    """The loops grouped per filled region: every outer loop with the holes that lie in it."""
+    return [[outer] + [l for l in loops if polygon_area(l) < 0.0 and _point_in_poly(outer, l[0])]
+            for outer in [l for l in loops if polygon_area(l) > 0.0]]
+
+
 def _region_of(loops, ref):
     """The loops of the one region of `loops` that `ref` was made for.
 
@@ -541,10 +552,7 @@ def _region_of(loops, ref):
     which: the region that covers most of it wins, and when none covers it at all the
     largest region does. `ref` is a loop in the coordinates of the same plane, or None.
     """
-    regions = []
-    for outer in [l for l in loops if polygon_area(l) > 0.0]:
-        holes = [l for l in loops if polygon_area(l) < 0.0 and _point_in_poly(outer, l[0])]
-        regions.append([outer] + holes)
+    regions = _regions_of(loops)
     sections = [mf.CrossSection([np.ascontiguousarray(l, dtype=float) for l in r],
                                 mf.FillRule.EvenOdd) for r in regions]
     if ref is not None and len(np.asarray(ref, dtype=float).reshape(-1, 2)) >= 3:
@@ -696,6 +704,172 @@ def fill_face_hole(manifold, frame, hole):
     return manifold + plate_solid([grown], (o - depth * n, u, v, n), depth)
 
 
+# --------------------------------------------------------------------------
+#  the outline of a linked face
+# --------------------------------------------------------------------------
+
+def _pieces(cs) -> list:
+    """A cross-section as the pieces it is made of: each one outer loop with its holes.
+
+    A sliver of no area - the seam two equal edges leave behind - is no piece.
+    """
+    if cs.is_empty():
+        return []
+    return [r for r in _regions_of(_orient([_clean(q) for q in cs.to_polygons()]))
+            if abs(polygon_area(r[0])) > OUTLINE_FIT]
+
+
+def _box_places(a, b) -> list:
+    """The translations that stand the bounding box of `b` on that of `a`.
+
+    Corner on corner, side on side and middle on middle, and no translation at all.
+    """
+    lo_a, hi_a = a.min(axis=0), a.max(axis=0)
+    lo_b, hi_b = b.min(axis=0), b.max(axis=0)
+    out = [np.zeros(2)]
+    for pa in (lo_a, 0.5 * (lo_a + hi_a), hi_a):
+        for pb in (lo_b, 0.5 * (lo_b + hi_b), hi_b):
+            out.append(np.asarray(pa, dtype=float) - np.asarray(pb, dtype=float))
+    return out
+
+
+def outline_fit(old, new) -> np.ndarray:
+    """The map that slides a new outline onto the place it belongs on the old one.
+
+    `Window._link_placement` puts the middle of a shape that no longer fits rigidly on the
+    middle of the old one, which splits a wall that grew on one side in two halves. An
+    outline knows better: of the places its bounding box offers - corner on corner, side on
+    side, middle on middle - the one that covers the old face the most is where it was
+    drawn. The place it came with is one of those, so an outline that already lies well
+    keeps it.
+    """
+    a, b = _loop(old), _loop(new)
+    if len(a) < 3 or len(b) < 3:
+        return np.eye(3)
+    A = mf.CrossSection([np.ascontiguousarray(a)], mf.FillRule.NonZero)
+    best, cover = np.zeros(2), -1.0
+    for t in _box_places(a, b):
+        q = mf.CrossSection([np.ascontiguousarray(b + t)], mf.FillRule.NonZero)
+        got = mf.CrossSection.batch_boolean([A, q], mf.OpType.Intersect).area()
+        if got > cover + OUTLINE_FIT:
+            best, cover = t, got
+    M = np.eye(3)
+    M[:2, 2] = best
+    return M
+
+
+def outline_place(old, new, ref, tol=OUTLINE_SNAP) -> np.ndarray | None:
+    """The map that carries the old outline onto the corners of the new one that stayed.
+
+    A changed outline has no rigid fit as a whole, but the corners that were not moved
+    still lie where they were. `ref` is the map of the last time the two agreed (see
+    `Link.place`); the outline may have moved since, so only its rotation is kept and
+    every pair of an old and a new corner votes for a translation. The one with the most
+    votes wins, and of equal ones the one closest to `ref`: a wall that only got higher
+    has its two bottom corners in place, and so does - read the other way - one whose
+    bottom went down, which `ref` tells apart. None without `ref` or without two corners
+    that agree.
+    """
+    a, b = _loop(old), _loop(new)
+    if ref is None or len(a) < 3 or len(b) < 3:
+        return None
+    ref = np.asarray(ref, dtype=float)
+    ra = a @ ref[:2, :2].T
+    t = (b[None, :, :] - ra[:, None, :]).reshape(-1, 2)
+    _keys, inverse, votes = np.unique(np.round(t / tol).astype(np.int64), axis=0,
+                                      return_inverse=True, return_counts=True)
+    if votes.max() < 2:
+        return None
+    inverse = np.asarray(inverse).reshape(-1)
+    best = [t[inverse == k].mean(axis=0) for k in np.flatnonzero(votes == votes.max())]
+    M = ref.copy()
+    M[:2, 2] = min(best, key=lambda c: float(np.linalg.norm(c - ref[:2, 2])))
+    return M
+
+
+def outline_diff(old, new):
+    """What a changed outline of a linked face did: (removed, added) pieces, or None.
+
+    Both are the outer loop of the face, in the plane of the link. What the worksheet lost
+    is cut out of the wall and what it gained is built on it, so both sides of the
+    difference come back as the pieces they fall in: the outer loop of every piece with the
+    holes inside it. None when the two do not overlap at all, which is an outline that was
+    moved somewhere else instead of changing the face.
+    """
+    a = mf.CrossSection([_loop(old)], mf.FillRule.NonZero)
+    b = mf.CrossSection([_loop(new)], mf.FillRule.NonZero)
+    if a.is_empty() or b.is_empty():
+        return None
+    if mf.CrossSection.batch_boolean([a, b], mf.OpType.Intersect).area() <= OUTLINE_FIT:
+        return None
+    return (_pieces(mf.CrossSection.batch_boolean([a, b], mf.OpType.Subtract)),
+            _pieces(mf.CrossSection.batch_boolean([b, a], mf.OpType.Subtract)))
+
+
+def wall_run(manifold, frame, loops):
+    """How deep the material under the plane of `frame` reaches at `loops` without a gap.
+
+    `wall_depth` measures the piece of the solid that touches the plane, and that is the
+    whole depth when the wall is joined to another one behind it - the front wall of a box
+    and its side wall at the corner. A piece of an outline is cut and built as deep as its
+    own wall, so this asks how far the plastic reaches from the face before the first empty
+    space: the prism is emptied of the solid, and the top of what is left is where the wall
+    ends. Nothing to measure is None, as for `wall_depth`.
+    """
+    if manifold is None or manifold.is_empty() or not loops:
+        return None
+    o, u, v, n = frame
+    lo, hi = np.asarray(manifold.bounding_box(), dtype=float).reshape(2, 3)
+    reach = float(np.abs(hi - lo) @ np.abs(n))
+    prism = plate_solid(loops, (o - reach * n, u, v, n), reach)
+    if prism.is_empty():
+        return None
+    gap = prism - manifold
+    if gap.is_empty():
+        return reach                                    # solid the whole way through
+    z = (np.asarray(gap.to_mesh().vert_properties, dtype=float)[:, :3] - o) @ n
+    return max(0.0, -float(z.max()))
+
+
+def cut_face_outline(manifold, frame, piece):
+    """`manifold` with a piece of a changed outline cut out of the wall under the face.
+
+    The same road a new hole takes: the cut starts `HOLE_OUT` mm outside the face and ends
+    `HOLE_PAST` mm below the bottom of the wall it meets there, so it takes that wall with
+    it and leaves the empty space behind it alone. A piece that meets no material at the
+    face is left where it is.
+    """
+    depth = wall_run(manifold, frame, piece)
+    if depth is None or depth <= 0.0:
+        return manifold
+    o, u, v, n = frame
+    return manifold - plate_solid(piece, (o - (depth + HOLE_PAST) * n, u, v, n),
+                                  HOLE_OUT + depth + HOLE_PAST)
+
+
+def add_face_outline(manifold, frame, piece, old):
+    """`manifold` with a piece of a changed outline built on, as deep as the wall beside it.
+
+    The piece itself stands in the air next to the face, so its depth is measured in the
+    band of the old face along the edge they share: the piece grown by `OUTLINE_BAND` mm,
+    cut back to that face. What is built is the piece, grown by `HOLE_FUSE` so it fuses
+    with the wall it grows out of, from the plane of the face down to that depth.
+    """
+    band = mf.CrossSection(ring(piece[0], OUTLINE_BAND), mf.FillRule.EvenOdd)
+    face = mf.CrossSection([_loop(old)], mf.FillRule.NonZero)
+    pieces = _pieces(mf.CrossSection.batch_boolean([band, face], mf.OpType.Intersect))
+    if not pieces:
+        return manifold
+    depth = wall_run(manifold, frame, max(pieces, key=lambda p: abs(polygon_area(p[0]))))
+    if depth is None or depth <= 0.0:
+        return manifold
+    grown = _grown(piece[0], HOLE_FUSE)
+    if grown is None:
+        return manifold
+    o, u, v, n = frame
+    return manifold + plate_solid([grown] + list(piece[1:]), (o - depth * n, u, v, n), depth)
+
+
 def _loops_json(loops) -> list:
     """The loops as the plain numbers a file keeps, rounded to the decimals above."""
     return [[[round(float(x), JSON_DECIMALS), round(float(y), JSON_DECIMALS)]
@@ -726,6 +900,10 @@ class Link:
     `frame` is what a link of a face adds: the plane its outline lives in, as
     `frame_to_list` keeps it, so the model can be read from the same side again. A plate
     needs no frame, because `plate_of` finds the plane of the plate itself.
+
+    `place` is the map from `shape` to the worksheet when both last agreed. It is not
+    kept in a file - the next sync finds it again - and only `outline_place` needs it, to
+    tell an outline whose top edge went up from one whose bottom edge went down.
     """
 
     src: int
@@ -734,6 +912,7 @@ class Link:
     shape: list = field(default_factory=list)
     thickness: float | None = None
     frame: list | None = None
+    place: np.ndarray | None = field(default=None, compare=False, repr=False)
 
     def to_dict(self) -> dict:
         """Plain values only, so a link goes into a file as it is."""

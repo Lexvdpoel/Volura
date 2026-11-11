@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 from dataclasses import replace
 
+import manifold3d as mf
 import numpy as np
 from PySide6.QtWidgets import QDialog
 
@@ -865,7 +866,8 @@ class SheetMixin:
             region = linking.face_region(solids[int(ctx)], frame, ref=shape[0])
             candidates.append({"group": int(ctx), "kind": "face",
                                "shape": linking.sorted_loops(region or shape),
-                               "thickness": None, "frame": linking.frame_to_list(frame)})
+                               "thickness": None, "frame": linking.frame_to_list(frame),
+                               "face": True})
         if not candidates:
             for g in groups:
                 m = g.ents.to_manifold()
@@ -892,11 +894,36 @@ class SheetMixin:
                 if i in used or not self._shape_matches(loops, cand["shape"]):
                     continue
                 used.add(i)
+                place = None
+                if cand.get("face"):
+                    place = self._face_sheet_place(linking.frame_of(cand["frame"]),
+                                                   cand["shape"], loops)
                 self.doc.links.append(linking.Link(src=src, group=cand["group"],
                                                    kind=cand["kind"], shape=cand["shape"],
                                                    thickness=cand["thickness"],
-                                                   frame=cand["frame"]))
+                                                   frame=cand["frame"], place=place))
                 break
+
+    @staticmethod
+    def _face_sheet_place(frame, shape, sheet_loops):
+        """The map from the plane of a face link to where that face went on the worksheet.
+
+        `vector_export.drawing_from_faces` lays a face flat in the axes of
+        `vector_export.plane_frame` and the link reads it in those of `linking.face_frame`;
+        both are the same plane, so the turn between them is exact, and the outline on the
+        sheet says the rest. A rectangle fits itself four ways, and only this map knows
+        which edge of the sheet is which edge of the wall.
+        """
+        if frame is None or not len(shape) or not len(sheet_loops):
+            return None
+        _o, u, v, n = frame
+        _n, us, vs = vector_export.plane_frame(n)
+        M = np.eye(3)
+        M[:2, :2] = [[us @ u, us @ v], [vs @ u, vs @ v]]
+        q = np.asarray(shape[0], dtype=float).reshape(-1, 2) @ M[:2, :2].T
+        s = np.asarray(sheet_loops[0], dtype=float).reshape(-1, 2)
+        M[:2, 2] = 0.5 * (s.min(axis=0) + s.max(axis=0)) - 0.5 * (q.min(axis=0) + q.max(axis=0))
+        return M
 
     def _link_parts_to_sheet(self, groups, plates):
         """A "plate" link for every part that came from the worksheet into the model."""
@@ -1017,21 +1044,36 @@ class SheetMixin:
     BACKGROUND_FACE_HOLES = 8
 
     def _link_face_holes(self, link, sheet_loops):
-        """What the holes of a linked face on the worksheet did: (loops, new, gone) or None.
+        """What a linked face on the worksheet did: (loops, outline, new, gone) or None.
 
-        The loops of the sheet are put back where the shape of the link lies, so a hole
-        drawn on the worksheet is a hole in the plane of the face. `linking.find_hole`
-        pairs the inner loops of both sides: a sheet hole without partner is new, a hole
-        the link remembers without partner on the sheet is gone. None when the outline
-        itself changed shape, for that is a change of the face and not of its holes, and
-        the outline of a face still only goes from the model to the worksheet.
+        The loops of the sheet are put back where the shape of the link lies, so what is
+        drawn on the worksheet lies in the plane of the face. An outline that changed is
+        put back by the corners that stayed (`linking.outline_place`), or else by
+        `linking.outline_fit`; `outline` is then the (removed, added) pieces of
+        `linking.outline_diff`, False when the new outline does not overlap the old one at
+        all, and None when the outline is the same. `linking.find_hole` pairs the inner
+        loops of both sides: a sheet hole without partner is new, a hole the link
+        remembers without partner on the sheet is gone. None when there is nothing to
+        compare.
         """
         if not len(sheet_loops) or not len(link.shape):
             return None
+        outline, M = None, None
         if linking.shape_changed([sheet_loops[0]], [link.shape[0]]):
-            return None
-        loops = linking.place(sheet_loops,
-                              linking.invert(self._link_placement(link.shape, sheet_loops)))
+            M = linking.outline_place(link.shape[0], sheet_loops[0], link.place)
+            if M is None:
+                M = self._link_placement(link.shape, sheet_loops)
+                moved = linking.place([sheet_loops[0]], linking.invert(M))[0]
+                M = M @ linking.invert(linking.outline_fit(link.shape[0], moved))
+            loops = linking.place(sheet_loops, linking.invert(M))
+            outline = linking.outline_diff(link.shape[0], loops[0])
+            if outline is None:
+                return loops, False, [], []
+            if not outline[0] and not outline[1]:
+                outline = None
+        else:
+            M = self._link_sheet_map(link, sheet_loops)
+            loops = linking.place(sheet_loops, linking.invert(M))
         left = list(link.shape[1:])
         new = []
         for h in loops[1:]:
@@ -1040,37 +1082,51 @@ class SheetMixin:
                 new.append(h)
             else:
                 del left[i]
-        return loops, new, left
+        if M is not None:
+            link.place = M
+        return loops, outline, new, left
 
-    def _link_face_from_sheet(self, link, loops, new, gone) -> None:
-        """The holes drawn on the worksheet cut into the model, the deleted ones closed again.
+    def _link_face_from_sheet(self, link, loops, outline, new, gone) -> bool:
+        """What was drawn on the worksheet carried into the model; False when it failed.
 
-        The solid is read in the plane of the link: every new hole goes through the wall
-        under the face and every hole that went is filled with plastic as deep as the wall
-        around it. The loops of the sheet become the shape of the link, so the next sync
-        sees the model and the worksheet agree again.
+        The solid is read in the plane of the link. A changed outline goes first: what the
+        face lost is cut out of the wall under it and what it gained is built on, as deep
+        as the wall beside it. Then every new hole goes through the wall under the face and
+        every hole that went is filled with plastic as deep as the wall around it. The
+        loops of the sheet become the shape of the link, so the next sync sees the model
+        and the worksheet agree again.
         """
         ents = self._link_ents(link)
         man = ents.to_manifold() if ents is not None else None
         frame = linking.frame_of(link.frame)
         if man is None or man.is_empty() or frame is None:
-            return
-        solid = self._link_face_solid(man, frame, new, gone)
-        if solid is None or solid.is_empty():
-            return
+            return False
+        old = link.shape[0] if len(link.shape) else None
+        solid = self._link_face_solid(man, frame, outline, new, gone, old)
+        if solid is None or solid.is_empty() or solid.status() != mf.Error.NoError:
+            return False
         g = self.doc.group(int(link.group))
         if g is not None:
             g.ents = Entities.from_manifold(solid)
         link.shape = linking.sorted_loops(loops)
+        return True
 
-    def _link_face_solid(self, man, frame, new, gone):
-        """The solid with the new holes cut and the gone holes closed; None when it failed.
+    def _link_face_solid(self, man, frame, outline, new, gone, old=None):
+        """The solid with the outline changed, the new holes cut and the gone holes closed.
 
-        A grille is dozens of booleans, so from `BACKGROUND_FACE_HOLES` on that happens in
-        the background, like rounding the corners of a contour from an import.
+        None when it failed. A grille is dozens of booleans, so from
+        `BACKGROUND_FACE_HOLES` on that happens in the background, like rounding the
+        corners of a contour from an import.
         """
+        removed, added = outline if outline else ([], [])
+
         def work(report):
-            solid, total = man, len(new) + len(gone)
+            solid = man
+            for piece in removed:
+                solid = linking.cut_face_outline(solid, frame, piece)
+            for piece in added:
+                solid = linking.add_face_outline(solid, frame, piece, old)
+            total = len(new) + len(gone)
             for i, h in enumerate(new):
                 report(i / total, tr("Cutting the holes…"))
                 solid = linking.cut_face_hole(solid, frame, h)
@@ -1115,7 +1171,7 @@ class SheetMixin:
         present = {int(p.src) for p in doc.sheet.paths if p.closed and len(p.pts) >= 3}
         alive = [l for l in doc.links if int(l.group) in live and int(l.src) in present]
         dropped = len(doc.links) - len(alive)
-        to_sheet, to_model, to_holes, face_only, both = [], [], [], 0, 0
+        to_sheet, to_model, to_holes, face_only, both, apart = [], [], [], 0, 0, 0
         for l in alive:
             sheet_loops = self._link_sheet_loops(l.src)
             ents = self._link_ents(l)
@@ -1137,39 +1193,45 @@ class SheetMixin:
                 push_model = False
                 both += 1
             elif direction in ("to_model", "both") and ch2 and l.kind == "face" and not ch3:
-                holes = self._link_face_holes(l, sheet_loops)
-                if holes is None:
+                change = self._link_face_holes(l, sheet_loops)
+                if change is None:
                     face_only += 1
-                elif holes[1] or holes[2]:      # equal holes in another order are no change
-                    to_holes.append((l,) + holes)
+                elif change[1] is False:
+                    apart += 1
+                elif change[1] or change[2] or change[3]:   # equal holes in another order
+                    to_holes.append((l,) + change)          # are no change
             elif direction in ("to_model", "both") and ch2 and l.kind == "face":
                 face_only += 1
             if push_sheet:
                 to_sheet.append((l, three, sheet_loops))
             elif push_model:
                 to_model.append((l, sheet_loops, plate))
+            elif not ch2:
+                self._remember_place(l, sheet_loops)
         changed = bool(to_sheet or to_model or to_holes or dropped)
         if changed:
             doc.checkpoint()
             if dropped:
                 doc.links = alive
             for l, three, sheet_loops in to_sheet:
-                self._replace_sheet_src(int(l.src),
-                                        linking.place(three, self._link_placement(l.shape,
-                                                                                  sheet_loops)))
-                l.shape = three
+                M = self._link_sheet_map(l, sheet_loops)
+                self._replace_sheet_src(int(l.src), linking.place(three, M))
+                l.shape, l.place = three, M
             for l, sheet_loops, plate in to_model:
                 self._link_plate_from_sheet(l, sheet_loops, plate)
-            for l, loops, new, gone in to_holes:
-                self._link_face_from_sheet(l, loops, new, gone)
+            failed = [l for l, loops, outline, new, gone in to_holes
+                      if not self._link_face_from_sheet(l, loops, outline, new, gone)]
+            to_holes = [t for t in to_holes if t[0] not in failed]
+            apart += len(failed)
             doc.notify()
             if self.mode == "2d":
                 self.sheet_view._refresh_outside(announce=False)
             else:
                 self.view.update()
         updated = len(to_sheet) + len(to_model)
-        cut = sum(len(new) for _l, _loops, new, _gone in to_holes)
-        closed = sum(len(gone) for _l, _loops, _new, gone in to_holes)
+        outlines = sum(1 for _l, _loops, outline, _new, _gone in to_holes if outline)
+        cut = sum(len(new) for _l, _loops, _outline, new, _gone in to_holes)
+        closed = sum(len(gone) for _l, _loops, _outline, _new, gone in to_holes)
         refitted = self.refit_vents(checkpoint=not changed)
         notes = []
         if both:
@@ -1179,6 +1241,11 @@ class SheetMixin:
         if updated:
             notes.append(trn("{n} link updated.", "{n} links updated.", updated)
                          .format(n=updated))
+        if outlines:
+            notes.append(tr("The outline of the face was carried to the model."))
+        if apart:
+            notes.append(tr("The new outline does not overlap the face; the model is left as "
+                            "it is."))
         if cut:
             notes.append(trn("{n} hole cut into the model.", "{n} holes cut into the model.",
                              cut).format(n=cut))
@@ -1193,6 +1260,32 @@ class SheetMixin:
         elif not refitted and announce_empty and direction == "both":
             self.hint.setText(tr("Nothing to update."))
         return updated + len(to_holes)
+
+    def _link_sheet_map(self, link, sheet_loops) -> np.ndarray:
+        """The map from the shape of a link to the worksheet, for an outline that is the same.
+
+        `link.place` knows which edge of a rectangle is which, where a rigid fit of the
+        shape has four answers that look equally good; it still holds when the corners of
+        the outline agree with it (`linking.outline_place`, which also follows a part that
+        moved) and - when both sides have holes - at least one hole of the shape lands on
+        a hole of the sheet, which a part turned half round on the sheet does not do.
+        Otherwise `_link_placement` decides, as before there was a `place`.
+        """
+        if len(link.shape) and len(sheet_loops):
+            M = linking.outline_place(link.shape[0], sheet_loops[0], link.place)
+            holes = linking.place(link.shape[1:], M) if M is not None else []
+            if M is not None and (not holes or len(sheet_loops) < 2 or any(
+                    linking.find_hole(h, sheet_loops[1:]) >= 0 for h in holes)):
+                return M
+        return self._link_placement(link.shape, sheet_loops)
+
+    def _remember_place(self, link, sheet_loops) -> None:
+        """`link.place` brought up to date while the sheet and the link agree.
+
+        The outline may have moved on the sheet since; `_link_sheet_map` finds it again.
+        """
+        if len(sheet_loops) and len(link.shape):
+            link.place = self._link_sheet_map(link, sheet_loops)
 
     def _replace_sheet_src(self, src, loops):
         """The paths of one source element replaced by `loops`, on the same layer."""

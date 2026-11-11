@@ -1658,6 +1658,8 @@ TRANSLATIONS = {
     '{n} holes closed in the model.': '{n} gaten gesloten in het model.',
     'Cutting the holes…': 'Gaten snijden…',
     'Closing the holes…': 'Gaten sluiten…',
+    'The outline of the face was carried to the model.': 'De omtrek van het vlak is in het model overgenomen.',
+    'The new outline does not overlap the face; the model is left as it is.': 'De nieuwe omtrek overlapt het vlak niet; het model blijft zoals het is.',
     'Nothing to update.': 'Niets bij te werken.',
     'There are no links to remove.': 'Er zijn geen koppelingen om te verwijderen.',
     'First select the parts or the outlines that are linked.': 'Selecteer eerst de onderdelen of contouren die gekoppeld zijn.',

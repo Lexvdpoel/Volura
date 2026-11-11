@@ -5,8 +5,9 @@ what was drawn there stayed there. The holes of that outline now go back too. A 
 hole or a vent pattern drawn inside the linked wall of a box is cut through that wall -
 through the wall and no further, so the wall on the far side keeps its plastic - and a
 hole that was deleted on the sheet closes again with plastic as deep as the wall around
-it: right through a plate, or only as deep as a pocket went. The outline of the face
-itself still only goes from 3D to 2D.
+it: right through a plate, or only as deep as a pocket went. And the outline of the face
+goes back as well: a corner notched out on the sheet is cut out of the wall, an edge that
+was moved out builds the wall on, as thick as it is.
 
 These tests (Qt offscreen) link the front wall of a hollow box, change the holes on the
 sheet and look at the solid.
@@ -110,7 +111,7 @@ def circle(c, r=R, n=32):
 
 def model_point(win, link, pt):
     """A point of the linked outline on the worksheet, as it lies in the model."""
-    M = linking.invert(win._link_placement(link.shape, loops(win, int(link.src))))
+    M = linking.invert(win._link_sheet_map(link, loops(win, int(link.src))))
     q = linking.place([np.asarray(pt, dtype=float).reshape(1, 2)], M)
     return linking.from_plane(q, linking.frame_of(link.frame))[0]
 
@@ -217,7 +218,9 @@ def test_a_hole_deleted_on_the_sheet_closes_again(win):
     win.set_mode("3d")
     assert genus(win, g) == 3
     win.set_mode("2d")
-    win.doc.sheet.paths.remove(hole_paths(win, src)[0])
+    first = min(hole_paths(win, src), key=lambda p: np.linalg.norm(
+        model_point(win, link, p.pts.mean(axis=0)) - centres[0]))
+    win.doc.sheet.paths.remove(first)
     win.doc.notify()
     was = volume(win, g)
     win.set_mode("3d")
@@ -258,21 +261,145 @@ def test_a_pocket_in_the_linked_face_closes_only_that_deep(win):
         "the pocket filled, the wall behind it stayed empty"
 
 
-def test_a_changed_outline_still_only_goes_from_3d_to_2d(win):
+def corner_notched(pts, corner, size):
+    """The outline with a square of `size` mm cut out at point `corner`."""
+    q = [np.asarray(x, dtype=float) for x in pts]
+    i = corner
+    c, a, b = q[i], q[i - 1], q[(i + 1) % len(q)]
+    ua, ub = (a - c) / np.linalg.norm(a - c), (b - c) / np.linalg.norm(b - c)
+    return np.array(q[:i] + [c + size * ua, c + size * (ua + ub), c + size * ub] + q[i + 1:])
+
+
+def slab(win, g, y0, y1):
+    """The volume of the part between y0 and y1: one wall of the box."""
+    solid = win.doc.group(g.id).ents.to_manifold()
+    cube = mf.Manifold.cube([X + 40, y1 - y0, Z + 40]).translate((-20, y0, -20))
+    return mf.Manifold.batch_boolean([solid, cube], mf.OpType.Intersect).volume()
+
+
+def test_a_notched_corner_on_the_sheet_is_cut_out_of_the_wall(win):
+    g = box(win)
+    src = to_sheet(win, g, wall_face(win, g))
+    link = link_of(win, src)
+    win.set_mode("2d")
+    outer = outer_path(win, src)
+    q = np.asarray(outer.pts, dtype=float)
+    i = int(np.argmax(q[:, 0] + q[:, 1]))
+    inside = model_point(win, link, q[i] - 5.0)          # in the middle of the notch
+    front, back, was = slab(win, g, Y - WALL, Y), slab(win, g, 0, WALL), volume(win, g)
+    outer.pts = np.ascontiguousarray(corner_notched(q, i, 10.0))
+    win.doc.notify()
+    win.set_mode("3d")
+    assert win.hint.text() == "The outline of the face was carried to the model."
+    assert probe(win, g, front_probe(inside))[0] == pytest.approx(0.0, abs=1e-6)
+    assert probe(win, g, back_probe(inside))[0] > 0.0, "the wall at the back is untouched"
+    assert slab(win, g, 0, WALL) == pytest.approx(back)
+    assert front - slab(win, g, Y - WALL, Y) == pytest.approx(10 * 10 * WALL, rel=0.05)
+    assert was - volume(win, g) == pytest.approx(10 * 10 * WALL, rel=0.08), \
+        "the cut goes no further than the wall, half a millimetre past it at most"
+
+
+def test_the_sheet_shows_the_wall_as_seen_from_outside(win):
+    """A rectangle fits itself four ways; the link knows which one the sheet shows.
+
+    Seen from in front of the +y wall, the +x end of the box is on the left. A hole drawn
+    in the top right corner of the outline is in the top corner at x = 0 in the model.
+    """
+    g = box(win)
+    src = to_sheet(win, g, wall_face(win, g))
+    link = link_of(win, src)
+    win.set_mode("2d")
+    centre = add_holes(win, link, [(0.85, 0.8)])[0]
+    win.set_mode("3d")
+    assert centre[0] < 0.5 * X and centre[2] > 0.5 * Z
+    rod, whole = probe(win, g, front_probe(centre))
+    assert rod < 0.6 * whole, "the hole is there"
+
+
+def test_an_edge_moved_out_on_the_sheet_builds_the_wall_on(win):
+    g = box(win)
+    src = to_sheet(win, g, wall_face(win, g))
+    link = link_of(win, src)
+    win.set_mode("2d")
+    outer = outer_path(win, src)
+    q = np.asarray(outer.pts, dtype=float)
+    top = q[:, 1] > q[:, 1].max() - 1e-6
+    mid = np.array([0.5 * (q[:, 0].min() + q[:, 0].max()), q[:, 1].max()])
+    above = model_point(win, link, mid + [0.0, 5.0])     # in the new strip
+    below = model_point(win, link, mid - [0.0, 5.0])     # in the old wall
+    was = volume(win, g)
+    q[top, 1] += 10.0
+    outer.pts = np.ascontiguousarray(q)
+    win.doc.notify()
+    win.set_mode("3d")
+    assert win.hint.text() == "The outline of the face was carried to the model."
+    rod, whole = probe(win, g, along_y((above[0], Y - WALL + 0.5, above[2]), WALL - 1.0, 1.0))
+    assert rod == pytest.approx(whole, rel=1e-3), "the new strip is plastic, in the wall"
+    assert probe(win, g, along_y((above[0], Y - WALL - 3.0, above[2]), 2.0, 1.0))[0] == \
+        pytest.approx(0.0, abs=1e-6), "and only as thick as the wall"
+    assert probe(win, g, along_y((above[0], Y + 0.5, above[2]), 3.0, 1.0))[0] == \
+        pytest.approx(0.0, abs=1e-6), "nothing in front of the wall"
+    assert probe(win, g, front_probe(below))[0] > 0.0
+    assert volume(win, g) - was == pytest.approx(60 * 10 * WALL, rel=0.05)
+    assert genus(win, g) == 0, "the strip is one with the wall"
+
+
+def test_the_outline_follows_a_part_moved_on_the_sheet(win):
+    g = box(win)
+    src = to_sheet(win, g, wall_face(win, g))
+    link = link_of(win, src)
+    win.set_mode("2d")
+    outer = outer_path(win, src)
+    q = np.asarray(outer.pts, dtype=float)
+    i = int(np.argmax(q[:, 0] + q[:, 1]))
+    inside = model_point(win, link, q[i] - 5.0)
+    was = volume(win, g)
+    outer.pts = np.ascontiguousarray(corner_notched(q, i, 10.0) + [120.0, 35.0])
+    win.doc.notify()
+    win.set_mode("3d")
+    assert probe(win, g, front_probe(inside))[0] == pytest.approx(0.0, abs=1e-6), \
+        "the corner that was notched, not the middle of the part on the sheet"
+    assert was - volume(win, g) == pytest.approx(10 * 10 * WALL, rel=0.08)
+
+
+def test_an_outline_that_does_not_overlap_the_face_changes_nothing(win, monkeypatch):
+    assert linking.outline_diff([(0, 0), (10, 0), (10, 10), (0, 10)],
+                                [(20, 0), (30, 0), (30, 10), (20, 10)]) is None
     g = box(win)
     src = to_sheet(win, g, wall_face(win, g))
     was, steps = volume(win, g), len(win.doc.undo_stack)
     win.set_mode("2d")
     outer = outer_path(win, src)
     q = np.asarray(outer.pts, dtype=float)
-    q[q[:, 0] > q[:, 0].max() - 1e-6, 0] += 10.0
-    outer.pts = np.ascontiguousarray(q)
+    outer.pts = np.ascontiguousarray(corner_notched(q, int(np.argmax(q[:, 0] + q[:, 1])), 10))
     win.doc.notify()
+    far = np.eye(3)
+    far[:2, 2] = (-500.0, -500.0)
+    monkeypatch.setattr(linking, "outline_place", lambda *args, **kw: far)
     win.set_mode("3d")
-    assert win.hint.text() == ("This link only goes from 3D to 2D: a change on the worksheet "
-                               "is not put back in the model.")
+    assert win.hint.text() == ("The new outline does not overlap the face; the model is left "
+                               "as it is.")
     assert genus(win, g) == 0 and volume(win, g) == pytest.approx(was)
     assert len(win.doc.undo_stack) == steps, "nothing changed, so nothing to undo"
+
+
+def test_a_changed_outline_is_one_undo_step(win):
+    g = box(win)
+    src = to_sheet(win, g, wall_face(win, g))
+    link = link_of(win, src)
+    win.set_mode("2d")
+    outer = outer_path(win, src)
+    q = np.asarray(outer.pts, dtype=float)
+    outer.pts = np.ascontiguousarray(corner_notched(q, int(np.argmax(q[:, 0] + q[:, 1])), 10))
+    add_holes(win, link, [(0.3, 0.4)])
+    was, steps = volume(win, g), len(win.doc.undo_stack)
+    win.set_mode("3d")
+    assert win.hint.text() == ("The outline of the face was carried to the model. "
+                               "1 hole cut into the model.")
+    assert genus(win, g) == 1
+    assert len(win.doc.undo_stack) == steps + 1
+    win.doc.undo()
+    assert genus(win, g) == 0 and volume(win, g) == pytest.approx(was)
 
 
 def test_a_sheet_that_did_not_change_is_no_undo_step(win):

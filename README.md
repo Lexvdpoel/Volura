@@ -232,7 +232,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
   in 3D. Every outline stays linked to its part: a linked face keeps its face when you turn the part
   over, and a pocket, a blind hole, a notch or a corner you cut into that face comes to the worksheet.
   The holes go back too: a hole or a vent pattern drawn in a linked face is cut through that wall,
-  and a hole deleted on the worksheet closes again in the model
+  and a hole deleted on the worksheet closes again in the model. A corner or notch cut off the
+  outline on the worksheet is cut out of the wall, and an edge moved outwards builds the wall on
 
 ## Installation
 
