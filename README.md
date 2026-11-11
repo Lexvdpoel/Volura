@@ -197,6 +197,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
   - **STL per color**
   - **3D model with colors (OBJ)**: one object per part, each in its own color from the `.mtl`
     that is written next to it
+  - **CAD model (STEP)**: one solid per part for Fusion, FreeCAD, SolidWorks or Onshape, with
+    real flat faces (a box is six faces, a hole is a hole in its face, not a fan of triangles);
+    round surfaces keep the facets they have in Volura
   - Where parts with different colors overlap, the part made later wins
 - Native file format `.volura` (files from version 0.1 are converted), unlimited undo
 - **3D import**: STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB and COLLADA (DAE), with a progress

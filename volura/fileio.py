@@ -1,4 +1,4 @@
-"""Reading and writing Volura documents, importing meshes, writing STL, OBJ and 3MF."""
+"""Reading and writing Volura documents, importing meshes, writing STL, OBJ, 3MF and STEP."""
 from __future__ import annotations
 
 import json
@@ -389,6 +389,19 @@ def export_stl_per_color(path, part_list, materials):
         write_stl(fn, m, cname)
         files.append(fn)
     return files
+
+
+def export_step(path, part_list):
+    """STEP for CAD programs: one solid per part, named after it. Returns the face count.
+
+    Unlike the STL the parts are not merged: a CAD program wants the bodies as they were
+    made, and parts that overlap stay two bodies there too.
+    """
+    from . import step                          # only this export needs it
+    solids = [(p.name, p.manifold) for p in part_list if p.manifold is not None]
+    if not solids:
+        raise ValueError(tr("There is nothing to export."))
+    return step.write_step(path, solids)
 
 
 # ------------------------------------------------------------------ OBJ

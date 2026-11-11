@@ -1504,6 +1504,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_exp_3mf = A(tr("&Multicolor 3MF…"), self.export_3mf, None, "3mf")
         self.a_exp_colors = A(tr("STL per &Color…"), self.export_stl_colors)
         self.a_exp_obj = A(tr("3D Model with &Colors (OBJ)…"), self.export_obj)
+        self.a_exp_step = A(tr("CAD Model (S&TEP)…"), self.export_step, None, None, False,
+                            tr("The parts as solids with flat faces, for Fusion, FreeCAD, "
+                               "SolidWorks or Onshape"))
         self.a_exp_svg2d = A(tr("2D Vector (&SVG)…"), lambda checked=False: self.export_vector("svg"))
         self.a_exp_dxf2d = A(tr("2D Vector (&DXF)…"), lambda checked=False: self.export_vector("dxf"))
         self.a_exp_gcode = A(tr("G-code for a GRBL Laser (.gcode)…"),
@@ -1995,7 +1998,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         m = mb.addMenu(tr("&File"))
         export = QMenu(tr("&Export"), m)
         self.fill(export, only("3d", self.a_exp_stl, self.a_exp_3mf, self.a_exp_colors,
-                               self.a_exp_obj) + (None,) +
+                               self.a_exp_obj, self.a_exp_step) + (None,) +
                   only("2d", self.a_exp_svg2d, self.a_exp_dxf2d, self.a_exp_gcode))
         self.recent_menu = QMenu(tr("&Recent Files"), m)
         self.update_recent_menu()
@@ -3415,10 +3418,13 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
     def export_obj(self):
         self._export_parts_async("obj")
 
+    def export_step(self):
+        self._export_parts_async("step")
+
     def _export_parts_async(self, kind):
         """Export the printable parts in the background: prepare, ask, write.
 
-        ``kind`` is "stl", "3mf", "obj" or "colors". Turning the model into solids and
+        ``kind`` is "stl", "3mf", "obj", "step" or "colors". Turning the model into solids and
         writing the file run in the background so the window keeps responding; the
         warnings and the file-name dialog stay on the GUI thread, in the same order
         as a synchronous export. Only the preparation can be cancelled, and then no
@@ -3443,6 +3449,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             elif kind == "obj":
                 path, _ = QFileDialog.getSaveFileName(self, tr("Export as OBJ"),
                                                       self.export_name(".obj"), "OBJ (*.obj)")
+            elif kind == "step":
+                path, _ = QFileDialog.getSaveFileName(self, tr("Export as STEP"),
+                                                      self.export_name(".step"),
+                                                      "STEP (*.step *.stp)")
             else:
                 path, _ = QFileDialog.getSaveFileName(self, tr("STL per Color (base name)"),
                                                       self.export_name(".stl"), "STL (*.stl)")
@@ -3468,6 +3478,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                 colors = len({fileio.obj_material(p.color)[0]
                               for p in part_list if p.manifold is not None})
                 return ("obj", (fileio.export_obj(path, part_list), colors))
+            if kind == "step":
+                return ("step", fileio.export_step(path, part_list))
             return ("colors", fileio.export_stl_per_color(path, part_list, materials))
 
         def written(outcome):
@@ -3479,6 +3491,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                 n, colors = value
                 self.hint.setText(tr("OBJ exported ({n} triangles, {colors} colors): {path}")
                                   .format(n=n, colors=colors, path=path))
+            elif what == "step":
+                self.hint.setText(tr("STEP exported ({n} faces): {path}")
+                                  .format(n=value, path=path))
             elif what == "3mf":
                 lines = "\n".join(tr("  extruder {e}: {name}").format(e=e, name=n)
                                   for n, e in value)
