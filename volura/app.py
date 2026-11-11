@@ -26,8 +26,9 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, battery_holder, bin_rack, boxgen, cable_chain, cable_clip,
-               cam, dxf, enclosure, errors, fileio, gcode, gears, gridfinity, hinge, i18n, joints,
-               knob, label_plate, linking, nesting, ops, pegboard, sheet3d, sheettools, svg,
+               cam, dxf, enclosure, errors, fileio, gcode, gears, gridfinity, hinge, hose_adapter,
+               i18n, joints, knob, label_plate, linking, nesting, ops, pegboard, sheet3d, sheettools,
+               svg,
                spacemouse, standoff, storage_bin, text3d, theme, threads, vector_export,
                vector_import, workers)
 from .brep import Entities
@@ -797,6 +798,21 @@ class Settings:
             except (TypeError, ValueError):
                 value = default
             setattr(self, key, max(lo, min(hi, value)))
+        for key, default, lo, hi in (
+                ("hose_d1", 12.0, hose_adapter.D_MIN, hose_adapter.D_MAX),
+                ("hose_d2", 8.0, hose_adapter.D_MIN, hose_adapter.D_MAX),
+                ("hose_wall", 1.6, hose_adapter.WALL_MIN, hose_adapter.WALL_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        try:
+            barbs = int(self.q.value("hose_barbs", 3))
+        except (TypeError, ValueError):
+            barbs = 3
+        self.hose_barbs = max(hose_adapter.BARBS_MIN, min(hose_adapter.BARBS_MAX, barbs))
+        self.hose_straight = self._bool("hose_straight", False)
         self.grid_magnets = self._bool("grid_magnets", False)
         self.grid_scoop = self._bool("grid_scoop", False)
         self.grid_label = self._bool("grid_label", False)
@@ -980,6 +996,8 @@ class Settings:
         self.q.setValue("chain_links", self.chain_links)
         self.q.setValue("chain_bend", self.chain_bend)
         for key in ("peg_kind", "peg_width", "peg_reach", "peg_board", "peg_size"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("hose_d1", "hose_d2", "hose_wall", "hose_barbs", "hose_straight"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -1838,6 +1856,13 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                             None, "pegboard", False,
                             tr("Add a hook, a shelf or a tool holder for a pegboard of 1/4 inch "
                                "holes at 1 inch: it hangs on two pegs and prints on its side"))
+        # ---- hose adapter
+        self.a_hose_adapter = A(tr("Hose Adapter…"),
+                                lambda checked=False: self.hose_adapter_dialog(), None, "hose",
+                                False,
+                                tr("Add a reducer between two hoses, with barbs or plain ends "
+                                   "and a collar between them: it prints upright without "
+                                   "support"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -1949,7 +1974,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                          (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
                           self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
                           self.a_battery_holder, self.a_storage_bin, self.a_bin_rack,
-                          self.a_cable_chain, self.a_gridfinity, self.a_pegboard))
+                          self.a_cable_chain, self.a_gridfinity, self.a_pegboard,
+                          self.a_hose_adapter))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

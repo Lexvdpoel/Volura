@@ -13,8 +13,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QSpinBox)
 
 from . import (battery_holder, bin_rack, cable_chain, cable_clip, enclosure, fonts, gears,
-               gridfinity, hinge, knob, label_plate, pegboard, standoff, storage_bin, text3d,
-               threads)
+               gridfinity, hinge, hose_adapter, knob, label_plate, pegboard, standoff, storage_bin,
+               text3d, threads)
 from .i18n import tr
 
 
@@ -897,6 +897,78 @@ class PegboardDialog(QDialog):
                 "reach": round(self.reach.value(), 6),
                 "board": round(self.board.value(), 6),
                 "size": round(self.size.value(), 6)}
+
+
+class HoseAdapterDialog(QDialog):
+    """The "Hose Adapter…" dialog: a reducer between two hoses.
+
+    The two diameters are the inside of the hoses, the bottom one and the top one as it prints;
+    the wall is the plastic around the water way and the barbs how many grip each hose. Plain
+    ends are for tube that is pushed on, and grey out the barbs. Under the fields the height and
+    the collar the adapter will have. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Hose adapter"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(0.5)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.d1 = spin(hose_adapter.D_MIN, hose_adapter.D_MAX, s.hose_d1)
+        self.d1.setToolTip(tr("The inside of the hose that goes over the bottom end"))
+        self.d2 = spin(hose_adapter.D_MIN, hose_adapter.D_MAX, s.hose_d2)
+        self.d2.setToolTip(tr("The inside of the hose that goes over the top end"))
+        self.wall = spin(hose_adapter.WALL_MIN, hose_adapter.WALL_MAX, s.hose_wall)
+        self.wall.setToolTip(tr("The plastic around the water way"))
+        self.barbs = QSpinBox()
+        self.barbs.setRange(hose_adapter.BARBS_MIN, hose_adapter.BARBS_MAX)
+        self.barbs.setValue(int(s.hose_barbs))
+        self.barbs.setToolTip(tr("How many barbs grip each hose"))
+        self.straight = QCheckBox(tr("Plain ends (push-on tube)"))
+        self.straight.setChecked(bool(s.hose_straight))
+        self.info = QLabel()
+        lay.addRow(tr("Hose bottom"), self.d1)
+        lay.addRow(tr("Hose top"), self.d2)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Barbs"), self.barbs)
+        lay.addRow("", self.straight)
+        lay.addRow("", self.info)
+        for w in (self.d1, self.d2, self.wall, self.barbs):
+            w.valueChanged.connect(self._changed)
+        self.straight.toggled.connect(self._changed)
+        self.bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.bb.accepted.connect(self.accept)
+        self.bb.rejected.connect(self.reject)
+        lay.addRow(self.bb)
+        self._changed()
+
+    def _changed(self, *_):
+        self.barbs.setEnabled(not self.straight.isChecked())
+        o = self.options()
+        try:
+            s = hose_adapter.sizes(**o)
+        except ValueError as e:
+            self.info.setText(str(e))
+            self.bb.button(QDialogButtonBox.Ok).setEnabled(False)
+            return
+        self.bb.button(QDialogButtonBox.Ok).setEnabled(True)
+        self.info.setText(tr("Height {h:.1f} mm, collar {c:.1f} mm, water way {b:.1f} mm")
+                          .format(h=s["length"], c=s["collar_d"],
+                                  b=min(s["bore1"], s["bore2"])))
+
+    def options(self) -> dict:
+        return {"d1": round(self.d1.value(), 6), "d2": round(self.d2.value(), 6),
+                "wall": round(self.wall.value(), 6), "barbs": int(self.barbs.value()),
+                "straight": self.straight.isChecked()}
 
 
 class GridfinityDialog(QDialog):

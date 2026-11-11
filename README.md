@@ -142,6 +142,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Pegboard Hook** (Draw > Parts): a hook, a shelf with a brace or a holder for a tool, for a
   pegboard of 1/4 inch holes at 1 inch. It hangs on an upper peg that hooks behind the board and
   rests on a lower one, and it prints lying on its side without support
+- **Hose Adapter** (Draw > Parts): a reducer between two hoses of the inside diameters you enter,
+  with barbs that grip each hose or plain ends for push-on tube, and a collar the hoses stop
+  against. It prints upright without support and keeps its wall all the way round the water way
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

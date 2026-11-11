@@ -293,6 +293,12 @@ SVG = {
                 f'<circle cx="6.5" cy="17" r="1" {N} {S(w=1.2)}/>'
                 f'<path d="M10.5 9 L13 9 L13 17 L20 17 L20 13" {N} stroke="#3b7dd8" '
                 f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    # hose adapter: a wide spigot below, a collar, a narrow spigot on top
+    "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
+            f'fill="#eef2f7" {S()}/>'
+            f'<path d="M9 11 L9 2.5 L15 2.5 L15 11" fill="#eef2f7" {S()}/>'
+            f'<path d="M7 18 L9.5 16.5 M17 18 L14.5 16.5 M9 7 L10.5 5.5 M15 7 L13.5 5.5" {N} '
+            f'stroke="#3b7dd8" stroke-width="1.4" stroke-linecap="round"/>',
     # gridfinity: a baseplate of four squares, with a bin standing in one of them
     "gridfinity": f'<path d="M2.5 13 L21.5 13 L21.5 21 L2.5 21 Z" fill="#eef2f7" {S()}/>'
                   f'<path d="M12 13 L12 21 M2.5 17 L21.5 17" {N} {S(w=1.2)}/>'

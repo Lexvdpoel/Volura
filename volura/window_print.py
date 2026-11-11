@@ -23,16 +23,17 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QVBoxLayout)
 
 from . import (background, battery_holder, bin_rack, cable_chain, cable_clip, enclosure, gears,
-               gridfinity, hinge, pegboard, joints, knob, label_plate, ops, standoff, storage_bin, text3d, theme,
-               threads)
+               gridfinity, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard, standoff,
+               storage_bin, text3d, theme, threads)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
 from .part_dialogs import (BatteryHolderDialog, BinRackDialog, CableChainDialog,
-                           CableClipDialog, GridfinityDialog, HingeDialog, PegboardDialog, KnobDialog, LabelPlateDialog,
-                           ProjectBoxDialog, StandoffDialog, StorageBinDialog, Text3DDialog)
+                           CableClipDialog, GridfinityDialog, HingeDialog, HoseAdapterDialog,
+                           KnobDialog, LabelPlateDialog, PegboardDialog, ProjectBoxDialog,
+                           StandoffDialog, StorageBinDialog, Text3DDialog)
 
 
 TOOL_INFO = [
@@ -775,6 +776,52 @@ class PrintMixin:
             self.view.set_status(tr("Pegboard part failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the pegboard part…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ hose adapter
+    def hose_adapter_dialog(self):
+        """Draw > Parts > Hose Adapter…: a reducer between two hoses."""
+        dlg = HoseAdapterDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("d1", "d2", "wall", "barbs", "straight"):
+            setattr(self.settings, "hose_" + key, options[key])
+        self.settings.save()
+        made = self.make_hose_adapter_model(options)
+        self.setFocus()
+        return made
+
+    def make_hose_adapter_model(self, options):
+        """The adapter standing upright as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("d1", "d2", "wall", "barbs", "straight")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the hose adapter…"))
+            m = hose_adapter.hose_adapter(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the adapter away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Hose adapter"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Hose adapter added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Hose adapter failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the hose adapter…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ gridfinity
