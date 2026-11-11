@@ -970,6 +970,11 @@ class UiMixin:
         else:
             m.addAction(self.a_sel_all)
             m.addAction(tr("Unhide All"), self.unhide_all)
+        link = self._context_link()
+        if link is not None:
+            m.addSeparator()
+            m.addAction(tr("Go to Linked Outline"),
+                        lambda checked=False, s=int(link.src): self.go_to_linked_outline(s))
         if self.doc.active != ROOT:
             m.addSeparator()
             m.addAction(self.a_close_group)

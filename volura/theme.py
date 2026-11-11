@@ -55,6 +55,7 @@ COLORS = {
     "desk_grid": ("#dfe3e8", "#2e3237"),
     "desk_grid_major": ("#b9c0c9", "#3c4148"),
     "origin": ("#2b2b2b", "#2b2b2b"),
+    "link_badge": ("#2f6fd6", "#2563eb"),       # the chain on an outline that is linked to a part
     # the 3D view (RGB 0..1 is made from these hex values)
     "sky_top": ("#9eb8d1", "#434a54"),
     "sky_horizon": ("#f7f7f5", "#7a7d82"),

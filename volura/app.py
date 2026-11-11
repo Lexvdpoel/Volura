@@ -1168,6 +1168,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.sheet_view.sheet_settings_requested.connect(self.open_sheet_settings)
         self.sheet_view.auto_arrange_requested.connect(self.auto_arrange)
         self.sheet_view.to_model_requested.connect(self.sheet_to_model)
+        self.sheet_view.go_to_part_requested.connect(self.go_to_linked_part)
         self.sheet_view.selection_changed.connect(self.info.refresh)
         self.set_tool("select")
         self.update_title()

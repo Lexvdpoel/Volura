@@ -233,7 +233,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   over, and a pocket, a blind hole, a notch or a corner you cut into that face comes to the worksheet.
   The holes go back too: a hole or a vent pattern drawn in a linked face is cut through that wall,
   and a hole deleted on the worksheet closes again in the model. A corner or notch cut off the
-  outline on the worksheet is cut out of the wall, and an edge moved outwards builds the wall on
+  outline on the worksheet is cut out of the wall, and an edge moved outwards builds the wall on.
+  A linked outline carries a small chain at its corner, and right-click it > *Go to Linked Part*
+  takes you to the part in 3D; right-click the part or its linked face > *Go to Linked Outline*
+  takes you back to the contour on the worksheet
 
 ## Installation
 

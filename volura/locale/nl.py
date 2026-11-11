@@ -566,6 +566,8 @@ TRANSLATIONS = {
     'Give a distance greater than zero to offset.': 'Geef een afstand groter dan nul om te verschuiven.',
     'give the two semi-axes, for example 30;20': 'geef de twee halve assen, bijvoorbeeld 30;20',
     'give width;height, for example 30;20': 'geef breedte;hoogte, bijvoorbeeld 30;20',
+    'Go to Linked Outline': 'Ga naar gekoppelde contour',
+    'Go to Linked Part': 'Ga naar gekoppeld onderdeel',
     'Gray': 'Grijs',
     'Green': 'Groen',
     'Green Axis': 'Groene as',

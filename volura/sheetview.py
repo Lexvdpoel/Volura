@@ -38,6 +38,8 @@ HOVER_COLOR = "#f08a24"      # the path under the cursor
 AXIS_X = "#d23b3b"
 AXIS_Y = "#3fa34d"
 OUTSIDE_COLOR = "#e02020"     # paths outside the sheet or in the margin: red outline
+LINK_BADGE = 14.0            # px: the chain that marks an outline linked to a part
+LINK_BADGE_GAP = 4.0         # px: between that badge and the corner of the outline
 # The sheet and the grid: colours per theme in theme.py. The sheet stays light in the
 # dark theme too, so black and blue layer colours remain readable on it.
 VCB_CHARS = set("0123456789.,;-+=\"' ")
@@ -64,6 +66,7 @@ class SheetView(QWidget):
     sheet_settings_requested = Signal()   # "Sheet…" asks for the sheet settings
     auto_arrange_requested = Signal()     # "Auto Arrange" asks for the options
     to_model_requested = Signal()         # "Parts to 3D Model": plates in the model
+    go_to_part_requested = Signal(int)    # "Go to Linked Part": the part of a linked outline
 
     MIN_SCALE = 0.005                      # pixels per mm
     MAX_SCALE = 500.0
@@ -209,6 +212,20 @@ class SheetView(QWidget):
             cx, cy = 0.5 * (box[0] + box[2]), 0.5 * (box[1] + box[3])
             self.origin = QPointF(0.5 * w - cx * self.scale,
                                   0.5 * (h + label) + cy * self.scale)
+        self._placed_origin = True
+        self.update()
+
+    def zoom_rect(self, rect):
+        """A rectangle (xmin, ymin, xmax, ymax) of the world as large as possible, centred."""
+        if rect is None:
+            return
+        w, h = max(self.width(), 1), max(self.height(), 1)
+        pad = 24.0                           # room around it, as in zoom_extents
+        dw = max(rect[2] - rect[0], 1e-6)
+        dh = max(rect[3] - rect[1], 1e-6)
+        self.scale = self._clamp_scale(min((w - 2 * pad) / dw, (h - 2 * pad) / dh))
+        self.origin = QPointF(0.5 * w - 0.5 * (rect[0] + rect[2]) * self.scale,
+                              0.5 * h + 0.5 * (rect[1] + rect[3]) * self.scale)
         self._placed_origin = True
         self.update()
 
@@ -369,6 +386,23 @@ class SheetView(QWidget):
     def _selectable_paths(self):
         return [p for p in self.doc.sheet.paths if self._visible(p)
                 and not self._layer(p).locked and len(p.pts)]
+
+    def _link_of_selection(self):
+        """The link of the selection: one when every selected path is of one linked src.
+
+        A selection of two outlines, or of an outline and something drawn by hand, is not
+        one part, and has no link to go to.
+        """
+        sel = self.selected_paths()
+        if not sel:
+            return None
+        srcs = {int(p.src) for p in sel}
+        if len(srcs) != 1:
+            return None
+        src = srcs.pop()
+        if not src:
+            return None
+        return next((l for l in self.doc.links if int(l.src) == src), None)
 
     def selection_center(self):
         box = paths_bbox(self.selected_paths())
@@ -727,6 +761,12 @@ class SheetView(QWidget):
             act = menu.addAction(label)
             act.triggered.connect(
                 lambda checked=False, n=name: self._menu_tool(n))
+        link = self._link_of_selection()
+        if link is not None:
+            menu.addSeparator()
+            menu.addAction(tr("Go to Linked Part"),
+                           lambda checked=False, g=int(link.group):
+                           self.go_to_part_requested.emit(g))
         menu.addSeparator()
         for label, slot in ((tr("Union"), lambda: self.sheet_boolean("union")),
                             (tr("Subtract"), lambda: self.sheet_boolean("subtract")),
@@ -947,6 +987,41 @@ class SheetView(QWidget):
             pen.setWidthF(2.6 if id(path) in chosen else 1.4)
             p.setPen(pen)
             p.drawPath(self._path_of(path))
+        self._draw_link_badges(p)
+
+    def _link_badges(self) -> list:
+        """(QPointF, link) for every link whose outline lies on the worksheet.
+
+        The point is the top-left corner of the bounding box of the visible paths of that
+        link, in screen coordinates: the badge hangs just outside it, so it never covers
+        the contour it belongs to. It is only a mark on the screen - exporting and printing
+        read the paths of the drawing and know nothing about it.
+        """
+        out = []
+        for link in self.doc.links:
+            pts = [np.asarray(path.pts, dtype=float) for path in self.doc.sheet.paths
+                   if int(path.src) == int(link.src) and self._visible(path) and len(path.pts)]
+            if not pts:
+                continue
+            q = np.concatenate(pts)
+            out.append((self.to_screen((float(q[:, 0].min()), float(q[:, 1].max()))), link))
+        return out
+
+    def _draw_link_badges(self, p):
+        """The chain that marks a linked outline: two interlocked rounded rectangles."""
+        badges = self._link_badges()
+        if not badges:
+            return
+        pen = QPen(theme.qcolor("link_badge"))
+        pen.setWidthF(1.6)
+        p.setPen(pen)
+        p.setBrush(Qt.NoBrush)
+        s, r = LINK_BADGE, 0.22 * LINK_BADGE
+        for pos, _link in badges:
+            x = pos.x() - LINK_BADGE_GAP - s
+            y = pos.y() - LINK_BADGE_GAP - s
+            p.drawRoundedRect(QRectF(x, y + 0.42 * s, 0.66 * s, 0.58 * s), r, r)
+            p.drawRoundedRect(QRectF(x + 0.34 * s, y, 0.66 * s, 0.58 * s), r, r)
 
     def _path_of(self, path) -> QPainterPath:
         pts = path.pts

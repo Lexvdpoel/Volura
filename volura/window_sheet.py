@@ -41,6 +41,10 @@ from .vector2d import (SHEET_SPACING, Drawing, MILL_OPS, OP_LABELS, VPath, _tran
 #: lies; a fit that is further off paired the loops up wrongly, and the outline decides instead
 PLACEMENT_FIT = 0.05
 
+#: how close the normal and the plane of a face must be to the plane a link of a face
+#: remembers for that face to be the linked one
+FACE_PLANE_TOL = 1e-3
+
 
 class SheetMixin:
     """The worksheet methods of `MainWindow`; the window itself lives in the app."""
@@ -1326,6 +1330,77 @@ class SheetMixin:
         self.hint.setText(trn("{n} link removed.", "{n} links removed.", removed)
                           .format(n=removed))
         return removed
+
+    # ------------------------------------------------ jumping between a link and its outline
+    def _link_face_item(self, link, g):
+        """("f", group id, face id) of the face a link of a face is about, or None.
+
+        The plane the link remembers decides: the first face whose normal and offset are
+        that plane within `FACE_PLANE_TOL`. None when the solid has no face in that plane
+        any more, which leaves the part itself as the thing to select.
+        """
+        frame = linking.frame_of(link.frame) if link is not None else None
+        if frame is None or g is None:
+            return None
+        o, _u, _v, n = frame
+        for fid, F in g.ents.F.items():
+            if not F.loops or not F.loops[0]:
+                continue
+            if float(np.linalg.norm(np.asarray(F.normal, dtype=float) - n)) > FACE_PLANE_TOL:
+                continue
+            if abs(float((g.ents.V[F.loops[0][0]] - o) @ n)) > FACE_PLANE_TOL:
+                continue
+            return ("f", int(g.id), int(fid))
+        return None
+
+    def go_to_linked_part(self, group_id):
+        """The worksheet's "Go to Linked Part": the part in 3D, selected and in view."""
+        g = self.doc.group(int(group_id))
+        if g is None:
+            return False
+        link = next((l for l in self.doc.links if int(l.group) == int(g.id)), None)
+        self.set_mode("3d")
+        item = self._link_face_item(link, g) if link is not None and link.kind == "face" else None
+        self.doc.set_selection([item or ("g", g.id, g.id)])
+        self.doc.notify()
+        self.zoom_selection()
+        return True
+
+    def _context_link(self):
+        """The link the model points at: that of the selected part, or of the clicked face.
+
+        The face under the cursor counts on its own, so right-clicking the linked face of
+        a solid gives the way back to its outline without first selecting the part.
+        """
+        groups = self.doc.selected_groups()
+        if len(groups) == 1:
+            link = next((l for l in self.doc.links if int(l.group) == int(groups[0].id)), None)
+            if link is not None:
+                return link
+        face = getattr(self, "_context_face", None)
+        if face is None:
+            return None
+        g = self.doc.group(int(face[0]))
+        if g is None:
+            return None
+        for link in self.doc.links:
+            if link.kind != "face" or int(link.group) != int(g.id):
+                continue
+            found = self._link_face_item(link, g)
+            if found is not None and int(found[2]) == int(face[1]):
+                return link
+        return None
+
+    def go_to_linked_outline(self, src):
+        """The model's "Go to Linked Outline": the paths of that src, selected and in view."""
+        src = int(src)
+        self.set_mode("2d")
+        paths = [p for p in self.sheet_view._selectable_paths() if int(p.src) == src]
+        if not paths:
+            return False
+        self.sheet_view.set_selection(paths)
+        self.sheet_view.zoom_rect(sheettools.paths_bbox(paths))
+        return True
 
     # ------------------------------------------------------------ export for laser and mill
     def sheet_layers_for_export(self) -> list:
