@@ -252,7 +252,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
   (.ctb, .goo, .pwmx, ...). Volura puts the parts on automatic supports - heads, pillars that
   bridge and brace each other, anchors on the model where nothing else fits - and a pad, shows
   them in 3D and layer by layer, and slices; UVtools, which comes with the download, writes the
-  printer's format
+  printer's format. **Hollowing** makes a large part a shell 1.5 to 6 mm thick with two drain
+  holes near the bottom, so the resin inside can run out and the print uses far less resin
 - Native file format `.volura` (files from version 0.1 are converted), unlimited undo
 - **3D import**: STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB and COLLADA (DAE), with a progress
   bar. Every closed part becomes a group in its own color; slicer projects (PrusaSlicer,

@@ -1,4 +1,5 @@
-"""The "Slice for Resin…" dialog: the resin printer, the layers, the light and the supports.
+"""The "Slice for Resin…" dialog: the resin printer, the layers, the light, the supports and
+whether the part is hollow.
 
 The printers come from the resin profiles that Volura brings along (see `volura.sla_profiles`):
 first the maker, then the printer. The layer height picks the print profile of that height, and
@@ -68,6 +69,14 @@ class ResinDialog(QDialog):
         self.elevation.setToolTip(tr("How high the part stands above the pad on its supports"))
         self.pad = QCheckBox(tr("Pad under the print"))
         self.pad.setChecked(bool(s.resin_pad))
+        self.hollow = QCheckBox(tr("Hollow the part"))
+        self.hollow.setChecked(bool(s.resin_hollow))
+        self.hollow.setToolTip(tr("Saves resin on large prints: the part becomes a shell"))
+        self.wall = spin(1.5, 6.0, s.resin_wall, 0.5, " mm")
+        self.wall.setToolTip(tr("How thick the shell is"))
+        self.drain = QCheckBox(tr("Drain holes"))
+        self.drain.setChecked(bool(s.resin_drain))
+        self.drain.setToolTip(tr("Two holes near the bottom, so the resin inside can drain"))
         self.info = QLabel()
         self.info.setWordWrap(True)
         lay.addRow(tr("Maker"), self.maker)
@@ -81,6 +90,9 @@ class ResinDialog(QDialog):
         lay.addRow(tr("Support density"), self.density)
         lay.addRow(tr("Lift off the pad"), self.elevation)
         lay.addRow("", self.pad)
+        lay.addRow("", self.hollow)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow("", self.drain)
         lay.addRow("", self.info)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.button(QDialogButtonBox.Ok).setText(tr("Supports…"))
@@ -94,10 +106,12 @@ class ResinDialog(QDialog):
         self.maker.currentIndexChanged.connect(self._maker_changed)
         self.printer_box.currentIndexChanged.connect(self._printer_changed)
         self.supports.toggled.connect(self._supports_toggled)
+        self.hollow.toggled.connect(self._hollow_toggled)
         self._maker_changed()
         if wanted is not None:
             self.printer_box.setCurrentIndex(max(0, self.printer_box.findData(wanted.id)))
         self._supports_toggled(self.supports.isChecked())
+        self._hollow_toggled(self.hollow.isChecked())
 
     def _maker_changed(self, *_):
         maker = self.maker.currentText()
@@ -123,6 +137,10 @@ class ResinDialog(QDialog):
         for w in (self.level, self.density, self.elevation):
             w.setEnabled(on)
 
+    def _hollow_toggled(self, on):
+        for w in (self.wall, self.drain):
+            w.setEnabled(on)
+
     # ---- the result
     def settings(self) -> ResinSettings:
         return ResinSettings(layer_height=float(self.layer.currentData() or 0.05),
@@ -132,7 +150,8 @@ class ResinDialog(QDialog):
                              supports=self.supports.isChecked(),
                              support_level=self.level.currentData(),
                              density=self.density.value(), elevation=self.elevation.value(),
-                             pad=self.pad.isChecked())
+                             pad=self.pad.isChecked(), hollow=self.hollow.isChecked(),
+                             wall=self.wall.value(), drain_holes=self.drain.isChecked())
 
     def profile(self):
         st = self.settings()
@@ -145,4 +164,5 @@ class ResinDialog(QDialog):
                 "level": st.support_level, "layer": st.layer_height,
                 "exposure": st.exposure, "bottom_exposure": st.bottom_exposure,
                 "bottom_layers": st.bottom_layers, "density": st.density,
-                "elevation": st.elevation, "supports": st.supports, "pad": st.pad}
+                "elevation": st.elevation, "supports": st.supports, "pad": st.pad,
+                "hollow": st.hollow, "wall": st.wall, "drain": st.drain_holes}

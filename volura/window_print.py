@@ -1096,7 +1096,7 @@ class PrintMixin:
 
     def _resin_supports(self, printer, profile, settings, parts, folder):
         """Make the supports in the background, show them, and slice when asked to."""
-        from . import sla_slicer, sla_supports
+        from . import sla_hollow, sla_slicer, sla_supports
         from .sla_preview import ResinPreviewDialog
         cfg = sla_supports.SupportConfig.from_profile(
             profile.values if profile else {}, density=settings.density,
@@ -1104,7 +1104,19 @@ class PrintMixin:
 
         def work(report):
             report(0.0, tr("Making the supports…"))
-            sup = sla_supports.support(parts, cfg, settings.supports,
+            made, saved = list(parts), 0.0
+            if settings.hollow:
+                # the drain holes are cut before the supports, so that no support point lands
+                # in one; the cavity itself is only taken out while slicing
+                report(0.1, tr("Hollowing the part…"))
+                solid = (mf.Manifold.batch_boolean(parts, mf.OpType.Add)
+                         if len(parts) > 1 else parts[0])
+                before = solid.volume()
+                shell, _ = sla_hollow.hollowed(solid, settings.wall, holes=settings.drain_holes)
+                if not shell.is_empty():
+                    saved = max(0.0, (before - shell.volume()) / 1000.0)
+                    made = [shell]
+            sup = sla_supports.support(made, cfg, settings.supports,
                                        step=max(settings.layer_height, 0.1))
             placed = sla_slicer.place_on_plate(sup.all, printer)
             n = len(sup.parts)
@@ -1121,16 +1133,18 @@ class PrintMixin:
                                     "build volume of {w:g} × {d:g} × {h:g} mm")
                                  .format(x=size[0], y=size[1], z=size[2], w=printer.width,
                                          d=printer.depth, h=printer.height))
-            return sup, whole
+            return sup, whole, saved
 
         def done(made):
-            sup, whole = made
+            sup, whole, saved = made
             layers = max(1, int(np.ceil(whole.bounding_box()[5] / settings.layer_height)))
             hours, rest = divmod(int(round(sla_slicer.print_seconds(layers, settings))), 3600)
             summary = tr("{printer}: {n} layers, about {h} h {m:02d} min, {ml:.1f} ml resin; "
                          "{points} support points on {pillars} pillars").format(
                 printer=printer.name, n=layers, h=hours, m=rest // 60,
                 ml=whole.volume() / 1000.0, points=sup.points, pillars=sup.pillars)
+            if saved:
+                summary += " " + tr("hollow: saves {ml:.1f} ml").format(ml=saved)
             if sup.dropped:
                 summary += " " + tr("({n} points could not be supported)").format(n=sup.dropped)
 
@@ -1156,16 +1170,28 @@ class PrintMixin:
                                                                   str(exc)))
 
     def _resin_slice(self, sup, printer, profile, settings, path, folder):
-        from . import sla_slicer
+        from . import sla_hollow, sla_slicer
         import tempfile
 
         def work(report):
+            cavities = None
+            if settings.hollow:
+                # the inside of the part, at the heights the print is cut at: the slicer takes
+                # it out of every layer, which is cheaper than a hollow solid of its own
+                report(0.05, tr("Hollowing the part…"))
+                whole = mf.Manifold.batch_boolean(sup.all, mf.OpType.Add)
+                zs = sla_slicer.layer_heights(float(whole.bounding_box()[5]),
+                                              settings.layer_height)
+                part = (mf.Manifold.batch_boolean(sup.parts, mf.OpType.Add)
+                        if len(sup.parts) > 1 else sup.parts[0])
+                cavities = sla_hollow.hollow_layers(part, zs, settings.wall)
             fd, archive = tempfile.mkstemp(suffix=".sl1", prefix="volura-")
             os.close(fd)
             try:
                 result = sla_slicer.write_sl1(
                     archive, printer, profile, settings, sup.all,
-                    on_progress=lambda f: report(0.85 * f, tr("Slicing the layers…")))
+                    on_progress=lambda f: report(0.85 * f, tr("Slicing the layers…")),
+                    cavities=cavities)
                 report(0.9, tr("Writing the file for the printer…"))
                 sla_slicer.convert(archive, printer, path, folder)
             finally:

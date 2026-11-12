@@ -198,7 +198,7 @@ class ResinLibrary:
 
 @dataclass
 class ResinSettings:
-    """What you choose for a resin print besides the printer: layers, light and supports."""
+    """What you choose for a resin print besides the printer: layers, light, supports, shell."""
 
     layer_height: float = 0.05
     exposure: float = 2.5                # s per layer
@@ -210,6 +210,9 @@ class ResinSettings:
     density: float = 100.0               # % of the support points of the profile
     elevation: float = 5.0               # mm the part stands above the pad on its supports
     pad: bool = True
+    hollow: bool = False                 # the part as a shell, with drain holes
+    wall: float = 2.5                    # mm thick that shell
+    drain_holes: bool = True             # holes near the bottom, so the resin inside drains
 
 
 def converter_environment() -> dict:

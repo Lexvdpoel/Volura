@@ -1,8 +1,9 @@
-"""Resin (MSLA) slicing: profiles, layer images, supports and File > Slice for Resin.
+"""Resin (MSLA) slicing: profiles, layer images, supports, hollowing and File > Slice for Resin.
 
 `sla_profiles` reads PrusaSlicer's resin printer and print profiles that come with UVtools,
-`sla_supports` puts the parts on supports and a pad, `sla_slicer` cuts them into grayscale layer
-images in an SL1 archive and lets UVtools convert that into the printer's own format. These
+`sla_supports` puts the parts on supports and a pad, `sla_hollow` makes a part a shell with drain
+holes, `sla_slicer` cuts them into grayscale layer images in an SL1 archive and lets UVtools
+convert that into the printer's own format. These
 tests use a small profile folder of their own; when tools/fetch_uvtools.py has fetched the real
 ones, a cube is also sliced for a real printer and the whole menu is walked through.
 
@@ -11,6 +12,7 @@ Run with:  python -m pytest tests/test_sla.py
 import io
 import math
 import os
+import re
 import sys
 import time
 import zipfile
@@ -25,6 +27,7 @@ from PySide6.QtCore import QPointF  # noqa: E402
 from PySide6.QtGui import QImage  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from volura import sla_hollow as sh  # noqa: E402
 from volura import sla_profiles as sp  # noqa: E402
 from volura import sla_slicer as ss  # noqa: E402
 from volura import sla_supports as su  # noqa: E402
@@ -213,6 +216,102 @@ def test_without_supports_the_part_stands_on_the_pad():
     assert len(whole.decompose()) == 1
 
 
+# ------------------------------------------------------------------ hollowing
+
+def heights(top, layer=0.5):
+    """The middle of every layer of a print of `top` mm high."""
+    return [(i + 0.5) * layer for i in range(int(round(top / layer)))]
+
+
+def white_pixels(path, index):
+    """The pixels a layer of an SL1 archive cures."""
+    img = ss.read_layer(path.read_bytes(), index).convertToFormat(QImage.Format_Grayscale8)
+    return int((ss._pixels(img) > 127).sum())
+
+
+def test_a_30_mm_cube_becomes_a_shell_of_2_5_mm():
+    cav = sh.hollow_layers(mf.Manifold.cube([30, 30, 30]), heights(30), 2.5)
+    assert cav[15.25].area() == pytest.approx(25.0 ** 2, rel=0.03)
+    assert not [z for z in cav if z <= 2.5], "the floor of the cavity is part of the print"
+    assert not [z for z in cav if z >= 27.5], "so is its roof"
+
+
+def test_the_shell_of_a_sphere_is_2_5_mm_thick_everywhere():
+    sphere = mf.Manifold.sphere(15, 96).translate((0.0, 0.0, 15.0))
+    zs = heights(30)
+    cav = sh.hollow_layers(sphere, zs, 2.5)
+    shell = (sum(sphere.slice(z).area() for z in zs)
+             - sum(c.area() for c in cav.values())) * 0.5
+    assert shell == pytest.approx(4.0 / 3.0 * math.pi * (15.0 ** 3 - 12.5 ** 3), rel=0.05)
+
+
+def test_the_drain_holes_go_through_the_floor_of_the_cavity():
+    cube = mf.Manifold.cube([30, 30, 30])
+    zs = heights(30)
+    hollow, cav = sh.hollowed(cube, 2.5, zs)
+    bottom = min(cav)
+    points, diameter = sh.drain_holes(cube, bottom, wall=2.5, zs=zs)
+    assert len(points) == 2 and math.dist(points[0], points[1]) > 20.0
+    assert diameter == sh.DRAIN_DIAMETER
+    for x, y in points:
+        probe = mf.Manifold.cylinder(bottom + 1.0, 0.02, 0.02, 16).translate((x, y, -1.0))
+        plastic = mf.Manifold.batch_boolean([probe, hollow], mf.OpType.Intersect).volume()
+        assert plastic == pytest.approx(0.0, abs=1e-6), "the resin inside cannot get out"
+
+
+@pytest.mark.parametrize("size, area", [(10.0, 25.0), (4.0, None)])
+def test_a_part_thinner_than_twice_the_wall_stays_solid(size, area):
+    cav = sh.hollow_layers(mf.Manifold.cube([size] * 3), heights(size), 2.5)
+    if area is None:
+        assert not cav, "nothing is left of a shell of 2.5 mm in a part of 4 mm"
+    else:
+        middle = min(cav, key=lambda z: abs(z - 0.5 * size))
+        assert cav[middle].area() == pytest.approx(area, rel=0.03)
+
+
+def test_a_hollow_layer_is_drawn_with_its_cavity_and_costs_less_resin(library, tmp_path):
+    pr = library.printer("Acme Resin Two")
+    st = sp.ResinSettings(layer_height=0.5)
+    cube = ss.place_on_plate([mf.Manifold.cube([30, 30, 30])], pr)
+    cav = sh.hollow_layers(cube[0], ss.layer_heights(30.0, 0.5), 2.5)
+    solid, hollow = tmp_path / "solid.sl1", tmp_path / "hollow.sl1"
+    a = ss.write_sl1(str(solid), pr, None, st, cube)
+    b = ss.write_sl1(str(hollow), pr, None, st, cube, cavities=cav)
+    assert b.millilitres == pytest.approx(a.millilitres - 25.0 ** 2 * 25.0 / 1000.0, rel=0.01)
+    middle = ss.layer_heights(30.0, 0.5).index(15.25)
+    assert white_pixels(hollow, middle) < white_pixels(solid, middle)
+
+
+def test_the_dialog_remembers_the_hollow_choice(library):
+    from PySide6.QtWidgets import QWidget
+    import volura.app as app_module
+    import volura.sla_dialog as sd
+
+    class Win(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.settings = app_module.Settings()
+
+    win = Win()
+    try:
+        start = app_module.Settings()
+        start.resin_hollow, start.resin_wall, start.resin_drain = False, 2.5, True
+        start.save()
+        dlg = sd.ResinDialog(win, library)
+        assert not dlg.hollow.isChecked(), "a print is solid unless you say otherwise"
+        assert not dlg.wall.isEnabled() and not dlg.drain.isEnabled()
+        dlg.hollow.setChecked(True)
+        dlg.wall.setValue(4.0)
+        dlg.drain.setChecked(False)
+        assert dlg.wall.isEnabled() and dlg.drain.isEnabled()
+        assert (dlg.settings().hollow, dlg.settings().wall,
+                dlg.settings().drain_holes) == (True, 4.0, False)
+        assert dlg.choice()["hollow"] and dlg.choice()["wall"] == 4.0
+        assert dlg.choice()["drain"] is False
+    finally:
+        win.close()
+
+
 # ------------------------------------------------------------------ the real profiles
 
 UV = sp.find_uvtools()
@@ -260,6 +359,7 @@ def test_the_menu_makes_supports_shows_them_and_saves(monkeypatch, tmp_path):
         assert dlg.printer is not None and dlg.printer.maker == "Elegoo"
         dlg.layer.setCurrentIndex(dlg.layer.findData(0.1))
         dlg.supports.setChecked(True)
+        dlg.hollow.setChecked(True)
         seen["printer"] = dlg.printer
         return QDialog.Accepted
 
@@ -287,10 +387,19 @@ def test_the_menu_makes_supports_shows_them_and_saves(monkeypatch, tmp_path):
             time.sleep(0.02)
         assert not errors, errors
         assert out.is_file() and "support points" in seen["summary"]
+        assert "hollow: saves" in seen["summary"], "the preview says nothing about the shell"
+        whole = re.search(r"([\d.]+) ml", seen["summary"])
+        sliced = re.search(r"([\d.]+) ml", w.hint.text())
+        assert sliced and float(sliced.group(1)) < float(whole.group(1)), \
+            "the file for the printer still counts the inside of the part"
         assert app_module.Settings().resin_printer == seen["printer"].id
+        assert app_module.Settings().resin_hollow and app_module.Settings().resin_drain
     finally:
         w.doc.dirty = False
         w.close()
+        back = app_module.Settings()
+        back.resin_hollow, back.resin_drain = False, True
+        back.save()
 
 
 if __name__ == "__main__":

@@ -2,11 +2,12 @@
 
 A resin (MSLA) printer cures one whole layer at a time with an image on its screen, so a slice is
 a stack of grayscale images. This cuts the parts - with their supports and pad, see
-`volura.sla_supports` - at the middle of every layer, fills the cross-sections into an image of
-the printer's screen with smooth (anti-aliased) edges, and writes them as an SL1 archive: the
-open format of PrusaSlicer, a zip with one PNG per layer, config.ini and the profile as
-prusaslicer.ini. UVtools' command line then converts that archive into the format the printer
-reads (.ctb, .goo, .pwmx, ...), with the lift and light values of the printer's profile.
+`volura.sla_supports`, and without the inside of a hollow print, see `volura.sla_hollow` - at the
+middle of every layer, fills the cross-sections into an image of the printer's screen with smooth
+(anti-aliased) edges, and writes them as an SL1 archive: the open format of PrusaSlicer, a zip
+with one PNG per layer, config.ini and the profile as prusaslicer.ini. UVtools' command line then
+converts that archive into the format the printer reads (.ctb, .goo, .pwmx, ...), with the lift
+and light values of the printer's profile.
 
 The image follows PrusaSlicer's mapping, which the profiles are made for: millimetres on the
 build plate become pixels with the origin in the top left corner of the image, then the image is
@@ -232,8 +233,13 @@ def print_seconds(layers: int, settings: ResinSettings) -> float:
 
 
 def write_sl1(path, printer: ResinPrinter, profile: ResinPrint | None, settings: ResinSettings,
-              parts, on_progress=None, workers=None) -> ResinResult:
-    """Slice `parts` (manifolds in mm on the plate, already placed) into an SL1 archive."""
+              parts, on_progress=None, workers=None, cavities=None) -> ResinResult:
+    """Slice `parts` (manifolds in mm on the plate, already placed) into an SL1 archive.
+
+    `cavities` is the inside of a hollow print, {z: CrossSection} from
+    `volura.sla_hollow.hollow_layers`: the cavity of that layer, taken out of it and out of the
+    resin it costs.
+    """
     solid = mf.Manifold.batch_boolean(list(parts), mf.OpType.Add) if len(parts) > 1 else parts[0]
     top = float(solid.bounding_box()[5])
     if top > printer.height + 1e-6:
@@ -241,12 +247,20 @@ def write_sl1(path, printer: ResinPrinter, profile: ResinPrint | None, settings:
                          f"the printer prints {printer.height:g} mm")
     zs = layer_heights(top, settings.layer_height)
     transform = image_transform(printer)
+    cavities = cavities or {}
 
     def one(z):
-        return layer_png(solid.slice(z).to_polygons(), printer, transform)
+        cs = solid.slice(z)
+        cavity = cavities.get(z)
+        if cavity is not None and not cavity.is_empty():
+            cs = cs - cavity
+        return layer_png(cs.to_polygons(), printer, transform)
 
     seconds = print_seconds(len(zs), settings)
     ml = solid.volume() / 1000.0
+    if cavities:
+        ml = max(0.0, ml - sum(cs.area() for cs in cavities.values())
+                 * settings.layer_height / 1000.0)
     values = dict(profile.values if profile else {})
     values.update(printer.values)
     values.update({"layer_height": f"{settings.layer_height:g}",

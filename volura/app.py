@@ -906,7 +906,8 @@ class Settings:
                                      ("resin_exposure", 2.5, 0.1, 120.0),
                                      ("resin_bottom_exposure", 25.0, 1.0, 300.0),
                                      ("resin_density", 100.0, 25.0, 400.0),
-                                     ("resin_elevation", 5.0, 0.0, 30.0)):
+                                     ("resin_elevation", 5.0, 0.0, 30.0),
+                                     ("resin_wall", 2.5, 1.5, 6.0)):
             try:
                 setattr(self, key, max(lo, min(hi, float(self.q.value(key, default)))))
             except (TypeError, ValueError):
@@ -918,6 +919,8 @@ class Settings:
             self.resin_bottom_layers = 4
         self.resin_supports = self._bool("resin_supports", True)
         self.resin_pad = self._bool("resin_pad", True)
+        self.resin_hollow = self._bool("resin_hollow", False)
+        self.resin_drain = self._bool("resin_drain", True)
         for key, default, lo, hi in (
                 ("tie_mount_base", 20.0, tie_mount.BASE_MIN, tie_mount.BASE_MAX),
                 ("tie_mount_tie_width", 5.0, tie_mount.TIE_W_MIN, tie_mount.TIE_W_MAX),
@@ -1218,7 +1221,8 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("resin_printer", "resin_level", "resin_layer", "resin_exposure",
                     "resin_bottom_exposure", "resin_bottom_layers", "resin_density",
-                    "resin_elevation", "resin_supports", "resin_pad"):
+                    "resin_elevation", "resin_supports", "resin_pad", "resin_hollow",
+                    "resin_wall", "resin_drain"):
             self.q.setValue(key, getattr(self, key))
         for key in ("tie_mount_base", "tie_mount_tie_width", "tie_mount_tie_thick",
                     "tie_mount_height", "tie_mount_screw", "tie_mount_countersink",
