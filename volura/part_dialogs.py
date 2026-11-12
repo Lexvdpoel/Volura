@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QFontComboBox, QFormLayout, QLabel, QLineEdit, QPlainTextEdit,
                                QSpinBox)
 
-from . import (battery_holder, bin_rack, bracket, cable_chain, cable_clip, enclosure, fan_guard,
-               fonts, gears,
+from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip, enclosure,
+               fan_guard, fonts, gears,
                gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, standoff,
                storage_bin, text3d, threads, tie_mount)
 from .i18n import tr
@@ -1233,6 +1233,94 @@ class TieMountDialog(QDialog):
                 "height": round(self.height.value(), 6),
                 "screw": str(self.screw.currentData()),
                 "countersink": self.countersink.isChecked(), "ways": int(self.ways.value())}
+
+
+class BitHolderDialog(QDialog):
+    """The "Bit Holder…" dialog: a block that stands screwdriver bits upright in rows.
+
+    The columns and rows say how many bits there are, the depth how far they stand in the block and
+    the fit how much wider a socket is than a bit; the pitch is the distance between the sockets and
+    the tilt how far the rows lean towards you. Under the fields the socket as it prints and the
+    block around it, because a pitch that is too small is raised to keep the wall between the
+    sockets. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Bit holder"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        def count(lo, hi, value, tip):
+            sp = QSpinBox()
+            sp.setRange(lo, hi)
+            sp.setValue(int(value))
+            sp.setToolTip(tip)
+            return sp
+
+        self.cols = count(bit_holder.COLS_MIN, bit_holder.COLS_MAX, s.bit_holder_cols,
+                          tr("How many bits there are in a row"))
+        self.rows = count(bit_holder.ROWS_MIN, bit_holder.ROWS_MAX, s.bit_holder_rows,
+                          tr("How many rows of bits there are"))
+        self.depth = spin(bit_holder.DEPTH_MIN, bit_holder.DEPTH_MAX, s.bit_holder_depth, 1.0)
+        self.depth.setToolTip(tr("How far the bit stands in the block"))
+        self.fit = spin(bit_holder.FIT_MIN, bit_holder.FIT_MAX, s.bit_holder_fit, 0.05)
+        self.fit.setDecimals(2)
+        self.fit.setToolTip(tr("How much wider the socket is than the bit, on every flat"))
+        self.pitch = spin(bit_holder.PITCH_MIN, bit_holder.PITCH_MAX, s.bit_holder_pitch, 0.5)
+        self.pitch.setToolTip(tr("The distance between the centres of two sockets next to each "
+                                 "other"))
+        self.angle = QDoubleSpinBox()
+        self.angle.setRange(bit_holder.ANGLE_MIN, bit_holder.ANGLE_MAX)
+        self.angle.setDecimals(1)
+        self.angle.setSingleStep(5.0)
+        self.angle.setSuffix(" °")
+        self.angle.setValue(float(s.bit_holder_angle))
+        self.angle.setToolTip(tr("How far the rows lean backwards, so the bits lean towards you"))
+        self.label = QCheckBox(tr("Label ledge"))
+        self.label.setChecked(bool(s.bit_holder_label))
+        self.label.setToolTip(tr("A flat along the front, below the top, for a printed or written "
+                                 "label"))
+        self.info = QLabel()
+        lay.addRow(tr("Columns"), self.cols)
+        lay.addRow(tr("Rows"), self.rows)
+        lay.addRow(tr("Socket depth"), self.depth)
+        lay.addRow(tr("Fit"), self.fit)
+        lay.addRow(tr("Pitch"), self.pitch)
+        lay.addRow(tr("Back tilt"), self.angle)
+        lay.addRow("", self.label)
+        lay.addRow("", self.info)
+        for w in (self.depth, self.fit, self.pitch, self.angle):
+            w.valueChanged.connect(self._changed)
+        for w in (self.cols, self.rows):
+            w.valueChanged.connect(self._changed)
+        self.label.toggled.connect(self._changed)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._changed()
+
+    def _changed(self, *_):
+        s = bit_holder.sizes(**self.options())
+        self.info.setText(tr("{c} × {r} sockets of {f:g} mm, block {w:g} × {l:g} × {h:g} mm")
+                          .format(c=s["cols"], r=s["rows"], f=s["flats"], w=s["width"],
+                                  l=s["length"], h=s["height"]))
+
+    def options(self) -> dict:
+        return {"cols": int(self.cols.value()), "rows": int(self.rows.value()),
+                "depth": round(self.depth.value(), 6), "fit": round(self.fit.value(), 6),
+                "pitch": round(self.pitch.value(), 6), "angle": round(self.angle.value(), 6),
+                "label": self.label.isChecked()}
 
 
 class HoseAdapterDialog(QDialog):

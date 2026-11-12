@@ -319,6 +319,13 @@ SVG = {
                  f'<path d="M4 13.4 L20 13.4 L20 11.2 L12 8.4 L4 11.2 Z" fill="#fff" {S(w=1.2)}/>'
                  f'<path d="M12 4.5 L12 8.4" {N} stroke="#3b7dd8" stroke-width="2" '
                  f'stroke-linecap="round"/>',
+    # bit holder: a block with bits standing in it and a ledge with a label in front
+    "bit_holder": f'<path d="M7 12 L7 4.5 M12 12 L12 2.8 M17 12 L17 4.5" {N} stroke="#3b7dd8" '
+                  f'stroke-width="2.4" stroke-linecap="round"/>'
+                  f'<rect x="2.5" y="11" width="19" height="10.5" rx="2" fill="#eef2f7" {S()}/>'
+                  f'<path d="M2.5 14.6 L21.5 14.6" {N} stroke="#9a9a9a" stroke-width="1.4"/>'
+                  f'<path d="M5.5 18 L9 18 M11.5 18 L15 18" {N} stroke="#3b7dd8" '
+                  f'stroke-width="1.4" stroke-linecap="round"/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

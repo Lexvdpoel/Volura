@@ -162,6 +162,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
   bridge over it, one tunnel or two that cross so the tie can go either way, and the head of the
   screw ends in the floor of that tunnel so the tie lies flat over it. The tunnel closes on a roof
   of 45 degrees, so the mount prints without support
+- **Bit Holder** (Draw > Parts): a block that stands 1/4 inch screwdriver bits upright in rows of 1
+  to 12; every bit is held by the flats of its hexagonal socket, a little wider than the bit, and
+  the rows lean up to 30 degrees backwards so the bits lean towards you. The mouth of a socket is
+  chamfered so a bit finds its way in, and a ledge along the front takes a label. It lies on its
+  block on the bed and prints without support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

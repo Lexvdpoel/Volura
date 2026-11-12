@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QLabel, QLineEdit, QPushButton, QSpinBox, QTextBrowser,
                                QVBoxLayout)
 
-from . import (background, battery_holder, bin_rack, bracket, cable_chain, cable_clip,
+from . import (background, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                enclosure, fan_guard, gears,
                gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard,
                standoff, storage_bin, text3d, theme, threads, tie_mount)
@@ -31,8 +31,9 @@ from .brep import Entities
 from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
-from .part_dialogs import (BatteryHolderDialog, BinRackDialog, BracketDialog, CableChainDialog,
-                           CableClipDialog, FanGuardDialog, GridfinityDialog, GrommetDialog,
+from .part_dialogs import (BatteryHolderDialog, BinRackDialog, BitHolderDialog, BracketDialog,
+                           CableChainDialog, CableClipDialog, FanGuardDialog, GridfinityDialog,
+                           GrommetDialog,
                            HingeDialog, HoseAdapterDialog,
                            KnobDialog, LabelPlateDialog, PegboardDialog, ProjectBoxDialog,
                            StandoffDialog, StorageBinDialog, Text3DDialog, TieMountDialog)
@@ -970,6 +971,53 @@ class PrintMixin:
             self.view.set_status(tr("Zip-tie mount failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the zip-tie mount…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ bit holder
+    def bit_holder_dialog(self):
+        """Draw > Parts > Bit Holder…: a block that stands screwdriver bits upright in rows."""
+        dlg = BitHolderDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("cols", "rows", "depth", "fit", "pitch", "angle", "label"):
+            setattr(self.settings, "bit_holder_" + key, options[key])
+        self.settings.save()
+        made = self.make_bit_holder_model(options)
+        self.setFocus()
+        return made
+
+    def make_bit_holder_model(self, options):
+        """The holder on the bed as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("cols", "rows", "depth", "fit", "pitch", "angle",
+                                        "label")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the bit holder…"))
+            m = bit_holder.bit_holder(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the holder away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Bit holder"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Bit holder added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Bit holder failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the bit holder…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter
