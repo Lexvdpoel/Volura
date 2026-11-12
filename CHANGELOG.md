@@ -3,6 +3,22 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.45 — 2026-11-12
+
+### New
+- **Slice** (File > Slice): G-code for your printer straight from Volura. Choose the maker and
+  the printer from the Cura printer profiles (more than 600 printers), then the nozzle, the
+  material and the quality, and set infill, support and bed adhesion. Volura works out the
+  profile the way Cura does, slices with CuraEngine in the background and shows the print time
+  and the filament it takes. CuraEngine (AGPL v3) and the Cura profiles come with the download as
+  a separate program; on Linux slicing needs glibc 2.38 or newer (Ubuntu 24.04 and later).
+- **Memory card holder** (Draw > Parts): a block with slots for SD cards, microSD cards and USB
+  sticks, with a finger notch in front of every column.
+- **Wall hook** (Draw > Parts): a J-shaped hook with countersunk screw holes that prints on its
+  side, so the layers run along the bend.
+
+### Website
+- The manual describes slicing, the memory card holder and the wall hook.
 ## 0.2.44 — 2026-11-12
 
 ### New
