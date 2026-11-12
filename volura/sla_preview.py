@@ -98,7 +98,8 @@ class MeshView(QOpenGLWidget):
         gl.glViewport(0, 0, int(self.width() * dpr), int(self.height() * dpr))
         gl.glClearColor(*_rgb(BACKGROUND), 1.0)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-        gl.glUseProgram(0)
+        if bool(gl.glUseProgram):              # not there on an old or software OpenGL
+            gl.glUseProgram(0)
         gl.glMatrixMode(gl.GL_PROJECTION)
         gl.glLoadMatrixd(self.cam.proj_matrix().T.ravel())
         gl.glMatrixMode(gl.GL_MODELVIEW)

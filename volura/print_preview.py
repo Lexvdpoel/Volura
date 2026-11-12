@@ -161,7 +161,8 @@ class LayerView(QOpenGLWidget):
         gl.glViewport(0, 0, int(self.width() * dpr), int(self.height() * dpr))
         gl.glClearColor(*_rgb(BACKGROUND), 1.0)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-        gl.glUseProgram(0)
+        if bool(gl.glUseProgram):              # not there on an old or software OpenGL
+            gl.glUseProgram(0)
         gl.glDisable(gl.GL_LIGHTING)
         gl.glDisable(gl.GL_CULL_FACE)
         gl.glMatrixMode(gl.GL_PROJECTION)
