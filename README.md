@@ -227,12 +227,12 @@ The interface is available in English and Dutch (*Window > Preferences > General
     round surfaces keep the facets they have in Volura
   - Where parts with different colors overlap, the part made later wins
 - **Slice** (File > Slice): G-code for your printer without a separate slicer. Choose the maker
-  and the printer from the Cura printer profiles (more than 600 printers), then the nozzle, the
-  filament brand and material and the quality, and set infill, support and bed adhesion; Volura
-  works out the profile the way Cura does and slices with CuraEngine, which comes with the
-  download. The print preview then shows the G-code layer by layer, with a virtual printer that
-  plays each layer as the printer will print it, the print time and the filament; save the G-code
-  from there
+  and the printer from the printer profiles of Cura and OrcaSlicer (nearly 1000 printers), then
+  the nozzle, the filament brand and material and the quality, and set infill, support and bed
+  adhesion; Volura works out the profile the way Cura does and slices with CuraEngine, which comes
+  with the download. The print preview then shows the G-code layer by layer, with a virtual
+  printer that plays each layer as the printer will print it, the print time and the filament;
+  save the G-code from there
 - Native file format `.volura` (files from version 0.1 are converted), unlimited undo
 - **3D import**: STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB and COLLADA (DAE), with a progress
   bar. Every closed part becomes a group in its own color; slicer projects (PrusaSlicer,
@@ -484,3 +484,9 @@ Volura uses third-party open source software: Qt 6 and PySide6 (LGPL v3), Manifo
 NumPy (BSD), PyOpenGL (BSD-style) and Python (PSF). The standalone versions contain their full
 license texts in `THIRD_PARTY_LICENSES.txt`; `packaging/licenses.py` assembles that file during the
 build. The Qt libraries are separate files in the program folder and may be replaced.
+
+File > Slice uses CuraEngine (AGPL v3) as a separate program in the `curaengine` folder, with the
+printer profiles of Cura (LGPL v3) and printers made from the profiles of OrcaSlicer (AGPL v3) by
+`tools/fetch_orca_profiles.py`. Volura starts CuraEngine and reads the profiles as data; it does not
+contain or link to their code, so Volura itself stays under the MIT license. The source of
+CuraEngine is attached to every release as `CuraEngine-<version>-source.tar.gz`.

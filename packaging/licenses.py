@@ -19,6 +19,8 @@ ROOT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent / "licenses"
 #: the Cura release the slicer comes from (tools/fetch_curaengine.py)
 CURA_VERSION = "5.14.0"
+#: the OrcaSlicer release of the extra printer profiles (tools/fetch_orca_profiles.py)
+ORCA_VERSION = "2.5.0"
 RULE = "=" * 78
 
 QT_NOTICE = """\
@@ -44,13 +46,25 @@ File > Slice uses CuraEngine and the printer profiles of UltiMaker Cura {version
   started by Volura; Volura is not linked to it. It is the unchanged CuraEngine of the
   official Cura {version} release, with the libraries it loads (Arcus, polyclipping,
   cura-formulae-engine, oneTBB and the Microsoft C++ runtime on Windows).
-  Source code: https://github.com/Ultimaker/CuraEngine/tree/{version}
+  Source code: https://github.com/Ultimaker/CuraEngine/tree/{version}, and attached to
+  every Volura release on GitHub as CuraEngine-{version}-source.tar.gz. You may ask for
+  it at https://github.com/Lexvdpoel/Volura/issues for at least three years after a release.
 - The printer definitions, nozzle variants and quality profiles in
   curaengine/resources are (c) UltiMaker and the printer makers who contributed them,
   under the GNU Lesser General Public License version 3 (LGPL v3, text above).
   Source: https://github.com/Ultimaker/Cura/tree/{version}/resources
 - The material profiles in curaengine/resources/materials come from
   https://github.com/Ultimaker/fdm_materials and are in the public domain (CC0 1.0).
+
+- The printers whose files in curaengine/resources start with "orca_" are made from
+  the printer profiles of OrcaSlicer {orca} by tools/fetch_orca_profiles.py, which is in
+  Volura's source. Those profiles are (c) the OrcaSlicer contributors and the printer
+  makers who contributed them (partly from Bambu Studio and PrusaSlicer), under the AGPL
+  v3. The made files keep that license.
+  Source: https://github.com/OrcaSlicer/OrcaSlicer/tree/v{orca}/resources/profiles
+
+Volura itself stays under the MIT license: it starts CuraEngine as a separate program and
+reads the profiles as data; it does not contain or link to their code.
 
 Below follows the text of the AGPL v3."""
 
@@ -110,15 +124,16 @@ def build_text():
         f"PyOpenGL                   {version('PyOpenGL') or '?':<11} BSD-style\n"
         f"Python                     {sys.version.split()[0]:<11} PSF-2.0\n",
         f"CuraEngine                 {CURA_VERSION:<11} AGPL-3.0 (a separate program)\n"
-        f"Cura printer profiles      {CURA_VERSION:<11} LGPL-3.0 (materials CC0-1.0)\n",
+        f"Cura printer profiles      {CURA_VERSION:<11} LGPL-3.0 (materials CC0-1.0)\n"
+        f"OrcaSlicer printer profiles {ORCA_VERSION:<10} AGPL-3.0 (as data)\n",
     ]
     parts.append(section(f"Qt 6 / PySide6 {qt}", QT_NOTICE))
     parts.append(section("GNU LESSER GENERAL PUBLIC LICENSE, version 3",
                          (HERE / "LGPL-3.0.txt").read_text(encoding="utf-8")))
     parts.append(section("GNU GENERAL PUBLIC LICENSE, version 3",
                          (HERE / "GPL-3.0.txt").read_text(encoding="utf-8")))
-    parts.append(section(f"CuraEngine and the Cura printer profiles {CURA_VERSION}",
-                         CURA_NOTICE.format(version=CURA_VERSION)))
+    parts.append(section("CuraEngine and the Cura and OrcaSlicer printer profiles",
+                         CURA_NOTICE.format(version=CURA_VERSION, orca=ORCA_VERSION)))
     parts.append(section("GNU AFFERO GENERAL PUBLIC LICENSE, version 3",
                          (HERE / "AGPL-3.0.txt").read_text(encoding="utf-8")))
     parts.append(files_section(f"manifold3d {version('manifold3d') or ''}", dist_license_files("manifold3d")))

@@ -193,6 +193,53 @@ def parse_header(text: str) -> dict:
     return out
 
 
+def orca_gcode_for(stacks, meshes, glob: dict):
+    """The start and end G-code of a printer from OrcaSlicer's profiles, worked out for this print.
+
+    Those printers keep their G-code in OrcaSlicer's language (see `volura.orca_gcode`), which
+    CuraEngine does not read; None for a printer of Cura's own.
+    """
+    from . import orca_gcode
+    meta = stacks.printer.definition.metadata
+    if "orca_start_gcode" not in meta:
+        return None
+    e0 = stacks.extruders[0]
+
+    def num(stack, key, default=0.0):
+        try:
+            return float(stack.get(key))
+        except (TypeError, ValueError):
+            return default
+    lo = np.min([np.asarray(v).min(axis=0) for v, _t, _e in meshes], axis=0)
+    hi = np.max([np.asarray(v).max(axis=0) for v, _t, _e in meshes], axis=0)
+    if not glob.get("machine_center_is_zero"):
+        half = np.array([0.5 * float(glob.get("machine_width", 0)),
+                         0.5 * float(glob.get("machine_depth", 0)), 0.0])
+        lo, hi = lo + half, hi + half
+    first = num(stacks.glob, "layer_height_0", 0.2)
+    layer = num(stacks.glob, "layer_height", 0.2) or 0.2
+    top = float(hi[2])
+    material = stacks.material.metadata.get("material", "PLA") if stacks.material else "PLA"
+    values = orca_gcode.variables(
+        meta.get("orca_config", {}),
+        nozzle_temp0=num(e0, "material_print_temperature_layer_0", 200),
+        nozzle_temp=num(e0, "material_print_temperature", 200),
+        bed_temp0=num(e0, "material_bed_temperature_layer_0", 60),
+        bed_temp=num(e0, "material_bed_temperature", 60),
+        material=str(material).upper(), layer_height=layer, first_layer_height=first,
+        nozzle=num(e0, "machine_nozzle_size", 0.4), retraction=num(e0, "retraction_amount", 0.8),
+        travel_speed=num(e0, "speed_travel", 150), print_min=(lo[0], lo[1]),
+        print_max=(hi[0], hi[1]), top=top,
+        layers=1 + max(0, math.ceil((top - first) / layer - 1e-6)),
+        printer=stacks.printer.name, quality=stacks.quality_name,
+        filament=stacks.material.name if stacks.material else "")
+    try:
+        return (orca_gcode.render(meta["orca_start_gcode"], values),
+                orca_gcode.render(meta.get("orca_end_gcode", ""), values))
+    except orca_gcode.OrcaGcodeError as e:
+        raise RuntimeError(f"the start G-code of this printer cannot be worked out: {e}") from None
+
+
 def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progress=None) -> SliceResult:
     """Slice `meshes` - a list of (verts, tris, extruder_nr) in bed millimetres - to `out_path`.
 
@@ -207,6 +254,18 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
         raise RuntimeError("there is nothing to slice")
     doc = resolved_settings(stacks)
     meshes = place_on_bed(meshes, doc["global"])
+    offset = stacks.printer.definition.metadata.get("orca_offset")
+    if offset and any(offset):
+        # the middle of what this printer can print is not the middle of Cura's bed
+        meshes = [(v + np.array([offset[0], offset[1], 0.0]), t, e) for v, t, e in meshes]
+    gcode = orca_gcode_for(stacks, meshes, doc["global"])
+    if gcode is not None:
+        start, end = gcode
+        doc["global"]["machine_start_gcode"], doc["global"]["machine_end_gcode"] = start, end
+        # what Cura's own front end decides: heat up first only when the start G-code does not
+        codes = set(re.findall(r"^\s*(M1(?:04|09|40|90))(?![0-9])", start, re.M))
+        doc["global"]["material_bed_temp_prepend"] = not codes & {"M140", "M190"}
+        doc["global"]["material_print_temp_prepend"] = not codes & {"M104", "M109"}
     with tempfile.TemporaryDirectory(prefix="volura-slice-") as tmp:
         for i, (v, t, e) in enumerate(meshes):
             name = f"part{i}.stl"

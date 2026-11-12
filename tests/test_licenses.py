@@ -20,7 +20,9 @@ def test_third_party_licenses(tmp_path):
     for needle in ("GNU LESSER GENERAL PUBLIC LICENSE", "GNU GENERAL PUBLIC LICENSE",
                    "https://code.qt.io", "Apache License", "Michael C. Fletcher",
                    "NumPy", "Python", "GNU AFFERO GENERAL PUBLIC LICENSE",
-                   "https://github.com/Ultimaker/CuraEngine/tree/", "CC0"):
+                   "https://github.com/Ultimaker/CuraEngine/tree/", "CC0",
+                   "CuraEngine-5.14.0-source.tar.gz",
+                   "https://github.com/OrcaSlicer/OrcaSlicer/tree/v"):
         assert needle in text, needle
     # the Qt commercial licence of the wheels is not ours to ship
     assert "LicenseRef-Qt-Commercial" not in text

@@ -4279,7 +4279,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                "<li>CuraEngine (UltiMaker), AGPL v3: a separate program for "
                                "File &gt; Slice; source code at <a href='https://github.com/"
                                "Ultimaker/CuraEngine'>github.com/Ultimaker/CuraEngine</a>. The "
-                               "Cura printer profiles, LGPL v3</li></ul>"
+                               "Cura printer profiles, LGPL v3</li>"
+                               "<li>Printer profiles of OrcaSlicer, AGPL v3, as data</li></ul>"
                                "<p>The full license texts are in THIRD_PARTY_LICENSES.txt next to "
                                "the program.</p>"))
 
