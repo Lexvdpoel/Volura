@@ -489,6 +489,9 @@ Questions, ideas and prints go to [Discussions](https://github.com/Lexvdpoel/Vol
 Something that is clearly broken goes to [Issues](https://github.com/Lexvdpoel/Volura/issues/new/choose)
 as a bug report.
 
+Want to help with code, translations or documentation? Read [CONTRIBUTING.md](CONTRIBUTING.md) and
+the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 MIT, see [LICENSE](LICENSE). © 2026 L. van der Poel.
