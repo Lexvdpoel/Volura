@@ -218,5 +218,22 @@ def test_the_slice_dialog_has_named_controls(win, monkeypatch):
     assert not found[0], found[0]
 
 
+
+def test_the_resin_dialog_has_named_controls(win, monkeypatch):
+    """File > Slice for Resin…, with the resin profiles when they are there."""
+    from volura import sla_dialog, sla_profiles
+    folder = sla_profiles.find_uvtools()
+    if folder is None:
+        pytest.skip("no resin profiles (tools/fetch_uvtools.py)")
+    dlg = sla_dialog.ResinDialog(win, sla_profiles.ResinLibrary(folder))
+    try:
+        dlg.show()
+        _app.processEvents()
+        problems = report(dlg)
+        assert not problems, problems
+    finally:
+        dlg.close()
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
