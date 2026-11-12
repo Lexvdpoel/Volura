@@ -140,9 +140,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
   wall so you slide small parts out with a finger, and a label shelf under the top of the inside of
   the back wall, at 45 degrees, in which a printed label stands
 - **Pegboard** (Draw > Parts): a pegboard of 1/4 inch holes at 1 inch with a rim and screw bosses
-  that hold it off the wall, and hooks, shelves with a brace and upright tool holders for it. A part
-  hangs on a straight upper peg that rises through the board, so its own weight keeps it on, and
-  rests on a lower one; everything prints without support
+  that hold it off the wall, and hooks, shelves with a brace and round tool holders for it. A part
+  hangs like a steel pegboard hook: a round upper peg bends up behind the board into a tip, with
+  less than half a millimetre of play, so it hangs straight and cannot be pulled off, and a straight
+  lower peg keeps it from swinging. Tilt it, push the tip through and swing it down. The parts
+  print on their side with support under the pegs
 - **Hose Adapter** (Draw > Parts): a reducer between two hoses of the inside diameters you enter,
   with barbs that grip each hose or plain ends for push-on tube, and a collar the hoses stop
   against. It prints upright without support and keeps its wall all the way round the water way

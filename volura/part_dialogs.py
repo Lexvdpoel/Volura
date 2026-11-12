@@ -876,8 +876,8 @@ class PegboardDialog(QDialog):
         self.reach = spin(pegboard.REACH_MIN, pegboard.REACH_MAX, s.peg_reach, 5.0)
         self.reach.setToolTip(tr("How far the part stands out of the board"))
         self.board = spin(pegboard.BOARD_MIN, pegboard.BOARD_MAX, s.peg_board, 0.5)
-        self.board.setToolTip(tr("The thickness of the pegboard, so the upper peg rises through it as "
-                                 "steeply as the hole allows"))
+        self.board.setToolTip(tr("The thickness of the pegboard: the hook behind it fits that board "
+                                 "with less than half a millimetre of play"))
         self.size = spin(pegboard.SIZE_MIN, pegboard.SIZE_MAX, s.peg_size, 1.0)
         self.size.setToolTip(tr("The tool the holder takes, across"))
 

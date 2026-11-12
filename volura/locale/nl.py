@@ -1809,7 +1809,7 @@ TRANSLATIONS = {
     'Tool holder': 'Gereedschapshouder',
     'How thick the part is, which is the height it prints': 'Hoe dik het onderdeel is, de hoogte waarop het print',
     'How far the part stands out of the board': 'Hoe ver het onderdeel uit het bord steekt',
-    'The thickness of the pegboard, so the upper peg rises through it as steeply as the hole allows': 'De dikte van het gaatjesbord, zodat de bovenste pen erachter haakt',
+    'The thickness of the pegboard: the hook behind it fits that board with less than half a millimetre of play': 'De dikte van het gaatjesbord: de haak erachter past om dat bord met minder dan een halve millimeter speling',
     'The tool the holder takes, across': 'De dikte van het gereedschap dat de houder vasthoudt',
     'Reach': 'Uitsteek',
     'Board': 'Bord',

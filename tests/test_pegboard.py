@@ -1,13 +1,15 @@
 """Pegboard parts: the board of 1/4 inch holes, and the hooks, shelves and holders that hang on it.
 
-`pegboard.pegboard_part` makes a part that hangs on two holes of `PEG_PITCH` apart: a straight upper
-peg that rises through the board, so the part's own weight keeps it on, and a lower peg as deep as
-the board that keeps it from swinging, with a back plate between them against the front of the
-board. The part lies on its side on the bed with the pegs on the bed. `pegboard_board` is the board
-itself, with a rim and screw bosses on its back. These tests weigh the parts against a real board:
-every kind is one volume that stands on the bed and prints without support, the pegs pass the round
-holes of a board of every thickness and stand on the pitch, `reach` makes a hook longer and a shelf
-deeper, a hook rises, and the ring of a holder stands upright and takes the tool asked for.
+`pegboard.pegboard_part` makes a part that hangs on two holes of `PEG_PITCH` apart like a steel
+pegboard hook: a round upper peg that goes through the board and bends up behind it into a tip,
+and a straight round lower peg as deep as the board, with a back plate between them against the
+front of the board. The part lies on its side on the bed, symmetric about its middle plane.
+`pegboard_board` is the board itself, with chamfered holes and a rim and screw bosses on its back.
+These tests weigh the parts against a real board: every kind is one symmetric volume on the bed,
+the pegs are round and on the pitch and pass the holes of a board of every thickness, the tip
+hooks behind the board with less than half a millimetre of play and less than two degrees of
+tilt, the hook goes on by tilting it in, `reach` makes a hook longer and a shelf deeper, a hook
+rises, and the ring of a holder is round, stands upright and takes the tool asked for.
 
 Run with:  python -m pytest tests/test_pegboard.py
 """
@@ -22,9 +24,12 @@ import manifold3d as mf  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 
-from volura import geom, pegboard  # noqa: E402
+from volura import pegboard  # noqa: E402
 
 HANGING = ("hook", "shelf", "holder")
+BOARDS = (3.0, 5.0, 7.0)
+#: mm3 of overlap with the board that still counts as touching: the corners of the polygons
+TOUCH = 0.5
 
 
 def common(a, b):
@@ -41,14 +46,27 @@ def bounds(part):
     return b[:3], b[3:]
 
 
-def board_behind(s):
-    """The board the part hangs on: a slab behind the back plate with round holes at the pegs."""
+def board_behind(s, lift=0.0):
+    """The board the part hangs on: a slab behind the back plate with round holes, whose middles
+    stand `lift` above the axes of the pegs."""
     b, r = s["board"], 0.5 * pegboard.PEG_HOLE
     slab = mf.Manifold.cube([b, 300.0, 300.0]).translate((s["x_face"] - b, -150.0, -150.0))
     for y in (s["peg_y"], s["lower_y"]):
         slab = slab - (mf.Manifold.cylinder(b + 2.0, r, r, 96).rotate((0.0, 90.0, 0.0))
-                       .translate((s["x_face"] - b - 1.0, y, s["peg_z"])))
+                       .translate((s["x_face"] - b - 1.0, y + lift, s["peg_z"])))
     return slab
+
+
+def hung(kind, board):
+    """A part and its board as it hangs: the pegs just above the bottom of their holes."""
+    s = pegboard.sizes(kind, board=board)
+    part = pegboard.pegboard_part(kind, board=board)
+    return s, part, board_behind(s, pegboard.hanging_drop() - 0.02)
+
+
+def section_area(part, x, y, z, size=10.0, thick=0.02):
+    """The area of the part cut square to x at `x`, near (`y`, `z`)."""
+    return common(part, block(x, y, thick, size, z - 0.5 * size, z + 0.5 * size)) / thick
 
 
 @pytest.mark.parametrize("kind", pegboard.KINDS)
@@ -61,52 +79,97 @@ def test_every_kind_is_one_volume_that_stands_on_the_bed(kind):
     assert hi[:2] == pytest.approx(-lo[:2], abs=1e-6), f"a {kind} is not centred in plan"
 
 
-@pytest.mark.parametrize("kind", pegboard.KINDS)
-def test_every_kind_prints_without_support(kind):
-    v, t = geom.mesh_arrays(pegboard.pegboard_part(kind))
-    a, b, c = v[t[:, 0]], v[t[:, 1]], v[t[:, 2]]
-    n = np.cross(b - a, c - a)
-    size = np.linalg.norm(n, axis=1)
-    keep = size > 1e-12                       # a triangle of no area has no direction
-    n, a, b, c = n[keep] / size[keep][:, None], a[keep], b[keep], c[keep]
-    z = (a[:, 2] + b[:, 2] + c[:, 2]) / 3.0
-    hanging = (n[:, 2] < -math.sin(math.radians(45.0)) - 0.01) & (z > 1e-6)
-    assert not hanging.any(), f"a {kind} has a face that overhangs more than 45 degrees"
+@pytest.mark.parametrize("kw", [{}, {"board": 3.0, "width": 6.0},
+                                {"board": 7.0, "width": 20.0, "size": 40.0}])
+@pytest.mark.parametrize("kind", HANGING)
+def test_a_part_is_symmetric_about_its_middle(kind, kw):
+    s = pegboard.sizes(kind, **kw)
+    part = pegboard.pegboard_part(kind, **kw)
+    mirror = part.mirror((0.0, 0.0, 1.0)).translate((0.0, 0.0, 2.0 * s["peg_z"]))
+    differ = (part - mirror).volume() + (mirror - part).volume()
+    assert differ < 0.01 * part.volume(), f"the two halves of a {kind} differ"
 
 
-@pytest.mark.parametrize("board", [3.0, 5.0, 7.0])
+@pytest.mark.parametrize("kind", HANGING)
+def test_the_pegs_are_round_and_stand_on_the_pitch(kind):
+    s = pegboard.sizes(kind)
+    part = pegboard.pegboard_part(kind)
+    assert s["peg_y"] - s["lower_y"] == pytest.approx(pegboard.PEG_PITCH)
+    x = s["x_face"] - 0.5 * s["board"]                    # in the middle of the board
+    for y in (s["peg_y"], s["lower_y"]):
+        area = section_area(part, x, y, s["peg_z"])
+        assert area == pytest.approx(math.pi * 0.25 * pegboard.PEG_D ** 2, rel=0.02), \
+            "a peg is not a round rod of PEG_D"
+        cut = mf.Manifold.batch_boolean([part, block(x, y, 0.02, 10.0, 0.0, 50.0)],
+                                        mf.OpType.Intersect)
+        lo, hi = bounds(cut)
+        assert 0.5 * (lo[1] + hi[1]) == pytest.approx(y, abs=0.05), "a peg is off its hole"
+        assert 0.5 * (lo[2] + hi[2]) == pytest.approx(s["peg_z"], abs=0.05), \
+            "a peg is not in the middle of the part"
+        assert hi[1] - lo[1] == pytest.approx(pegboard.PEG_D, abs=0.05)
+
+
+@pytest.mark.parametrize("board", BOARDS)
 @pytest.mark.parametrize("kind", HANGING)
 def test_the_pegs_pass_the_holes_of_a_board(kind, board):
-    s = pegboard.sizes(kind, board=board)
-    part = pegboard.pegboard_part(kind, board=board)
-    assert common(part, board_behind(s)) == pytest.approx(0.0, abs=1e-6), \
-        "a peg is too fat for a hole of the board"
+    s, part, slab = hung(kind, board)
+    assert common(part, slab) < TOUCH, "a peg is too fat for a hole of the board"
     for y in (s["peg_y"], s["lower_y"]):
         inside = block(s["x_face"] - 0.5 * board, y, 0.5, 4.0, 0.0, s["peg_z"] * 2.0)
         assert common(part, inside) > 0.0, "a peg does not go into the board"
-
-
-def test_the_upper_peg_rises_and_comes_out_behind_the_board():
-    s = pegboard.sizes("hook")
-    part = pegboard.pegboard_part("hook")
-    assert 10.0 < s["peg_rise"] <= pegboard.PEG_RISE_MAX, "the peg does not rise enough to hold"
-    behind = s["x_face"] - s["board"] - 0.75
-    rise = (s["board"] * 0.5 + 0.75) * math.tan(math.radians(s["peg_rise"]))
-    assert common(part, block(behind, s["peg_y"] + rise, 0.5, 0.5, 0.0, 1.0)) > 0.0, \
-        "the upper peg does not come out behind the board, risen"
-    assert common(part, block(behind, s["lower_y"], 0.5, 6.0, 0.0, 5.0)) == 0.0, \
+    beyond = block(s["x_face"] - board - 1.0, s["lower_y"], 2.0, 6.0, 0.0, 2.0 * s["peg_z"])
+    assert common(part, beyond) == pytest.approx(0.0, abs=1e-6), \
         "the lower peg goes through the board and beyond it"
 
 
-def test_the_two_pegs_stand_on_the_pitch():
-    s = pegboard.sizes("shelf")
-    assert s["peg_y"] - s["lower_y"] == pytest.approx(pegboard.PEG_PITCH)
-    part = pegboard.pegboard_part("shelf")
-    mid = s["x_face"] - 0.5 * s["board"]
-    for y in (s["peg_y"], s["lower_y"]):
-        lane = block(mid, y, 0.2, pegboard.PEG_HOLE, 0.0, 10.0)
-        lo, hi = bounds(mf.Manifold.batch_boolean([part, lane], mf.OpType.Intersect))
-        assert 0.5 * (lo[1] + hi[1]) == pytest.approx(y, abs=0.05), "a peg is off its hole"
+@pytest.mark.parametrize("board", BOARDS)
+def test_the_tip_stands_up_behind_the_board(board):
+    s, part, slab = hung("hook", board)
+    x = s["x_tip"] + 0.5 * pegboard.PEG_D                  # the axis of the tip
+    top = s["peg_y"] + pegboard.TIP
+    assert common(part, block(x, top - 0.5, 1.0, 1.0, 0.0, 50.0)) > 0.0, "no tip at the top"
+    assert common(part, block(x, top + 0.3, 1.0, 0.5, 0.0, 50.0)) == 0.0, "the tip is too high"
+    # pulled 3 mm straight out of the board, the tip runs into the back of it
+    assert common(part.translate((3.0, 0.0, 0.0)), slab) > 1.0, "the tip does not hook behind"
+
+
+@pytest.mark.parametrize("board", BOARDS)
+def test_the_part_has_little_play_on_the_board(board):
+    s, part, slab = hung("hook", board)
+    base = common(part, slab)
+
+    def touches(p):
+        return common(p, slab) > base + 0.005
+
+    moved = 0.0
+    while not touches(part.translate((moved + 0.05, 0.0, 0.0))) and moved < 5.0:
+        moved += 0.05
+    assert 0.05 < moved <= 0.5, f"it moves {moved:.2f} mm along the peg"
+    # tilted top away from the board - about the bottom edge of the back plate, which stays on
+    # the board while the lower peg has room in its hole - until the tip touches
+    px, py = s["x_face"], s["y_bottom"]
+    turned = 0.0
+    while turned < 10.0:
+        p = part.translate((-px, -py, 0.0)).rotate((0.0, 0.0, -(turned + 0.1))) \
+            .translate((px, py, 0.0))
+        if touches(p):
+            break
+        turned += 0.1
+    assert 0.1 < turned < 2.0, f"it tilts {turned:.1f} degrees"
+
+
+@pytest.mark.parametrize("board", BOARDS)
+def test_the_hook_goes_on_by_tilting_it_in(board):
+    path = pegboard.insertion_path(board)
+    assert path is not None, f"the hook does not go on a board of {board} mm"
+    assert path[0][0] == pytest.approx(90.0) and path[-1][0] == pytest.approx(0.0)
+    steps = list(zip(path, path[1:]))
+    assert all(math.hypot(b[1] - a[1], b[2] - a[2]) <= pegboard.INSERT_SHIFT + 1e-9
+               for a, b in steps), "the part jumps"
+    part, slab = pegboard.mount_section(board), pegboard.board_section(board)
+    for deg, dx, dy in path:
+        assert (pegboard.placed(part, board, deg, dx, dy) ^ slab).area() <= \
+            pegboard.INSERT_OVERLAP
 
 
 @pytest.mark.parametrize("kind", ["hook", "shelf"])
@@ -133,7 +196,7 @@ def test_a_hook_rises_to_its_tip():
 
 
 @pytest.mark.parametrize("size", [5.0, 12.0, 40.0])
-def test_the_ring_stands_upright_and_takes_the_tool_asked_for(size):
+def test_the_ring_is_round_stands_upright_and_takes_the_tool_asked_for(size):
     s = pegboard.sizes("holder", size=size)
     part = pegboard.pegboard_part("holder", size=size)
 
@@ -145,6 +208,16 @@ def test_the_ring_stands_upright_and_takes_the_tool_asked_for(size):
     assert common(part, tool(size - 0.2)) == pytest.approx(0.0, abs=1e-6), \
         "the tool does not drop into the ring from above"
     assert common(part, tool(size + 0.5)) > 0.0, "the ring is wider than asked"
+    # cut across its axis, the ring is a round ring: the area of the annulus, centred on the axis
+    y = s["ring_y"] + 0.5 * pegboard.HOLDER_HEIGHT
+    R, r = s["ring_r"], s["bore_r"]
+    ring = mf.Manifold.batch_boolean(
+        [part, mf.Manifold.cylinder(0.02, R + 0.5, R + 0.5, 96).rotate((-90.0, 0.0, 0.0))
+         .translate((s["ring_x"], y, s["ring_z"]))], mf.OpType.Intersect)
+    assert ring.volume() / 0.02 == pytest.approx(math.pi * (R * R - r * r), rel=0.02)
+    lo, hi = bounds(ring)
+    assert hi[2] - lo[2] == pytest.approx(2.0 * R, abs=0.05)
+    assert lo[2] == pytest.approx(0.0, abs=1e-6) or s["width"] > 2.0 * R
 
 
 def test_a_number_that_does_not_print_becomes_the_nearest_one_that_does():
@@ -169,7 +242,7 @@ def test_a_kind_there_is_no_such_thing_of_is_refused():
 
 # ------------------------------------------------------------------ the board
 
-def test_the_board_has_its_holes_on_the_pitch_and_four_screw_holes():
+def test_the_board_has_chamfered_holes_on_the_pitch_and_four_screw_holes():
     board = pegboard.pegboard_board(cols=5, rows=3, board=5.0, standoff=15.0)
     assert board.genus() == 5 * 3 + 4, "not every hole and screw hole goes through"
     lo, hi = bounds(board)
@@ -180,17 +253,26 @@ def test_the_board_has_its_holes_on_the_pitch_and_four_screw_holes():
             x, y = lo[0] + (i + 0.5) * pegboard.PEG_PITCH, lo[1] + (j + 0.5) * pegboard.PEG_PITCH
             fits = mf.Manifold.cylinder(5.0, r - 0.05, r - 0.05, 48).translate((x, y, 0.0))
             assert common(board, fits) == pytest.approx(0.0, abs=1e-6), "a hole is too small"
+            # the face of the board, where a peg comes in, is wider by the chamfer
+            mouth = mf.Manifold.cylinder(0.1, r + 0.3, r + 0.3, 48).translate((x, y, 0.0))
+            assert common(board, mouth) == pytest.approx(0.0, abs=1e-6), "no chamfer"
+            deeper = mf.Manifold.cylinder(0.1, r + 0.3, r + 0.3, 48).translate((x, y, 1.0))
+            assert common(board, deeper) > 0.0, "the chamfer runs too deep"
 
 
-def test_the_board_stands_off_the_wall_with_room_for_the_pegs():
+def test_the_board_stands_off_the_wall_with_room_for_the_tips():
     s = pegboard.sizes("hook", board=5.0)
-    board = pegboard.pegboard_board(board=5.0, standoff=pegboard.STANDOFF_MIN)
-    lo, hi = bounds(board)
-    # behind the board, from the plate of a hook to the tip of its peg, is less than the standoff
-    assert s["x_face"] - s["x_tip"] - s["board"] < pegboard.STANDOFF_MIN
-    # and that room is empty behind every hole that is not next to a boss or the rim
-    x, y = lo[0] + 2.5 * pegboard.PEG_PITCH, lo[1] + 2.5 * pegboard.PEG_PITCH
-    assert common(board, block(x, y, 8.0, 8.0, 5.0 + 0.01, hi[2])) == 0.0
+    board = pegboard.pegboard_board(cols=6, rows=6, board=5.0, standoff=pegboard.STANDOFF_MIN)
+    lo, _hi = bounds(board)
+    behind = s["x_face"] - s["x_tip"] - s["board"]
+    assert behind < pegboard.STANDOFF_MIN, "the tip reaches the wall"
+    # behind every hole, where the tip of a hung part stands up, the rim and the bosses leave room
+    rise = pegboard.TIP + pegboard.hanging_drop()
+    tips = [block(lo[0] + (i + 0.5) * pegboard.PEG_PITCH,
+                  lo[1] + (j + 0.5) * pegboard.PEG_PITCH + 0.5 * rise,
+                  pegboard.PEG_D, rise, 5.0 + 0.01, 5.0 + behind)
+            for i in range(6) for j in range(6)]
+    assert common(board, mf.Manifold.batch_boolean(tips, mf.OpType.Add)) == 0.0
 
 
 # ------------------------------------------------------------------ the interface
