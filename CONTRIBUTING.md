@@ -17,9 +17,9 @@ follow it.
 - **A bug**: open a [bug report](https://github.com/Lexvdpoel/Volura/issues/new/choose). Give the
   version (Help > About Volura), your operating system and the steps that lead to the problem. A
   small `.volura` file and, after a crash, the `volura.log` next to the program help a lot.
-- **A security problem**: do not post it in public. Contact the maintainer,
-  [@Lexvdpoel](https://github.com/Lexvdpoel), privately through the contact details on that
-  GitHub profile.
+- **A security problem**: do not post it in public. Report it privately through
+  [private vulnerability reporting](https://github.com/Lexvdpoel/Volura/security/advisories/new);
+  see [SECURITY.md](SECURITY.md).
 
 ## Before you write code
 
