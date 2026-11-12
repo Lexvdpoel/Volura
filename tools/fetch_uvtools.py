@@ -57,6 +57,9 @@ def command_files(base: Path) -> list[str]:
     names = {os.path.basename(path) for info in target.values()
              for key in ("runtime", "native") for path in info.get(key, {})}
     names |= {p.name for p in base.iterdir() if p.name.startswith("UVtoolsCmd")}
+    # OpenCV's native library, which reads and writes the layer images: on Linux the release
+    # does not list it in the .deps.json, but loads it all the same
+    names |= {p.name for p in base.iterdir() if p.name.startswith(("cvextern", "libcvextern"))}
     return sorted(n for n in names if (base / n).is_file())
 
 

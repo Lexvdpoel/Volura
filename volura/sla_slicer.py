@@ -312,7 +312,9 @@ def convert(archive: str, printer: ResinPrinter, out_path: str, uvtools: str,
             os.remove(made)
         lines = [ln.strip() for ln in text.splitlines()
                  if ln.strip() and not ln.strip().startswith("at ") and "[" not in ln]
-        raise RuntimeError(lines[-1] if lines else f"UVtools stopped with code {proc.returncode}")
+        # the exception says what went wrong; the last line is often only a progress line
+        why = [ln for ln in lines if "exception" in ln.lower()] or lines
+        raise RuntimeError(why[0] if why else f"UVtools stopped with code {proc.returncode}")
     os.replace(made, out_path)
     return out_path
 
