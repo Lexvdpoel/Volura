@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 from . import (background, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                card_holder, enclosure, fan_guard, gears,
                gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard,
-               standoff, storage_bin, text3d, theme, threads, tie_mount)
+               standoff, storage_bin, text3d, theme, threads, tie_mount, wall_hook)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
@@ -36,7 +36,8 @@ from .part_dialogs import (BatteryHolderDialog, BinRackDialog, BitHolderDialog, 
                            GridfinityDialog, GrommetDialog,
                            HingeDialog, HoseAdapterDialog,
                            KnobDialog, LabelPlateDialog, PegboardDialog, ProjectBoxDialog,
-                           StandoffDialog, StorageBinDialog, Text3DDialog, TieMountDialog)
+                           StandoffDialog, StorageBinDialog, Text3DDialog, TieMountDialog,
+                           WallHookDialog)
 
 
 TOOL_INFO = [
@@ -1065,6 +1066,54 @@ class PrintMixin:
             self.view.set_status(tr("Memory card holder failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the memory card holder…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ wall hook
+    def wall_hook_dialog(self):
+        """Draw > Parts > Wall Hook…: a J that is screwed to a wall, for a coat or a bag."""
+        dlg = WallHookDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("reach", "rise", "width", "thickness", "plate", "holes", "screw",
+                    "countersink"):
+            setattr(self.settings, "wall_hook_" + key, options[key])
+        self.settings.save()
+        made = self.make_wall_hook_model(options)
+        self.setFocus()
+        return made
+
+    def make_wall_hook_model(self, options):
+        """The hook on the bed as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("reach", "rise", "width", "thickness", "plate", "holes",
+                                        "screw", "countersink")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the wall hook…"))
+            m = wall_hook.wall_hook(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the hook away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Wall hook"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Wall hook added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Wall hook failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the wall hook…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter

@@ -32,7 +32,7 @@ from . import (__version__, background, battery_holder, bin_rack, bit_holder, bo
                nesting, ops, pegboard, sheet3d, sheettools,
                svg,
                spacemouse, standoff, storage_bin, text3d, theme, threads, tie_mount,
-               vector_export, vector_import, workers)
+               vector_export, vector_import, wall_hook, workers)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -934,6 +934,26 @@ class Settings:
                 value = default
             setattr(self, key, max(lo, min(hi, value)))
         for key, default, lo, hi in (
+                ("wall_hook_reach", 30.0, wall_hook.REACH_MIN, wall_hook.REACH_MAX),
+                ("wall_hook_rise", 15.0, wall_hook.RISE_MIN, wall_hook.RISE_MAX),
+                ("wall_hook_width", 15.0, wall_hook.WIDTH_MIN, wall_hook.WIDTH_MAX),
+                ("wall_hook_thickness", 5.0, wall_hook.THICK_MIN, wall_hook.THICK_MAX),
+                ("wall_hook_plate", 50.0, 0.0, wall_hook.PLATE_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        try:
+            holes = int(self.q.value("wall_hook_holes", 2))
+        except (TypeError, ValueError):
+            holes = 2
+        self.wall_hook_holes = max(wall_hook.HOLES_MIN, min(wall_hook.HOLES_MAX, holes))
+        self.wall_hook_screw = str(self.q.value("wall_hook_screw", "M4"))
+        if self.wall_hook_screw not in wall_hook.SCREWS:
+            self.wall_hook_screw = "M4"
+        self.wall_hook_countersink = self._bool("wall_hook_countersink", True)
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1147,6 +1167,10 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("card_holder_sd", "card_holder_micro", "card_holder_usb", "card_holder_rows",
                     "card_holder_depth", "card_holder_fit"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("wall_hook_reach", "wall_hook_rise", "wall_hook_width",
+                    "wall_hook_thickness", "wall_hook_plate", "wall_hook_holes",
+                    "wall_hook_screw", "wall_hook_countersink"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2060,6 +2084,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                   "upright in slots of their own size: the slots are open at the "
                                   "top and the front of a column dips down, so you can pinch the "
                                   "card out"))
+        # ---- wall hook
+        self.a_wall_hook = A(tr("Wall Hook…"),
+                             lambda checked=False: self.wall_hook_dialog(), None, "wall_hook",
+                             False,
+                             tr("Add a J-shaped hook that you screw to a wall: the plate lies "
+                                "against it, the arm reaches out and the tip stops what hangs on "
+                                "it from sliding off; it prints on its side, so the layer lines "
+                                "run along the hook"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2177,7 +2209,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_battery_holder, self.a_storage_bin, self.a_bin_rack,
                           self.a_cable_chain, self.a_gridfinity, self.a_pegboard,
                           self.a_hose_adapter, self.a_fan_guard, self.a_grommet, self.a_bracket,
-                          self.a_tie_mount, self.a_bit_holder, self.a_card_holder))
+                          self.a_tie_mount, self.a_bit_holder, self.a_card_holder,
+                          self.a_wall_hook))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

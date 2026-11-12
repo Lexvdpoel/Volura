@@ -333,6 +333,12 @@ SVG = {
                    f'<rect x="17" y="4" width="4" height="8.5" rx="1" fill="#cfe0f5" {S()}/>'
                    f'<rect x="2.5" y="11" width="19" height="10.5" rx="2" fill="#eef2f7" {S()}/>'
                    f'<path d="M2.5 14.6 L21.5 14.6" {N} stroke="#9a9a9a" stroke-width="1.4"/>',
+    # wall hook: the J seen from the side, screwed to a wall
+    "wall_hook": f'<path d="M2.5 2 L2.5 22" {N} stroke="#9a9a9a" stroke-width="1.4"/>'
+                 f'<path d="M4 2.5 L7 2.5 L7 16.5 L16 16.5 L16 9.5 A1.5 1.5 0 0 1 19 9.5 '
+                 f'L19 20.5 L4 20.5 Z" fill="#cfe0f5" {S()}/>'
+                 f'<circle cx="5.5" cy="7" r="1.2" fill="#fff" {S(w=1.1)}/>'
+                 f'<circle cx="5.5" cy="13.5" r="1.2" fill="#fff" {S(w=1.1)}/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

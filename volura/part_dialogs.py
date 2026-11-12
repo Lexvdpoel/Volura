@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                card_holder, enclosure, fan_guard, fonts, gears,
                gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, standoff,
-               storage_bin, text3d, threads, tie_mount)
+               storage_bin, text3d, threads, tie_mount, wall_hook)
 from .i18n import tr
 
 
@@ -1402,6 +1402,91 @@ class CardHolderDialog(QDialog):
         return {"sd": int(self.sd.value()), "micro": int(self.micro.value()),
                 "usb": int(self.usb.value()), "rows": int(self.rows.value()),
                 "depth": round(self.depth.value(), 6), "fit": round(self.fit.value(), 6)}
+
+
+class WallHookDialog(QDialog):
+    """The "Wall Hook…" dialog: a J that is screwed to a wall, for a coat, a bag or a cable.
+
+    The reach says how far the hook stands out from the wall and the rise how high its tip comes
+    above the arm; the plate is what lies against the wall and the thickness how thick plate, arm
+    and tip are, which is also how strong the hook is. The holes, the screw and whether its head
+    sinks say how it is fastened. Under the fields the hook it will make, because a plate that is
+    too short for its holes is made taller and a thick hook is never too short to bend. The values
+    come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Wall hook"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(0.5)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.reach = spin(wall_hook.REACH_MIN, wall_hook.REACH_MAX, s.wall_hook_reach)
+        self.reach.setSingleStep(5.0)
+        self.reach.setToolTip(tr("How far out from the wall the hook reaches"))
+        self.rise = spin(wall_hook.RISE_MIN, wall_hook.RISE_MAX, s.wall_hook_rise)
+        self.rise.setSingleStep(5.0)
+        self.rise.setToolTip(tr("How high the tip rises above the arm"))
+        self.width = spin(wall_hook.WIDTH_MIN, wall_hook.WIDTH_MAX, s.wall_hook_width)
+        self.width.setSingleStep(5.0)
+        self.width.setToolTip(tr("How wide the hook is, which is how high it stands on the bed"))
+        self.thickness = spin(wall_hook.THICK_MIN, wall_hook.THICK_MAX, s.wall_hook_thickness)
+        self.thickness.setToolTip(tr("How thick the plate, the arm and the tip are"))
+        self.plate = spin(0.0, wall_hook.PLATE_MAX, s.wall_hook_plate)
+        self.plate.setSingleStep(5.0)
+        self.plate.setToolTip(tr("How tall the plate that lies against the wall is"))
+        self.holes = QSpinBox()
+        self.holes.setRange(wall_hook.HOLES_MIN, wall_hook.HOLES_MAX)
+        self.holes.setValue(int(s.wall_hook_holes))
+        self.holes.setToolTip(tr("How many screw holes there are in the plate"))
+        self.screw = QComboBox()
+        for size in wall_hook.SCREWS:
+            self.screw.addItem(size, size)
+        self.screw.setCurrentIndex(max(0, self.screw.findData(s.wall_hook_screw)))
+        self.screw.setToolTip(tr("The screw that goes through the holes"))
+        self.countersink = QCheckBox(tr("The head sinks into the front of the plate"))
+        self.countersink.setChecked(bool(s.wall_hook_countersink))
+        self.info = QLabel()
+        lay.addRow(tr("Reach"), self.reach)
+        lay.addRow(tr("Rise"), self.rise)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Thickness"), self.thickness)
+        lay.addRow(tr("Plate"), self.plate)
+        lay.addRow(tr("Holes"), self.holes)
+        lay.addRow(tr("Screw"), self.screw)
+        lay.addRow("", self.countersink)
+        lay.addRow("", self.info)
+        for w in (self.reach, self.rise, self.width, self.thickness, self.plate):
+            w.valueChanged.connect(self._changed)
+        self.holes.valueChanged.connect(self._changed)
+        self.screw.currentIndexChanged.connect(self._changed)
+        self.countersink.toggled.connect(self._changed)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._changed()
+
+    def _changed(self, *_):
+        s = wall_hook.sizes(**self.options())
+        self.info.setText(tr("Hook {r:g} × {i:g} mm, hole {d:g} mm, {n} in the plate")
+                          .format(r=s["reach"], i=s["rise"], d=s["hole_d"], n=len(s["holes_y"])))
+
+    def options(self) -> dict:
+        return {"reach": round(self.reach.value(), 6), "rise": round(self.rise.value(), 6),
+                "width": round(self.width.value(), 6),
+                "thickness": round(self.thickness.value(), 6),
+                "plate": round(self.plate.value(), 6), "holes": int(self.holes.value()),
+                "screw": str(self.screw.currentData()), "countersink": self.countersink.isChecked()}
 
 
 class HoseAdapterDialog(QDialog):

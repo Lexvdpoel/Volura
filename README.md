@@ -172,6 +172,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
   columns behind the first when you want it. The slots are open at the top and chamfered at their
   mouth, and in front of every column the top dips down so you can pinch the card out there. The
   holder lies on its block on the bed and prints without support
+- **Wall Hook** (Draw > Parts): a J that you screw to a wall or the side of a cupboard, for a
+  coat, a bag, headphones or a cable: the plate lies against the wall, the arm reaches 10 to 80 mm
+  out and the tip stops what hangs on it from sliding off. Both inside bends are rounded, because
+  a sharp inside corner is where a hook snaps, and the plate takes one or two countersunk screws.
+  The hook prints on its side, so the layer lines run along the J, and its holes are teardrops
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is
