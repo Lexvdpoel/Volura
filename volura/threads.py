@@ -175,6 +175,7 @@ SCREW_HOLE_KINDS = ("through", "counterbore", "countersink", "nutpocket")
 
 DEFAULT_HOLE_CLEARANCE = 0.2   # mm on every diameter of a hole: printed holes come out smaller
 COUNTERBORE_ROOM = 0.2         # mm the counterbore goes deeper than the head, so it sits low
+COUNTERSINK_OVER = 0.05        # mm the cone goes past the hole Ø, so it crosses the wall
 
 
 def _teardrop_loop(radius, up, segments):
@@ -235,10 +236,14 @@ def screw_hole(manifold, center, axis, length, size, kind, clearance=DEFAULT_HOL
         cutter = cutter + head.translate((0.0, 0.0, -margin))
     elif kind == "countersink":
         # 90° included angle: the radius falls 1 mm per mm of depth, so the cone that ends
-        # in the hole Ø is exactly as deep below the face as its radius is wide
+        # in the hole Ø is exactly as deep below the face as its radius is wide. It is run
+        # COUNTERSINK_OVER further, to just inside the hole: a cone that stops exactly on
+        # the wall of the hole touches it instead of crossing it, and where its rim meets
+        # the 45° roof of a teardrop that leaves a sliver the model cannot close.
         r_head = (cs_head_d + clearance) / 2.0
-        head = mf.Manifold.cylinder(r_head - r_hole + margin, r_head + margin, r_hole,
-                                    segments).translate((0.0, 0.0, -margin))
+        over = COUNTERSINK_OVER * max(1.0, r_hole / 2.0)
+        head = mf.Manifold.cylinder(r_head - r_hole + margin + over, r_head + margin,
+                                    r_hole - over, segments).translate((0.0, 0.0, -margin))
         cutter = cutter + head
     elif kind == "nutpocket":
         # the nut of the same size, held by its flats: a hexagon whose corners stand

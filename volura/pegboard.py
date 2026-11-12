@@ -298,11 +298,15 @@ def pegboard_board(cols=COLS_DEFAULT, rows=ROWS_DEFAULT, board=BOARD,
     s = board_sizes(cols, rows, board, standoff)
     L, H, t, h = s["length"], s["height"], s["board"], s["standoff"]
     face = mf.CrossSection.square((L, H))
-    rim = face - mf.CrossSection.square((L - 2.0 * RIM, H - 2.0 * RIM)).translate((RIM, RIM))
+    inner = mf.CrossSection.square((L - 2.0 * RIM, H - 2.0 * RIM)).translate((RIM, RIM))
+    # the rim is flush with the edges of the board, so it is cut out of one block that stands
+    # the whole height: a frame that is stood on the back of the board touches it face to face,
+    # and the seam between them is a sliver the model cannot close
+    body = face.extrude(t + h) - inner.extrude(h + 1.0).translate((0.0, 0.0, t))
     corners = [(x, y) for x in (PEG_PITCH, L - PEG_PITCH) for y in (PEG_PITCH, H - PEG_PITCH)]
     bosses = [mf.CrossSection.circle(BOSS, SEGMENTS).translate(c) for c in corners]
-    body = face.extrude(t) + mf.CrossSection.batch_boolean([rim] + bosses, mf.OpType.Add) \
-        .extrude(h).translate((0.0, 0.0, t))
+    body = body + mf.CrossSection.batch_boolean(bosses, mf.OpType.Add).extrude(h) \
+        .translate((0.0, 0.0, t))
     holes = [mf.CrossSection.circle(0.5 * PEG_HOLE, SEGMENTS)
              .translate(((i + 0.5) * PEG_PITCH, (j + 0.5) * PEG_PITCH))
              for i in range(s["cols"]) for j in range(s["rows"])]

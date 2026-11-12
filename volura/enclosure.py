@@ -50,6 +50,9 @@ SCREW_SIZES = ("M2", "M2.5", "M3", "M4")
 POST_OVER_SCREW, PILOT_OVER_SCREW = 2.2, 0.8
 #: mm of plastic that stays above the floor around a pilot hole
 POST_FLOOR = 1.0
+#: mm a post runs into the two walls of its corner; without that it only touches them, and the
+#: line where a cylinder touches a wall is a sliver the model cannot close
+POST_BITE = 0.5
 #: the straight pieces a post, a pilot hole or a screw hole is approximated with
 SEGMENTS = 48
 #: the vent slots in the long walls: how wide they are, how far above the floor they start
@@ -206,7 +209,8 @@ def project_box(length=80, width=50, height=30, wall=2.0, floor=2.0, radius=3.0,
 
     # the screw posts stand in the inside corners, so wide that they run into both walls; the
     # lid is centred on the same origin, so its holes are on the same four points
-    centres = [(sx * (0.5 * L - 0.5 * post_d), sy * (0.5 * W - 0.5 * post_d))
+    bite = min(POST_BITE, t)
+    centres = [(sx * (0.5 * L - 0.5 * post_d + bite), sy * (0.5 * W - 0.5 * post_d + bite))
                for sx in (-1.0, 1.0) for sy in (-1.0, 1.0)] if size else []
     if centres:
         # a post reaches up to the top edge of the base minus the lip, where the lid comes down

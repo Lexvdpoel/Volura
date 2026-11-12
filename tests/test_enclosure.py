@@ -257,13 +257,13 @@ def test_the_pilot_hole_stops_short_of_the_floor():
                                                       o["width"] + 2 * o["wall"],
                                                       o["radius"]), rel=REL), \
         "the pilot hole goes through the bottom"
-    wall = (rounded_area(o["length"] + 2 * o["wall"], o["width"] + 2 * o["wall"], o["radius"])
-            - rounded_area(o["length"], o["width"], max(0.0, o["radius"] - o["wall"])))
-    post = 0.5 * enclosure.POST_OVER_SCREW * 3.0
     pilot = 0.5 * enclosure.PILOT_OVER_SCREW * 3.0
-    above = base.slice(o["floor"] + enclosure.POST_FLOOR + 0.5)
-    assert above.area() == pytest.approx(wall + 4.0 * math.pi * (post * post - pilot * pilot),
-                                         rel=REL), "the posts have no pilot hole"
+    # a post runs into the two walls of its corner, so it does not add a whole circle to the
+    # ring there; what the pilot hole takes off is four of them, standing free or not
+    solid = base.slice(o["floor"] + 0.5 * enclosure.POST_FLOOR)     # the posts without a hole
+    above = base.slice(o["floor"] + enclosure.POST_FLOOR + 0.5)     # ... and with one
+    assert solid.area() - above.area() == pytest.approx(4.0 * math.pi * pilot * pilot,
+                                                        rel=REL), "the posts have no pilot hole"
 
 
 @pytest.mark.parametrize("kw, screws, wrong", (
