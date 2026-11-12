@@ -43,7 +43,7 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Cache the slicer
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: curaengine
           key: curaengine-5.14.0-${{ runner.os }}-${{ hashFiles('tools/fetch_curaengine.py') }}
