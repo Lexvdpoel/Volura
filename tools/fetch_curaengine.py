@@ -67,17 +67,26 @@ def unpack_appimage(image: Path, folder: Path) -> Path:
                 if p.is_file())
 
 
+#: the system's dynamic loader: the engine in the AppImage names a loader relative to the
+#: AppImage (lib64/ld-linux-x86-64.so.2), so volura/slicer.py starts it through this one. The C
+#: library itself is the system's: the engine of Cura 5.14 needs glibc 2.38 or newer (Ubuntu
+#: 24.04, Debian 13, Fedora 39 and later)
+LINUX_LOADER = "/lib64/ld-linux-x86-64.so.2"
+#: the C library and its parts, which always come from the system
+GLIBC = ("libc.so", "libm.so", "libdl.so", "libpthread.so", "librt.so", "libresolv.so",
+         "ld-linux")
+
+
 def linux_libs(engine: Path, root: Path) -> list[Path]:
     """The shared libraries of the engine that come from the Cura package, not from the system."""
-    env = dict(os.environ)
-    dirs = sorted({str(p.parent) for p in root.rglob("*.so*")})
-    env["LD_LIBRARY_PATH"] = os.pathsep.join(dirs)
-    out = subprocess.run(["ldd", str(engine)], env=env, capture_output=True, text=True).stdout
+    dirs = sorted({str(p.parent) for p in root.rglob("*.so*")}, key=len)
+    out = subprocess.run([LINUX_LOADER, "--list", "--library-path", os.pathsep.join(dirs),
+                          str(engine)], capture_output=True, text=True).stdout
     libs = []
     for line in out.splitlines():
         if "=>" in line:
             path = line.split("=>")[1].split("(")[0].strip()
-            if path and str(root) in path:
+            if path and str(root) in path and not Path(path).name.startswith(GLIBC):
                 libs.append(Path(path))
     return libs
 
@@ -111,6 +120,8 @@ def main():
         for lib in libs:
             if lib.is_file():
                 shutil.copy2(lib, lib_dir / lib.name)
+        if sys.platform != "win32" and not any(lib_dir.iterdir()):
+            raise SystemExit("none of the libraries of CuraEngine were found in the AppImage")
         for d in RESOURCE_DIRS:
             shutil.copytree(resources / d, TARGET / "resources" / d)
         (TARGET / "resources" / "texts").mkdir()

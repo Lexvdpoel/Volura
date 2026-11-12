@@ -937,6 +937,11 @@ class PrintMixin:
                 "The slicer is not part of this copy of Volura. The downloads on the releases "
                 "page include it."))
             return
+        problem = slicer.engine_problem(engine)
+        if problem:
+            QMessageBox.warning(self, tr("Slice"), tr("The slicer does not start on this "
+                                                      "computer:\n{problem}").format(problem=problem))
+            return
         only = bool(self.doc.selected_groups())
 
         def prepare(report):

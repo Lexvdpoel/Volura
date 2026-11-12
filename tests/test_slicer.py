@@ -26,8 +26,9 @@ import pytest  # noqa: E402
 from volura import cura_profiles, slicer  # noqa: E402
 
 ENGINE, RESOURCES = slicer.find_engine(), slicer.find_resources()
-needs_engine = pytest.mark.skipif(ENGINE is None or RESOURCES is None,
-                                  reason="no CuraEngine (tools/fetch_curaengine.py)")
+needs_engine = pytest.mark.skipif(
+    ENGINE is None or RESOURCES is None or slicer.engine_problem(ENGINE) is not None,
+    reason="no CuraEngine that runs here (tools/fetch_curaengine.py; Linux: glibc 2.38+)")
 
 
 def _cube(size=20.0, at=(0.0, 0.0, 0.0)):
@@ -132,17 +133,20 @@ def test_slice_from_the_file_menu(monkeypatch, tmp_path):
         return QDialog.Accepted
 
     monkeypatch.setattr(sd.SliceDialog, "exec", fill)
+    errors = []
+    monkeypatch.setattr(wp.QMessageBox, "critical", lambda *a, **k: errors.append(a[2]))
     monkeypatch.setattr(wp.QFileDialog, "getSaveFileName", lambda *a, **k: (str(out), ""))
     try:
         assert w.a_slice in w.flat_actions(w.menuBar())
         w.slice_dialog()
         deadline = time.monotonic() + 120.0
-        while not out.exists() and time.monotonic() < deadline:
+        while not out.exists() and not errors and time.monotonic() < deadline:
             app.processEvents()
             time.sleep(0.01)
-        while "Sliced" not in w.hint.text() and time.monotonic() < deadline:
+        while "Sliced" not in w.hint.text() and not errors and time.monotonic() < deadline:
             app.processEvents()
             time.sleep(0.01)
+        assert not errors, errors
         assert seen.get("opened") and out.exists()
         assert "Sliced" in w.hint.text() and "g filament" in w.hint.text()
         assert w.settings.slice_printer == "creality_ender3"

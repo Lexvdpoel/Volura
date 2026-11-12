@@ -54,6 +54,41 @@ def find_engine() -> str | None:
     return shutil.which(ENGINE)
 
 
+#: the system's dynamic loader on Linux: the CuraEngine of the Cura AppImage names a loader
+#: relative to the AppImage, so it is started through this one, with its own libraries in `lib`
+#: next to it. It needs glibc 2.38 or newer (Ubuntu 24.04 and later); see `engine_problem`
+LINUX_LOADER = "/lib64/ld-linux-x86-64.so.2"
+_PROBLEMS: dict = {}
+
+
+def engine_command(engine: str) -> list:
+    """How to start `engine`: on its own, or on Linux through the loader with its own libraries."""
+    lib = os.path.join(os.path.dirname(engine), "lib")
+    if sys.platform.startswith("linux") and os.path.isdir(lib) and os.path.exists(LINUX_LOADER):
+        return [LINUX_LOADER, "--library-path", lib, engine]
+    return [engine]
+
+
+def engine_problem(engine: str) -> str | None:
+    """Why `engine` does not start on this computer, or None when it does (asked once)."""
+    if engine not in _PROBLEMS:
+        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        try:
+            run = subprocess.run(engine_command(engine) + ["help"], capture_output=True,
+                                 text=True, encoding="utf-8", errors="replace", timeout=30,
+                                 env=engine_environment(engine), creationflags=flags)
+            text = run.stdout + run.stderr
+            ok = "CuraEngine slice" in text
+            problem = None if ok else (text.strip().splitlines() or ["CuraEngine did not start"])[-1]
+            if problem and "GLIBC" in problem:
+                problem = ("CuraEngine needs a newer Linux (glibc 2.38 or later, such as "
+                           "Ubuntu 24.04): " + problem)
+        except (OSError, subprocess.SubprocessError) as exc:
+            problem = str(exc)
+        _PROBLEMS[engine] = problem
+    return _PROBLEMS[engine]
+
+
 def engine_environment(engine: str) -> dict:
     """The environment CuraEngine runs in: on Linux its own libraries in `lib` next to it."""
     env = dict(os.environ)
@@ -180,7 +215,7 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
         settings_path = os.path.join(tmp, "settings.json")
         with open(settings_path, "w", encoding="utf-8") as fh:
             json.dump(doc, fh)
-        cmd = [engine, "slice", "-p", "-r", settings_path, "-o", out_path]
+        cmd = engine_command(engine) + ["slice", "-p", "-r", settings_path, "-o", out_path]
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                 encoding="utf-8", errors="replace", creationflags=flags,

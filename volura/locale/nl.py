@@ -1995,6 +1995,7 @@ TRANSLATIONS = {
     'Save G-code': 'G-code opslaan',
     'Slicing…': 'Slicen…',
     'Slicing Failed': 'Slicen mislukt',
+    'The slicer does not start on this computer:\n{problem}': 'De slicer start niet op deze computer:\n{problem}',
     'The parts ({x:.0f} × {y:.0f} × {z:.0f} mm) do not fit the build volume of {w:.0f} × {d:.0f} × {h:.0f} mm': 'De onderdelen ({x:.0f} × {y:.0f} × {z:.0f} mm) passen niet in het bouwvolume van {w:.0f} × {d:.0f} × {h:.0f} mm',
     'Sliced: {h} h {m:02d} min, {g:.0f} g filament ({l:.2f} m): {path}': 'Gesliced: {h} u {m:02d} min, {g:.0f} g filament ({l:.2f} m): {path}',
 }
