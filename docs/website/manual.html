@@ -1171,6 +1171,27 @@ volura</code></pre>
     </table></div>
     <p class="note" lang="en">The order of the filaments is the order of the list under <b>Materials</b>; only the colours you actually use get a number. See <a href="#groups">Groups and colours</a>.</p>
     <p class="note" lang="nl">De volgorde van de filamenten is de volgorde van de lijst bij <b>Materialen</b>; alleen de kleuren die je echt gebruikt, krijgen een nummer. Zie <a href="#groups">Groepen en kleuren</a>.</p>
+    <h3 id="slice"><span lang="en">Slicing</span><span lang="nl">Slicen</span></h3>
+    <p lang="en">G-code for your printer straight from Volura, without a separate slicer.</p>
+    <p lang="nl">G-code voor je printer rechtstreeks uit Volura, zonder aparte slicer.</p>
+    <p class="where" lang="en">Where: <b>File &gt; Slice…</b></p>
+    <p class="where" lang="nl">Waar: <b>Bestand &gt; Slicen…</b></p>
+    <ul lang="en">
+      <li>Choose the maker and then the printer; the list holds the printer profiles of Cura, more than 600 printers.</li>
+      <li>Then the nozzle, the material (only those for the filament of that printer) and the quality with its layer height.</li>
+      <li>Set the infill, support (none, touching the bed or everywhere) and bed adhesion; everything else comes from the profile, worked out the way Cura does it.</li>
+      <li>Choose where the G-code goes. Volura slices with CuraEngine in the background and then shows in the status bar how long the print takes and how much filament it uses.</li>
+      <li>The parts land in the middle of the bed, as they stand to each other. Volura remembers your choice for the next time.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Kies het merk en dan de printer; de lijst bevat de printerprofielen van Cura, meer dan 600 printers.</li>
+      <li>Daarna de nozzle, het materiaal (alleen dat voor het filament van die printer) en de kwaliteit met zijn laaghoogte.</li>
+      <li>Stel de vulling, support (geen, op het bed of overal) en de hechting aan het bed in; de rest komt uit het profiel, uitgerekend zoals Cura dat doet.</li>
+      <li>Kies waar de G-code heen gaat. Volura slicet met CuraEngine op de achtergrond en laat daarna in de statusbalk zien hoe lang de print duurt en hoeveel filament hij kost.</li>
+      <li>De onderdelen komen midden op het bed, zoals ze ten opzichte van elkaar staan. Volura onthoudt je keuze voor de volgende keer.</li>
+    </ul>
+    <p class="note" lang="en">CuraEngine (AGPL v3) and the Cura printer profiles (LGPL v3) come with the download as a separate program in the <i>curaengine</i> folder; see THIRD_PARTY_LICENSES.txt.</p>
+    <p class="note" lang="nl">CuraEngine (AGPL v3) en de printerprofielen van Cura (LGPL v3) zitten in de download als apart programma in de map <i>curaengine</i>; zie THIRD_PARTY_LICENSES.txt.</p>
     <h3><span lang="en">Checks and backups</span><span lang="nl">Controles en reservekopieën</span></h3>
     <p lang="en">Nothing goes to the printer as a broken object, and nothing is lost when Volura or the computer stops.</p>
     <p lang="nl">Er gaat niets als kapot object naar de printer, en er gaat niets verloren als Volura of de computer stopt.</p>

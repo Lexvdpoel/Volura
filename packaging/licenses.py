@@ -3,8 +3,9 @@
     python packaging/licenses.py dist/Volura
 
 Called by build.py. The licenses of what PyInstaller bundles (Qt and PySide6,
-manifold3d, numpy, PyOpenGL and Python itself) must ship with the distribution. The
-texts come from the installed packages; what is not in there (LGPL/GPL for Qt, the
+manifold3d, numpy, PyOpenGL and Python itself) and of the slicer next to it (CuraEngine
+and the Cura printer profiles) must ship with the distribution. The texts come from the
+installed packages; what is not in there (LGPL/GPL for Qt, AGPL for CuraEngine, the
 PyOpenGL license) is in packaging/licenses/.
 """
 from __future__ import annotations
@@ -16,6 +17,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent / "licenses"
+#: the Cura release the slicer comes from (tools/fetch_curaengine.py)
+CURA_VERSION = "5.14.0"
 RULE = "=" * 78
 
 QT_NOTICE = """\
@@ -32,6 +35,24 @@ License version 3 (LGPL v3). Qt is (c) The Qt Company Ltd. and other contributor
 
 Below follows the text of the LGPL v3, and after that the GPL v3 that the LGPL v3
 builds on."""
+
+CURA_NOTICE = """\
+File > Slice uses CuraEngine and the printer profiles of UltiMaker Cura {version}.
+
+- CuraEngine is (c) UltiMaker and contributors, under the GNU Affero General Public
+  License version 3 (AGPL v3). It is a separate program in the curaengine folder,
+  started by Volura; Volura is not linked to it. It is the unchanged CuraEngine of the
+  official Cura {version} release, with the libraries it loads (Arcus, polyclipping,
+  cura-formulae-engine, oneTBB and the Microsoft C++ runtime on Windows).
+  Source code: https://github.com/Ultimaker/CuraEngine/tree/{version}
+- The printer definitions, nozzle variants and quality profiles in
+  curaengine/resources are (c) UltiMaker and the printer makers who contributed them,
+  under the GNU Lesser General Public License version 3 (LGPL v3, text above).
+  Source: https://github.com/Ultimaker/Cura/tree/{version}/resources
+- The material profiles in curaengine/resources/materials come from
+  https://github.com/Ultimaker/fdm_materials and are in the public domain (CC0 1.0).
+
+Below follows the text of the AGPL v3."""
 
 
 def version(dist):
@@ -88,12 +109,18 @@ def build_text():
         f"NumPy                      {version('numpy') or '?':<11} BSD-3-Clause (with parts under 0BSD, MIT, Zlib, CC0)\n"
         f"PyOpenGL                   {version('PyOpenGL') or '?':<11} BSD-style\n"
         f"Python                     {sys.version.split()[0]:<11} PSF-2.0\n",
+        f"CuraEngine                 {CURA_VERSION:<11} AGPL-3.0 (a separate program)\n"
+        f"Cura printer profiles      {CURA_VERSION:<11} LGPL-3.0 (materials CC0-1.0)\n",
     ]
     parts.append(section(f"Qt 6 / PySide6 {qt}", QT_NOTICE))
     parts.append(section("GNU LESSER GENERAL PUBLIC LICENSE, version 3",
                          (HERE / "LGPL-3.0.txt").read_text(encoding="utf-8")))
     parts.append(section("GNU GENERAL PUBLIC LICENSE, version 3",
                          (HERE / "GPL-3.0.txt").read_text(encoding="utf-8")))
+    parts.append(section(f"CuraEngine and the Cura printer profiles {CURA_VERSION}",
+                         CURA_NOTICE.format(version=CURA_VERSION)))
+    parts.append(section("GNU AFFERO GENERAL PUBLIC LICENSE, version 3",
+                         (HERE / "AGPL-3.0.txt").read_text(encoding="utf-8")))
     parts.append(files_section(f"manifold3d {version('manifold3d') or ''}", dist_license_files("manifold3d")))
     parts.append(files_section(f"NumPy {version('numpy') or ''}", dist_license_files("numpy")))
     ogl = [("PyOpenGL license.txt", HERE / "PyOpenGL-license.txt")]

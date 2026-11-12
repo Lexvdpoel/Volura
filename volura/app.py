@@ -877,6 +877,20 @@ class Settings:
             self.bracket_screw = "M4"
         self.bracket_countersink = self._bool("bracket_countersink", True)
         self.bracket_gussets = self._bool("bracket_gussets", True)
+        # File > Slice: the printer, nozzle, material and quality last sliced with
+        for key in ("slice_printer", "slice_variant", "slice_material", "slice_quality",
+                    "slice_adhesion"):
+            setattr(self, key, str(self.q.value(key, "") or ""))
+        if not self.slice_printer:
+            self.slice_printer = "creality_ender3"
+        try:
+            self.slice_infill = max(0, min(100, int(float(self.q.value("slice_infill", 20)))))
+        except (TypeError, ValueError):
+            self.slice_infill = 20
+        try:
+            self.slice_support = max(0, min(2, int(float(self.q.value("slice_support", 0)))))
+        except (TypeError, ValueError):
+            self.slice_support = 0
         for key, default, lo, hi in (
                 ("tie_mount_base", 20.0, tie_mount.BASE_MIN, tie_mount.BASE_MAX),
                 ("tie_mount_tie_width", 5.0, tie_mount.TIE_W_MIN, tie_mount.TIE_W_MAX),
@@ -1157,6 +1171,9 @@ class Settings:
         for key in ("bracket_leg_a", "bracket_leg_b", "bracket_width", "bracket_thickness",
                     "bracket_fillet", "bracket_holes", "bracket_screw", "bracket_countersink",
                     "bracket_gussets"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("slice_printer", "slice_variant", "slice_material", "slice_quality",
+                    "slice_adhesion", "slice_infill", "slice_support"):
             self.q.setValue(key, getattr(self, key))
         for key in ("tie_mount_base", "tie_mount_tie_width", "tie_mount_tie_thick",
                     "tie_mount_height", "tie_mount_screw", "tie_mount_countersink",
@@ -1630,6 +1647,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_print_setup = A(tr("Printer Set&up…"), lambda checked=False: self.print_setup())
         self.a_check = A(tr("Print &Check"), self.print_check, "F5", "check")
         self.a_print = A(tr("&Print"), self.export_3mf, "Ctrl+P", "3mf")
+        self.a_slice = A(tr("S&lice…"), lambda checked=False: self.slice_dialog(), None, None,
+                         False, tr("Slice the parts for your printer and save the G-code"))
         self.a_quit = A(tr("E&xit"), self.close, "Ctrl+Q")
 
         self.a_undo = A(tr("&Undo"), self.undo, ["Alt+Backspace", "Ctrl+Z"], "undo")
@@ -2157,7 +2176,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.fill(m, (self.a_new, self.a_open, self.recent_menu, None,
                       self.a_save, self.a_save_as, self.a_save_copy, None,
                       self.a_import, export, None)
-                  + only("3d", self.a_print) + (None, self.a_quit))
+                  + only("3d", self.a_print, self.a_slice) + (None, self.a_quit))
 
         # ---- Edit
         m = mb.addMenu(tr("&Edit"))
@@ -4256,7 +4275,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                "<li>Manifold (manifold3d), Apache 2.0</li>"
                                "<li>NumPy, BSD 3-clause</li>"
                                "<li>PyOpenGL, BSD-style</li>"
-                               "<li>Python, PSF license</li></ul>"
+                               "<li>Python, PSF license</li>"
+                               "<li>CuraEngine (UltiMaker), AGPL v3: a separate program for "
+                               "File &gt; Slice; source code at <a href='https://github.com/"
+                               "Ultimaker/CuraEngine'>github.com/Ultimaker/CuraEngine</a>. The "
+                               "Cura printer profiles, LGPL v3</li></ul>"
                                "<p>The full license texts are in THIRD_PARTY_LICENSES.txt next to "
                                "the program.</p>"))
 

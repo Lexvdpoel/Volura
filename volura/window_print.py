@@ -18,14 +18,14 @@ from __future__ import annotations
 import manifold3d as mf
 import numpy as np
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-                               QDoubleSpinBox, QFontComboBox, QFormLayout, QHBoxLayout,
-                               QLabel, QLineEdit, QPushButton, QSpinBox, QTextBrowser,
-                               QVBoxLayout)
+                               QDoubleSpinBox, QFileDialog, QFontComboBox, QFormLayout,
+                               QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
+                               QSpinBox, QTextBrowser, QVBoxLayout)
 
 from . import (background, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                card_holder, enclosure, fan_guard, gears,
                gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard,
-               standoff, storage_bin, text3d, theme, threads, tie_mount, wall_hook)
+               slicer, standoff, storage_bin, text3d, theme, threads, tie_mount, wall_hook)
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
@@ -926,6 +926,85 @@ class PrintMixin:
 
         background.run(self, work, text=tr("Building the corner bracket…"), on_done=done,
                        on_error=failed)
+
+    # ------------------------------------------------------------ slicing
+    def slice_dialog(self):
+        """File > Slice…: slice the printable parts with CuraEngine and save the G-code."""
+        from . import slice_dialog as sd
+        engine, resources = slicer.find_engine(), slicer.find_resources()
+        if not engine or not resources:
+            QMessageBox.information(self, tr("Slice"), tr(
+                "The slicer is not part of this copy of Volura. The downloads on the releases "
+                "page include it."))
+            return
+        only = bool(self.doc.selected_groups())
+
+        def prepare(report):
+            report(0.0, tr("Reading the printer profiles…"))
+            lib = sd.library(resources)
+            report(0.6, tr("Preparing…"))
+            return lib, ops.parts(self.doc, only_selected=only)
+
+        def prepared(result):
+            lib, part_list = result
+            part_list = self._validated_parts(part_list)
+            if part_list is None:
+                return
+            dlg = sd.SliceDialog(self, lib)
+            if dlg.exec() != QDialog.Accepted or dlg.printer is None:
+                self.setFocus()
+                return
+            choice = dlg.choice()
+            for key, value in choice.items():
+                setattr(self.settings, "slice_" + key, value)
+            self.settings.save()
+            stacks = dlg.stacks()
+            path, _ = QFileDialog.getSaveFileName(self, tr("Save G-code"),
+                                                  self.export_name(".gcode"),
+                                                  "G-code (*.gcode *.gco *.g)")
+            self.setFocus()
+            if path:
+                self._slice_async(stacks, part_list, path, engine)
+
+        background.run(self, prepare, text=tr("Reading the printer profiles…"),
+                       on_done=prepared, on_error=self._export_failed)
+
+    def _slice_async(self, stacks, part_list, path, engine):
+        """Slice `part_list` with `stacks` to `path` in the background, then say what it made."""
+        meshes = []
+        for p in part_list:
+            if p.manifold is None:
+                continue
+            mesh = p.manifold.to_mesh()
+            meshes.append((np.asarray(mesh.vert_properties)[:, :3], np.asarray(mesh.tri_verts), 0))
+        g = stacks.glob
+        bed = [float(g.get(k) or 0) for k in ("machine_width", "machine_depth", "machine_height")]
+
+        def work(report):
+            report(0.0, tr("Slicing…"))
+            lo = np.min([v.min(axis=0) for v, _t, _e in meshes], axis=0)
+            hi = np.max([v.max(axis=0) for v, _t, _e in meshes], axis=0)
+            size = hi - lo
+            if any(b > 0 and s > b + 1e-6 for s, b in zip(size, bed)):
+                raise ValueError(tr("The parts ({x:.0f} × {y:.0f} × {z:.0f} mm) do not fit the "
+                                    "build volume of {w:.0f} × {d:.0f} × {h:.0f} mm")
+                                 .format(x=size[0], y=size[1], z=size[2], w=bed[0], d=bed[1],
+                                         h=bed[2]))
+            return slicer.slice_meshes(stacks, meshes, path, engine,
+                                       on_progress=lambda f: report(f, tr("Slicing…")))
+
+        def done(result):
+            hours, rest = divmod(int(round(result.seconds)), 3600)
+            minutes = rest // 60
+            self.hint.setText(tr("Sliced: {h} h {m:02d} min, {g:.0f} g filament "
+                                 "({l:.2f} m): {path}")
+                              .format(h=hours, m=minutes, g=result.grams,
+                                      l=sum(result.filament_m), path=path))
+
+        def failed(exc):
+            QMessageBox.critical(self, tr("Slicing Failed"), str(exc))
+
+        background.run(self, work, text=tr("Slicing…"), on_done=done, on_error=failed)
 
     # ------------------------------------------------------------ zip-tie mount
     def tie_mount_dialog(self):

@@ -10,7 +10,8 @@
 PyInstaller cannot cross-compile: build on the platform you are building for.
 The workflow in .github/workflows/build.yml does that for Windows and Linux.
 The licenses (LICENSE.txt and THIRD_PARTY_LICENSES.txt, see licenses.py) are always
-included. The Linux build also includes `volura.desktop` and `install.sh`; that script
+included. When ./curaengine is there (tools/fetch_curaengine.py) it goes next to the program,
+so File > Slice works; without it Volura says the slicer is not part of that copy. The Linux build also includes `volura.desktop` and `install.sh`; that script
 puts Volura in ~/.local/opt/volura and the menu entry in ~/.local/share/applications.
 """
 from __future__ import annotations
@@ -92,6 +93,15 @@ def add_linux_files():
             f.chmod(f.stat().st_mode | 0o755)
 
 
+def add_slicer():
+    """CuraEngine and the Cura printer profiles next to the program, for File > Slice."""
+    engine = ROOT / "curaengine"
+    if engine.is_dir():
+        shutil.copytree(engine, DIST / "Volura" / "curaengine", dirs_exist_ok=True)
+    else:
+        print("No ./curaengine: this build cannot slice (tools/fetch_curaengine.py).")
+
+
 def archive(system, arch):
     name = f"Volura-{system}-{arch}"
     app = DIST / "Volura"
@@ -147,6 +157,7 @@ def main():
     system, arch = target()
     print(f"Building Volura for {system}-{arch} (Python {platform.python_version()})")
     pyinstaller(system)
+    add_slicer()
     archive(system, arch)
     if system == "windows":
         installer()

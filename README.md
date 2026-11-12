@@ -226,6 +226,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
     real flat faces (a box is six faces, a hole is a hole in its face, not a fan of triangles);
     round surfaces keep the facets they have in Volura
   - Where parts with different colors overlap, the part made later wins
+- **Slice** (File > Slice): G-code for your printer without a separate slicer. Choose the maker
+  and the printer from the Cura printer profiles (more than 600 printers), then the nozzle, the
+  material and the quality, and set infill, support and bed adhesion; Volura works out the
+  profile the way Cura does and slices with CuraEngine, which comes with the download. The status
+  bar then shows the print time and how much filament it takes
 - Native file format `.volura` (files from version 0.1 are converted), unlimited undo
 - **3D import**: STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB and COLLADA (DAE), with a progress
   bar. Every closed part becomes a group in its own color; slicer projects (PrusaSlicer,

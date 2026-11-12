@@ -19,7 +19,8 @@ def test_third_party_licenses(tmp_path):
     assert (tmp_path / "LICENSE.txt").read_text(encoding="utf-8").startswith("MIT License")
     for needle in ("GNU LESSER GENERAL PUBLIC LICENSE", "GNU GENERAL PUBLIC LICENSE",
                    "https://code.qt.io", "Apache License", "Michael C. Fletcher",
-                   "NumPy", "Python"):
+                   "NumPy", "Python", "GNU AFFERO GENERAL PUBLIC LICENSE",
+                   "https://github.com/Ultimaker/CuraEngine/tree/", "CC0"):
         assert needle in text, needle
     # the Qt commercial licence of the wheels is not ours to ship
     assert "LicenseRef-Qt-Commercial" not in text
