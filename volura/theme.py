@@ -1,14 +1,18 @@
-"""Light and dark theme: the choice, the Qt palette and the colors of Volura's own drawing.
+"""The theme: the choice, the Qt palette and the colors of Volura's own drawing.
 
-Window > Preferences > Theme picks System (follows Windows or the desktop), Light or
-Dark. Qt widgets follow the palette by themselves; whatever Volura draws itself (the 3D
-view, the 2D worksheet, the panel headers, the switch, the icons) asks here with
-:func:`color` for the color of the current theme.
+Window > Preferences > Theme picks System (follows Windows or the desktop), Light,
+Dark or High contrast. Qt widgets follow the palette by themselves; whatever Volura
+draws itself (the 3D view, the 2D worksheet, the panel headers, the switch, the icons)
+asks here with :func:`color` for the color of the current theme.
 
 In the dark theme the sheet on the worksheet stays light, like paper or material:
 the layer colors of a laser cutter (pure red, blue, black) then stay easy to read.
 The 3D view gets a muted gray sky on which both the black edges and preview lines
 and the white faces have enough contrast.
+
+High contrast is a dark theme too, but in pure black and white with a yellow
+selection. An entry of :data:`COLORS` may carry a third color for it; without one the
+color of the dark theme is used.
 """
 from __future__ import annotations
 
@@ -17,51 +21,54 @@ from PySide6.QtGui import QColor, QGuiApplication, QPalette
 
 from .i18n import tr
 
-SYSTEM, LIGHT, DARK = "system", "light", "dark"
-CHOICES = ((SYSTEM, tr("System")), (LIGHT, tr("Light")), (DARK, tr("Dark")))
+SYSTEM, LIGHT, DARK, HIGH_CONTRAST = "system", "light", "dark", "contrast"
+CHOICES = ((SYSTEM, tr("System")), (LIGHT, tr("Light")), (DARK, tr("Dark")),
+           (HIGH_CONTRAST, tr("High contrast")))
 
+# The color of every name per theme: (light, dark) or (light, dark, high contrast).
 COLORS = {
     # messages and text with a meaning
-    "ok": ("#2e7d32", "#7ed389"),
-    "error": ("#c62828", "#ff8f87"),
-    "warn": ("#b94700", "#ffb45e"),
-    "info": ("#1565c0", "#8cc4ff"),
-    "invalid": ("#c0392b", "#ff6f61"),
-    "title": ("#d23b3b", "#ff6b6b"),
-    "muted": ("#555c69", "#a9b0bb"),
+    "ok": ("#2e7d32", "#7ed389", "#00ff66"),
+    "error": ("#c62828", "#ff8f87", "#ff4d4d"),
+    "warn": ("#b94700", "#ffb45e", "#ffd400"),
+    "info": ("#1565c0", "#8cc4ff", "#66ccff"),
+    "invalid": ("#c0392b", "#ff6f61", "#ff4d4d"),
+    "title": ("#d23b3b", "#ff6b6b", "#ffffff"),
+    "muted": ("#555c69", "#a9b0bb", "#e6e6e6"),
     # panel headers of the Default Tray
-    "tray_bg": ("#ededed", "#30343a"),
-    "tray_hover": ("#e2e2e2", "#3b4048"),
-    "tray_line_top": ("#d8d8d8", "#41464e"),
-    "tray_line_bottom": ("#c4c4c4", "#15171a"),
-    "tray_text": ("#1f1f1f", "#f2f4f7"),
+    "tray_bg": ("#ededed", "#30343a", "#000000"),
+    "tray_hover": ("#e2e2e2", "#3b4048", "#1a1a1a"),
+    "tray_line_top": ("#d8d8d8", "#41464e", "#ffffff"),
+    "tray_line_bottom": ("#c4c4c4", "#15171a", "#ffffff"),
+    "tray_text": ("#1f1f1f", "#f2f4f7", "#ffffff"),
     # the 3D | 2D switch
-    "switch_on": ("#2f6fd6", "#2563eb"),
-    "switch_on_text": ("#ffffff", "#ffffff"),
-    "switch_track": ("#e6eaf0", "#2b2f35"),
+    "switch_on": ("#2f6fd6", "#2563eb", "#ffd400"),
+    "switch_on_text": ("#ffffff", "#ffffff", "#000000"),
+    "switch_track": ("#e6eaf0", "#2b2f35", "#000000"),
     "switch_hover": ("#dde2ea", "#353a42"),
-    "switch_border": ("#b9c3d0", "#5b636e"),
-    "switch_text": ("#4b5563", "#d5dae1"),
+    "switch_border": ("#b9c3d0", "#5b636e", "#ffffff"),
+    "switch_text": ("#4b5563", "#d5dae1", "#ffffff"),
     # the 2D worksheet
     "sheet_empty": ("#ffffff", "#e9ebee"),        # without a sheet: the whole area is paper
-    "sheet_desk": ("#e8ebef", "#25282c"),         # next to the sheet
+    "sheet_desk": ("#e8ebef", "#25282c", "#000000"),      # next to the sheet
     "sheet_plate": ("#ffffff", "#eceef1"),
     "sheet_shadow": ("#c4cad3", "#0e0f11"),
-    "sheet_border": ("#4b5563", "#8b95a3"),
-    "sheet_label": ("#555c69", "#c9ced6"),
+    "sheet_border": ("#4b5563", "#8b95a3", "#ffffff"),
+    "sheet_label": ("#555c69", "#c9ced6", "#ffffff"),
     "sheet_margin": ("#8fa3bf", "#7f95b5"),
     "grid": ("#dfe3e8", "#d6dae0"),
     "grid_major": ("#b9c0c9", "#b0b7c1"),
-    "desk_grid": ("#dfe3e8", "#2e3237"),
-    "desk_grid_major": ("#b9c0c9", "#3c4148"),
+    "desk_grid": ("#dfe3e8", "#2e3237", "#3a3a3a"),
+    "desk_grid_major": ("#b9c0c9", "#3c4148", "#808080"),
     "origin": ("#2b2b2b", "#2b2b2b"),
     "link_badge": ("#2f6fd6", "#2563eb"),       # the chain on an outline that is linked to a part
     # the 3D view (RGB 0..1 is made from these hex values)
-    "sky_top": ("#9eb8d1", "#434a54"),
-    "sky_horizon": ("#f7f7f5", "#7a7d82"),
-    "ground": ("#cccbc6", "#686864"),
-    "view_text": ("#5a5a5a", "#e3e6ea"),
+    "sky_top": ("#9eb8d1", "#434a54", "#000000"),
+    "sky_horizon": ("#f7f7f5", "#7a7d82", "#1a1a1a"),
+    "ground": ("#cccbc6", "#686864", "#333333"),
+    "view_text": ("#5a5a5a", "#e3e6ea", "#ffffff"),
     "overhang": ("#e0491f", "#ff7043"),        # a face that needs support (View > Overhangs)
+    "edge": ("#0d0d0d", "#0d0d0d", "#ffffff"),   # the edges between the faces of the 3D view
 }
 
 # Dark colors in the SVG icons and their light counterpart in the dark theme.
@@ -85,10 +92,13 @@ def is_dark(app=None) -> bool:
 
 
 def color(name, dark=None) -> str:
-    light_value, dark_value = COLORS[name]
+    """The color of `name`; the third value of an entry is the high contrast one."""
+    values = COLORS[name]
     if dark is None:
         dark = is_dark()
-    return dark_value if dark else light_value
+    if dark and _choice == HIGH_CONTRAST and len(values) > 2:
+        return values[2]
+    return values[1] if dark else values[0]
 
 
 def qcolor(name, alpha=None, dark=None) -> QColor:
@@ -143,9 +153,46 @@ def dark_palette() -> QPalette:
     return p
 
 
+def contrast_palette() -> QPalette:
+    """The palette of the high contrast theme: black and white with a yellow selection."""
+    p = QPalette()
+    black, white = QColor("#000000"), QColor("#ffffff")
+    alt, grey = QColor("#1a1a1a"), QColor("#808080")
+    yellow, link = QColor("#ffd400"), QColor("#66ccff")
+    disabled = QColor("#a0a0a0")
+    for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
+        p.setColor(group, QPalette.Window, black)
+        p.setColor(group, QPalette.WindowText, white)
+        p.setColor(group, QPalette.Base, black)
+        p.setColor(group, QPalette.AlternateBase, alt)
+        p.setColor(group, QPalette.ToolTipBase, black)
+        p.setColor(group, QPalette.ToolTipText, white)
+        p.setColor(group, QPalette.PlaceholderText, QColor("#c8c8c8"))
+        p.setColor(group, QPalette.Text, white)
+        p.setColor(group, QPalette.Button, black)
+        p.setColor(group, QPalette.ButtonText, white)
+        p.setColor(group, QPalette.BrightText, white)
+        p.setColor(group, QPalette.Light, white)
+        p.setColor(group, QPalette.Midlight, grey)
+        p.setColor(group, QPalette.Mid, grey)
+        p.setColor(group, QPalette.Dark, grey)
+        p.setColor(group, QPalette.Shadow, white)
+        p.setColor(group, QPalette.Highlight, yellow)
+        p.setColor(group, QPalette.HighlightedText, black)
+        p.setColor(group, QPalette.Link, link)
+        p.setColor(group, QPalette.LinkVisited, QColor("#c6a6ff"))
+        p.setColor(group, QPalette.Accent, yellow)
+    for role in (QPalette.WindowText, QPalette.Text, QPalette.ButtonText):
+        p.setColor(QPalette.Disabled, role, disabled)
+    p.setColor(QPalette.Disabled, QPalette.Base, black)
+    p.setColor(QPalette.Disabled, QPalette.Button, black)
+    p.setColor(QPalette.Disabled, QPalette.Highlight, QColor("#595959"))
+    return p
+
+
 def wants_dark(value, app=None) -> bool:
     """Does this choice make it dark? With System, Windows or the desktop decides."""
-    if value == DARK:
+    if value in (DARK, HIGH_CONTRAST):
         return True
     if value == LIGHT:
         return False
@@ -156,16 +203,16 @@ def wants_dark(value, app=None) -> bool:
 
 
 def apply(value=SYSTEM, app=None):
-    """Set the theme: System, Light or Dark. Returns True when it is now dark.
+    """Set the theme: System, Light, Dark or High contrast. Returns True when it is now dark.
 
-    Dark uses the Fusion style everywhere with its own palette: the Windows styles have
-    too little contrast in the dark, and Windows 10 has no dark style. Light uses the
-    normal style of the system.
+    Dark and High contrast use the Fusion style everywhere with their own palette: the
+    Windows styles have too little contrast in the dark, and Windows 10 has no dark
+    style. Light uses the normal style of the system.
     """
     global _choice, _base_style
     from PySide6.QtWidgets import QApplication
     app = app or QApplication.instance()
-    _choice = value if value in (SYSTEM, LIGHT, DARK) else SYSTEM
+    _choice = value if value in (SYSTEM, LIGHT, DARK, HIGH_CONTRAST) else SYSTEM
     if app is None:
         return False
     if _base_style is None:
@@ -174,12 +221,13 @@ def apply(value=SYSTEM, app=None):
     if _choice == SYSTEM:
         hints.unsetColorScheme()
     else:
-        hints.setColorScheme(Qt.ColorScheme.Dark if _choice == DARK else Qt.ColorScheme.Light)
+        hints.setColorScheme(Qt.ColorScheme.Dark if _choice in (DARK, HIGH_CONTRAST)
+                            else Qt.ColorScheme.Light)
     dark = wants_dark(_choice, app)
     if dark:
         if app.style().name().lower() != "fusion":
             app.setStyle("Fusion")
-        app.setPalette(dark_palette())
+        app.setPalette(contrast_palette() if _choice == HIGH_CONTRAST else dark_palette())
     else:
         if app.style().name().lower() != _base_style.lower():
             app.setStyle(_base_style)

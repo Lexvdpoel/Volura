@@ -28,7 +28,8 @@ FRONT = (1.0, 1.0, 1.0)                # the front of a face is white, like Sket
 BACK = (0.64, 0.70, 0.78)              # the back of a face is blue grey
 
 # The SketchUp background: a light blue grey sky that fades to almost white at the
-# horizon, and a grey ground below it. In the dark theme a muted grey (theme.py).
+# horizon, and a grey ground below it. In the dark theme a muted grey, in the high
+# contrast theme black (theme.py).
 
 # The inference markers of SketchUp: one shape per kind, drawn in 2D at the cursor.
 INFERENCE_COLORS = {
@@ -65,6 +66,11 @@ BED_DARK = ((0.85, 0.88, 0.85, 0.08), (0.86, 0.89, 0.86, 0.16), (0.90, 0.92, 0.9
 def hex_rgb(h):
     c = QColor(h)
     return c.redF(), c.greenF(), c.blueF()
+
+
+def edge_color() -> tuple:
+    """The color of the edges between the faces: white in the high contrast theme."""
+    return (*theme.rgb("edge"), 1)
 
 
 def _tint(col, on):
@@ -679,7 +685,7 @@ class Viewport(QOpenGLWidget):
                     elif selected:
                         col = (*sel_col, 1)
                     else:
-                        col = (0.05, 0.05, 0.05, 1)
+                        col = edge_color()
                     self.draw_lines(rc["edges"], col, 1.4, buf=edges)
                     if show_hidden and len(rc["soft"]):
                         self.draw_lines(rc["soft"], (0.7, 0.7, 0.7, 1) if faded else SOFT_EDGE_COLOR,

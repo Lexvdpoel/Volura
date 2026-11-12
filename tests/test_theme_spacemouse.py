@@ -125,7 +125,8 @@ def test_workspace_dark_with_light_sheet(win):
 def test_theme_in_the_preferences(win):
     from volura.app import PreferencesDialog
     dlg = PreferencesDialog(win, "Display")
-    assert [dlg.theme.itemData(i) for i in range(dlg.theme.count())] == ["system", "light", "dark"]
+    assert [dlg.theme.itemData(i) for i in range(dlg.theme.count())] == \
+        ["system", "light", "dark", "contrast"]
     dlg.theme.setCurrentIndex(dlg.theme.findData("dark"))
     dlg.accept()
     assert win.settings.theme == "dark" and theme.is_dark()

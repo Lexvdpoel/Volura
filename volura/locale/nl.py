@@ -598,6 +598,7 @@ TRANSLATIONS = {
     'Hidden &Geometry': 'Verborgen &geometrie',
     'Hide &Rest of Model': '&Rest van model verbergen',
     'Hide layer (is not exported)': 'Laag verbergen (wordt niet geëxporteerd)',
+    'High contrast': 'Hoog contrast',
     'Holes for loose pins': 'Gaten voor losse pennen',
     'Horizontal distance': 'Afstand horizontaal',
     'Horizontally': 'Horizontaal',

@@ -23,6 +23,8 @@ what does not work well yet, and how to tell us about a barrier you run into.
 
 **Seeing**
 - A light and a dark theme, or the theme of the system (*Window > Preferences*).
+- A **high contrast** theme: black background, white text and edges, yellow selection
+  (*Window > Preferences > Display > Theme*).
 - A colour-blind friendly palette for the print preview, with colours that people with red-green
   colour blindness can tell apart (*Window > Preferences > Display*).
 - A line width of Normal, Thick, Thicker or Thickest for the 3D view and the worksheet, for
@@ -49,8 +51,8 @@ We prefer to be clear about these:
   Display*) and its legend names every colour, so the kinds of line are not colour alone any
   more. Other views still tell things apart by colour only, such as the red, green and blue axes;
   no view offers patterns.
-- **Contrast and size**: there is no high-contrast theme of Volura's own; the line width can be
-  set (*Window > Preferences > Display > Line width*), but the size of the text follows the system.
+- **Size**: the line width can be set (*Window > Preferences > Display > Line width*), but the
+  size of the text follows the system.
 - **Motion**: the print preview plays an animation only when you press Play; nothing moves by
   itself.
 

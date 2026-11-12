@@ -41,7 +41,7 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - Display styles under **View**: Wireframe, Hidden Line, Shaded and Monochrome (View > Face Style),
   X-ray (Alt+X), Back Edges (K), Hidden Geometry (softened edges) and hiding the rest of the model
   while editing a group
-- **Dark theme**: *Window > Preferences > Display > Theme*: System, Light or Dark
+- **Themes**: *Window > Preferences > Display > Theme*: System, Light, Dark or High contrast
 - **Accessible**: every command has a menu entry and a shortcut you can change, and every button,
   field and list has a name a screen reader can read, also the ones that only show an icon. The
   print preview can colour the kinds of line with a colour-blind friendly palette, and the edges,
@@ -475,7 +475,7 @@ volura/
   sheetview.py  the 2D worksheet; sheettools.py its drawing tools
   cam.py        kerf and tool compensation; nesting.py arranging; boxgen.py boxes with finger joints
   sheet3d.py    worksheet and model together: parts as sheets in 3D
-  theme.py      light and dark theme
+  theme.py      light, dark and high contrast theme
   spacemouse.py 3Dconnexion 3D mice (3DxWare, Raw Input, spacenavd)
   i18n.py       translations; locale/ holds the Dutch tables
   updater.py    checking for a newer version and installing it
