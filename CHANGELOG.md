@@ -3,6 +3,22 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.44 — 2026-11-12
+
+### New
+- **Corner bracket** (Draw > Parts): an L-shaped angle bracket with countersunk screw holes in
+  both legs, a rounded inner corner and gussets. It prints on its side, so the layer lines run
+  round the bend and nothing needs support.
+- **Zip-tie mount** (Draw > Parts): a cable-tie anchor with one screw through its base. The tie
+  slides through a tunnel in the bridge over it, in one direction or two that cross, and the
+  head of the screw sinks into the floor of that tunnel so the tie lies flat over it.
+- **Bit holder** (Draw > Parts): a block with rows of hexagonal sockets for 1/4 inch screwdriver
+  bits, with a mouth chamfer so a bit finds its way in, a fit you can set, rows that can lean
+  towards you by up to 30 degrees and a ledge along the front for a label.
+
+### Website
+- The manual describes the corner bracket, the zip-tie mount and the bit holder.
+
 ## 0.2.43 — 2026-11-11
 
 ### New
