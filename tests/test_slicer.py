@@ -125,6 +125,14 @@ def test_slice_from_the_file_menu(monkeypatch, tmp_path):
         dlg.printer_box.setCurrentIndex(i)
         assert dlg.nozzle.currentText() == "0.4mm Nozzle"
         assert dlg.material.currentData() == "generic_pla_175"
+        assert dlg.brand.currentText() == "Generic" and dlg.brand.count() > 3
+        dlg.brand.setCurrentText(next(dlg.brand.itemText(i) for i in range(dlg.brand.count())
+                                      if dlg.brand.itemText(i) != "Generic"))
+        assert dlg.material.count() > 0 and dlg.material.currentData() != "generic_pla_175"
+        dlg.brand.setCurrentText("Generic")
+        i = dlg.material.findData("generic_pla_175")
+        dlg.material.setCurrentIndex(i)
+        assert dlg.material.currentText() == "PLA"
         assert dlg.quality.currentData() == "standard"
         assert "235" in dlg.info.text(), "the build volume of the printer"
         dlg.infill.setValue(15)
@@ -136,6 +144,21 @@ def test_slice_from_the_file_menu(monkeypatch, tmp_path):
     errors = []
     monkeypatch.setattr(wp.QMessageBox, "critical", lambda *a, **k: errors.append(a[2]))
     monkeypatch.setattr(wp.QFileDialog, "getSaveFileName", lambda *a, **k: (str(out), ""))
+    import volura.print_preview as pp
+
+    def look(dlg):
+        """The preview: layers to look at, a nozzle that plays, then Save G-code…"""
+        seen["layers"] = len(dlg.preview.layers)
+        dlg.slider.setValue(5)
+        dlg.play.setChecked(True)
+        dlg._tick()
+        assert dlg.view.at is not None and dlg.view.layer == 5
+        dlg.play.setChecked(False)
+        dlg.grab()                                    # it draws
+        dlg._save()
+        return QDialog.Accepted
+
+    monkeypatch.setattr(pp.PrintPreviewDialog, "exec", look)
     try:
         assert w.a_slice in w.flat_actions(w.menuBar())
         w.slice_dialog()
@@ -149,6 +172,7 @@ def test_slice_from_the_file_menu(monkeypatch, tmp_path):
         assert not errors, errors
         assert seen.get("opened") and out.exists()
         assert "Sliced" in w.hint.text() and "g filament" in w.hint.text()
+        assert seen["layers"] > 10 and str(out) in w.hint.text()
         assert w.settings.slice_printer == "creality_ender3"
         assert w.settings.slice_infill == 15 and w.settings.slice_support == 1
         text = out.read_text(encoding="utf-8")

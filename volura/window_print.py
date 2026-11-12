@@ -15,6 +15,8 @@ them; the app imports them back.
 """
 from __future__ import annotations
 
+import os
+
 import manifold3d as mf
 import numpy as np
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
@@ -26,6 +28,8 @@ from . import (background, battery_holder, bin_rack, bit_holder, bracket, cable_
                card_holder, enclosure, fan_guard, gears,
                gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard,
                slicer, standoff, storage_bin, text3d, theme, threads, tie_mount, wall_hook)
+from . import gcode_preview
+from .print_preview import PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
@@ -929,7 +933,7 @@ class PrintMixin:
 
     # ------------------------------------------------------------ slicing
     def slice_dialog(self):
-        """File > Slice…: slice the printable parts with CuraEngine and save the G-code."""
+        """File > Slice…: slice the printable parts with CuraEngine, preview it, save the G-code."""
         from . import slice_dialog as sd
         engine, resources = slicer.find_engine(), slicer.find_resources()
         if not engine or not resources:
@@ -943,9 +947,12 @@ class PrintMixin:
                                                       "computer:\n{problem}").format(problem=problem))
             return
         only = bool(self.doc.selected_groups())
+        # reading the profiles the first time takes a while; after that they are kept
+        reading = (tr("Preparing…") if sd.is_loaded(resources) else
+                   tr("Reading the printer profiles… The first time this can take a few minutes."))
 
         def prepare(report):
-            report(0.0, tr("Reading the printer profiles…"))
+            report(0.0, reading)
             lib = sd.library(resources)
             report(0.6, tr("Preparing…"))
             return lib, ops.parts(self.doc, only_selected=only)
@@ -963,19 +970,20 @@ class PrintMixin:
             for key, value in choice.items():
                 setattr(self.settings, "slice_" + key, value)
             self.settings.save()
-            stacks = dlg.stacks()
-            path, _ = QFileDialog.getSaveFileName(self, tr("Save G-code"),
-                                                  self.export_name(".gcode"),
-                                                  "G-code (*.gcode *.gco *.g)")
-            self.setFocus()
-            if path:
-                self._slice_async(stacks, part_list, path, engine)
+            self._slice_async(dlg.stacks(), part_list, engine, dlg.printer.name)
 
-        background.run(self, prepare, text=tr("Reading the printer profiles…"),
-                       on_done=prepared, on_error=self._export_failed)
+        background.run(self, prepare, text=reading, on_done=prepared,
+                       on_error=self._export_failed)
 
-    def _slice_async(self, stacks, part_list, path, engine):
-        """Slice `part_list` with `stacks` to `path` in the background, then say what it made."""
+    def _slice_async(self, stacks, part_list, engine, printer_name=""):
+        """Slice `part_list` with `stacks` in the background, then show the print preview.
+
+        The G-code goes to a temporary file first; the preview reads it back layer by layer
+        and Save G-code… there copies it to where you want it.
+        """
+        import tempfile
+        fd, path = tempfile.mkstemp(prefix="volura-", suffix=".gcode")
+        os.close(fd)
         meshes = []
         for p in part_list:
             if p.manifold is None:
@@ -995,21 +1003,52 @@ class PrintMixin:
                                     "build volume of {w:.0f} × {d:.0f} × {h:.0f} mm")
                                  .format(x=size[0], y=size[1], z=size[2], w=bed[0], d=bed[1],
                                          h=bed[2]))
-            return slicer.slice_meshes(stacks, meshes, path, engine,
-                                       on_progress=lambda f: report(f, tr("Slicing…")))
+            result = slicer.slice_meshes(stacks, meshes, path, engine,
+                                         on_progress=lambda f: report(0.9 * f, tr("Slicing…")))
+            report(0.95, tr("Reading the G-code…"))
+            return result, gcode_preview.read_gcode(path)
 
-        def done(result):
+        def done(made):
+            result, preview = made
             hours, rest = divmod(int(round(result.seconds)), 3600)
-            minutes = rest // 60
-            self.hint.setText(tr("Sliced: {h} h {m:02d} min, {g:.0f} g filament "
-                                 "({l:.2f} m): {path}")
-                              .format(h=hours, m=minutes, g=result.grams,
-                                      l=sum(result.filament_m), path=path))
+            summary = tr("{printer}: {h} h {m:02d} min, {g:.0f} g filament ({l:.2f} m), "
+                         "{n} layers").format(printer=printer_name, h=hours, m=rest // 60,
+                                              g=result.grams, l=sum(result.filament_m),
+                                              n=len(preview.layers))
+
+            def ask():
+                target, _ = QFileDialog.getSaveFileName(self, tr("Save G-code"),
+                                                        self.export_name(".gcode"),
+                                                        "G-code (*.gcode *.gco *.g)")
+                return target
+
+            # the bed in the coordinates of the G-code: from 0, or around 0 for a printer that
+            # has its origin in the middle of the bed
+            x0 = -0.5 * bed[0] if g.get("machine_center_is_zero") else 0.0
+            y0 = -0.5 * bed[1] if g.get("machine_center_is_zero") else 0.0
+            dlg = PrintPreviewDialog(self, path, preview, (x0, y0, x0 + bed[0], y0 + bed[1]),
+                                     summary, ask)
+            dlg.exec()
+            if dlg.saved_to:
+                self.hint.setText(tr("Sliced: {summary}: {path}")
+                                  .format(summary=summary, path=dlg.saved_to))
+            else:
+                self.hint.setText(tr("Sliced, not saved: {summary}").format(summary=summary))
+            self._forget(path)
+            self.setFocus()
 
         def failed(exc):
+            self._forget(path)
             QMessageBox.critical(self, tr("Slicing Failed"), str(exc))
 
         background.run(self, work, text=tr("Slicing…"), on_done=done, on_error=failed)
+
+    @staticmethod
+    def _forget(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
     # ------------------------------------------------------------ zip-tie mount
     def tie_mount_dialog(self):

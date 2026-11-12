@@ -25,6 +25,11 @@ ADHESION = [(tr_noop("As the printer has it"), ""), (tr_noop("Skirt"), "skirt"),
             (tr_noop("Brim"), "brim"), (tr_noop("Raft"), "raft"), (tr_noop("None"), "none")]
 
 
+def is_loaded(resources: str) -> bool:
+    """Whether the profiles of `resources` were read already in this session."""
+    return resources in _LIBRARIES
+
+
 def library(resources: str) -> cura_profiles.Library:
     """The profile library of `resources`, read completely the first time it is asked for."""
     lib = _LIBRARIES.get(resources)
@@ -47,6 +52,7 @@ class SliceDialog(QDialog):
         self.maker = QComboBox()
         self.printer_box = QComboBox()
         self.nozzle = QComboBox()
+        self.brand = QComboBox()
         self.material = QComboBox()
         self.quality = QComboBox()
         self.infill = QSpinBox()
@@ -69,6 +75,7 @@ class SliceDialog(QDialog):
         lay.addRow(tr("Maker"), self.maker)
         lay.addRow(tr("Printer"), self.printer_box)
         lay.addRow(tr("Nozzle"), self.nozzle)
+        lay.addRow(tr("Filament brand"), self.brand)
         lay.addRow(tr("Material"), self.material)
         lay.addRow(tr("Quality"), self.quality)
         lay.addRow(tr("Infill"), self.infill)
@@ -92,6 +99,7 @@ class SliceDialog(QDialog):
         self.maker.currentIndexChanged.connect(self._maker_changed)
         self.printer_box.currentIndexChanged.connect(self._printer_changed)
         self.nozzle.currentIndexChanged.connect(self._nozzle_changed)
+        self.brand.currentIndexChanged.connect(self._brand_changed)
         self.material.currentIndexChanged.connect(self._material_changed)
         self.quality.currentIndexChanged.connect(self._show_info)
         self._remembered = {"variant": s.slice_variant, "material": s.slice_material,
@@ -138,16 +146,38 @@ class SliceDialog(QDialog):
         return next((v for v in self.printer.variants if v.id == vid), None)
 
     def _nozzle_changed(self, *_):
+        """The brands of the materials this nozzle takes; the remembered or default one chosen."""
+        self.brand.blockSignals(True)
+        self.brand.clear()
+        wanted = None
+        if self.printer is not None:
+            variant = self._variant()
+            mats = self.printer.materials(variant)
+            brands = sorted({m.metadata["brand"] for m in mats},
+                            key=lambda b: (b != "Generic", b.lower()))
+            self.brand.addItems(brands)
+            wanted = next((m for m in mats if m.id == self._remembered.get("material")), None)
+            if wanted is None:
+                wanted = self.printer.default_material(variant)
+            if wanted is not None:
+                self.brand.setCurrentText(wanted.metadata["brand"])
+        self.brand.blockSignals(False)
+        self._form.setRowVisible(self.brand, self.brand.count() > 0)
+        self._brand_changed(want=wanted.id if wanted is not None else None)
+
+    def _brand_changed(self, *_, want=None):
+        """The materials of the chosen brand."""
         self.material.blockSignals(True)
         self.material.clear()
         if self.printer is not None:
-            variant = self._variant()
-            for m in self.printer.materials(variant):
-                self.material.addItem(m.name, m.id)
-            default = self.printer.default_material(variant)
-            i = self.material.findData(self._remembered.get("material"))
-            if i < 0 and default is not None:
-                i = self.material.findData(default.id)
+            brand = self.brand.currentText()
+            for m in self.printer.materials(self._variant()):
+                if m.metadata["brand"] == brand:
+                    label = m.name[len(brand):].strip() if m.name.startswith(brand) else m.name
+                    self.material.addItem(label or m.name, m.id)
+            i = self.material.findData(want) if want else -1
+            if i < 0:
+                i = self.material.findData(self._remembered.get("material"))
             self.material.setCurrentIndex(max(0, i))
         self.material.blockSignals(False)
         self._form.setRowVisible(self.material, self.material.count() > 0)
