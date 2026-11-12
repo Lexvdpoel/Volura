@@ -841,6 +841,10 @@ class SheetView(QWidget):
                 errors.log_exception(note=f"2D preview: {e}")
         p.end()
 
+    def _width(self, width):
+        """A pen width times the line width of the preferences (Window > Preferences > Display)."""
+        return width * getattr(self.settings, "line_scale", 1.0)
+
     def _draw_grid(self, p):
         step = grid_step(self.scale)
         xmin, ymin, xmax, ymax = self.world_rect()
@@ -866,9 +870,9 @@ class SheetView(QWidget):
     def _grid_lines(self, p, step, minor_color, major_color):
         xmin, ymin, xmax, ymax = self.world_rect()
         minor = QPen(theme.qcolor(minor_color))
-        minor.setWidthF(1.0)
+        minor.setWidthF(self._width(1.0))
         major = QPen(theme.qcolor(major_color))
-        major.setWidthF(1.0)
+        major.setWidthF(self._width(1.0))
         start = math.floor(xmin / step) * step
         x = start
         while x <= xmax:
@@ -919,7 +923,7 @@ class SheetView(QWidget):
         if not rects:
             return
         pen = QPen(theme.qcolor("sheet_border"))
-        pen.setWidthF(1.6)
+        pen.setWidthF(self._width(1.6))
         pen.setJoinStyle(Qt.MiterJoin)
         p.setBrush(Qt.NoBrush)
         font = p.font()
@@ -944,7 +948,7 @@ class SheetView(QWidget):
             return
         pen = QPen(theme.qcolor("sheet_margin"))
         pen.setStyle(Qt.DashLine)
-        pen.setWidthF(1.0)
+        pen.setWidthF(self._width(1.0))
         p.setPen(pen)
         p.setBrush(Qt.NoBrush)
         for (x0, y0, x1, y1) in nesting.usable_rects(s):
@@ -955,12 +959,12 @@ class SheetView(QWidget):
     def _draw_axes(self, p):
         xmin, ymin, xmax, ymax = self.world_rect()
         pen = QPen(QColor(AXIS_X))
-        pen.setWidthF(1.2)
+        pen.setWidthF(self._width(1.2))
         p.setPen(pen)
         o = self.to_screen((0.0, 0.0))
         p.drawLine(self.to_screen((xmin, 0.0)), self.to_screen((xmax, 0.0)))
         pen = QPen(QColor(AXIS_Y))
-        pen.setWidthF(1.2)
+        pen.setWidthF(self._width(1.2))
         p.setPen(pen)
         p.drawLine(self.to_screen((0.0, ymin)), self.to_screen((0.0, ymax)))
         p.setPen(QPen(theme.qcolor("origin")))
@@ -976,16 +980,16 @@ class SheetView(QWidget):
             color = self._layer(path).color or "#000000"
             if id(path) in self._outside_ids:      # outside the sheet or in the margin
                 warn = QPen(QColor(OUTSIDE_COLOR))
-                warn.setWidthF(4.2)
+                warn.setWidthF(self._width(4.2))
                 p.setPen(warn)
                 p.drawPath(self._path_of(path))
             if path is self.hover:
                 pen = QPen(QColor(HOVER_COLOR))
-                pen.setWidthF(3.0)
+                pen.setWidthF(self._width(3.0))
                 p.setPen(pen)
                 p.drawPath(self._path_of(path))
             pen = QPen(QColor(SELECT_COLOR if id(path) in chosen else color))
-            pen.setWidthF(2.6 if id(path) in chosen else 1.4)
+            pen.setWidthF(self._width(2.6 if id(path) in chosen else 1.4))
             p.setPen(pen)
             p.drawPath(self._path_of(path))
         self._draw_link_badges(p)
@@ -1014,7 +1018,7 @@ class SheetView(QWidget):
         if not badges:
             return
         pen = QPen(theme.qcolor("link_badge"))
-        pen.setWidthF(1.6)
+        pen.setWidthF(self._width(1.6))
         p.setPen(pen)
         p.setBrush(Qt.NoBrush)
         s, r = LINK_BADGE, 0.22 * LINK_BADGE

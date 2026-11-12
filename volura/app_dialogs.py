@@ -47,6 +47,11 @@ FILAMENT_MATERIALS = [
 ]
 
 
+# The choices of Preferences > Display > Line width: text and factor of the drawn widths.
+LINE_WIDTHS = [(tr_noop("Normal"), 1.0), (tr_noop("Thick"), 1.5),
+               (tr_noop("Thicker"), 2.0), (tr_noop("Thickest"), 3.0)]
+
+
 class SimplifyDialog(QDialog):
     """Tools > Simplify Model: a quality slider and a live estimate of the result.
 
@@ -464,6 +469,14 @@ class PreferencesDialog(PageDialog):
         self.colour_blind.setToolTip(tr("Colours in the print preview that people with red-green "
                                         "colour blindness can tell apart"))
         form.addRow(self.colour_blind)
+        self.line_width = QComboBox()
+        for label, scale in LINE_WIDTHS:
+            self.line_width.addItem(tr(label), scale)
+        self.line_width.setCurrentIndex(max(
+            0, self.line_width.findData(self.win.settings.line_scale)))
+        self.line_width.setToolTip(tr("How thick the edges and guides are drawn, for screens or "
+                                      "eyes on which thin lines are hard to see"))
+        form.addRow(tr("Line width"), self.line_width)
         self.add_page(page)
 
     def _build_spacemouse(self):
@@ -541,6 +554,7 @@ class PreferencesDialog(PageDialog):
         theme_changed = s.theme != self.theme.currentData()
         s.theme = self.theme.currentData()
         s.colour_blind = self.colour_blind.isChecked()
+        s.line_scale = float(self.line_width.currentData())
         scheme = keyschemes.scheme_of(str(self.scheme.currentData() or keyschemes.SKETCHUP))
         scheme_changed = s.key_scheme != scheme
         # the language is read once at startup (i18n.saved_choice), so it applies after a restart
@@ -555,6 +569,7 @@ class PreferencesDialog(PageDialog):
             self.win.set_key_scheme(scheme)
         self.win.view.tools["circle"].segments = s.circle_segments
         self.win.view.update()
+        self.win.sheet_view.update()      # the line width also changes the worksheet
         self.win.view.update_overhang_status()
 
 

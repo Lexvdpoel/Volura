@@ -1065,7 +1065,7 @@ class Viewport(QOpenGLWidget):
     def draw_points(self, pts, color, size=8.0, on_top=True):
         pts = np.asarray(pts, dtype=np.float32).reshape(-1, 3)
         if len(pts):
-            gl.glPointSize(size)
+            gl.glPointSize(self._width(size))
             gl.glEnable(gl.GL_POINT_SMOOTH)
             self._prim(gl.GL_POINTS, pts, color, 1, False, on_top)
 
@@ -1078,6 +1078,10 @@ class Viewport(QOpenGLWidget):
         self._prim(gl.GL_TRIANGLES, pts, color, 1, False, on_top)
         gl.glDepthMask(gl.GL_TRUE)
 
+    def _width(self, width):
+        """A line width times the line width of the preferences (Window > Preferences > Display)."""
+        return width * getattr(self.settings, "line_scale", 1.0)
+
     def _prim(self, mode, pts, color, width, stipple, on_top, buf=0):
         st = self._fstate
         if on_top:
@@ -1085,7 +1089,7 @@ class Viewport(QOpenGLWidget):
         if stipple:
             gl.glEnable(gl.GL_LINE_STIPPLE)
             gl.glLineStipple(2, 0x3333)
-        gl.glLineWidth(width)
+        gl.glLineWidth(self._width(width))
         gl.glColor4f(*color) if len(color) == 4 else gl.glColor3f(*color)
         st.array(gl.GL_VERTEX_ARRAY, True)
         if buf:

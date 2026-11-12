@@ -206,6 +206,11 @@ class Settings:
         if self.theme not in dict(theme.CHOICES):
             self.theme = theme.SYSTEM
         self.colour_blind = self._bool("colour_blind", False)
+        try:
+            self.line_scale = float(self.q.value("line_scale", 1.0))
+        except (TypeError, ValueError):
+            self.line_scale = 1.0
+        self.line_scale = max(1.0, min(3.0, self.line_scale))
         self.key_scheme = keyschemes.scheme_of(
             str(self.q.value("key_scheme", keyschemes.SKETCHUP)))
         self.spacemouse = self._bool("spacemouse", True)
@@ -1057,6 +1062,7 @@ class Settings:
         self.q.setValue("ask_simplify_import", self.ask_simplify_import)
         self.q.setValue("theme", self.theme)
         self.q.setValue("colour_blind", self.colour_blind)
+        self.q.setValue("line_scale", self.line_scale)
         self.q.setValue("key_scheme", self.key_scheme)
         self.q.setValue("spacemouse", self.spacemouse)
         self.q.setValue("spacemouse_speed", self.spacemouse_speed)

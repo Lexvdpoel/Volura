@@ -44,7 +44,8 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Dark theme**: *Window > Preferences > Display > Theme*: System, Light or Dark
 - **Accessible**: every command has a menu entry and a shortcut you can change, and every button,
   field and list has a name a screen reader can read, also the ones that only show an icon. The
-  print preview can colour the kinds of line with a colour-blind friendly palette
+  print preview can colour the kinds of line with a colour-blind friendly palette, and the edges,
+  guides and outlines of the 3D view and the worksheet can be drawn up to three times as thick
   (*Window > Preferences > Display*) ([ACCESSIBILITY.md](ACCESSIBILITY.md))
 - **3Dconnexion SpaceMouse** support (*Window > Preferences > 3D Mouse*): through 3DxWare 10 or the
   older 3DxSoftware (siappdll), without a driver through Windows Raw Input, and on Linux through
