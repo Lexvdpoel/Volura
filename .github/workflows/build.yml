@@ -12,6 +12,9 @@ permissions:
 
 jobs:
   build:
+    # a release commit is pushed to main and then tagged: the tag builds and publishes it,
+    # so the push of that commit to main does not build it a second time
+    if: github.ref_type == 'tag' || !startsWith(github.event.head_commit.message, 'Release ')
     strategy:
       fail-fast: false
       matrix:
