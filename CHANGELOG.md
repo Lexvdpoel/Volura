@@ -3,6 +3,35 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.47 — 2026-11-12
+
+### New
+- **Slice for Resin** (File > Slice for Resin): layer images for more than 150 resin (MSLA)
+  printers of Anycubic, Elegoo, Phrozen, Creality, EPAX and others, in the printer's own file
+  (.ctb, .goo, .pwmx, ...). Volura puts the parts on automatic supports - heads, pillars that
+  bridge and brace each other, anchors on the model where nothing else fits - and a pad, shows
+  the print on its supports in 3D and layer by layer, and slices. UVtools (AGPL v3) comes with
+  the download as a separate program to write the printer's format. New and not yet tried on
+  many printers: start with a small test print, and tell us how it went.
+- **3D print preview**: the G-code preview of File > Slice is now 3D. Turn, move and zoom it with
+  the mouse; Top and 3D switch the view and Only this layer hides the layers below.
+- **Phone Stand** (Draw > Parts): a stand a phone or tablet leans in, at the angle you choose,
+  with a lip, a cable slot and a base long enough that it does not tip over.
+
+### Accessibility
+- Every button, field and list has a name a screen reader can read.
+- A colour-blind friendly palette for the print preview, a line width setting for thicker lines,
+  and a High contrast theme (Window > Preferences > Display).
+- ACCESSIBILITY.md says what Volura offers and how to report a barrier.
+
+### Community
+- Discussions are open for questions, ideas and prints, with a form for each; issues have a bug
+  report form. CONTRIBUTING.md, a code of conduct, a security policy and a pull request template
+  explain how to take part.
+
+### Licenses
+- The third-party notices name UVtools (AGPL v3), and every release has its source attached.
+
 ## 0.2.46 — 2026-11-12
 
 ### New
