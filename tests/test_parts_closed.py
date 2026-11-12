@@ -27,8 +27,8 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import (battery_holder, bin_rack, bit_holder, bracket, cable_chain,  # noqa: E402
                     cable_clip, card_holder, enclosure, fan_guard, fonts, gears, gridfinity,
-                    grommet, hinge, hose_adapter, knob, label_plate, pegboard, standoff,
-                    storage_bin, text3d, tie_mount, wall_hook)
+                    grommet, hinge, hose_adapter, knob, label_plate, pegboard, phone_stand,
+                    standoff, storage_bin, text3d, tie_mount, wall_hook)
 from volura import ops  # noqa: E402
 from volura.model import Document  # noqa: E402
 
@@ -233,6 +233,12 @@ CASES = [
     ("wall hook large", lambda: [wall_hook.wall_hook(
         reach=80.0, rise=50.0, width=40.0, thickness=10.0, plate=150.0, screw="M5",
         countersink=True, holes=2)]),
+
+    ("phone stand default", lambda: [phone_stand.phone_stand()]),
+    ("phone stand small no cable", lambda: [phone_stand.phone_stand(
+        width=30.0, angle=50.0, back=40.0, device=5.0, lip=4.0, cable=False)]),
+    ("phone stand large", lambda: [phone_stand.phone_stand(
+        width=200.0, angle=80.0, back=160.0, device=16.0, lip=20.0, cable=True)]),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

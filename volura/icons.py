@@ -339,6 +339,14 @@ SVG = {
                  f'L19 20.5 L4 20.5 Z" fill="#cfe0f5" {S()}/>'
                  f'<circle cx="5.5" cy="7" r="1.2" fill="#fff" {S(w=1.1)}/>'
                  f'<circle cx="5.5" cy="13.5" r="1.2" fill="#fff" {S(w=1.1)}/>',
+    # phone stand: a phone leaning against a support on a base, with a lip at its foot
+    "phone_stand": f'<rect x="2.5" y="16.5" width="19" height="4.5" rx="1.5" fill="#eef2f7" {S()}/>'
+                   f'<path d="M9.5 16.5 L5.5 4.5" {N} stroke="#9a9a9a" stroke-width="3" '
+                   f'stroke-linecap="round"/>'
+                   f'<path d="M12.6 16 L8.6 4" {N} stroke="#3b7dd8" stroke-width="2.6" '
+                   f'stroke-linecap="round"/>'
+                   f'<path d="M15.6 16.5 L14.2 11.8" {N} stroke="#9a9a9a" stroke-width="1.8" '
+                   f'stroke-linecap="round"/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

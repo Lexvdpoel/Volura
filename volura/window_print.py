@@ -27,7 +27,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 from . import (background, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                card_holder, enclosure, fan_guard, gears,
                gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard,
-               slicer, standoff, storage_bin, text3d, theme, threads, tie_mount, wall_hook)
+               phone_stand, slicer, standoff, storage_bin, text3d, theme, threads, tie_mount,
+               wall_hook)
 from . import gcode_preview
 from .print_preview import PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
@@ -39,7 +40,8 @@ from .part_dialogs import (BatteryHolderDialog, BinRackDialog, BitHolderDialog, 
                            CableChainDialog, CableClipDialog, CardHolderDialog, FanGuardDialog,
                            GridfinityDialog, GrommetDialog,
                            HingeDialog, HoseAdapterDialog,
-                           KnobDialog, LabelPlateDialog, PegboardDialog, ProjectBoxDialog,
+                           KnobDialog, LabelPlateDialog, PegboardDialog, PhoneStandDialog,
+                           ProjectBoxDialog,
                            StandoffDialog, StorageBinDialog, Text3DDialog, TieMountDialog,
                            WallHookDialog)
 
@@ -1237,6 +1239,52 @@ class PrintMixin:
             self.view.set_status(tr("Wall hook failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the wall hook…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ phone stand
+    def phone_stand_dialog(self):
+        """Draw > Parts > Phone Stand…: a stand a phone or a tablet leans in."""
+        dlg = PhoneStandDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("width", "angle", "back", "device", "lip", "cable"):
+            setattr(self.settings, "phone_stand_" + key, options[key])
+        self.settings.save()
+        made = self.make_phone_stand_model(options)
+        self.setFocus()
+        return made
+
+    def make_phone_stand_model(self, options):
+        """The stand on the bed as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("width", "angle", "back", "device", "lip", "cable")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the phone stand…"))
+            m = phone_stand.phone_stand(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the stand away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Phone stand"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Phone stand added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Phone stand failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the phone stand…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter

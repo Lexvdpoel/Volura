@@ -179,6 +179,13 @@ The interface is available in English and Dutch (*Window > Preferences > General
   out and the tip stops what hangs on it from sliding off. Both inside bends are rounded, because
   a sharp inside corner is where a hook snaps, and the plate takes one or two countersunk screws.
   The hook prints on its side, so the layer lines run along the J, and its holes are teardrops
+- **Phone Stand** (Draw > Parts): a stand a phone or a tablet leans in: the back support holds it
+  at 50 to 80 degrees from the bed and a front lip keeps the foot of the device in a slot that is a
+  millimetre wider than the device, its case included. The length of the base is computed from the
+  lean, so the centre of a leaning tablet stays 10 mm in front of the back edge and the stand does
+  not tip over backwards, and a gap of 12 mm in the middle of the width lets a charging cable run
+  in behind the stand and up to the phone. The stand prints lying on its side, so every wall is
+  pulled straight up from the bed and nothing needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

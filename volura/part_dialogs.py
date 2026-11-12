@@ -14,8 +14,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 
 from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                card_holder, enclosure, fan_guard, fonts, gears,
-               gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, standoff,
-               storage_bin, text3d, threads, tie_mount, wall_hook)
+               gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, phone_stand,
+               standoff, storage_bin, text3d, threads, tie_mount, wall_hook)
 from .i18n import tr
 
 
@@ -1487,6 +1487,81 @@ class WallHookDialog(QDialog):
                 "thickness": round(self.thickness.value(), 6),
                 "plate": round(self.plate.value(), 6), "holes": int(self.holes.value()),
                 "screw": str(self.screw.currentData()), "countersink": self.countersink.isChecked()}
+
+
+class PhoneStandDialog(QDialog):
+    """The "Phone Stand…" dialog: a stand a phone or a tablet leans in.
+
+    The width is how wide the stand is, which is also how high it stands on the bed because it
+    prints on its side; the angle is how far the back support leans back from the bed and the back
+    height how far it rises up that lean. The device thickness is the phone or tablet with its case
+    in it, and the lip how far the front lip comes up above the ledge it stands on. Under the
+    fields the base the stand is computed with, because a device that leans further over its foot
+    needs a longer one. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Phone stand"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(5.0)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.width = spin(phone_stand.WIDTH_MIN, phone_stand.WIDTH_MAX, s.phone_stand_width)
+        self.width.setToolTip(tr("How wide the stand is, which is how high it stands on the bed"))
+        self.angle = QDoubleSpinBox()
+        self.angle.setRange(phone_stand.ANGLE_MIN, phone_stand.ANGLE_MAX)
+        self.angle.setDecimals(1)
+        self.angle.setSingleStep(5.0)
+        self.angle.setSuffix(" °")
+        self.angle.setValue(float(s.phone_stand_angle))
+        self.angle.setToolTip(tr("How far the back support leans back from the bed"))
+        self.back = spin(phone_stand.BACK_MIN, phone_stand.BACK_MAX, s.phone_stand_back)
+        self.back.setToolTip(tr("How far the support rises up the lean"))
+        self.device = spin(phone_stand.DEVICE_MIN, phone_stand.DEVICE_MAX, s.phone_stand_device)
+        self.device.setSingleStep(0.5)
+        self.device.setToolTip(tr("How thick the phone or tablet is, its case included"))
+        self.lip = spin(phone_stand.LIP_MIN, phone_stand.LIP_MAX, s.phone_stand_lip)
+        self.lip.setSingleStep(1.0)
+        self.lip.setToolTip(tr("How far the lip comes up above the ledge the device stands on"))
+        self.cable = QCheckBox(tr("Cable slot"))
+        self.cable.setChecked(bool(s.phone_stand_cable))
+        self.cable.setToolTip(tr("A gap in the middle of the width for a charging cable, through "
+                                 "the ledge and the base under it"))
+        self.info = QLabel()
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Angle"), self.angle)
+        lay.addRow(tr("Back height"), self.back)
+        lay.addRow(tr("Device thickness"), self.device)
+        lay.addRow(tr("Lip height"), self.lip)
+        lay.addRow("", self.cable)
+        lay.addRow("", self.info)
+        for w in (self.width, self.angle, self.back, self.device, self.lip):
+            w.valueChanged.connect(self._changed)
+        self.cable.toggled.connect(self._changed)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._changed()
+
+    def _changed(self, *_):
+        s = phone_stand.sizes(**self.options())
+        self.info.setText(tr("Base {d:.1f} mm long, stand {h:.1f} mm high")
+                          .format(d=s["depth"], h=s["height"]))
+
+    def options(self) -> dict:
+        return {"width": round(self.width.value(), 6), "angle": round(self.angle.value(), 6),
+                "back": round(self.back.value(), 6), "device": round(self.device.value(), 6),
+                "lip": round(self.lip.value(), 6), "cable": self.cable.isChecked()}
 
 
 class HoseAdapterDialog(QDialog):

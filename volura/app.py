@@ -29,7 +29,7 @@ from . import (__version__, background, battery_holder, bin_rack, bit_holder, bo
                cable_chain, cable_clip, cam, card_holder, dxf, enclosure, errors, fan_guard,
                fileio, gcode, gears, gridfinity, grommet, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking,
-               nesting, ops, pegboard, sheet3d, sheettools,
+               nesting, ops, pegboard, phone_stand, sheet3d, sheettools,
                svg,
                spacemouse, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers)
@@ -968,6 +968,18 @@ class Settings:
             self.wall_hook_screw = "M4"
         self.wall_hook_countersink = self._bool("wall_hook_countersink", True)
         for key, default, lo, hi in (
+                ("phone_stand_width", 70.0, phone_stand.WIDTH_MIN, phone_stand.WIDTH_MAX),
+                ("phone_stand_angle", 65.0, phone_stand.ANGLE_MIN, phone_stand.ANGLE_MAX),
+                ("phone_stand_back", 90.0, phone_stand.BACK_MIN, phone_stand.BACK_MAX),
+                ("phone_stand_device", 11.0, phone_stand.DEVICE_MIN, phone_stand.DEVICE_MAX),
+                ("phone_stand_lip", 10.0, phone_stand.LIP_MIN, phone_stand.LIP_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        self.phone_stand_cable = self._bool("phone_stand_cable", True)
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1188,6 +1200,9 @@ class Settings:
         for key in ("wall_hook_reach", "wall_hook_rise", "wall_hook_width",
                     "wall_hook_thickness", "wall_hook_plate", "wall_hook_holes",
                     "wall_hook_screw", "wall_hook_countersink"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("phone_stand_width", "phone_stand_angle", "phone_stand_back",
+                    "phone_stand_device", "phone_stand_lip", "phone_stand_cable"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2111,6 +2126,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                 "against it, the arm reaches out and the tip stops what hangs on "
                                 "it from sliding off; it prints on its side, so the layer lines "
                                 "run along the hook"))
+        # ---- phone stand
+        self.a_phone_stand = A(tr("Phone Stand…"),
+                               lambda checked=False: self.phone_stand_dialog(), None,
+                               "phone_stand", False,
+                               tr("Add a stand a phone or a tablet leans in: the back support "
+                                  "holds it at the angle you choose and the lip keeps its foot in "
+                                  "the slot; the base is as long as the lean needs and a gap in "
+                                  "the middle lets a charging cable through"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2229,7 +2252,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_cable_chain, self.a_gridfinity, self.a_pegboard,
                           self.a_hose_adapter, self.a_fan_guard, self.a_grommet, self.a_bracket,
                           self.a_tie_mount, self.a_bit_holder, self.a_card_holder,
-                          self.a_wall_hook))
+                          self.a_wall_hook, self.a_phone_stand))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
