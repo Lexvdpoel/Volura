@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                card_holder, enclosure, fan_guard, fonts, gears,
                gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, phone_stand,
-               standoff, storage_bin, text3d, threads, tie_mount, wall_hook)
+               spool_adapter, standoff, storage_bin, text3d, threads, tie_mount, wall_hook)
 from .i18n import tr
 
 
@@ -1562,6 +1562,81 @@ class PhoneStandDialog(QDialog):
         return {"width": round(self.width.value(), 6), "angle": round(self.angle.value(), 6),
                 "back": round(self.back.value(), 6), "device": round(self.device.value(), 6),
                 "lip": round(self.lip.value(), 6), "cable": self.cable.isChecked()}
+
+
+class SpoolAdapterDialog(QDialog):
+    """The "Spool Adapter…" dialog: a hub that fills the hole of a filament spool.
+
+    The hub is the hole in the middle of the spool, the depth how far the adapter goes into it and
+    the lip how far the flange reaches past the hub to keep the adapter from sliding in. The rod is
+    what turns in the middle; a 608 bearing makes a pocket for the bearing of a spool holder
+    instead and greys out the rod. The spokes hold the two rings of the hub together where there is
+    plastic to save. Under the fields the hub and the bore the adapter is made with, because a bore
+    that is too fat for the hole makes the hub larger. The values come from Settings and are
+    remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Spool adapter"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(1.0)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.hub = spin(spool_adapter.HUB_MIN, spool_adapter.HUB_MAX, s.spool_adapter_hub)
+        self.hub.setSingleStep(5.0)
+        self.hub.setToolTip(tr("The hole in the middle of the spool that the adapter fills"))
+        self.depth = spin(spool_adapter.DEPTH_MIN, spool_adapter.DEPTH_MAX, s.spool_adapter_depth)
+        self.depth.setSingleStep(5.0)
+        self.depth.setToolTip(tr("How far the hub goes into the spool"))
+        self.lip = spin(spool_adapter.LIP_MIN, spool_adapter.LIP_MAX, s.spool_adapter_lip)
+        self.lip.setToolTip(tr("How far the flange reaches past the hub all round"))
+        self.rod = spin(spool_adapter.ROD_MIN, spool_adapter.ROD_MAX, s.spool_adapter_rod)
+        self.rod.setSingleStep(0.5)
+        self.rod.setToolTip(tr("The rod that turns in the middle of the adapter"))
+        self.bearing = QCheckBox(tr("608 bearing"))
+        self.bearing.setChecked(bool(s.spool_adapter_bearing))
+        self.bearing.setToolTip(tr("A pocket for a 608 bearing instead of a hole for a rod, with "
+                                   "the axle through under it"))
+        self.spokes = QSpinBox()
+        self.spokes.setRange(0, spool_adapter.SPOKES_MAX)
+        self.spokes.setValue(int(s.spool_adapter_spokes))
+        self.spokes.setToolTip(tr("How many spokes hold the hub together; 0 makes the hub solid"))
+        self.info = QLabel()
+        lay.addRow(tr("Hub (spool hole)"), self.hub)
+        lay.addRow(tr("Depth"), self.depth)
+        lay.addRow(tr("Lip"), self.lip)
+        lay.addRow(tr("Rod"), self.rod)
+        lay.addRow("", self.bearing)
+        lay.addRow(tr("Spokes"), self.spokes)
+        lay.addRow("", self.info)
+        for w in (self.hub, self.depth, self.lip, self.rod, self.spokes):
+            w.valueChanged.connect(self._changed)
+        self.bearing.toggled.connect(self._changed)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._changed()
+
+    def _changed(self, *_):
+        self.rod.setEnabled(not self.bearing.isChecked())
+        s = spool_adapter.sizes(**self.options())
+        self.info.setText(tr("Hub {h:.1f} mm, bore {b:.1f} mm, {n} spokes")
+                          .format(h=s["hub"], b=max(s["bore"], s["pocket"]), n=s["spokes"]))
+
+    def options(self) -> dict:
+        return {"hub": round(self.hub.value(), 6), "depth": round(self.depth.value(), 6),
+                "lip": round(self.lip.value(), 6), "rod": round(self.rod.value(), 6),
+                "bearing": self.bearing.isChecked(), "spokes": int(self.spokes.value())}
 
 
 class HoseAdapterDialog(QDialog):

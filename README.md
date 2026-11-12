@@ -191,6 +191,13 @@ The interface is available in English and Dutch (*Window > Preferences > General
   not tip over backwards, and a gap of 12 mm in the middle of the width lets a charging cable run
   in behind the stand and up to the phone. The stand prints lying on its side, so every wall is
   pulled straight up from the bed and nothing needs support
+- **Spool Adapter** (Draw > Parts): a hub that fills the big hole in the middle of a filament
+  spool, so the spool turns true on a rod that is much thinner than that hole or on the 608 bearing
+  of a spool holder. The hub is 5 to 40 mm long and 0.4 mm under the hole, so it
+  goes in by hand, and it stands on a flange that keeps it from sliding into the spool. Bore it for
+  a rod of 5 to 30 mm or ask for a pocket that a 608 bearing presses into with the axle through
+  under it; spokes hold the hub together where there is plastic to save. It prints flat on its
+  flange, so the pockets are open at the top and nothing needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

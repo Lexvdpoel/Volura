@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 from . import (background, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                card_holder, enclosure, fan_guard, gears,
                gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard,
-               phone_stand, slicer, standoff, storage_bin, text3d, theme, threads, tie_mount,
-               wall_hook)
+               phone_stand, slicer, spool_adapter, standoff, storage_bin, text3d, theme, threads,
+               tie_mount, wall_hook)
 from . import gcode_preview
 from .print_preview import PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
@@ -41,7 +41,7 @@ from .part_dialogs import (BatteryHolderDialog, BinRackDialog, BitHolderDialog, 
                            GridfinityDialog, GrommetDialog,
                            HingeDialog, HoseAdapterDialog,
                            KnobDialog, LabelPlateDialog, PegboardDialog, PhoneStandDialog,
-                           ProjectBoxDialog,
+                           ProjectBoxDialog, SpoolAdapterDialog,
                            StandoffDialog, StorageBinDialog, Text3DDialog, TieMountDialog,
                            WallHookDialog)
 
@@ -1443,6 +1443,52 @@ class PrintMixin:
             self.view.set_status(tr("Phone stand failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the phone stand…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ spool adapter
+    def spool_adapter_dialog(self):
+        """Draw > Parts > Spool Adapter…: a hub that fills the hole of a filament spool."""
+        dlg = SpoolAdapterDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("hub", "depth", "lip", "rod", "bearing", "spokes"):
+            setattr(self.settings, "spool_adapter_" + key, options[key])
+        self.settings.save()
+        made = self.make_spool_adapter_model(options)
+        self.setFocus()
+        return made
+
+    def make_spool_adapter_model(self, options):
+        """The adapter on the bed as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("hub", "depth", "lip", "rod", "bearing", "spokes")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the spool adapter…"))
+            m = spool_adapter.spool_adapter(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the adapter away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Spool adapter"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Spool adapter added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Spool adapter failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the spool adapter…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter

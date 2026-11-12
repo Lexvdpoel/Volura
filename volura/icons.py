@@ -347,6 +347,12 @@ SVG = {
                    f'stroke-linecap="round"/>'
                    f'<path d="M15.6 16.5 L14.2 11.8" {N} stroke="#9a9a9a" stroke-width="1.8" '
                    f'stroke-linecap="round"/>',
+    # spool adapter: the hub with its flange, seen from the front, with spokes and a bore
+    "spool_adapter": f'<circle cx="12" cy="12" r="9.5" fill="#eef2f7" {S()}/>'
+                     f'<circle cx="12" cy="12" r="6" fill="#cfe0f5" {S()}/>'
+                     f'<path d="M12 6 L12 18 M6.8 9 L17.2 15 M6.8 15 L17.2 9" {N} '
+                     f'stroke="#3b7dd8" stroke-width="1.6" stroke-linecap="round"/>'
+                     f'<circle cx="12" cy="12" r="2.4" fill="#fff" {S(w=1.2)}/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

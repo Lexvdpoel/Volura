@@ -31,7 +31,7 @@ from . import (__version__, background, battery_holder, bin_rack, bit_holder, bo
                keyschemes, knob, label_plate, linking,
                nesting, ops, pegboard, phone_stand, sheet3d, sheettools,
                svg,
-               spacemouse, standoff, storage_bin, text3d, theme, threads, tie_mount,
+               spacemouse, spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers)
 from .brep import Entities
 from .inference import GeoCache
@@ -1010,6 +1010,22 @@ class Settings:
             setattr(self, key, max(lo, min(hi, value)))
         self.phone_stand_cable = self._bool("phone_stand_cable", True)
         for key, default, lo, hi in (
+                ("spool_adapter_hub", 53.0, spool_adapter.HUB_MIN, spool_adapter.HUB_MAX),
+                ("spool_adapter_depth", 12.0, spool_adapter.DEPTH_MIN, spool_adapter.DEPTH_MAX),
+                ("spool_adapter_lip", 4.0, spool_adapter.LIP_MIN, spool_adapter.LIP_MAX),
+                ("spool_adapter_rod", 8.0, spool_adapter.ROD_MIN, spool_adapter.ROD_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        try:
+            spokes = int(self.q.value("spool_adapter_spokes", 5))
+        except (TypeError, ValueError):
+            spokes = 5
+        self.spool_adapter_spokes = max(0, min(spool_adapter.SPOKES_MAX, spokes))
+        self.spool_adapter_bearing = self._bool("spool_adapter_bearing", False)
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1240,6 +1256,9 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("phone_stand_width", "phone_stand_angle", "phone_stand_back",
                     "phone_stand_device", "phone_stand_lip", "phone_stand_cable"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("spool_adapter_hub", "spool_adapter_depth", "spool_adapter_lip",
+                    "spool_adapter_rod", "spool_adapter_bearing", "spool_adapter_spokes"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2175,6 +2194,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                   "holds it at the angle you choose and the lip keeps its foot in "
                                   "the slot; the base is as long as the lean needs and a gap in "
                                   "the middle lets a charging cable through"))
+        # ---- spool adapter
+        self.a_spool_adapter = A(tr("Spool Adapter…"),
+                                 lambda checked=False: self.spool_adapter_dialog(), None,
+                                 "spool_adapter", False,
+                                 tr("Add a hub that fills the hole of a filament spool, so it "
+                                    "turns true on a thin rod or the 608 bearing of a spool "
+                                    "holder; it stands on a flange that keeps it from sliding in "
+                                    "and spokes hold it together where there is plastic to save"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2293,7 +2320,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_cable_chain, self.a_gridfinity, self.a_pegboard,
                           self.a_hose_adapter, self.a_fan_guard, self.a_grommet, self.a_bracket,
                           self.a_tie_mount, self.a_bit_holder, self.a_card_holder,
-                          self.a_wall_hook, self.a_phone_stand))
+                          self.a_wall_hook, self.a_phone_stand, self.a_spool_adapter))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
