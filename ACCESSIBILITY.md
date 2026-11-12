@@ -23,6 +23,8 @@ what does not work well yet, and how to tell us about a barrier you run into.
 
 **Seeing**
 - A light and a dark theme, or the theme of the system (*Window > Preferences*).
+- A colour-blind friendly palette for the print preview, with colours that people with red-green
+  colour blindness can tell apart (*Window > Preferences > Display*).
 - Volura follows the display scaling of the operating system, so text and controls grow with it.
 - Every part is checked for a closed volume before export, and problems are reported in words,
   not only with colour.
@@ -40,9 +42,10 @@ We prefer to be clear about these:
   Every button, field and list now has a descriptive accessible name, also the ones that only
   show an icon; `tests/test_accessibility.py` walks the window and the dialogs and keeps it
   that way.
-- **Colour**: some views use colour to tell things apart, such as the red, green and blue axes and
-  the kinds of line in the print preview. The legend names them, but the view itself does not yet
-  offer a colour-blind friendly palette or patterns.
+- **Colour**: the print preview has a colour-blind friendly palette (*Window > Preferences >
+  Display*) and its legend names every colour, so the kinds of line are not colour alone any
+  more. Other views still tell things apart by colour only, such as the red, green and blue axes;
+  no view offers patterns.
 - **Contrast and size**: there is no high-contrast theme of Volura's own, and the line width in
   the 3D view cannot be set yet.
 - **Motion**: the print preview plays an animation only when you press Play; nothing moves by

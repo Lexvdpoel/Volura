@@ -1,15 +1,21 @@
 """Reading sliced G-code back for the print preview (volura/gcode_preview.py).
 
+Also the two colour palettes of the preview and the colour-blind preference behind them.
+
 Run with:  python -m pytest tests/test_gcode_preview.py
 """
 import os
 import sys
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import numpy as np  # noqa: E402
 import pytest  # noqa: E402
+from PySide6.QtWidgets import QWidget  # noqa: E402
 
 from volura import gcode_preview as gp  # noqa: E402
+from volura.settings import qsettings  # noqa: E402
 
 GCODE = """\
 ;FLAVOR:Marlin
@@ -128,3 +134,69 @@ def test_the_3d_view_turns_moves_zooms_and_draws(preview, tmp_path):
         dlg.grab()                                       # it draws, half a layer and the nozzle
     finally:
         dlg.close()
+
+
+# ------------------------------------------------------------------- colours
+
+def test_both_palettes_have_the_same_kinds():
+    from volura import print_preview as pp
+    assert [name for _color, name in pp.KIND_STYLE_CB] == \
+        [name for _color, name in pp.KIND_STYLE]
+    assert len({color for color, _name in pp.KIND_STYLE_CB}) == len(pp.KIND_STYLE_CB), \
+        "the colour-blind palette has two of the same colour"
+    assert pp.kind_style(True) is pp.KIND_STYLE_CB
+    assert pp.kind_style(False) is pp.KIND_STYLE
+
+
+class FakeWindow(QWidget):
+    """A parent window for the preview dialog that only carries the colour-blind preference."""
+
+    def __init__(self, colour_blind):
+        super().__init__()
+        self.settings = SimpleNamespace(colour_blind=colour_blind)
+
+
+def fill_rows(view):
+    """The rows of `lines.col` of the FILL move of the first layer, its two vertices."""
+    printed = view.preview.layers[0].kind
+    printed = printed[printed != gp.TRAVEL]
+    first = int(np.flatnonzero(printed == gp.KIND["FILL"])[0])
+    return slice(view.lines.start[0] + 2 * first, view.lines.start[0] + 2 * first + 2)
+
+
+@pytest.mark.parametrize("colour_blind, palette", ((True, "KIND_STYLE_CB"),
+                                                   (False, "KIND_STYLE")))
+def test_the_preview_colours_the_lines_with_the_chosen_palette(preview, tmp_path,
+                                                               colour_blind, palette):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication(sys.argv[:1])
+    from volura import print_preview as pp
+    path = tmp_path / "x.gcode"
+    path.write_text(GCODE, encoding="utf-8")
+    win = FakeWindow(colour_blind)
+    dlg = pp.PrintPreviewDialog(win, str(path), preview, (0.0, 0.0, 100.0, 100.0), "")
+    try:
+        assert dlg.colour_blind is colour_blind
+        colour = np.array(pp._rgb(getattr(pp, palette)[gp.KIND["FILL"]][0]), dtype=np.float32)
+        assert dlg.view.lines.col[fill_rows(dlg.view)] == pytest.approx(np.tile(colour, (2, 1)))
+    finally:
+        dlg.close()
+        win.close()
+
+
+def test_the_colour_blind_preference_is_stored():
+    q = qsettings()
+    saved = q.value("colour_blind")
+    try:
+        from volura.app import Settings
+        s = Settings()
+        s.colour_blind = not s.colour_blind
+        s.save()
+        assert Settings().colour_blind is s.colour_blind
+    finally:
+        if saved is None:
+            q.remove("colour_blind")
+        else:
+            q.setValue("colour_blind", saved)
+        q.sync()

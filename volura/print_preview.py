@@ -33,6 +33,13 @@ KIND_STYLE = [("#9aa4b1", tr_noop("Travel")), ("#d9480f", tr_noop("Outer wall"))
               ("#2f9e44", tr_noop("Infill")), ("#1c7ed6", tr_noop("Support")),
               ("#4dabf7", tr_noop("Support interface")), ("#7048e8", tr_noop("Skirt and brim")),
               ("#ae3ec9", tr_noop("Prime tower")), ("#868e96", tr_noop("Other"))]
+#: the same kinds in the Okabe-Ito palette, which people with red-green colour blindness
+#: can tell apart (Window > Preferences > Display)
+KIND_STYLE_CB = [("#999999", tr_noop("Travel")), ("#E69F00", tr_noop("Outer wall")),
+                 ("#56B4E9", tr_noop("Inner wall")), ("#009E73", tr_noop("Top and bottom")),
+                 ("#F0E442", tr_noop("Infill")), ("#0072B2", tr_noop("Support")),
+                 ("#8FD3FF", tr_noop("Support interface")), ("#CC79A7", tr_noop("Skirt and brim")),
+                 ("#D55E00", tr_noop("Prime tower")), ("#BBBBBB", tr_noop("Other"))]
 #: how much faster than the real print the virtual printer plays
 SPEEDS = (1, 5, 20, 100)
 #: frames a second of the playback
@@ -41,6 +48,11 @@ FPS = 30
 DIM = 0.5
 #: the colours of the background, the bed and its grid
 BACKGROUND, BED, GRID = "#20242a", "#2b3038", "#3a404a"
+
+
+def kind_style(colour_blind: bool):
+    """The colours and names of every kind of line: the standard or the colour-blind palette."""
+    return KIND_STYLE_CB if colour_blind else KIND_STYLE
 
 
 def _hms(seconds: float) -> str:
@@ -63,8 +75,8 @@ class _Lines:
     printed draws only those.
     """
 
-    def __init__(self, preview: gp.Preview):
-        colours = np.array([_rgb(c) for c, _name in KIND_STYLE], dtype=np.float32)
+    def __init__(self, preview: gp.Preview, colour_blind=False):
+        colours = np.array([_rgb(c) for c, _name in kind_style(colour_blind)], dtype=np.float32)
         pos, col, travel, start, tstart, done = [], [], [], [0], [0], []
         for layer in preview.layers:
             printed = layer.kind != gp.TRAVEL
@@ -94,10 +106,11 @@ class LayerView(QOpenGLWidget):
     layer, `at` the seconds into it the virtual printer is (None: the whole layer).
     """
 
-    def __init__(self, preview: gp.Preview, bed, parent=None):
+    def __init__(self, preview: gp.Preview, bed, colour_blind=False, parent=None):
         super().__init__(parent)
         self.preview, self.bed = preview, bed
-        self.lines = _Lines(preview)
+        self.colour_blind = bool(colour_blind)
+        self.lines = _Lines(preview, self.colour_blind)
         self.layer = 0
         self.at = None
         self.show_travel = False
@@ -201,7 +214,7 @@ class LayerView(QOpenGLWidget):
         gl.glDisableClientState(gl.GL_COLOR_ARRAY)
         if self.show_travel and ln.tstart[i + 1] > ln.tstart[i]:
             gl.glLineWidth(1.0)
-            gl.glColor3f(*_rgb(KIND_STYLE[gp.TRAVEL][0]))
+            gl.glColor3f(*_rgb(kind_style(self.colour_blind)[gp.TRAVEL][0]))
             gl.glVertexPointer(3, gl.GL_FLOAT, 0, ln.travel)
             gl.glDrawArrays(gl.GL_LINES, ln.tstart[i], ln.tstart[i + 1] - ln.tstart[i])
         gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
@@ -277,6 +290,8 @@ class PrintPreviewDialog(QDialog):
         self.gcode_path, self.preview = gcode_path, preview
         self.ask_path = ask_path
         self.saved_to = None
+        settings = getattr(win, "settings", None)
+        self.colour_blind = bool(getattr(settings, "colour_blind", False))
         self.setWindowTitle(tr("Print Preview"))
         self.resize(980, 780)
         lay = QVBoxLayout(self)
@@ -284,7 +299,7 @@ class PrintPreviewDialog(QDialog):
         self.summary.setWordWrap(True)
         lay.addWidget(self.summary)
         row = QHBoxLayout()
-        self.view = LayerView(preview, bed)
+        self.view = LayerView(preview, bed, self.colour_blind)
         row.addWidget(self.view, 1)
         self.slider = QSlider(Qt.Vertical)
         self.slider.setRange(0, max(0, len(preview.layers) - 1))
@@ -316,7 +331,7 @@ class PrintPreviewDialog(QDialog):
         used = set()
         for layer in preview.layers:
             used.update(int(k) for k in np.unique(layer.kind))
-        for k, (color, name) in enumerate(KIND_STYLE):
+        for k, (color, name) in enumerate(kind_style(self.colour_blind)):
             if k in used and k != gp.TRAVEL:
                 legend.addWidget(QLabel(f"<span style='color:{color}'>■</span> {tr(name)}"))
         legend.addStretch(1)

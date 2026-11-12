@@ -459,6 +459,11 @@ class PreferencesDialog(PageDialog):
         form.addRow(note(tr("In the dark theme the sheet on the 2D worksheet stays light, so the "
                             "layer colors stay readable, and the 3D window gets a muted gray "
                             "background.")))
+        self.colour_blind = QCheckBox(tr("Colour-blind friendly colours"))
+        self.colour_blind.setChecked(self.win.settings.colour_blind)
+        self.colour_blind.setToolTip(tr("Colours in the print preview that people with red-green "
+                                        "colour blindness can tell apart"))
+        form.addRow(self.colour_blind)
         self.add_page(page)
 
     def _build_spacemouse(self):
@@ -535,6 +540,7 @@ class PreferencesDialog(PageDialog):
         s.spacemouse = self.sm_on.isChecked()
         theme_changed = s.theme != self.theme.currentData()
         s.theme = self.theme.currentData()
+        s.colour_blind = self.colour_blind.isChecked()
         scheme = keyschemes.scheme_of(str(self.scheme.currentData() or keyschemes.SKETCHUP))
         scheme_changed = s.key_scheme != scheme
         # the language is read once at startup (i18n.saved_choice), so it applies after a restart

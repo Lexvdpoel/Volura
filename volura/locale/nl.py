@@ -360,6 +360,8 @@ TRANSLATIONS = {
     'Color {n}': 'Kleur {n}',
     'Column spacing': 'Kolomafstand',
     'Columns': 'Kolommen',
+    'Colour-blind friendly colours': 'Kleurenblind-vriendelijke kleuren',
+    'Colours in the print preview that people with red-green colour blindness can tell apart': 'Kleuren in het printvoorbeeld die mensen met rood-groen kleurenblindheid uit elkaar kunnen houden',
     'Command': 'Opdracht',
     'Cone': 'Kegel',
     'Connected Faces': 'Verbonden vlakken',
