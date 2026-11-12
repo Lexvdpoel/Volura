@@ -20,4 +20,5 @@ Closes #<!-- issue number, or link the idea in Discussions -->
 - [ ] Every new text the user sees goes through `tr()` (with a Dutch translation in `volura/locale/nl.py`, or a note here that it is missing)
 - [ ] A new ready-made part is one closed volume and is in `tests/test_parts_closed.py`
 - [ ] `README.md` and `docs/website/manual.html` (English and Dutch) describe what users will notice
+- [ ] New interface works with the keyboard and does not rely on colour alone ([ACCESSIBILITY.md](https://github.com/Lexvdpoel/Volura/blob/main/ACCESSIBILITY.md))
 - [ ] The code, models and images in this pull request are mine to share under the MIT license

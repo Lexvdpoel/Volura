@@ -490,7 +490,8 @@ Something that is clearly broken goes to [Issues](https://github.com/Lexvdpoel/V
 as a bug report.
 
 Want to help with code, translations or documentation? Read [CONTRIBUTING.md](CONTRIBUTING.md) and
-the [Code of Conduct](CODE_OF_CONDUCT.md).
+the [Code of Conduct](CODE_OF_CONDUCT.md). [ACCESSIBILITY.md](ACCESSIBILITY.md) says what Volura offers for
+keyboard, sight and other needs, what does not work well yet, and how to report a barrier.
 
 ## License
 

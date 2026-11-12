@@ -75,6 +75,8 @@ whole suite once at the end.
   Leave the translation out and say so in the pull request; it will be added.
 - **Platform independent**: no drive letters, no `os.startfile`; `tests/test_portability.py`
   checks it.
+- **Accessible**: commands reachable from a menu and the keyboard, controls with a text or an
+  accessible name, never colour alone; see [ACCESSIBILITY.md](ACCESSIBILITY.md).
 - **Tests come with the change**: a new feature gets tests that show it works, a bug fix a test
   that fails without the fix.
 
