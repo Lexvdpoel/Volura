@@ -1492,6 +1492,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.coords.setToolTip(tr("Position of the cursor on the 2D worksheet"))
         self.vcb_label = QLabel(tr("Measurements"))
         self.vcb = QLineEdit()
+        self.vcb.setAccessibleName(tr("Measurements"))
         self.vcb.setFixedWidth(180)
         self.vcb.returnPressed.connect(self.on_vcb_return)
         sb.addPermanentWidget(self.coords)

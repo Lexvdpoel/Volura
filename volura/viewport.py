@@ -313,6 +313,7 @@ class Viewport(QOpenGLWidget):
         self.middle_pans = False        # the Fusion scheme pans with the middle button
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
+        self.setAccessibleName(tr("3D view"))
         self.setMinimumSize(320, 240)
         doc.changed.connect(self.update)
         doc.selection_changed.connect(self.update)

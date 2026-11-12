@@ -37,7 +37,9 @@ We prefer to be clear about these:
 - **Screen readers**: the menus, dialogs and the Measurements box are standard Qt controls and
   are read out, but the 3D view itself cannot be explored with a screen reader. Modelling in 3D
   is visual by nature; the typed values and the Parts dialogs are the most usable route today.
-  Not every button and field has a descriptive accessible name yet.
+  Every button, field and list now has a descriptive accessible name, also the ones that only
+  show an icon; `tests/test_accessibility.py` walks the window and the dialogs and keeps it
+  that way.
 - **Colour**: some views use colour to tell things apart, such as the red, green and blue axes and
   the kinds of line in the print preview. The legend names them, but the view itself does not yet
   offer a colour-blind friendly palette or patterns.

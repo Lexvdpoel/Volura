@@ -42,6 +42,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
   X-ray (Alt+X), Back Edges (K), Hidden Geometry (softened edges) and hiding the rest of the model
   while editing a group
 - **Dark theme**: *Window > Preferences > Display > Theme*: System, Light or Dark
+- **Accessible**: every command has a menu entry and a shortcut you can change, and every button,
+  field and list has a name a screen reader can read, also the ones that only show an icon
+  ([ACCESSIBILITY.md](ACCESSIBILITY.md))
 - **3Dconnexion SpaceMouse** support (*Window > Preferences > 3D Mouse*): through 3DxWare 10 or the
   older 3DxSoftware (siappdll), without a driver through Windows Raw Input, and on Linux through
   spacenavd

@@ -96,6 +96,7 @@ class SheetView(QWidget):
         self._outside_ids: set = set()     # ids of paths outside the sheet or in the margin
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
+        self.setAccessibleName(tr("2D worksheet"))
         self.setMinimumSize(320, 240)
         doc.changed.connect(self._on_doc_changed)
         self.set_tool("select")
