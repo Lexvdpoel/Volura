@@ -3,6 +3,40 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.46 — 2026-11-12
+
+### New
+- **Print preview** (File > Slice): after slicing, the G-code opens in a preview before it is
+  saved: the bed from above with one layer, coloured by what it prints, the layer below it faint.
+  Pick a layer with the slider or the arrow keys; Play lets a virtual printer print each layer at
+  1 to 100 times the real speed. Save G-code writes the file.
+- **More printers to slice for**: the printers of OrcaSlicer's profiles that Cura does not have
+  come along, nearly 1000 printers in all, among them the Flashforge Adventurer 5M Pro and
+  Creator 5 Pro. Their own start and end G-code is worked out when you slice.
+- **Filament brand** in the slice dialog: choose the brand first, then its material.
+
+### Changed
+- **Pegboard**: the hooks, shelves and holders hang like steel pegboard hooks. The round upper peg
+  bends up behind the board into a tip, with less than half a millimetre of play, so a part hangs
+  straight and cannot be pulled off; the lower peg is a straight round rod. Tilt the part, push
+  the tip through and swing it down. The parts are symmetric and print on their side with
+  support under the pegs; the tool holder has a plain round ring, and the holes of the board a
+  chamfer at the front.
+- The first time the printer profiles are read, the slice dialog says it can take a few minutes.
+
+### Fixed
+- Every ready-made part of Draw > Parts comes back as a closed volume in the export: the wall
+  hook and the corner bracket with countersunk holes, the project box with screw posts and the
+  pegboard were reported as not closed.
+
+### Licenses
+- The third-party notices name the OrcaSlicer printer profiles (AGPL v3), and every release has
+  the source of CuraEngine attached.
+
+### Website
+- The manual describes the print preview, the filament brand, the extra printers and the new
+  pegboard hooks.
+
 ## 0.2.45 — 2026-11-12
 
 ### New
