@@ -379,8 +379,11 @@ at 256 x 256, also from an existing icon with `--from assets/volura.ico`.
 ## Tests
 
 ```sh
-QT_QPA_PLATFORM=offscreen python -m pytest -q tests    # Windows: $env:QT_QPA_PLATFORM = "offscreen"
+QT_QPA_PLATFORM=offscreen python -m pytest -q -n auto tests    # Windows: $env:QT_QPA_PLATFORM = "offscreen"
 ```
+
+`-n auto` (pytest-xdist) spreads the tests over all processor cores, which takes the run from about
+twelve minutes to two or three; leave it out to run them one after the other.
 
 The tests need no display. `tests/test_portability.py` keeps the code platform independent: it
 imports every module in `volura/` and allows no `os.startfile` and no paths with a drive letter.

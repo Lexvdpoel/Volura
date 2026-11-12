@@ -28,9 +28,12 @@ from volura.brep import Entities, _loop_triangles, triangulate_payload  # noqa: 
 from volura.geom import Plane  # noqa: E402
 
 GROUND = Plane((0, 0, 0), (0, 0, 1))
-LIMIT = 5.0  # seconds
-TRI_LIMIT = 2.0  # seconds for 200k triangular faces
-APART_LIMIT = 2.0  # seconds for a print check of ten heavy parts that lie apart
+#: with the tests spread over processes (pytest -n), the others share the processor: the limits
+#: guard against a slowdown of many times, so twice the room there keeps them meaningful
+SLACK = 2.0 if os.environ.get("PYTEST_XDIST_WORKER") else 1.0
+LIMIT = 5.0 * SLACK  # seconds
+TRI_LIMIT = 2.0 * SLACK  # seconds for 200k triangular faces
+APART_LIMIT = 2.0 * SLACK  # seconds for a print check of ten heavy parts that lie apart
 
 
 def _new_face(ents, fids, vertex_id):

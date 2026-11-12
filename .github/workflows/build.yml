@@ -55,7 +55,7 @@ jobs:
           if [ ! -f curaengine/VERSION ]; then python tools/fetch_curaengine.py; fi
 
       - name: Tests
-        run: python -m pytest -q tests
+        run: python -m pytest -q -n auto tests     # spread over the cores of the runner
 
       - name: Build the standalone version
         run: python packaging/build.py

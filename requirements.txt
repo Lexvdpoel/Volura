@@ -9,4 +9,5 @@ manifold3d>=3.0
 truststore>=0.10
 certifi>=2024.2.2
 pytest>=8
+pytest-xdist>=3.6
 pyinstaller>=6.10
