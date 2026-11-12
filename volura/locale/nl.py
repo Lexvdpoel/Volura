@@ -2015,4 +2015,9 @@ TRANSLATIONS = {
     'Sliced: {summary}: {path}': 'Gesliced: {summary}: {path}',
     'Sliced, not saved: {summary}': 'Gesliced, niet opgeslagen: {summary}',
     'Reading the printer profiles… The first time this can take a few minutes.': 'Printerprofielen inlezen… De eerste keer kan dit enkele minuten duren.',
+    '3D': '3D',
+    'Only this layer': 'Alleen deze laag',
+    'Look straight down on the bed': 'Kijk recht van boven op het bed',
+    'Look at the print from the side, at an angle': 'Kijk schuin van opzij naar de print',
+    'Drag to turn, right-drag to move, wheel to zoom': 'Slepen draait, rechts slepen verschuift, wieltje zoomt',
 }

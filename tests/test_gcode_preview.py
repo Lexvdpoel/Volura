@@ -84,3 +84,47 @@ def test_box_of_what_is_printed(preview):
 def test_empty_gcode():
     p = gp.parse([])
     assert p.layers == [] and p.seconds == 0.0
+
+
+def test_the_3d_view_turns_moves_zooms_and_draws(preview, tmp_path):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication(sys.argv[:1])
+    from volura import print_preview as pp
+    path = tmp_path / "x.gcode"
+    path.write_text(GCODE, encoding="utf-8")
+    dlg = pp.PrintPreviewDialog(None, str(path), preview, (0.0, 0.0, 100.0, 100.0), "")
+    try:
+        dlg.resize(800, 700)
+        dlg.show()
+        QApplication.processEvents()
+        view = dlg.view
+        assert view.layer == 1, "the preview starts at the whole print"
+        # every printed line is there once, the lower layers dimmed
+        assert view.lines.start == [0, 6, 10]
+        assert view.lines.dim == pytest.approx(view.lines.col * pp.DIM)
+        yaw, target, distance = view.cam.yaw, view.cam.target.copy(), view.cam.distance
+        c = view.rect().center()
+        QTest.mousePress(view, Qt.LeftButton, Qt.NoModifier, c)
+        QTest.mouseMove(view, c + QPoint(60, 20))
+        QTest.mouseRelease(view, Qt.LeftButton, Qt.NoModifier, c + QPoint(60, 20))
+        assert view.cam.yaw != yaw, "dragging does not turn the view"
+        QTest.mousePress(view, Qt.RightButton, Qt.NoModifier, c)
+        QTest.mouseMove(view, c + QPoint(40, 0))
+        QTest.mouseRelease(view, Qt.RightButton, Qt.NoModifier, c + QPoint(40, 0))
+        assert (view.cam.target != target).any(), "right-dragging does not move the view"
+        view.cam.zoom(0.5)
+        assert view.cam.distance < distance
+        dlg.top.click()
+        assert view.cam.pitch > 89.0, "Top does not look down"
+        dlg.iso.click()
+        assert view.cam.pitch < 60.0
+        dlg.only.setChecked(True)
+        dlg.travel.setChecked(True)
+        assert view.only_layer and view.show_travel
+        view.at = 3.0
+        dlg.grab()                                       # it draws, half a layer and the nozzle
+    finally:
+        dlg.close()

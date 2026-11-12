@@ -232,9 +232,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
   and the printer from the printer profiles of Cura and OrcaSlicer (nearly 1000 printers), then
   the nozzle, the filament brand and material and the quality, and set infill, support and bed
   adhesion; Volura works out the profile the way Cura does and slices with CuraEngine, which comes
-  with the download. The print preview then shows the G-code layer by layer, with a virtual
-  printer that plays each layer as the printer will print it, the print time and the filament;
-  save the G-code from there
+  with the download. The print preview then shows the G-code in 3D, layer by layer (turn, move
+  and zoom it with the mouse), with a virtual printer that plays each layer as the printer will
+  print it, the print time and the filament; save the G-code from there
 - Native file format `.volura` (files from version 0.1 are converted), unlimited undo
 - **3D import**: STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB and COLLADA (DAE), with a progress
   bar. Every closed part becomes a group in its own color; slicer projects (PrusaSlicer,

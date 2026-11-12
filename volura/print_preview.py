@@ -1,23 +1,30 @@
-"""The print preview: the sliced G-code layer by layer, with a virtual printer that prints it.
+"""The print preview: the sliced G-code in 3D, layer by layer, with a virtual printer that prints it.
 
-After File > Slice the G-code goes here first instead of straight to a file. The canvas shows the
-bed from above with one layer: what it prints in the colour of its kind (outer wall, inner wall,
-top and bottom, infill, support, skirt), the layer under it faint, the travel moves as thin lines
-when you want them, and the nozzle where it is. Play moves the nozzle through the layer at the
-speed of the real print times a factor, and goes on to the next layer; the slider and the arrow
-keys pick a layer, the mouse wheel zooms and dragging moves the view. Save G-code… writes the file.
+After File > Slice the G-code goes here first instead of straight to a file. The view shows the
+print in 3D on the bed: every layer up to the chosen one, in the colour of what it prints (outer
+wall, inner wall, top and bottom, infill, support, skirt), the layers below it dimmed, the travel
+moves of the chosen layer as thin lines when you want them, and the nozzle where it is. Drag with
+the left mouse button to turn the view, with the right or middle button (or Shift and the left) to
+move it; the wheel zooms towards the mouse and a double-click shows the whole print again. Top and
+3D switch the view; Only this layer hides the layers below. Play moves the nozzle through the layer
+at the speed of the real print times a factor and goes on to the next layer; the slider and the
+arrow keys pick a layer. Save G-code… writes the file.
 """
 from __future__ import annotations
 
 import shutil
 
 import numpy as np
-from PySide6.QtCore import QLineF, QPointF, QRectF, Qt, QTimer
-from PySide6.QtGui import QColor, QPainter, QPen
+from OpenGL import GL as gl
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QColor
+from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QHBoxLayout,
-                               QLabel, QPushButton, QSlider, QVBoxLayout, QWidget)
+                               QLabel, QPushButton, QSlider, QVBoxLayout)
 
+from . import errors
 from . import gcode_preview as gp
+from .camera import Camera
 from .i18n import tr, tr_noop
 
 #: the colour and the name of every kind of line, in the order of gcode_preview.KIND_NAMES
@@ -30,6 +37,10 @@ KIND_STYLE = [("#9aa4b1", tr_noop("Travel")), ("#d9480f", tr_noop("Outer wall"))
 SPEEDS = (1, 5, 20, 100)
 #: frames a second of the playback
 FPS = 30
+#: how bright the layers below the chosen one are, against its own colours
+DIM = 0.5
+#: the colours of the background, the bed and its grid
+BACKGROUND, BED, GRID = "#20242a", "#2b3038", "#3a404a"
 
 
 def _hms(seconds: float) -> str:
@@ -39,97 +50,221 @@ def _hms(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
-class LayerView(QWidget):
-    """The bed from above with one layer of the print, and the nozzle on it.
+def _rgb(hex_color) -> tuple:
+    c = QColor(hex_color)
+    return c.redF(), c.greenF(), c.blueF()
 
-    `bed` is (x0, y0, x1, y1): the bed in the coordinates of the G-code.
+
+class _Lines:
+    """Every printed line of the print as one array of vertices and colours, layer after layer.
+
+    `start[i]` is the first vertex of layer `i` (and `start[-1]` the end); `done[i]` counts, for
+    every move of layer `i`, the printed lines up to and including it, so a layer that is half
+    printed draws only those.
+    """
+
+    def __init__(self, preview: gp.Preview):
+        colours = np.array([_rgb(c) for c, _name in KIND_STYLE], dtype=np.float32)
+        pos, col, travel, start, tstart, done = [], [], [], [0], [0], []
+        for layer in preview.layers:
+            printed = layer.kind != gp.TRAVEL
+            seg = layer.seg[printed]
+            z = np.full((len(seg), 1), layer.z, dtype=np.float32)
+            pos.append(np.hstack([seg[:, :2], z, seg[:, 2:], z]).reshape(-1, 3))
+            col.append(np.repeat(colours[layer.kind[printed]], 2, axis=0))
+            trav = layer.seg[~printed]
+            zt = np.full((len(trav), 1), layer.z, dtype=np.float32)
+            travel.append(np.hstack([trav[:, :2], zt, trav[:, 2:], zt]).reshape(-1, 3))
+            start.append(start[-1] + 2 * len(seg))
+            tstart.append(tstart[-1] + 2 * len(trav))
+            done.append(np.cumsum(printed))
+        empty = np.zeros((0, 3), dtype=np.float32)
+        self.pos = np.ascontiguousarray(np.vstack(pos) if pos else empty, dtype=np.float32)
+        self.col = np.ascontiguousarray(np.vstack(col) if col else empty, dtype=np.float32)
+        self.dim = np.ascontiguousarray(self.col * DIM, dtype=np.float32)
+        self.travel = np.ascontiguousarray(np.vstack(travel) if travel else empty,
+                                           dtype=np.float32)
+        self.start, self.tstart, self.done = start, tstart, done
+
+
+class LayerView(QOpenGLWidget):
+    """The print in 3D on the bed, up to one layer, with the nozzle on it.
+
+    `bed` is (x0, y0, x1, y1): the bed in the coordinates of the G-code. `layer` is the chosen
+    layer, `at` the seconds into it the virtual printer is (None: the whole layer).
     """
 
     def __init__(self, preview: gp.Preview, bed, parent=None):
         super().__init__(parent)
         self.preview, self.bed = preview, bed
+        self.lines = _Lines(preview)
         self.layer = 0
-        self.at = None                  # seconds into the layer; None: the whole layer
+        self.at = None
         self.show_travel = False
-        self.zoom, self.pan = 1.0, QPointF(0.0, 0.0)
-        self._drag = None
+        self.only_layer = False
+        self.cam = Camera()
+        self._drag, self._last = None, None
+        self._fitted = False                    # fitted once the view has its real size
         self.setMinimumSize(420, 420)
         self.setFocusPolicy(Qt.StrongFocus)
+        self.fit("iso")
 
-    # ---- the mapping from the bed to the widget
-    def _scale(self):
-        x0, y0, x1, y1 = self.bed
-        return self.zoom * 0.92 * min(self.width() / max(x1 - x0, 1.0),
-                                      self.height() / max(y1 - y0, 1.0))
-
-    def _to_view(self, x, y):
-        x0, y0, x1, y1 = self.bed
-        s = self._scale()
-        cx = 0.5 * self.width() + self.pan.x()
-        cy = 0.5 * self.height() + self.pan.y()
-        return QPointF(cx + (x - 0.5 * (x0 + x1)) * s, cy - (y - 0.5 * (y0 + y1)) * s)
-
-    def paintEvent(self, _event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        p.fillRect(self.rect(), QColor("#20242a"))
-        x0, y0, x1, y1 = self.bed
-        p.setPen(QPen(QColor("#5c6370"), 1.0))
-        p.setBrush(QColor("#2b3038"))
-        p.drawRect(QRectF(self._to_view(x0, y1), self._to_view(x1, y0)))
+    # ---- the camera
+    def _box(self):
+        """The print, or the bed when nothing is printed, as (lo, hi)."""
         layers = self.preview.layers
-        if not layers:
-            return
-        s = self._scale()
-        width = max(1.0, 0.4 * s)
-        if self.layer > 0:
-            self._draw(p, layers[self.layer - 1], None, QColor(255, 255, 255, 40), width, False)
-        layer = layers[self.layer]
-        self._draw(p, layer, self.at, None, width, self.show_travel)
-        if self.at is not None:
-            pos, _done = layer.position(self.at)
-            if pos is not None:
-                c = self._to_view(*pos)
-                p.setPen(QPen(QColor("#ffffff"), 2.0))
-                p.setBrush(QColor("#ff6b6b"))
-                p.drawEllipse(c, 5.0, 5.0)
+        top = max((layer.z for layer in layers), default=0.0)
+        if self.preview.hi != self.preview.lo:
+            lo = np.array([*self.preview.lo, 0.0])
+            hi = np.array([*self.preview.hi, top])
+        else:
+            x0, y0, x1, y1 = self.bed
+            lo, hi = np.array([x0, y0, 0.0]), np.array([x1, y1, top])
+        return lo, hi
 
-    def _draw(self, p, layer, at, color, width, travel):
-        count = len(layer.seg)
-        if at is not None:
-            count = min(count, int(np.searchsorted(layer.t, at, side="right")) + 1)
-        seg, kinds = layer.seg[:count], layer.kind[:count]
-        for k in np.unique(kinds):
-            if k == gp.TRAVEL and not travel:
-                continue
-            rows = seg[kinds == k]
-            pen = QPen(color if color is not None else QColor(KIND_STYLE[int(k)][0]),
-                       1.0 if k == gp.TRAVEL else width)
-            pen.setCapStyle(Qt.RoundCap)
-            p.setPen(pen)
-            p.drawLines([QLineF(self._to_view(r[0], r[1]), self._to_view(r[2], r[3]))
-                         for r in rows])
-
-    # ---- zoom and pan
-    def wheelEvent(self, event):
-        factor = 1.2 if event.angleDelta().y() > 0 else 1.0 / 1.2
-        self.zoom = max(0.5, min(40.0, self.zoom * factor))
+    def fit(self, view=None):
+        """Show the whole print, from `view` ("iso", "top", ...) or from where the camera is."""
+        if view:
+            self.cam.set_view(view)
+        self.cam.width, self.cam.height = max(1, self.width()), max(1, self.height())
+        self.cam.fit(self._box())
         self.update()
 
+    # ---- drawing
+    def initializeGL(self):
+        errors.clear_gl_errors()
+        gl.glClearColor(*_rgb(BACKGROUND), 1.0)
+
+    def resizeGL(self, w, h):
+        self.cam.width, self.cam.height = max(1, w), max(1, h)
+        if not self._fitted and w > 50 and h > 50:
+            self._fitted = True
+            self.cam.fit(self._box())
+
+    @errors.safe_handler
+    def paintGL(self):
+        self.cam.width, self.cam.height = max(1, self.width()), max(1, self.height())
+        dpr = self.devicePixelRatioF()
+        gl.glViewport(0, 0, int(self.width() * dpr), int(self.height() * dpr))
+        gl.glClearColor(*_rgb(BACKGROUND), 1.0)
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+        gl.glUseProgram(0)
+        gl.glDisable(gl.GL_LIGHTING)
+        gl.glDisable(gl.GL_CULL_FACE)
+        gl.glMatrixMode(gl.GL_PROJECTION)
+        gl.glLoadMatrixd(self.cam.proj_matrix().T.ravel())
+        gl.glMatrixMode(gl.GL_MODELVIEW)
+        gl.glLoadMatrixd(self.cam.view_matrix().T.ravel())
+        gl.glEnable(gl.GL_DEPTH_TEST)
+        self._draw_bed()
+        if self.preview.layers:
+            self._draw_print()
+
+    def _draw_bed(self):
+        x0, y0, x1, y1 = self.bed
+        gl.glDepthMask(gl.GL_FALSE)
+        gl.glColor3f(*_rgb(BED))
+        gl.glBegin(gl.GL_QUADS)
+        for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
+            gl.glVertex3f(x, y, -0.01)
+        gl.glEnd()
+        gl.glLineWidth(1.0)
+        gl.glColor3f(*_rgb(GRID))
+        gl.glBegin(gl.GL_LINES)
+        for x in np.arange(x0, x1 + 1e-6, 10.0):
+            gl.glVertex3f(x, y0, 0.0)
+            gl.glVertex3f(x, y1, 0.0)
+        for y in np.arange(y0, y1 + 1e-6, 10.0):
+            gl.glVertex3f(x0, y, 0.0)
+            gl.glVertex3f(x1, y, 0.0)
+        gl.glEnd()
+        gl.glDepthMask(gl.GL_TRUE)
+
+    def _draw_print(self):
+        ln, i = self.lines, self.layer
+        first, end = ln.start[i], ln.start[i + 1]
+        if self.at is not None:
+            layer = self.preview.layers[i]
+            moves = min(len(layer.t), int(np.searchsorted(layer.t, self.at, side="right")) + 1)
+            end = first + 2 * (int(ln.done[i][moves - 1]) if moves else 0)
+        gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
+        gl.glEnableClientState(gl.GL_COLOR_ARRAY)
+        gl.glVertexPointer(3, gl.GL_FLOAT, 0, ln.pos)
+        gl.glLineWidth(1.0)
+        if first > 0 and not self.only_layer:
+            gl.glColorPointer(3, gl.GL_FLOAT, 0, ln.dim)
+            gl.glDrawArrays(gl.GL_LINES, 0, first)
+        gl.glLineWidth(2.0)
+        gl.glColorPointer(3, gl.GL_FLOAT, 0, ln.col)
+        if end > first:
+            gl.glDrawArrays(gl.GL_LINES, first, end - first)
+        gl.glDisableClientState(gl.GL_COLOR_ARRAY)
+        if self.show_travel and ln.tstart[i + 1] > ln.tstart[i]:
+            gl.glLineWidth(1.0)
+            gl.glColor3f(*_rgb(KIND_STYLE[gp.TRAVEL][0]))
+            gl.glVertexPointer(3, gl.GL_FLOAT, 0, ln.travel)
+            gl.glDrawArrays(gl.GL_LINES, ln.tstart[i], ln.tstart[i + 1] - ln.tstart[i])
+        gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
+        if self.at is not None:
+            layer = self.preview.layers[i]
+            pos, _done = layer.position(self.at)
+            if pos is not None:
+                x, y, z = pos[0], pos[1], layer.z
+                gl.glDisable(gl.GL_DEPTH_TEST)
+                gl.glLineWidth(3.0)
+                gl.glColor3f(0.85, 0.85, 0.85)
+                gl.glBegin(gl.GL_LINES)             # the nozzle, coming down from above
+                gl.glVertex3f(x, y, z)
+                gl.glVertex3f(x, y, z + 8.0)
+                gl.glEnd()
+                gl.glPointSize(9.0)
+                gl.glColor3f(1.0, 0.42, 0.42)
+                gl.glBegin(gl.GL_POINTS)
+                gl.glVertex3f(x, y, z)
+                gl.glEnd()
+                gl.glEnable(gl.GL_DEPTH_TEST)
+
+    # ---- turn, move and zoom
     def mousePressEvent(self, event):
-        self._drag = event.position()
+        self.setFocus()
+        self._last = event.position()
+        shift = bool(event.modifiers() & Qt.ShiftModifier)
+        if event.button() == Qt.LeftButton:
+            self._drag = "pan" if shift else "orbit"
+        elif event.button() in (Qt.RightButton, Qt.MiddleButton):
+            self._drag = "pan"
 
     def mouseMoveEvent(self, event):
-        if self._drag is not None:
-            self.pan += event.position() - self._drag
-            self._drag = event.position()
-            self.update()
+        if self._drag is None or self._last is None:
+            return
+        pos = event.position()
+        dx, dy = pos.x() - self._last.x(), pos.y() - self._last.y()
+        self._last = pos
+        if self._drag == "orbit":
+            self.cam.orbit(dx, dy)
+        else:
+            self.cam.pan(dx, dy)
+        self.update()
 
     def mouseReleaseEvent(self, _event):
         self._drag = None
 
     def mouseDoubleClickEvent(self, _event):
-        self.zoom, self.pan = 1.0, QPointF(0.0, 0.0)
+        self.fit()
+
+    def wheelEvent(self, event):
+        steps = event.angleDelta().y() / 120.0
+        if not steps:
+            return
+        # towards the point under the mouse on the height of the chosen layer
+        o, d = self.cam.ray(event.position().x(), event.position().y())
+        z = self.preview.layers[self.layer].z if self.preview.layers else 0.0
+        about = None
+        if abs(d[2]) > 1e-6:
+            t = (z - o[2]) / d[2]
+            if 0 < t < self.cam.distance * 5:
+                about = o + t * d
+        self.cam.zoom(0.85 ** steps, about)
         self.update()
 
 
@@ -143,7 +278,7 @@ class PrintPreviewDialog(QDialog):
         self.ask_path = ask_path
         self.saved_to = None
         self.setWindowTitle(tr("Print Preview"))
-        self.resize(900, 760)
+        self.resize(980, 780)
         lay = QVBoxLayout(self)
         self.summary = QLabel(summary)
         self.summary.setWordWrap(True)
@@ -153,7 +288,7 @@ class PrintPreviewDialog(QDialog):
         row.addWidget(self.view, 1)
         self.slider = QSlider(Qt.Vertical)
         self.slider.setRange(0, max(0, len(preview.layers) - 1))
-        self.slider.setValue(0)
+        self.slider.setValue(max(0, len(preview.layers) - 1))
         row.addWidget(self.slider)
         lay.addLayout(row, 1)
 
@@ -165,10 +300,14 @@ class PrintPreviewDialog(QDialog):
             self.speed.addItem(f"{f}×", f)
         self.speed.setCurrentIndex(2)
         self.travel = QCheckBox(tr("Travel moves"))
+        self.only = QCheckBox(tr("Only this layer"))
+        self.top = QPushButton(tr("Top"))
+        self.iso = QPushButton(tr("3D"))
+        self.top.setToolTip(tr("Look straight down on the bed"))
+        self.iso.setToolTip(tr("Look at the print from the side, at an angle"))
         self.info = QLabel()
-        controls.addWidget(self.play)
-        controls.addWidget(self.speed)
-        controls.addWidget(self.travel)
+        for w in (self.play, self.speed, self.travel, self.only, self.top, self.iso):
+            controls.addWidget(w)
         controls.addStretch(1)
         controls.addWidget(self.info)
         lay.addLayout(controls)
@@ -179,9 +318,11 @@ class PrintPreviewDialog(QDialog):
             used.update(int(k) for k in np.unique(layer.kind))
         for k, (color, name) in enumerate(KIND_STYLE):
             if k in used and k != gp.TRAVEL:
-                swatch = QLabel(f"<span style='color:{color}'>■</span> {tr(name)}")
-                legend.addWidget(swatch)
+                legend.addWidget(QLabel(f"<span style='color:{color}'>■</span> {tr(name)}"))
         legend.addStretch(1)
+        hint = QLabel(tr("Drag to turn, right-drag to move, wheel to zoom"))
+        hint.setEnabled(False)
+        legend.addWidget(hint)
         lay.addLayout(legend)
 
         bb = QDialogButtonBox()
@@ -197,7 +338,10 @@ class PrintPreviewDialog(QDialog):
         self.slider.valueChanged.connect(self._layer_changed)
         self.play.toggled.connect(self._play_toggled)
         self.travel.toggled.connect(self._travel_toggled)
-        self._layer_changed(0)
+        self.only.toggled.connect(self._only_toggled)
+        self.top.clicked.connect(lambda: self.view.fit("top"))
+        self.iso.clicked.connect(lambda: self.view.fit("iso"))
+        self._layer_changed(self.slider.value())
 
     # ---- layers and playback
     def _layer_changed(self, value):
@@ -221,6 +365,8 @@ class PrintPreviewDialog(QDialog):
         self.play.setText(tr("Pause") if on else tr("Play"))
         if on:
             if self.view.at is None:
+                if self.view.layer == len(self.preview.layers) - 1:
+                    self.slider.setValue(0)          # the print is done: start it again
                 self.view.at = 0.0
             self.timer.start()
         else:
@@ -244,6 +390,10 @@ class PrintPreviewDialog(QDialog):
 
     def _travel_toggled(self, on):
         self.view.show_travel = on
+        self.view.update()
+
+    def _only_toggled(self, on):
+        self.view.only_layer = on
         self.view.update()
 
     def keyPressEvent(self, event):
