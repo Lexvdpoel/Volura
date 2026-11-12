@@ -478,6 +478,17 @@ for robust boolean operations with guaranteed closed results.
 Volura is an independent implementation that mimics the workflow of SketchUp 2017. It contains no
 SketchUp code and is not affiliated with SketchUp.
 
+## Community
+
+Questions, ideas and prints go to [Discussions](https://github.com/Lexvdpoel/Volura/discussions):
+
+- **Q&A**: how do I ...? Ask about modelling, the ready-made parts, exporting and slicing
+- **Ideas**: suggest a feature or a new part, and upvote the ones you want
+- **Show and tell**: show what you made with Volura
+
+Something that is clearly broken goes to [Issues](https://github.com/Lexvdpoel/Volura/issues/new/choose)
+as a bug report.
+
 ## License
 
 MIT, see [LICENSE](LICENSE). © 2026 L. van der Poel.

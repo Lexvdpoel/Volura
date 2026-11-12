@@ -1,0 +1,23 @@
+title: "[Print] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Made something with Volura? Show it! A photo of the print, the model, and what it is for.
+  - type: textarea
+    id: what
+    attributes:
+      label: What did you make?
+      description: A photo or a screenshot, and a few words about it.
+    validations:
+      required: true
+  - type: input
+    id: printer
+    attributes:
+      label: Printer and material
+      placeholder: "Flashforge Adventurer 5M Pro, PLA"
+  - type: textarea
+    id: how
+    attributes:
+      label: How you made it
+      description: The tools or ready-made parts you used, tips for others.

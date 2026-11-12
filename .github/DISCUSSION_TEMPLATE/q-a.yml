@@ -1,0 +1,33 @@
+title: "[Question] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask anything about using Volura: modelling, the ready-made parts, exporting, slicing.
+        Found something that is clearly broken? Please open an [issue](https://github.com/Lexvdpoel/Volura/issues/new/choose) instead.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What are you trying to do, and where do you get stuck?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Volura version
+      description: Help > About Volura shows it.
+      placeholder: "0.2.46"
+  - type: dropdown
+    id: system
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - Linux
+        - Running from source
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or files
+      description: Drag images or a small .volura / STL file in here if it helps to explain.

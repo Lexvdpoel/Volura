@@ -1,0 +1,24 @@
+title: "[Idea] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest a feature, a new ready-made part or an improvement. Upvote the ideas you would like
+        to see too; the most wanted ones are picked up first.
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What should Volura do, and what would you use it for?
+    validations:
+      required: true
+  - type: textarea
+    id: now
+    attributes:
+      label: How do you do it now?
+      description: A workaround, another program, or not at all.
+  - type: textarea
+    id: example
+    attributes:
+      label: Examples or sketches
+      description: Pictures, links or a sketch of what you have in mind.

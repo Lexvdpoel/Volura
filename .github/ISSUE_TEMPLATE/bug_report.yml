@@ -1,0 +1,41 @@
+name: Bug report
+description: Something in Volura does not work as it should.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Draw > Parts > ...
+        2. ...
+  - type: input
+    id: version
+    attributes:
+      label: Volura version
+      description: Help > About Volura shows it.
+      placeholder: "0.2.46"
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - Linux
+        - Running from source
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Screenshots, files or the error log
+      description: After a crash, volura.log next to the program says what went wrong; a small .volura file helps too.

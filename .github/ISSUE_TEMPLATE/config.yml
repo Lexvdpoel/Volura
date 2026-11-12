@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a question
+    url: https://github.com/Lexvdpoel/Volura/discussions/new?category=q-a
+    about: How do I ...? Questions about using Volura go to the Q&A in Discussions.
+  - name: Suggest an idea
+    url: https://github.com/Lexvdpoel/Volura/discussions/new?category=ideas
+    about: New features and parts are discussed and voted on in Discussions.
+  - name: Show what you made
+    url: https://github.com/Lexvdpoel/Volura/discussions/new?category=show-and-tell
+    about: Share your prints and models in Show and tell.
