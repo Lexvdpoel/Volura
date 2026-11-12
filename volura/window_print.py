@@ -1052,6 +1052,138 @@ class PrintMixin:
         except OSError:
             pass
 
+    # ------------------------------------------------------------ resin
+    def resin_slice_dialog(self):
+        """File > Slice for Resin…: supports, a preview, then the layer images in the
+        printer's own file (made by UVtools)."""
+        from . import sla_dialog, sla_profiles
+        folder = sla_profiles.find_uvtools()
+        if not folder or not sla_profiles.converter(folder):
+            QMessageBox.information(self, tr("Slice for Resin"), tr(
+                "Resin slicing is not part of this copy of Volura. The downloads on the "
+                "releases page include it."))
+            return
+        problem = sla_profiles.converter_problem(folder)
+        if problem:
+            QMessageBox.warning(self, tr("Slice for Resin"), tr(
+                "The resin converter does not start on this computer:\n{problem}")
+                .format(problem=problem))
+            return
+        only = bool(self.doc.selected_groups())
+
+        def prepare(report):
+            report(0.0, tr("Reading the resin printer profiles…"))
+            return sla_profiles.ResinLibrary(folder), ops.parts(self.doc, only_selected=only)
+
+        def prepared(result):
+            lib, part_list = result
+            part_list = self._validated_parts(part_list)
+            if part_list is None:
+                return
+            dlg = sla_dialog.ResinDialog(self, lib)
+            if dlg.exec() != QDialog.Accepted or dlg.printer is None:
+                self.setFocus()
+                return
+            for key, value in dlg.choice().items():
+                setattr(self.settings, "resin_" + key, value)
+            self.settings.save()
+            self._resin_supports(dlg.printer, dlg.profile(), dlg.settings(),
+                                 [p.manifold for p in part_list if p.manifold is not None],
+                                 folder)
+
+        background.run(self, prepare, text=tr("Reading the resin printer profiles…"),
+                       on_done=prepared, on_error=self._export_failed)
+
+    def _resin_supports(self, printer, profile, settings, parts, folder):
+        """Make the supports in the background, show them, and slice when asked to."""
+        from . import sla_slicer, sla_supports
+        from .sla_preview import ResinPreviewDialog
+        cfg = sla_supports.SupportConfig.from_profile(
+            profile.values if profile else {}, density=settings.density,
+            elevation=settings.elevation, pad=settings.pad)
+
+        def work(report):
+            report(0.0, tr("Making the supports…"))
+            sup = sla_supports.support(parts, cfg, settings.supports,
+                                       step=max(settings.layer_height, 0.1))
+            placed = sla_slicer.place_on_plate(sup.all, printer)
+            n = len(sup.parts)
+            rest = placed[n:]
+            sup.parts = placed[:n]
+            sup.supports = rest[0] if sup.supports is not None and rest else None
+            sup.pad = rest[-1] if sup.pad is not None and rest else None
+            whole = mf.Manifold.batch_boolean(placed, mf.OpType.Add)
+            lo, hi = np.asarray(whole.bounding_box()[:3]), np.asarray(whole.bounding_box()[3:])
+            size = hi - lo
+            if size[0] > printer.width + 1e-6 or size[1] > printer.depth + 1e-6 \
+                    or size[2] > printer.height + 1e-6:
+                raise ValueError(tr("The print ({x:.0f} × {y:.0f} × {z:.0f} mm) does not fit the "
+                                    "build volume of {w:g} × {d:g} × {h:g} mm")
+                                 .format(x=size[0], y=size[1], z=size[2], w=printer.width,
+                                         d=printer.depth, h=printer.height))
+            return sup, whole
+
+        def done(made):
+            sup, whole = made
+            layers = max(1, int(np.ceil(whole.bounding_box()[5] / settings.layer_height)))
+            hours, rest = divmod(int(round(sla_slicer.print_seconds(layers, settings))), 3600)
+            summary = tr("{printer}: {n} layers, about {h} h {m:02d} min, {ml:.1f} ml resin; "
+                         "{points} support points on {pillars} pillars").format(
+                printer=printer.name, n=layers, h=hours, m=rest // 60,
+                ml=whole.volume() / 1000.0, points=sup.points, pillars=sup.pillars)
+            if sup.dropped:
+                summary += " " + tr("({n} points could not be supported)").format(n=sup.dropped)
+
+            def ask():
+                ext = printer.extension
+                target, _ = QFileDialog.getSaveFileName(
+                    self, tr("Save for the Printer"), self.export_name("." + ext),
+                    f"{printer.name} (*.{ext})")
+                return target
+
+            dlg = ResinPreviewDialog(self, sup, (printer.width, printer.depth),
+                                     settings.layer_height, summary, ask)
+            dlg.exec()
+            if dlg.path:
+                self._resin_slice(sup, printer, profile, settings, dlg.path, folder)
+            else:
+                self.hint.setText(tr("Supports made, not sliced: {summary}")
+                                  .format(summary=summary))
+            self.setFocus()
+
+        background.run(self, work, text=tr("Making the supports…"), on_done=done,
+                       on_error=lambda exc: QMessageBox.critical(self, tr("Slicing Failed"),
+                                                                  str(exc)))
+
+    def _resin_slice(self, sup, printer, profile, settings, path, folder):
+        from . import sla_slicer
+        import tempfile
+
+        def work(report):
+            fd, archive = tempfile.mkstemp(suffix=".sl1", prefix="volura-")
+            os.close(fd)
+            try:
+                result = sla_slicer.write_sl1(
+                    archive, printer, profile, settings, sup.all,
+                    on_progress=lambda f: report(0.85 * f, tr("Slicing the layers…")))
+                report(0.9, tr("Writing the file for the printer…"))
+                sla_slicer.convert(archive, printer, path, folder)
+            finally:
+                self._forget(archive)
+            result.path = path
+            return result
+
+        def done(result):
+            hours, rest = divmod(int(round(result.seconds)), 3600)
+            self.hint.setText(tr("Sliced for resin: {n} layers, about {h} h {m:02d} min, "
+                                 "{ml:.1f} ml: {path}").format(n=result.layers, h=hours,
+                                                               m=rest // 60,
+                                                               ml=result.millilitres, path=path))
+
+        background.run(self, work, text=tr("Slicing the layers…"), on_done=done,
+                       on_error=lambda exc: QMessageBox.critical(self, tr("Slicing Failed"),
+                                                                  str(exc)))
+
     # ------------------------------------------------------------ zip-tie mount
     def tie_mount_dialog(self):
         """Draw > Parts > Zip-Tie Mount…: a cable-tie anchor that is screwed onto a surface."""

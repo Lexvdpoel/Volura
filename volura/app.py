@@ -891,6 +891,27 @@ class Settings:
             self.slice_support = max(0, min(2, int(float(self.q.value("slice_support", 0)))))
         except (TypeError, ValueError):
             self.slice_support = 0
+        # File > Slice for Resin: the printer and what was chosen for the last resin print
+        self.resin_printer = str(self.q.value("resin_printer", "") or "")
+        self.resin_level = str(self.q.value("resin_level", "Medium") or "Medium")
+        if self.resin_level not in ("Light", "Medium", "Heavy"):
+            self.resin_level = "Medium"
+        for key, default, lo, hi in (("resin_layer", 0.05, 0.01, 0.2),
+                                     ("resin_exposure", 2.5, 0.1, 120.0),
+                                     ("resin_bottom_exposure", 25.0, 1.0, 300.0),
+                                     ("resin_density", 100.0, 25.0, 400.0),
+                                     ("resin_elevation", 5.0, 0.0, 30.0)):
+            try:
+                setattr(self, key, max(lo, min(hi, float(self.q.value(key, default)))))
+            except (TypeError, ValueError):
+                setattr(self, key, default)
+        try:
+            self.resin_bottom_layers = max(1, min(20, int(float(
+                self.q.value("resin_bottom_layers", 4)))))
+        except (TypeError, ValueError):
+            self.resin_bottom_layers = 4
+        self.resin_supports = self._bool("resin_supports", True)
+        self.resin_pad = self._bool("resin_pad", True)
         for key, default, lo, hi in (
                 ("tie_mount_base", 20.0, tie_mount.BASE_MIN, tie_mount.BASE_MAX),
                 ("tie_mount_tie_width", 5.0, tie_mount.TIE_W_MIN, tie_mount.TIE_W_MAX),
@@ -1186,6 +1207,10 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("slice_printer", "slice_variant", "slice_material", "slice_quality",
                     "slice_adhesion", "slice_infill", "slice_support"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("resin_printer", "resin_level", "resin_layer", "resin_exposure",
+                    "resin_bottom_exposure", "resin_bottom_layers", "resin_density",
+                    "resin_elevation", "resin_supports", "resin_pad"):
             self.q.setValue(key, getattr(self, key))
         for key in ("tie_mount_base", "tie_mount_tie_width", "tie_mount_tie_thick",
                     "tie_mount_height", "tie_mount_screw", "tie_mount_countersink",
@@ -1664,6 +1689,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_print = A(tr("&Print"), self.export_3mf, "Ctrl+P", "3mf")
         self.a_slice = A(tr("S&lice…"), lambda checked=False: self.slice_dialog(), None, None,
                          False, tr("Slice the parts for your printer and save the G-code"))
+        self.a_slice_resin = A(tr("Slice for &Resin…"),
+                               lambda checked=False: self.resin_slice_dialog(), None, None, False,
+                               tr("Supports and layer images for a resin (MSLA) printer"))
         self.a_quit = A(tr("E&xit"), self.close, "Ctrl+Q")
 
         self.a_undo = A(tr("&Undo"), self.undo, ["Alt+Backspace", "Ctrl+Z"], "undo")
@@ -2199,7 +2227,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.fill(m, (self.a_new, self.a_open, self.recent_menu, None,
                       self.a_save, self.a_save_as, self.a_save_copy, None,
                       self.a_import, export, None)
-                  + only("3d", self.a_print, self.a_slice) + (None, self.a_quit))
+                  + only("3d", self.a_print, self.a_slice, self.a_slice_resin) + (None, self.a_quit))
 
         # ---- Edit
         m = mb.addMenu(tr("&Edit"))
@@ -4303,7 +4331,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                "File &gt; Slice; source code at <a href='https://github.com/"
                                "Ultimaker/CuraEngine'>github.com/Ultimaker/CuraEngine</a>. The "
                                "Cura printer profiles, LGPL v3</li>"
-                               "<li>Printer profiles of OrcaSlicer, AGPL v3, as data</li></ul>"
+                               "<li>Printer profiles of OrcaSlicer, AGPL v3, as data</li>"
+                               "<li>UVtools (command line), AGPL v3: a separate program for "
+                               "File &gt; Slice for Resin, with its resin printer profiles</li></ul>"
                                "<p>The full license texts are in THIRD_PARTY_LICENSES.txt next to "
                                "the program.</p>"))
 

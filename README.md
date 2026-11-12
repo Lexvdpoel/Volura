@@ -242,6 +242,12 @@ The interface is available in English and Dutch (*Window > Preferences > General
   with the download. The print preview then shows the G-code in 3D, layer by layer (turn, move
   and zoom it with the mouse), with a virtual printer that plays each layer as the printer will
   print it, the print time and the filament; save the G-code from there
+- **Slice for Resin** (File > Slice for Resin): layer images for more than 150 resin (MSLA)
+  printers of Anycubic, Elegoo, Phrozen, Creality, EPAX and others, in the printer's own file
+  (.ctb, .goo, .pwmx, ...). Volura puts the parts on automatic supports - heads, pillars that
+  bridge and brace each other, anchors on the model where nothing else fits - and a pad, shows
+  them in 3D and layer by layer, and slices; UVtools, which comes with the download, writes the
+  printer's format
 - Native file format `.volura` (files from version 0.1 are converted), unlimited undo
 - **3D import**: STL, OBJ, 3MF, PLY, OFF, AMF, glTF/GLB and COLLADA (DAE), with a progress
   bar. Every closed part becomes a group in its own color; slicer projects (PrusaSlicer,
@@ -512,5 +518,7 @@ build. The Qt libraries are separate files in the program folder and may be repl
 File > Slice uses CuraEngine (AGPL v3) as a separate program in the `curaengine` folder, with the
 printer profiles of Cura (LGPL v3) and printers made from the profiles of OrcaSlicer (AGPL v3) by
 `tools/fetch_orca_profiles.py`. Volura starts CuraEngine and reads the profiles as data; it does not
-contain or link to their code, so Volura itself stays under the MIT license. The source of
-CuraEngine is attached to every release as `CuraEngine-<version>-source.tar.gz`.
+contain or link to their code, so Volura itself stays under the MIT license. File > Slice for
+Resin uses the command line of UVtools (AGPL v3) the same way, from the `uvtools` folder, with
+the resin printer profiles that come with it. The sources of CuraEngine and UVtools are attached
+to every release as `CuraEngine-<version>-source.tar.gz` and `UVtools-<version>-source.tar.gz`.

@@ -21,6 +21,8 @@ HERE = Path(__file__).resolve().parent / "licenses"
 CURA_VERSION = "5.14.0"
 #: the OrcaSlicer release of the extra printer profiles (tools/fetch_orca_profiles.py)
 ORCA_VERSION = "2.5.0"
+#: the UVtools release of resin slicing (tools/fetch_uvtools.py)
+UVTOOLS_VERSION = "7.1.2"
 RULE = "=" * 78
 
 QT_NOTICE = """\
@@ -63,8 +65,17 @@ File > Slice uses CuraEngine and the printer profiles of UltiMaker Cura {version
   v3. The made files keep that license.
   Source: https://github.com/OrcaSlicer/OrcaSlicer/tree/v{orca}/resources/profiles
 
-Volura itself stays under the MIT license: it starts CuraEngine as a separate program and
-reads the profiles as data; it does not contain or link to their code.
+- File > Slice for Resin uses the command line of UVtools {uvtools} (UVtoolsCmd), (c) Tiago
+  Conceicao and contributors, under the AGPL v3. It is a separate program in the uvtools
+  folder, started by Volura to convert the layer images into the file format of a resin
+  printer; it is the unchanged UVtools of the official release, with the libraries it loads
+  (the .NET runtime, OpenCV through Emgu CV and others; their licenses are in the release of
+  UVtools). The resin printer and print profiles in uvtools/profiles come with UVtools.
+  Source code: https://github.com/sn4k3/UVtools/tree/v{uvtools}, and attached to every Volura
+  release on GitHub as UVtools-{uvtools}-source.tar.gz.
+
+Volura itself stays under the MIT license: it starts CuraEngine and UVtools as separate
+programs and reads the profiles as data; it does not contain or link to their code.
 
 Below follows the text of the AGPL v3."""
 
@@ -125,15 +136,17 @@ def build_text():
         f"Python                     {sys.version.split()[0]:<11} PSF-2.0\n",
         f"CuraEngine                 {CURA_VERSION:<11} AGPL-3.0 (a separate program)\n"
         f"Cura printer profiles      {CURA_VERSION:<11} LGPL-3.0 (materials CC0-1.0)\n"
-        f"OrcaSlicer printer profiles {ORCA_VERSION:<10} AGPL-3.0 (as data)\n",
+        f"OrcaSlicer printer profiles {ORCA_VERSION:<10} AGPL-3.0 (as data)\n"
+        f"UVtools (command line)     {UVTOOLS_VERSION:<11} AGPL-3.0 (a separate program)\n",
     ]
     parts.append(section(f"Qt 6 / PySide6 {qt}", QT_NOTICE))
     parts.append(section("GNU LESSER GENERAL PUBLIC LICENSE, version 3",
                          (HERE / "LGPL-3.0.txt").read_text(encoding="utf-8")))
     parts.append(section("GNU GENERAL PUBLIC LICENSE, version 3",
                          (HERE / "GPL-3.0.txt").read_text(encoding="utf-8")))
-    parts.append(section("CuraEngine and the Cura and OrcaSlicer printer profiles",
-                         CURA_NOTICE.format(version=CURA_VERSION, orca=ORCA_VERSION)))
+    parts.append(section("CuraEngine, UVtools and the printer profiles",
+                         CURA_NOTICE.format(version=CURA_VERSION, orca=ORCA_VERSION,
+                                            uvtools=UVTOOLS_VERSION)))
     parts.append(section("GNU AFFERO GENERAL PUBLIC LICENSE, version 3",
                          (HERE / "AGPL-3.0.txt").read_text(encoding="utf-8")))
     parts.append(files_section(f"manifold3d {version('manifold3d') or ''}", dist_license_files("manifold3d")))

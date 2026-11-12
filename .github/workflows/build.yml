@@ -51,6 +51,12 @@ jobs:
           path: curaengine
           key: curaengine-5.14.0-${{ runner.os }}-${{ hashFiles('tools/fetch_curaengine.py', 'tools/fetch_orca_profiles.py', 'volura/orca_gcode.py') }}
 
+      - name: Cache the resin converter
+        uses: actions/cache@v6
+        with:
+          path: uvtools
+          key: uvtools-${{ runner.os }}-${{ hashFiles('tools/fetch_uvtools.py') }}
+
       - name: CuraEngine and the printer profiles for File > Slice
         continue-on-error: true      # without it the build works, only File > Slice says so
         shell: bash
@@ -58,6 +64,12 @@ jobs:
           if [ ! -f curaengine/VERSION ]; then python tools/fetch_curaengine.py; fi
           # the printers of OrcaSlicer's profiles that Cura does not have
           if [ ! -f curaengine/resources/ORCA_VERSION ]; then python tools/fetch_orca_profiles.py; fi
+
+      - name: UVtools and the resin printer profiles for File > Slice for Resin
+        continue-on-error: true      # without it the build works, only resin slicing says so
+        shell: bash
+        run: |
+          if [ ! -f uvtools/VERSION ]; then python tools/fetch_uvtools.py; fi
 
       - name: Tests
         run: python -m pytest -q -n auto tests     # spread over the cores of the runner
@@ -88,12 +100,14 @@ jobs:
           echo "All versions: [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md)" >> release_notes.md
           cat release_notes.md
 
-      - name: Source of CuraEngine for the release (AGPL)
+      - name: Source of CuraEngine and UVtools for the release (AGPL)
         if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Linux'
         shell: bash
         run: |
           curl -fsSL -o dist/CuraEngine-5.14.0-source.tar.gz \
             https://github.com/Ultimaker/CuraEngine/archive/refs/tags/5.14.0.tar.gz
+          curl -fsSL -o dist/UVtools-7.1.2-source.tar.gz \
+            https://github.com/sn4k3/UVtools/archive/refs/tags/v7.1.2.tar.gz
 
       - name: Attach to the release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -105,3 +119,4 @@ jobs:
             dist/Volura-*.tar.gz
             dist/Volura-*.exe
             dist/CuraEngine-*-source.tar.gz
+            dist/UVtools-*-source.tar.gz

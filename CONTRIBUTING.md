@@ -45,6 +45,7 @@ source tree; fetch them once with:
 ```sh
 python tools/fetch_curaengine.py
 python tools/fetch_orca_profiles.py
+python tools/fetch_uvtools.py          # File > Slice for Resin
 ```
 
 ## Running the tests

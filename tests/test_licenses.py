@@ -22,7 +22,8 @@ def test_third_party_licenses(tmp_path):
                    "NumPy", "Python", "GNU AFFERO GENERAL PUBLIC LICENSE",
                    "https://github.com/Ultimaker/CuraEngine/tree/", "CC0",
                    "CuraEngine-5.14.0-source.tar.gz",
-                   "https://github.com/OrcaSlicer/OrcaSlicer/tree/v"):
+                   "https://github.com/OrcaSlicer/OrcaSlicer/tree/v",
+                   "https://github.com/sn4k3/UVtools/tree/v", "UVtools-7.1.2-source.tar.gz"):
         assert needle in text, needle
     # the Qt commercial licence of the wheels is not ours to ship
     assert "LicenseRef-Qt-Commercial" not in text

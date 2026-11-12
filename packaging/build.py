@@ -94,12 +94,18 @@ def add_linux_files():
 
 
 def add_slicer():
-    """CuraEngine and the Cura printer profiles next to the program, for File > Slice."""
+    """CuraEngine and the Cura printer profiles next to the program, for File > Slice, and
+    UVtools' command line with the resin printer profiles, for File > Slice for Resin."""
     engine = ROOT / "curaengine"
     if engine.is_dir():
         shutil.copytree(engine, DIST / "Volura" / "curaengine", dirs_exist_ok=True)
     else:
         print("No ./curaengine: this build cannot slice (tools/fetch_curaengine.py).")
+    uvtools = ROOT / "uvtools"
+    if uvtools.is_dir():
+        shutil.copytree(uvtools, DIST / "Volura" / "uvtools", dirs_exist_ok=True)
+    else:
+        print("No ./uvtools: this build cannot slice for resin (tools/fetch_uvtools.py).")
 
 
 def archive(system, arch):
