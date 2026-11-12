@@ -167,6 +167,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
   the rows lean up to 30 degrees backwards so the bits lean towards you. The mouth of a socket is
   chamfered so a bit finds its way in, and a ledge along the front takes a label. It lies on its
   block on the bed and prints without support
+- **Memory Card Holder** (Draw > Parts): a block that stands up to 12 SD cards, 12 microSD cards
+  and 12 USB sticks upright, every kind in a column of slots of its own size and a second row of
+  columns behind the first when you want it. The slots are open at the top and chamfered at their
+  mouth, and in front of every column the top dips down so you can pinch the card out there. The
+  holder lies on its block on the bed and prints without support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

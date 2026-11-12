@@ -26,9 +26,9 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, battery_holder, bin_rack, bit_holder, boxgen, bracket,
-               cable_chain, cable_clip, cam, dxf, enclosure, errors, fan_guard, fileio, gcode,
-               gears, gridfinity, grommet, hinge, hose_adapter, i18n, joints, keyschemes, knob,
-               label_plate, linking,
+               cable_chain, cable_clip, cam, card_holder, dxf, enclosure, errors, fan_guard,
+               fileio, gcode, gears, gridfinity, grommet, hinge, hose_adapter, i18n, joints,
+               keyschemes, knob, label_plate, linking,
                nesting, ops, pegboard, sheet3d, sheettools,
                svg,
                spacemouse, standoff, storage_bin, text3d, theme, threads, tie_mount,
@@ -916,6 +916,24 @@ class Settings:
             setattr(self, key, max(lo, min(hi, value)))
         self.bit_holder_label = self._bool("bit_holder_label", True)
         for key, default, lo, hi in (
+                ("card_holder_depth", 12.0, card_holder.DEPTH_MIN, card_holder.DEPTH_MAX),
+                ("card_holder_fit", 0.3, card_holder.FIT_MIN, card_holder.FIT_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        for key, default, lo, hi in (
+                ("card_holder_sd", 4, card_holder.SD_MIN, card_holder.SD_MAX),
+                ("card_holder_micro", 6, card_holder.MICRO_MIN, card_holder.MICRO_MAX),
+                ("card_holder_usb", 0, card_holder.USB_MIN, card_holder.USB_MAX),
+                ("card_holder_rows", 1, card_holder.ROWS_MIN, card_holder.ROWS_MAX)):
+            try:
+                value = int(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1126,6 +1144,9 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("bit_holder_cols", "bit_holder_rows", "bit_holder_depth", "bit_holder_fit",
                     "bit_holder_pitch", "bit_holder_angle", "bit_holder_label"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("card_holder_sd", "card_holder_micro", "card_holder_usb", "card_holder_rows",
+                    "card_holder_depth", "card_holder_fit"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2031,6 +2052,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                               tr("Add a block that stands 1/4 inch screwdriver bits upright in "
                                  "rows: the hexagonal sockets hold them by the flats, the rows "
                                  "lean towards you and the front has a ledge for a label"))
+        # ---- memory card holder
+        self.a_card_holder = A(tr("Memory Card Holder…"),
+                               lambda checked=False: self.card_holder_dialog(), None,
+                               "card_holder", False,
+                               tr("Add a block that stands SD cards, microSD cards and USB sticks "
+                                  "upright in slots of their own size: the slots are open at the "
+                                  "top and the front of a column dips down, so you can pinch the "
+                                  "card out"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2148,7 +2177,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_battery_holder, self.a_storage_bin, self.a_bin_rack,
                           self.a_cable_chain, self.a_gridfinity, self.a_pegboard,
                           self.a_hose_adapter, self.a_fan_guard, self.a_grommet, self.a_bracket,
-                          self.a_tie_mount, self.a_bit_holder))
+                          self.a_tie_mount, self.a_bit_holder, self.a_card_holder))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

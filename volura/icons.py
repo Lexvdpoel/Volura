@@ -326,6 +326,13 @@ SVG = {
                   f'<path d="M2.5 14.6 L21.5 14.6" {N} stroke="#9a9a9a" stroke-width="1.4"/>'
                   f'<path d="M5.5 18 L9 18 M11.5 18 L15 18" {N} stroke="#3b7dd8" '
                   f'stroke-width="1.4" stroke-linecap="round"/>',
+    # memory card holder: an SD card, a microSD card and a USB stick standing in a block
+    "card_holder": f'<rect x="3.5" y="2.5" width="7" height="10" rx="1.2" fill="#cfe0f5" {S()}/>'
+                   f'<rect x="12" y="5.5" width="3.6" height="7" rx="0.8" fill="#fff" '
+                   f'{S(w=1.2)}/>'
+                   f'<rect x="17" y="4" width="4" height="8.5" rx="1" fill="#cfe0f5" {S()}/>'
+                   f'<rect x="2.5" y="11" width="19" height="10.5" rx="2" fill="#eef2f7" {S()}/>'
+                   f'<path d="M2.5 14.6 L21.5 14.6" {N} stroke="#9a9a9a" stroke-width="1.4"/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

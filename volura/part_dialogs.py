@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QFontComboBox, QFormLayout, QLabel, QLineEdit, QPlainTextEdit,
                                QSpinBox)
 
-from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip, enclosure,
-               fan_guard, fonts, gears,
+from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
+               card_holder, enclosure, fan_guard, fonts, gears,
                gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, standoff,
                storage_bin, text3d, threads, tie_mount)
 from .i18n import tr
@@ -1321,6 +1321,87 @@ class BitHolderDialog(QDialog):
                 "depth": round(self.depth.value(), 6), "fit": round(self.fit.value(), 6),
                 "pitch": round(self.pitch.value(), 6), "angle": round(self.angle.value(), 6),
                 "label": self.label.isChecked()}
+
+
+class CardHolderDialog(QDialog):
+    """The "Memory Card Holder…" dialog: a block that stands cards and USB sticks upright.
+
+    The three counts say how many cards of every kind stand in the block, the rows how many rows of
+    columns there are, the depth how far the cards go in and the fit how much wider a slot is than
+    its card. Under the fields the block the holder will have, because a kind without cards is left
+    out and the block is narrower for it; with not a single card there is nothing to print and OK
+    waits. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Memory card holder"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step, tip):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            sp.setToolTip(tip)
+            return sp
+
+        def count(lo, hi, value, tip):
+            sp = QSpinBox()
+            sp.setRange(lo, hi)
+            sp.setValue(int(value))
+            sp.setToolTip(tip)
+            return sp
+
+        self.sd = count(card_holder.SD_MIN, card_holder.SD_MAX, s.card_holder_sd,
+                        tr("How many SD cards stand in the block"))
+        self.micro = count(card_holder.MICRO_MIN, card_holder.MICRO_MAX, s.card_holder_micro,
+                           tr("How many microSD cards stand in the block"))
+        self.usb = count(card_holder.USB_MIN, card_holder.USB_MAX, s.card_holder_usb,
+                         tr("How many USB sticks stand in the block"))
+        self.rows = count(card_holder.ROWS_MIN, card_holder.ROWS_MAX, s.card_holder_rows,
+                          tr("How many rows of cards there are"))
+        self.depth = spin(card_holder.DEPTH_MIN, card_holder.DEPTH_MAX, s.card_holder_depth, 1.0,
+                          tr("How far a card goes into the block"))
+        self.fit = spin(card_holder.FIT_MIN, card_holder.FIT_MAX, s.card_holder_fit, 0.05,
+                        tr("How much wider a slot is than its card, on every side"))
+        self.fit.setDecimals(2)
+        self.info = QLabel()
+        lay.addRow(tr("SD cards"), self.sd)
+        lay.addRow(tr("microSD cards"), self.micro)
+        lay.addRow(tr("USB sticks"), self.usb)
+        lay.addRow(tr("Rows"), self.rows)
+        lay.addRow(tr("Slot depth"), self.depth)
+        lay.addRow(tr("Fit"), self.fit)
+        lay.addRow("", self.info)
+        for w in (self.sd, self.micro, self.usb, self.rows, self.depth, self.fit):
+            w.valueChanged.connect(self._changed)
+        self.bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.bb.accepted.connect(self.accept)
+        self.bb.rejected.connect(self.reject)
+        lay.addRow(self.bb)
+        self._changed()
+
+    def _changed(self, *_):
+        o = self.options()
+        try:
+            s = card_holder.sizes(**o)
+        except ValueError as e:
+            self.info.setText(str(e))
+            self.bb.button(QDialogButtonBox.Ok).setEnabled(False)
+            return
+        self.bb.button(QDialogButtonBox.Ok).setEnabled(True)
+        self.info.setText(tr("{s} SD, {m} microSD, {u} USB, block {w:g} × {l:g} × {h:g} mm")
+                          .format(s=s["sd"], m=s["micro"], u=s["usb"], w=s["width"],
+                                  l=s["length"], h=s["height"]))
+
+    def options(self) -> dict:
+        return {"sd": int(self.sd.value()), "micro": int(self.micro.value()),
+                "usb": int(self.usb.value()), "rows": int(self.rows.value()),
+                "depth": round(self.depth.value(), 6), "fit": round(self.fit.value(), 6)}
 
 
 class HoseAdapterDialog(QDialog):
