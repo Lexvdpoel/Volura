@@ -217,6 +217,15 @@ The interface is available in English and Dutch (*Window > Preferences > General
   wall - and channels under the floor lead the water out from under the pot. The
   saucer is 15 mm high and 10 mm all round larger than the bottom of the pot, and prints beside it
   with 5 mm in between, so one print gives you both
+- **Cable Winder** (Draw > Parts): an H-shaped plate you wind a loose cable round and hang up. You
+  enter the length of the plate (40 to 200 mm), its width (20 to 100 mm) and its thickness (2 to
+  6 mm), and how wide (4 to 30 mm) and how deep (5 to 60 mm) a slot is cut from the middle of each
+  short end. The two ends are the flanges that keep the wound cable from sliding off and the middle
+  part between the two slots is the barrel it winds on - the dialog says how long that barrel is.
+  The outside corners round with 3 mm and the closed end of every slot with half the slot width, so
+  nothing snags the cable, and an optional keyhole pinches the end of the cable while you wind. An
+  optional label engraves itself 0.6 mm deep in the top face of the middle part. It prints lying
+  flat, so every wall is pulled straight up and nothing overhangs or needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

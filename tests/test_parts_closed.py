@@ -26,7 +26,8 @@ import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import (battery_holder, bin_rack, bit_holder, bracket, cable_chain,  # noqa: E402
-                    cable_clip, card_holder, drawer_organizer, enclosure, fan_guard, fonts, gears,
+                    cable_clip, cable_winder, card_holder, drawer_organizer, enclosure, fan_guard,
+                    fonts, gears,
                     gridfinity,
                     grommet, hinge, hose_adapter, knob, label_plate, pegboard, phone_stand,
                     plant_pot, spool_adapter, standoff, storage_bin, text3d, tie_mount, wall_hook)
@@ -84,6 +85,13 @@ def bin_label(**kw):
                                                    ("length", "width", "height", "wall", "floor",
                                                     "radius", "scoop", "stack")}))
     return made
+
+
+def winder(**kw):
+    """A cable winder, whose engraved label needs the fonts of this system when it has one."""
+    if str(kw.get("label", "")).strip():
+        need_fonts()
+    return [cable_winder.cable_winder(**kw)]
 
 
 CASES = [
@@ -260,6 +268,12 @@ CASES = [
         diameter=40.0, height=30.0, taper=50.0, wall=1.2, holes=1, shape="hexagon", saucer=False)),
     ("plant pot large nine drain holes", lambda: plant_pot.plant_pot(
         diameter=250.0, height=250.0, taper=90.0, wall=4.0, holes=9, shape="round", saucer=True)),
+
+    ("cable winder default", lambda: winder()),
+    ("cable winder small no clamp", lambda: winder(
+        length=40.0, width=20.0, thickness=2.0, slot=8.0, depth=5.0, keyhole=False)),
+    ("cable winder large labelled", lambda: winder(
+        length=200.0, width=100.0, thickness=6.0, slot=30.0, depth=60.0, label="VOLURA")),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

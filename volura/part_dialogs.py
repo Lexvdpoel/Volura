@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QSpinBox)
 
 from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
-               card_holder, drawer_organizer, enclosure, fan_guard, fonts, gears,
+               cable_winder, card_holder, drawer_organizer, enclosure, fan_guard, fonts, gears,
                gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, phone_stand,
                plant_pot, spool_adapter, standoff, storage_bin, text3d, threads, tie_mount,
                wall_hook)
@@ -1816,6 +1816,85 @@ class PlantPotDialog(QDialog):
                 "height": round(self.height.value(), 6), "taper": round(self.taper.value(), 6),
                 "wall": round(self.wall.value(), 6), "holes": int(self.holes.value()),
                 "shape": self.shape.currentData(), "saucer": self.saucer.isChecked()}
+
+
+class CableWinderDialog(QDialog):
+    """The "Cable Winder…" dialog: an H-shaped plate to wind a cable round.
+
+    The length is how long the plate is and the width how wide; the thickness is the plastic. The
+    slot is how wide a slot is cut from each short end and the depth how deep, so the cable winds
+    round the middle part between the two slots. The cable clamp is the keyhole that pinches the end
+    of the cable and the label is engraved on the middle part. Under the fields the length of that
+    middle part, because that is how much cable it holds. The values come from Settings and are
+    remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Cable Winder"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0, suffix=" mm"):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(suffix)
+            sp.setValue(float(value))
+            return sp
+
+        self.length = spin(cable_winder.LENGTH_MIN, cable_winder.LENGTH_MAX, s.cable_winder_length,
+                           5.0)
+        self.length.setToolTip(tr("How long the plate is, from one end to the other"))
+        self.width = spin(cable_winder.WIDTH_MIN, cable_winder.WIDTH_MAX, s.cable_winder_width, 5.0)
+        self.width.setToolTip(tr("How wide the plate is; its ends are the flanges that keep the "
+                                 "wound cable from sliding off"))
+        self.thickness = spin(cable_winder.THICKNESS_MIN, cable_winder.THICKNESS_MAX,
+                              s.cable_winder_thickness, 0.5)
+        self.thickness.setToolTip(tr("How thick the plate is; it prints lying flat"))
+        self.slot = spin(cable_winder.SLOT_MIN, cable_winder.SLOT_MAX, s.cable_winder_slot, 1.0)
+        self.slot.setToolTip(tr("How wide a slot is cut from each end; the cable winds between the "
+                                "two ends round the middle part"))
+        self.depth = spin(cable_winder.DEPTH_MIN, cable_winder.DEPTH_MAX, s.cable_winder_depth, 1.0)
+        self.depth.setToolTip(tr("How deep a slot is cut from each end; the deeper it is, the "
+                                 "shorter the middle part the cable winds on"))
+        self.keyhole = QCheckBox(tr("Cable clamp"))
+        self.keyhole.setChecked(bool(s.cable_winder_keyhole))
+        self.keyhole.setToolTip(tr("A small keyhole in one slot to pinch the end of the cable while "
+                                   "you wind"))
+        self.label = QLineEdit(s.cable_winder_label)
+        self.label.setPlaceholderText(tr("No label"))
+        self.label.setToolTip(tr("Text engraved in the top face of the middle part; leave it empty "
+                                  "for no engraving"))
+        self.info = QLabel()
+        lay.addRow(tr("Length"), self.length)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Thickness"), self.thickness)
+        lay.addRow(tr("Slot width"), self.slot)
+        lay.addRow(tr("Slot depth"), self.depth)
+        lay.addRow("", self.keyhole)
+        lay.addRow(tr("Label"), self.label)
+        lay.addRow("", self.info)
+        for w in (self.length, self.width, self.thickness, self.slot, self.depth):
+            w.valueChanged.connect(self._changed)
+        self.keyhole.toggled.connect(self._changed)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._changed()
+
+    def _changed(self, *_):
+        s = cable_winder.sizes(**self.options())
+        self.info.setText(tr("Middle part {m:.1f} mm").format(m=s["middle"]))
+
+    def options(self) -> dict:
+        return {"length": round(self.length.value(), 6),
+                "width": round(self.width.value(), 6),
+                "thickness": round(self.thickness.value(), 6),
+                "slot": round(self.slot.value(), 6), "depth": round(self.depth.value(), 6),
+                "keyhole": self.keyhole.isChecked(), "label": self.label.text()}
 
 
 class HoseAdapterDialog(QDialog):

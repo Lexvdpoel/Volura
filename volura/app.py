@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, battery_holder, bin_rack, bit_holder, boxgen, bracket,
-               cable_chain, cable_clip, cam, card_holder, drawer_organizer, dxf, enclosure, errors,
+               cable_chain, cable_clip, cable_winder, cam, card_holder, drawer_organizer, dxf, enclosure, errors,
                fan_guard,
                fileio, gcode, gears, gridfinity, grommet, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking,
@@ -1074,6 +1074,20 @@ class Settings:
             self.plant_pot_shape = plant_pot.POT_SHAPES[0]
         self.plant_pot_saucer = self._bool("plant_pot_saucer", True)
         for key, default, lo, hi in (
+                ("cable_winder_length", 80.0, cable_winder.LENGTH_MIN, cable_winder.LENGTH_MAX),
+                ("cable_winder_width", 40.0, cable_winder.WIDTH_MIN, cable_winder.WIDTH_MAX),
+                ("cable_winder_thickness", 3.0, cable_winder.THICKNESS_MIN,
+                 cable_winder.THICKNESS_MAX),
+                ("cable_winder_slot", 10.0, cable_winder.SLOT_MIN, cable_winder.SLOT_MAX),
+                ("cable_winder_depth", 15.0, cable_winder.DEPTH_MIN, cable_winder.DEPTH_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        self.cable_winder_keyhole = self._bool("cable_winder_keyhole", True)
+        self.cable_winder_label = str(self.q.value("cable_winder_label", "") or "")
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1315,6 +1329,10 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("plant_pot_diameter", "plant_pot_height", "plant_pot_taper", "plant_pot_wall",
                     "plant_pot_holes", "plant_pot_shape", "plant_pot_saucer"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("cable_winder_length", "cable_winder_width", "cable_winder_thickness",
+                    "cable_winder_slot", "cable_winder_depth", "cable_winder_keyhole",
+                    "cable_winder_label"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2275,6 +2293,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                 "outwards, its floor has drain holes and channels under it lead "
                                 "the water out; the saucer that catches that water prints beside "
                                 "it"))
+        # ---- cable winder
+        self.a_cable_winder = A(tr("Cable Winder…"),
+                                lambda checked=False: self.cable_winder_dialog(), None,
+                                "cable_winder", False,
+                                tr("Add an H-shaped plate to wind a cable round: a slot is cut "
+                                   "from each end so the cable winds on the middle part, the ends "
+                                   "keep it in, a keyhole clamps its end and it prints lying flat "
+                                   "without support"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2394,7 +2420,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_hose_adapter, self.a_fan_guard, self.a_grommet, self.a_bracket,
                           self.a_tie_mount, self.a_bit_holder, self.a_card_holder,
                           self.a_wall_hook, self.a_phone_stand, self.a_spool_adapter,
-                          self.a_drawer_organizer, self.a_plant_pot))
+                          self.a_drawer_organizer, self.a_plant_pot, self.a_cable_winder))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

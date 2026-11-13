@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QSpinBox, QTextBrowser, QVBoxLayout)
 
 from . import (background, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
-               card_holder, drawer_organizer, enclosure, fan_guard, gears,
+               cable_winder, card_holder, drawer_organizer, enclosure, fan_guard, gears,
                gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard,
                phone_stand, plant_pot, slicer, spool_adapter, standoff, storage_bin, text3d, theme,
                threads, tie_mount, wall_hook)
@@ -37,7 +37,7 @@ from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
 from .part_dialogs import (BatteryHolderDialog, BinRackDialog, BitHolderDialog, BracketDialog,
-                           CableChainDialog, CableClipDialog, CardHolderDialog,
+                           CableChainDialog, CableClipDialog, CableWinderDialog, CardHolderDialog,
                            DrawerOrganizerDialog, FanGuardDialog,
                            GridfinityDialog, GrommetDialog,
                            HingeDialog, HoseAdapterDialog,
@@ -1593,6 +1593,53 @@ class PrintMixin:
             self.view.set_status(tr("Plant pot failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the plant pot…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ cable winder
+    def cable_winder_dialog(self):
+        """Draw > Parts > Cable Winder…: an H-shaped plate to wind a cable round."""
+        dlg = CableWinderDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("length", "width", "thickness", "slot", "depth", "keyhole", "label"):
+            setattr(self.settings, "cable_winder_" + key, options[key])
+        self.settings.save()
+        made = self.make_cable_winder_model(options)
+        self.setFocus()
+        return made
+
+    def make_cable_winder_model(self, options):
+        """The winder lying flat as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("length", "width", "thickness", "slot", "depth", "keyhole",
+                                        "label")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the cable winder…"))
+            m = cable_winder.cable_winder(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the winder away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Cable winder"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Cable winder added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Cable winder failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the cable winder…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter
