@@ -3,6 +3,21 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.49 — 2026-11-13
+
+### New
+- **Plant Pot** (Draw > Parts): a tapered flower pot, round or six-sided, with drain holes and the
+  saucer that catches the water beside it. It prints upright without support: the wall leans out
+  at most 45 degrees, the rounded rim grows out of it at 45 degrees, and narrow channels under the
+  floor lead the water out from under the pot.
+- **Infill pattern** (File > Slice): choose grid, lines, triangles, tri-hexagon, cubic, gyroid,
+  honeycomb, concentric, zig zag, cross or lightning, or keep the pattern of the profile.
+
+### Improved
+- The print preview draws every line as wide and high as it prints, worked out from the filament
+  it pushes out, so neighbouring lines lie against each other as they do on the bed; the lines
+  have a rounded, shaded top so you can still tell them apart.
+
 ## 0.2.48 — 2026-11-13
 
 ### New
