@@ -26,7 +26,8 @@ import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import (battery_holder, bin_rack, bit_holder, bracket, cable_chain,  # noqa: E402
-                    cable_clip, card_holder, enclosure, fan_guard, fonts, gears, gridfinity,
+                    cable_clip, card_holder, drawer_organizer, enclosure, fan_guard, fonts, gears,
+                    gridfinity,
                     grommet, hinge, hose_adapter, knob, label_plate, pegboard, phone_stand,
                     spool_adapter, standoff, storage_bin, text3d, tie_mount, wall_hook)
 from volura import ops  # noqa: E402
@@ -245,6 +246,14 @@ CASES = [
         hub=25.0, depth=5.0, lip=2.0, bearing=True, spokes=0)]),
     ("spool adapter large rod eight spokes", lambda: [spool_adapter.spool_adapter(
         hub=90.0, depth=40.0, lip=10.0, rod=30.0, spokes=8)]),
+
+    ("drawer organizer default", lambda: [drawer_organizer.drawer_organizer()]),
+    ("drawer organizer small two by two", lambda: [drawer_organizer.drawer_organizer(
+        length=60.0, width=45.0, height=20.0, clearance=1.0, cols=2, rows=2, wall=1.6, floor=1.0,
+        radius=3.0, finger=True)]),
+    ("drawer organizer large no clearance", lambda: [drawer_organizer.drawer_organizer(
+        length=300.0, width=240.0, height=100.0, clearance=0.0, cols=6, rows=4, wall=3.0,
+        floor=2.0, radius=10.0, finger=True)]),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

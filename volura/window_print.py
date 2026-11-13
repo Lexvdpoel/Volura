@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QSpinBox, QTextBrowser, QVBoxLayout)
 
 from . import (background, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
-               card_holder, enclosure, fan_guard, gears,
+               card_holder, drawer_organizer, enclosure, fan_guard, gears,
                gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard,
                phone_stand, slicer, spool_adapter, standoff, storage_bin, text3d, theme, threads,
                tie_mount, wall_hook)
@@ -37,7 +37,8 @@ from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
 from .part_dialogs import (BatteryHolderDialog, BinRackDialog, BitHolderDialog, BracketDialog,
-                           CableChainDialog, CableClipDialog, CardHolderDialog, FanGuardDialog,
+                           CableChainDialog, CableClipDialog, CardHolderDialog,
+                           DrawerOrganizerDialog, FanGuardDialog,
                            GridfinityDialog, GrommetDialog,
                            HingeDialog, HoseAdapterDialog,
                            KnobDialog, LabelPlateDialog, PegboardDialog, PhoneStandDialog,
@@ -1489,6 +1490,54 @@ class PrintMixin:
             self.view.set_status(tr("Spool adapter failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the spool adapter…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ drawer organizer
+    def drawer_organizer_dialog(self):
+        """Draw > Parts > Drawer Organizer…: a tray that drops into a drawer and divides it."""
+        dlg = DrawerOrganizerDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("length", "width", "height", "clearance", "cols", "rows", "wall", "floor",
+                    "radius", "finger"):
+            setattr(self.settings, "drawer_organizer_" + key, options[key])
+        self.settings.save()
+        made = self.make_drawer_organizer_model(options)
+        self.setFocus()
+        return made
+
+    def make_drawer_organizer_model(self, options):
+        """The tray on the bed as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("length", "width", "height", "clearance", "cols", "rows",
+                                        "wall", "floor", "radius", "finger")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the drawer organizer…"))
+            m = drawer_organizer.drawer_organizer(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the tray away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Drawer organizer"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Drawer organizer added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Drawer organizer failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the drawer organizer…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter

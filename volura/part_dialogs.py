@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QSpinBox)
 
 from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
-               card_holder, enclosure, fan_guard, fonts, gears,
+               card_holder, drawer_organizer, enclosure, fan_guard, fonts, gears,
                gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, phone_stand,
                spool_adapter, standoff, storage_bin, text3d, threads, tie_mount, wall_hook)
 from .i18n import tr
@@ -1637,6 +1637,102 @@ class SpoolAdapterDialog(QDialog):
         return {"hub": round(self.hub.value(), 6), "depth": round(self.depth.value(), 6),
                 "lip": round(self.lip.value(), 6), "rod": round(self.rod.value(), 6),
                 "bearing": self.bearing.isChecked(), "spokes": int(self.spokes.value())}
+
+
+class DrawerOrganizerDialog(QDialog):
+    """The "Drawer Organizer…" dialog: a tray that drops into a drawer and divides it.
+
+    The length and the width are the inside of the drawer and the clearance how much smaller the
+    tray is made on every side so it drops in; the height is how high it stands. The columns and
+    rows say into how many equal compartments it is divided, the wall and the floor how thick its
+    plastic is and the radius how round the inside corners are. The finger notches cut the top of
+    every inner wall so you get a finger down beside an item. Under the fields the size of one
+    compartment, because that is what you measure the things you sort against. The values come from
+    Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Drawer organizer"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.length = spin(drawer_organizer.LENGTH_MIN, drawer_organizer.LENGTH_MAX,
+                           s.drawer_organizer_length, 5.0)
+        self.length.setToolTip(tr("The inside length of the drawer the tray drops into"))
+        self.width = spin(drawer_organizer.WIDTH_MIN, drawer_organizer.WIDTH_MAX,
+                          s.drawer_organizer_width, 5.0)
+        self.width.setToolTip(tr("The inside width of the drawer the tray drops into"))
+        self.height = spin(drawer_organizer.HEIGHT_MIN, drawer_organizer.HEIGHT_MAX,
+                           s.drawer_organizer_height, 5.0)
+        self.height.setToolTip(tr("How high the tray stands in the drawer"))
+        self.clearance = spin(drawer_organizer.CLEAR_MIN, drawer_organizer.CLEAR_MAX,
+                              s.drawer_organizer_clearance, 0.1)
+        self.clearance.setToolTip(tr("How much smaller the tray is made on every side, so it drops in"))
+        self.cols = QSpinBox()
+        self.cols.setRange(drawer_organizer.COLS_MIN, drawer_organizer.COLS_MAX)
+        self.cols.setValue(int(s.drawer_organizer_cols))
+        self.cols.setToolTip(tr("How many compartments along the length of the drawer"))
+        self.rows = QSpinBox()
+        self.rows.setRange(drawer_organizer.ROWS_MIN, drawer_organizer.ROWS_MAX)
+        self.rows.setValue(int(s.drawer_organizer_rows))
+        self.rows.setToolTip(tr("How many compartments along the width of the drawer"))
+        self.wall = spin(drawer_organizer.WALL_MIN, drawer_organizer.WALL_MAX,
+                         s.drawer_organizer_wall, 0.2)
+        self.wall.setToolTip(tr("How thick the walls and the dividers are"))
+        self.floor = spin(drawer_organizer.FLOOR_MIN, drawer_organizer.FLOOR_MAX,
+                          s.drawer_organizer_floor, 0.2)
+        self.floor.setToolTip(tr("How thick the floor the tray stands on is"))
+        self.radius = spin(drawer_organizer.RADIUS_MIN, drawer_organizer.RADIUS_MAX,
+                           s.drawer_organizer_radius, 0.5)
+        self.radius.setToolTip(tr("How round the inside corners of the compartments are"))
+        self.finger = QCheckBox(tr("Finger notches"))
+        self.finger.setChecked(bool(s.drawer_organizer_finger))
+        self.finger.setToolTip(tr("A half-round notch in the top of every inner wall, so you can "
+                                  "lift an item out from between two dividers"))
+        self.info = QLabel()
+        lay.addRow(tr("Length (drawer inside)"), self.length)
+        lay.addRow(tr("Width (drawer inside)"), self.width)
+        lay.addRow(tr("Height"), self.height)
+        lay.addRow(tr("Clearance"), self.clearance)
+        lay.addRow(tr("Columns"), self.cols)
+        lay.addRow(tr("Rows"), self.rows)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Floor"), self.floor)
+        lay.addRow(tr("Radius"), self.radius)
+        lay.addRow("", self.finger)
+        lay.addRow("", self.info)
+        for w in (self.length, self.width, self.height, self.clearance, self.cols, self.rows,
+                  self.wall, self.floor, self.radius):
+            w.valueChanged.connect(self._changed)
+        self.finger.toggled.connect(self._changed)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._changed()
+
+    def _changed(self, *_):
+        s = drawer_organizer.sizes(**self.options())
+        self.info.setText(tr("Compartment {l:.1f} × {w:.1f} mm")
+                          .format(l=s["compartment_length"], w=s["compartment_width"]))
+
+    def options(self) -> dict:
+        return {"length": round(self.length.value(), 6), "width": round(self.width.value(), 6),
+                "height": round(self.height.value(), 6),
+                "clearance": round(self.clearance.value(), 6), "cols": int(self.cols.value()),
+                "rows": int(self.rows.value()), "wall": round(self.wall.value(), 6),
+                "floor": round(self.floor.value(), 6), "radius": round(self.radius.value(), 6),
+                "finger": self.finger.isChecked()}
 
 
 class HoseAdapterDialog(QDialog):

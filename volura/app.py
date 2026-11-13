@@ -26,7 +26,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, battery_holder, bin_rack, bit_holder, boxgen, bracket,
-               cable_chain, cable_clip, cam, card_holder, dxf, enclosure, errors, fan_guard,
+               cable_chain, cable_clip, cam, card_holder, drawer_organizer, dxf, enclosure, errors,
+               fan_guard,
                fileio, gcode, gears, gridfinity, grommet, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking,
                nesting, ops, pegboard, phone_stand, sheet3d, sheettools,
@@ -1026,6 +1027,34 @@ class Settings:
         self.spool_adapter_spokes = max(0, min(spool_adapter.SPOKES_MAX, spokes))
         self.spool_adapter_bearing = self._bool("spool_adapter_bearing", False)
         for key, default, lo, hi in (
+                ("drawer_organizer_length", 200.0, drawer_organizer.LENGTH_MIN,
+                 drawer_organizer.LENGTH_MAX),
+                ("drawer_organizer_width", 150.0, drawer_organizer.WIDTH_MIN,
+                 drawer_organizer.WIDTH_MAX),
+                ("drawer_organizer_height", 50.0, drawer_organizer.HEIGHT_MIN,
+                 drawer_organizer.HEIGHT_MAX),
+                ("drawer_organizer_clearance", 1.0, drawer_organizer.CLEAR_MIN,
+                 drawer_organizer.CLEAR_MAX),
+                ("drawer_organizer_wall", 1.6, drawer_organizer.WALL_MIN, drawer_organizer.WALL_MAX),
+                ("drawer_organizer_floor", 1.2, drawer_organizer.FLOOR_MIN,
+                 drawer_organizer.FLOOR_MAX),
+                ("drawer_organizer_radius", 4.0, drawer_organizer.RADIUS_MIN,
+                 drawer_organizer.RADIUS_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        for key, default, lo, hi in (
+                ("drawer_organizer_cols", 3, drawer_organizer.COLS_MIN, drawer_organizer.COLS_MAX),
+                ("drawer_organizer_rows", 2, drawer_organizer.ROWS_MIN, drawer_organizer.ROWS_MAX)):
+            try:
+                value = int(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        self.drawer_organizer_finger = self._bool("drawer_organizer_finger", True)
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1259,6 +1288,11 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("spool_adapter_hub", "spool_adapter_depth", "spool_adapter_lip",
                     "spool_adapter_rod", "spool_adapter_bearing", "spool_adapter_spokes"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("drawer_organizer_length", "drawer_organizer_width", "drawer_organizer_height",
+                    "drawer_organizer_clearance", "drawer_organizer_cols", "drawer_organizer_rows",
+                    "drawer_organizer_wall", "drawer_organizer_floor", "drawer_organizer_radius",
+                    "drawer_organizer_finger"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2202,6 +2236,15 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                     "turns true on a thin rod or the 608 bearing of a spool "
                                     "holder; it stands on a flange that keeps it from sliding in "
                                     "and spokes hold it together where there is plastic to save"))
+        # ---- drawer organizer
+        self.a_drawer_organizer = A(tr("Drawer Organizer…"),
+                                    lambda checked=False: self.drawer_organizer_dialog(), None,
+                                    "drawer_organizer", False,
+                                    tr("Add a tray that drops into a drawer and divides it into "
+                                       "compartments; it is made a little smaller than the drawer "
+                                       "so it drops in, its compartments have rounded corners you "
+                                       "scoop out and its inner walls have a finger notch to lift "
+                                       "an item out"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2320,7 +2363,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_cable_chain, self.a_gridfinity, self.a_pegboard,
                           self.a_hose_adapter, self.a_fan_guard, self.a_grommet, self.a_bracket,
                           self.a_tie_mount, self.a_bit_holder, self.a_card_holder,
-                          self.a_wall_hook, self.a_phone_stand, self.a_spool_adapter))
+                          self.a_wall_hook, self.a_phone_stand, self.a_spool_adapter,
+                          self.a_drawer_organizer))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

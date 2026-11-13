@@ -353,6 +353,14 @@ SVG = {
                      f'<path d="M12 6 L12 18 M6.8 9 L17.2 15 M6.8 15 L17.2 9" {N} '
                      f'stroke="#3b7dd8" stroke-width="1.6" stroke-linecap="round"/>'
                      f'<circle cx="12" cy="12" r="2.4" fill="#fff" {S(w=1.2)}/>',
+    # drawer organizer: a tray with rounded corners, divided into compartments, with finger notches
+    "drawer_organizer": f'<rect x="2.5" y="5" width="19" height="14" rx="3" fill="#eef2f7" {S()}/>'
+                        f'<path d="M12 5 L12 19 M2.5 12 L21.5 12" {N} stroke="#9a9a9a" '
+                        f'stroke-width="1.4"/>'
+                        f'<path d="M9.5 5 A2.5 2.5 0 0 0 14.5 5" {N} stroke="#3b7dd8" '
+                        f'stroke-width="1.6"/>'
+                        f'<path d="M2.5 9.5 A2.5 2.5 0 0 0 2.5 14.5" {N} stroke="#3b7dd8" '
+                        f'stroke-width="1.6"/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

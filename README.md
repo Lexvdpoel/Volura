@@ -198,6 +198,14 @@ The interface is available in English and Dutch (*Window > Preferences > General
   a rod of 5 to 30 mm or ask for a pocket that a 608 bearing presses into with the axle through
   under it; spokes hold the hub together where there is plastic to save. It prints flat on its
   flange, so the pockets are open at the top and nothing needs support
+- **Drawer Organizer** (Draw > Parts): a tray that drops into a drawer and divides it into
+  `cols` by `rows` equal compartments. You enter the inside of the drawer (40 to 300 mm each way)
+  and how high the tray stands (15 to 120 mm); it is made a little smaller on every side so it drops
+  in without forcing. The walls and dividers are 1.2 to 4 mm and the floor 0.8 to 3 mm, the inside
+  corners of the compartments are rounded so you scoop things out and the tray cleans easily, and a
+  half-round finger notch in the top of every inner wall lets you lift an item out from between two
+  dividers. It prints upright on its floor, so every wall is pulled straight up and nothing needs
+  support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is
