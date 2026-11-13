@@ -3,6 +3,20 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.50 — 2026-11-13
+
+### New
+- **Lithophane** (Draw > Parts): turn a photo into a thin plate that shows the picture with a
+  light behind it - dark is thick, light is thin. Choose the width, the thinnest and thickest
+  plastic, a flat frame and how fine the detail is, or invert it; it prints standing up.
+- **Cable Winder** (Draw > Parts): an H-shaped plate to wind a loose cable round, with rounded
+  slots, a notch that clamps the end of the cable and an optional engraved label. It prints flat
+  without any overhang.
+
+### Improved
+- File > Slice opens much faster after the first time: the printer profiles are read once, with
+  several threads, and kept in a cache that is read again after an update.
+
 ## 0.2.49 — 2026-11-13
 
 ### New
