@@ -7,10 +7,13 @@ how the print sticks to the bed; everything else comes from the profile. The cho
 """
 from __future__ import annotations
 
+import os
+
+from PySide6.QtCore import QStandardPaths
 from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel,
                                QSpinBox)
 
-from . import cura_profiles
+from . import __version__, cura_profiles
 from .i18n import tr, tr_noop
 
 #: one library per resources folder, kept for the session: reading it takes a while
@@ -37,12 +40,19 @@ def is_loaded(resources: str) -> bool:
     return resources in _LIBRARIES
 
 
+def cache_path() -> str:
+    """Where the profiles read once are kept for the next time (see `Library.load`)."""
+    folder = QStandardPaths.writableLocation(QStandardPaths.CacheLocation)
+    return os.path.join(folder, "cura-profiles.cache") if folder else ""
+
+
 def library(resources: str) -> cura_profiles.Library:
-    """The profile library of `resources`, read completely the first time it is asked for."""
+    """The profile library of `resources`, read completely the first time it is asked for:
+    from the cache when it is still good, otherwise from the files and into the cache."""
     lib = _LIBRARIES.get(resources)
     if lib is None:
         lib = cura_profiles.Library(resources)
-        lib.machines, lib.qualities, lib.variants, lib.materials     # read it all now
+        lib.load(cache_path() or None, __version__)
         _LIBRARIES[resources] = lib
     return lib
 

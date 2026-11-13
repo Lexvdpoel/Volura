@@ -297,6 +297,58 @@ def test_what_curaengine_gets(library):
     json.dumps(doc)                                         # all of it is plain JSON
 
 
+# ------------------------------------------------------------------ reading it all at once
+
+def _everything(lib):
+    return (lib.machines, [(p.id, p.name, p.metadata, p.values) for p in lib.qualities],
+            [(p.id, p.metadata, p.values) for p in lib.variants],
+            [(p.id, p.metadata, p.values) for p in lib.materials])
+
+
+def test_load_reads_what_the_lazy_library_reads(library):
+    lazy = _everything(cura_profiles.Library(library.root))
+    assert library.load() is False
+    assert _everything(library) == lazy
+
+
+def test_load_keeps_a_cache_and_reads_it_back(library, tmp_path):
+    cache = str(tmp_path / "cache" / "profiles.cache")
+    assert library.load(cache, "1.0") is False, "there was no cache yet"
+    again = cura_profiles.Library(library.root)
+    assert again.load(cache, "1.0") is True, "the cache was not used"
+    assert _everything(again) == _everything(library)
+    st = _choose(again)                                     # and it slices the same
+    assert st.global_settings()["layer_height"] == pytest.approx(0.2)
+
+
+def test_a_cache_of_another_version_or_a_broken_one_is_read_again(library, tmp_path):
+    cache = str(tmp_path / "profiles.cache")
+    library.load(cache, "1.0")
+    assert cura_profiles.Library(library.root).load(cache, "1.1") is False
+    assert cura_profiles.Library(library.root).load(cache, "1.1") is True, "not written anew"
+    with open(cache, "wb") as fh:
+        fh.write(b"not a cache")
+    fresh = cura_profiles.Library(library.root)
+    assert fresh.load(cache, "1.1") is False
+    assert _everything(fresh) == _everything(library)
+
+
+def test_a_cache_is_read_again_when_the_profiles_change(library, tmp_path):
+    cache = str(tmp_path / "profiles.cache")
+    library.load(cache)
+    folder = os.path.join(library.root, "quality")
+    st = os.stat(folder)
+    os.utime(folder, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    assert cura_profiles.Library(library.root).load(cache) is False
+
+
+def test_a_cache_that_cannot_be_written_is_no_problem(library, tmp_path):
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    assert library.load(str(blocker / "sub" / "profiles.cache")) is False
+    assert library.machines
+
+
 # ------------------------------------------------------------------ the real profiles
 
 REAL = slicer.find_resources()

@@ -22,7 +22,10 @@ hands CuraEngine only the results, so this file does that too, the way Cura does
   and a formula that fails counts as 0, as in Cura.
 
 The library is read lazily: the list of printers reads only the definitions, and the qualities and
-materials are read the first time a printer needs them.
+materials are read the first time a printer needs them. `Library.load` reads it all at once
+instead: with many threads, because the more than ten thousand small files make a first read wait
+on the disk (and the virus scanner) far longer than on Python, and into a cache file, so the next
+time it takes a moment instead of a minute.
 """
 from __future__ import annotations
 
@@ -30,9 +33,11 @@ import configparser
 import json
 import math
 import os
+import pickle
 import re
 import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from functools import cached_property
 
@@ -143,6 +148,19 @@ class Profile:
     name: str
     metadata: dict
     values: dict = field(default_factory=dict)
+
+
+#: the layout of the cache `Library.load` writes; a cache of another layout is read again
+CACHE_FORMAT = 1
+#: how many files `Library.load` reads at the same time
+READERS = 8
+#: the folders of a library whose times tell whether a cache is still good
+_FOLDERS = ("definitions", "extruders", "quality", "variants", "materials", "texts")
+
+
+def _read_json(path):
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 class Library:
@@ -265,6 +283,68 @@ class Library:
                         continue
         return self._materials
 
+    # ---- everything at once
+    def load(self, cache: str | None = None, stamp: str = "") -> bool:
+        """Read the printers, nozzles, qualities and materials now, so choosing is quick.
+
+        The files are read `READERS` at a time. With `cache` (a file path) they come from there
+        instead when it was written for this library - the same folder, the same `stamp` (the
+        version of the program, say) and the same times of its folders - and the cache is
+        written after reading them otherwise. A cache that cannot be read or written is left
+        alone. Returns whether the cache was used.
+        """
+        key = self._cache_key(stamp)
+        if cache:
+            got = _read_cache(cache, key)
+            if got is not None:
+                self.__dict__["machines"] = got[0]
+                self._qualities, self._variants, self._materials = got[1:]
+                return True
+        with ThreadPoolExecutor(READERS) as pool:
+            paths = []
+            for folder in ("definitions", "extruders"):
+                top = os.path.join(self.root, folder)
+                names = sorted(os.listdir(top)) if os.path.isdir(top) else []
+                paths += [(n[:-len(".def.json")], os.path.join(top, n))
+                          for n in names if n.endswith(".def.json")]
+            for (did, _path), raw in zip(paths, pool.map(self._try_json, [p for _d, p in paths])):
+                if raw is not None:
+                    self._defs.setdefault(did, raw)     # a printer before an extruder of that id
+            self.machines
+            if self._qualities is None:
+                self._qualities = list(pool.map(self._read_inst, list(self._inst_files("quality"))))
+            if self._variants is None:
+                self._variants = list(pool.map(self._read_inst, list(self._inst_files("variants"))))
+            if self._materials is None:
+                folder = os.path.join(self.root, "materials")
+                names = sorted(os.listdir(folder)) if os.path.isdir(folder) else []
+                products = self._product_ids()
+                read = pool.map(lambda n: _try_material(os.path.join(folder, n), products),
+                                [n for n in names if n.endswith(".xml.fdm_material")])
+                self._materials = [m for m in read if m is not None]
+        if cache:
+            _write_cache(cache, key, (self.machines, self._qualities, self._variants,
+                                      self._materials))
+        return False
+
+    @staticmethod
+    def _try_json(path):
+        try:
+            return _read_json(path)
+        except (OSError, ValueError):
+            return None
+
+    def _cache_key(self, stamp: str) -> tuple:
+        """What a cache must have been written for: this folder, `stamp` and its folder times."""
+        times = []
+        for folder in _FOLDERS:
+            try:
+                times.append(os.stat(os.path.join(self.root, folder)).st_mtime_ns)
+            except OSError:
+                times.append(0)
+        return (CACHE_FORMAT, os.path.normcase(os.path.realpath(self.root)), str(stamp),
+                tuple(times))
+
     def _product_ids(self) -> dict:
         path = os.path.join(self.root, "texts", "product_to_id.json")
         try:
@@ -288,6 +368,40 @@ def _product_to_ids(product: str, table: dict) -> list[str]:
             if m:
                 return [did.replace("#", m.group(1))]
     return [product.lower().replace(" ", "_").replace("+", "_plus")]
+
+
+def _try_material(path: str, products: dict) -> Profile | None:
+    try:
+        return _read_material(path, products)
+    except (ET.ParseError, OSError, ValueError):
+        return None
+
+
+def _read_cache(path: str, key) -> tuple | None:
+    """What `Library.load` cached at `path` for `key`, or None when it is not there or not that."""
+    try:
+        with open(path, "rb") as fh:
+            got = pickle.load(fh)
+    except Exception:                       # missing, cut short or from another version
+        return None
+    if not isinstance(got, tuple) or len(got) != 2 or got[0] != key:
+        return None
+    return got[1]
+
+
+def _write_cache(path: str, key, payload) -> None:
+    """Write `payload` for `key` to `path` whole or not at all; a folder we cannot write is fine."""
+    tmp = path + ".tmp"
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(tmp, "wb") as fh:
+            pickle.dump((key, payload), fh, protocol=pickle.HIGHEST_PROTOCOL)
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 
 def _read_material(path: str, products: dict) -> Profile:
