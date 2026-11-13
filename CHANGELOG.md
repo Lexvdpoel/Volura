@@ -3,6 +3,20 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.48 — 2026-11-13
+
+### New
+- **Hollow resin prints** (File > Slice for Resin): a large part can be printed as a shell with a
+  wall of 1.5 to 6 mm, which saves resin; two drain holes through the floor let the resin inside
+  run out. The preview says how much resin it saves.
+- **Spool Adapter** (Draw > Parts): a hub that fills the centre hole of a filament spool, on a
+  flange, with a bore for a rod or a pocket for a 608 bearing, and spokes that save plastic.
+- **Drawer Organizer** (Draw > Parts): a tray made to the inside of a drawer, divided into columns
+  and rows of compartments with rounded inside corners and finger notches.
+
+### Fixed
+- The G-code and resin print previews no longer stop drawing on an old or software OpenGL.
+
 ## 0.2.47 — 2026-11-12
 
 ### New
