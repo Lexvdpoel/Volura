@@ -206,6 +206,17 @@ The interface is available in English and Dutch (*Window > Preferences > General
   half-round finger notch in the top of every inner wall lets you lift an item out from between two
   dividers. It prints upright on its floor, so every wall is pulled straight up and nothing needs
   support
+- **Plant Pot** (Draw > Parts): a flower pot with the saucer that catches its water. You enter the
+  diameter across its top (40 to 250 mm) and how high it stands (30 to 250 mm), round or as a
+  hexagon measured across its flats. The bottom is `taper` percent of the top (50 to 100), so the
+  wall leans outwards and every layer is supported by the one under it: the pot prints upright
+  without support, and the taper is made milder when it would lean past 45 degrees. The wall is 1.2
+  to 4 mm and the floor 2.5 mm, the rim rounds out by 2 mm so the pot is comfortable to hold, and
+  the dialog says how wide the bottom is and what the pot holds in litres. 0 to 9 drain holes of
+  8 mm let the water out - one in the middle of the floor and the rest in a circle halfway to the
+  wall - and channels under the floor lead the water out from under the pot. The
+  saucer is 15 mm high and 10 mm all round larger than the bottom of the pot, and prints beside it
+  with 5 mm in between, so one print gives you both
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

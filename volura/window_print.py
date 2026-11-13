@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 from . import (background, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                card_holder, drawer_organizer, enclosure, fan_guard, gears,
                gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, ops, pegboard,
-               phone_stand, slicer, spool_adapter, standoff, storage_bin, text3d, theme, threads,
-               tie_mount, wall_hook)
+               phone_stand, plant_pot, slicer, spool_adapter, standoff, storage_bin, text3d, theme,
+               threads, tie_mount, wall_hook)
 from . import gcode_preview
 from .print_preview import PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
@@ -42,7 +42,7 @@ from .part_dialogs import (BatteryHolderDialog, BinRackDialog, BitHolderDialog, 
                            GridfinityDialog, GrommetDialog,
                            HingeDialog, HoseAdapterDialog,
                            KnobDialog, LabelPlateDialog, PegboardDialog, PhoneStandDialog,
-                           ProjectBoxDialog, SpoolAdapterDialog,
+                           PlantPotDialog, ProjectBoxDialog, SpoolAdapterDialog,
                            StandoffDialog, StorageBinDialog, Text3DDialog, TieMountDialog,
                            WallHookDialog)
 
@@ -1540,6 +1540,59 @@ class PrintMixin:
             self.view.set_status(tr("Drawer organizer failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the drawer organizer…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ plant pot
+    def plant_pot_dialog(self):
+        """Draw > Parts > Plant Pot…: a flower pot that drains and the saucer under it."""
+        dlg = PlantPotDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("diameter", "height", "taper", "wall", "holes", "shape", "saucer"):
+            setattr(self.settings, "plant_pot_" + key, options[key])
+        self.settings.save()
+        made = self.make_plant_pot_model(options)
+        self.setFocus()
+        return made
+
+    def make_plant_pot_model(self, options):
+        """The pot and its saucer on the bed as they print: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("diameter", "height", "taper", "wall", "holes", "shape",
+                                        "saucer")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the plant pot…"))
+            made = plant_pot.plant_pot(**size)
+            for m in made:
+                if m.status() != mf.Error.NoError or m.is_empty():
+                    raise ValueError(tr("the result is not a valid volume"))
+            boxes = [np.asarray(m.bounding_box(), dtype=float) for m in made]
+            left, right = min(b[0] for b in boxes), max(b[3] for b in boxes)
+            x = (0.5 * bx - 0.5 * (right - left)) if bb is None else float(bb[1][0]) + 10.0
+            y = 0.5 * by - 0.5 * (min(b[1] for b in boxes) + max(b[4] for b in boxes))
+            z = -min(b[2] for b in boxes)
+            return [m.translate((x - left, y, z)) for m in made]
+
+        def done(made):
+            doc.checkpoint()                # one undo takes the pot away again
+            names = (tr("Plant pot"), tr("Saucer"))
+            groups = [ops.group_from_manifold(doc, m, self.settings.current_color, names[i])
+                      for i, m in enumerate(made)]
+            doc.set_selection([("g", g.id, g.id) for g in groups])
+            doc.notify()
+            self.view.set_status(tr("Plant pot added.") if len(groups) == 1
+                                 else tr("Plant pot and saucer added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Plant pot failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the plant pot…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter

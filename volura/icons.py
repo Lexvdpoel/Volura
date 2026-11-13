@@ -361,6 +361,12 @@ SVG = {
                         f'stroke-width="1.6"/>'
                         f'<path d="M2.5 9.5 A2.5 2.5 0 0 0 2.5 14.5" {N} stroke="#3b7dd8" '
                         f'stroke-width="1.6"/>',
+    # plant pot: a tapered pot with its rim over a saucer, with the drain holes in its floor
+    "plant_pot": f'<path d="M4.5 7 L19.5 7 L17.3 15.5 L6.7 15.5 Z" fill="#cfe0f5" {S()}/>'
+                 f'<rect x="3" y="4" width="18" height="3.2" rx="1.3" fill="#eef2f7" {S()}/>'
+                 f'<path d="M3 18.5 L21 18.5 L19 21.5 L5 21.5 Z" fill="#eef2f7" {S()}/>'
+                 f'<path d="M9.2 15.9 L9.7 18.1 M12 15.9 L12 18.1 M14.8 15.9 L14.3 18.1" {N} '
+                 f'stroke="#3b7dd8" stroke-width="1.4" stroke-linecap="round"/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

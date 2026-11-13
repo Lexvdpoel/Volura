@@ -29,7 +29,7 @@ from volura import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, 
                     cable_clip, card_holder, drawer_organizer, enclosure, fan_guard, fonts, gears,
                     gridfinity,
                     grommet, hinge, hose_adapter, knob, label_plate, pegboard, phone_stand,
-                    spool_adapter, standoff, storage_bin, text3d, tie_mount, wall_hook)
+                    plant_pot, spool_adapter, standoff, storage_bin, text3d, tie_mount, wall_hook)
 from volura import ops  # noqa: E402
 from volura.model import Document  # noqa: E402
 
@@ -254,6 +254,12 @@ CASES = [
     ("drawer organizer large no clearance", lambda: [drawer_organizer.drawer_organizer(
         length=300.0, width=240.0, height=100.0, clearance=0.0, cols=6, rows=4, wall=3.0,
         floor=2.0, radius=10.0, finger=True)]),
+
+    ("plant pot default", lambda: plant_pot.plant_pot()),
+    ("plant pot small hexagon without saucer", lambda: plant_pot.plant_pot(
+        diameter=40.0, height=30.0, taper=50.0, wall=1.2, holes=1, shape="hexagon", saucer=False)),
+    ("plant pot large nine drain holes", lambda: plant_pot.plant_pot(
+        diameter=250.0, height=250.0, taper=90.0, wall=4.0, holes=9, shape="round", saucer=True)),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

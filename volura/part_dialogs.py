@@ -15,7 +15,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                card_holder, drawer_organizer, enclosure, fan_guard, fonts, gears,
                gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, phone_stand,
-               spool_adapter, standoff, storage_bin, text3d, threads, tie_mount, wall_hook)
+               plant_pot, spool_adapter, standoff, storage_bin, text3d, threads, tie_mount,
+               wall_hook)
 from .i18n import tr
 
 
@@ -1733,6 +1734,88 @@ class DrawerOrganizerDialog(QDialog):
                 "rows": int(self.rows.value()), "wall": round(self.wall.value(), 6),
                 "floor": round(self.floor.value(), 6), "radius": round(self.radius.value(), 6),
                 "finger": self.finger.isChecked()}
+
+
+class PlantPotDialog(QDialog):
+    """The "Plant Pot…" dialog: a flower pot that drains and the saucer that catches the water.
+
+    The diameter is how wide the pot is at its top and the height how high it stands; the taper is
+    how wide the bottom is as a percentage of the top, the wall how thick the plastic is and the
+    drain holes how many the water runs out through. The shape is round or a hexagon, which is
+    measured across its flats. Under the fields the bottom the pot stands on and what it holds,
+    because that is what a plant is bought against. The values come from Settings and are
+    remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Plant Pot"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0, suffix=" mm"):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(suffix)
+            sp.setValue(float(value))
+            return sp
+
+        self.shape = QComboBox()
+        for label, key in ((tr("Round"), "round"), (tr("Hexagonal"), "hexagon")):
+            self.shape.addItem(label, key)
+        self.shape.setCurrentIndex(max(0, self.shape.findData(s.plant_pot_shape)))
+        self.shape.setToolTip(tr("A hexagon is measured across its flats and does not roll off "
+                                 "the table while you press the soil in"))
+        self.diameter = spin(plant_pot.D_MIN, plant_pot.D_MAX, s.plant_pot_diameter, 5.0)
+        self.diameter.setToolTip(tr("How wide the pot is across at its top"))
+        self.height = spin(plant_pot.HEIGHT_MIN, plant_pot.HEIGHT_MAX, s.plant_pot_height, 5.0)
+        self.height.setToolTip(tr("How high the pot stands"))
+        self.taper = spin(plant_pot.TAPER_MIN, plant_pot.TAPER_MAX, s.plant_pot_taper, 1.0, " %")
+        self.taper.setToolTip(tr("How wide the bottom is as a percentage of the top; the smaller "
+                                 "the bottom, the better the pot prints without support"))
+        self.wall = spin(plant_pot.WALL_MIN, plant_pot.WALL_MAX, s.plant_pot_wall, 0.2)
+        self.wall.setToolTip(tr("How thick the plastic of the pot is"))
+        self.holes = QSpinBox()
+        self.holes.setRange(plant_pot.HOLES_MIN, plant_pot.HOLES_MAX)
+        self.holes.setValue(int(s.plant_pot_holes))
+        self.holes.setToolTip(tr("How many holes the water runs out through; one stands in the "
+                                 "middle of the floor and the rest in a circle round it"))
+        self.saucer = QCheckBox(tr("Saucer"))
+        self.saucer.setChecked(bool(s.plant_pot_saucer))
+        self.saucer.setToolTip(tr("Print the saucer that catches the water beside the pot, so the "
+                                  "two stand side by side on the bed"))
+        self.info = QLabel()
+        lay.addRow(tr("Shape"), self.shape)
+        lay.addRow(tr("Top diameter"), self.diameter)
+        lay.addRow(tr("Height"), self.height)
+        lay.addRow(tr("Bottom taper"), self.taper)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Drain holes"), self.holes)
+        lay.addRow("", self.saucer)
+        lay.addRow("", self.info)
+        for w in (self.diameter, self.height, self.taper, self.wall):
+            w.valueChanged.connect(self._changed)
+        self.holes.valueChanged.connect(self._changed)
+        self.shape.currentIndexChanged.connect(self._changed)
+        self.saucer.toggled.connect(self._changed)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._changed()
+
+    def _changed(self, *_):
+        s = plant_pot.sizes(**self.options())
+        self.info.setText(tr("Bottom {d:.1f} mm · holds {v:.2f} l")
+                          .format(d=s["bottom"], v=s["capacity"]))
+
+    def options(self) -> dict:
+        return {"diameter": round(self.diameter.value(), 6),
+                "height": round(self.height.value(), 6), "taper": round(self.taper.value(), 6),
+                "wall": round(self.wall.value(), 6), "holes": int(self.holes.value()),
+                "shape": self.shape.currentData(), "saucer": self.saucer.isChecked()}
 
 
 class HoseAdapterDialog(QDialog):

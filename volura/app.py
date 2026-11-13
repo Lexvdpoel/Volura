@@ -30,7 +30,7 @@ from . import (__version__, background, battery_holder, bin_rack, bit_holder, bo
                fan_guard,
                fileio, gcode, gears, gridfinity, grommet, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking,
-               nesting, ops, pegboard, phone_stand, sheet3d, sheettools,
+               nesting, ops, pegboard, phone_stand, plant_pot, sheet3d, sheettools,
                svg,
                spacemouse, spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers)
@@ -1055,6 +1055,25 @@ class Settings:
             setattr(self, key, max(lo, min(hi, value)))
         self.drawer_organizer_finger = self._bool("drawer_organizer_finger", True)
         for key, default, lo, hi in (
+                ("plant_pot_diameter", 100.0, plant_pot.D_MIN, plant_pot.D_MAX),
+                ("plant_pot_height", 90.0, plant_pot.HEIGHT_MIN, plant_pot.HEIGHT_MAX),
+                ("plant_pot_taper", 75.0, plant_pot.TAPER_MIN, plant_pot.TAPER_MAX),
+                ("plant_pot_wall", 2.0, plant_pot.WALL_MIN, plant_pot.WALL_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        try:
+            holes = int(self.q.value("plant_pot_holes", 5))
+        except (TypeError, ValueError):
+            holes = 5
+        self.plant_pot_holes = max(plant_pot.HOLES_MIN, min(plant_pot.HOLES_MAX, holes))
+        self.plant_pot_shape = str(self.q.value("plant_pot_shape", plant_pot.POT_SHAPES[0]))
+        if self.plant_pot_shape not in plant_pot.POT_SHAPES:
+            self.plant_pot_shape = plant_pot.POT_SHAPES[0]
+        self.plant_pot_saucer = self._bool("plant_pot_saucer", True)
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1293,6 +1312,9 @@ class Settings:
                     "drawer_organizer_clearance", "drawer_organizer_cols", "drawer_organizer_rows",
                     "drawer_organizer_wall", "drawer_organizer_floor", "drawer_organizer_radius",
                     "drawer_organizer_finger"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("plant_pot_diameter", "plant_pot_height", "plant_pot_taper", "plant_pot_wall",
+                    "plant_pot_holes", "plant_pot_shape", "plant_pot_saucer"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2245,6 +2267,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                        "so it drops in, its compartments have rounded corners you "
                                        "scoop out and its inner walls have a finger notch to lift "
                                        "an item out"))
+        # ---- plant pot
+        self.a_plant_pot = A(tr("Plant Pot…"),
+                             lambda checked=False: self.plant_pot_dialog(), None, "plant_pot",
+                             False,
+                             tr("Add a flower pot that prints without support: its wall leans "
+                                "outwards, its floor has drain holes and channels under it lead "
+                                "the water out; the saucer that catches that water prints beside "
+                                "it"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2364,7 +2394,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_hose_adapter, self.a_fan_guard, self.a_grommet, self.a_bracket,
                           self.a_tie_mount, self.a_bit_holder, self.a_card_holder,
                           self.a_wall_hook, self.a_phone_stand, self.a_spool_adapter,
-                          self.a_drawer_organizer))
+                          self.a_drawer_organizer, self.a_plant_pot))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
