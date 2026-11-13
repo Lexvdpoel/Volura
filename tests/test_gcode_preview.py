@@ -92,6 +92,40 @@ def test_empty_gcode():
     assert p.layers == [] and p.seconds == 0.0
 
 
+def test_line_widths_follow_the_filament_pushed_out(preview):
+    area = np.pi * 0.875 ** 2                       # 1.75 mm filament
+    first, second = preview.layers
+    assert first.height == pytest.approx(0.2) and second.height == pytest.approx(0.2)
+    # 1 mm of filament over 10 mm of a 0.2 mm layer; travel has no width
+    assert first.width.tolist() == pytest.approx([0, area / 2, area / 2, area / 2, 0], rel=1e-5)
+    assert second.width.tolist() == pytest.approx([area / 4, area / 4], rel=1e-5)
+    thin = gp.parse(GCODE.splitlines(), filament=1.0).layers[0]
+    assert thin.width[1] == pytest.approx(np.pi * 0.25 / 2)
+    # a prime of a lot of filament on a tiny move is not a line metres wide
+    blob = gp.parse([";LAYER:0", "G0 X0 Y0 Z0.2", ";TYPE:FILL", "G1 X0.1 E5"]).layers[0]
+    assert blob.width[-1] == gp.WIDTH_MAX
+
+
+def test_the_lines_are_bars_as_wide_and_high_as_they_print(preview):
+    from volura import print_preview as pp
+    lines = pp._Lines(preview)
+    assert lines.start == [0, 3, 5]
+    assert len(lines.pos) == 5 * pp.VERTS
+    w = float(preview.layers[0].width[1])
+    bar = lines.pos[:pp.VERTS]                      # the first wall, (10, 10) to (20, 10)
+    assert bar[:, 0].min() == pytest.approx(10 - w / 2) and \
+        bar[:, 0].max() == pytest.approx(20 + w / 2)
+    assert bar[:, 1].min() == pytest.approx(10 - w / 2) and \
+        bar[:, 1].max() == pytest.approx(10 + w / 2)
+    assert bar[:, 2].min() == pytest.approx(0.0) and bar[:, 2].max() == pytest.approx(0.2)
+    # the next wall, (20, 10) to (20, 20), meets it: their ends overlap at the corner
+    nxt = lines.pos[pp.VERTS:2 * pp.VERTS]
+    assert nxt[:, 1].min() <= bar[:, 1].min() + 1e-6
+    # the top in the colour of the kind, the sides darker
+    top, side = lines.col[4].astype(int), lines.col[0].astype(int)
+    assert (side < top).all()
+
+
 def test_the_3d_view_turns_moves_zooms_and_draws(preview, tmp_path):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtCore import QPoint, Qt
@@ -109,8 +143,8 @@ def test_the_3d_view_turns_moves_zooms_and_draws(preview, tmp_path):
         view = dlg.view
         assert view.layer == 1, "the preview starts at the whole print"
         # every printed line is there once, the lower layers dimmed
-        assert view.lines.start == [0, 6, 10]
-        assert view.lines.dim == pytest.approx(view.lines.col * pp.DIM)
+        assert view.lines.start == [0, 3, 5]
+        assert view.lines.dim.astype(float) == pytest.approx(view.lines.col * pp.DIM, abs=1)
         yaw, target, distance = view.cam.yaw, view.cam.target.copy(), view.cam.distance
         c = view.rect().center()
         QTest.mousePress(view, Qt.LeftButton, Qt.NoModifier, c)
@@ -157,11 +191,13 @@ class FakeWindow(QWidget):
 
 
 def fill_rows(view):
-    """The rows of `lines.col` of the FILL move of the first layer, its two vertices."""
+    """The rows of `lines.col` of the top of the FILL move of the first layer."""
     printed = view.preview.layers[0].kind
     printed = printed[printed != gp.TRAVEL]
     first = int(np.flatnonzero(printed == gp.KIND["FILL"])[0])
-    return slice(view.lines.start[0] + 2 * first, view.lines.start[0] + 2 * first + 2)
+    from volura.print_preview import VERTS
+    v = (view.lines.start[0] + first) * VERTS
+    return slice(v + 4, v + 6)                      # the two vertices of its crown
 
 
 @pytest.mark.parametrize("colour_blind, palette", ((True, "KIND_STYLE_CB"),
@@ -179,7 +215,8 @@ def test_the_preview_colours_the_lines_with_the_chosen_palette(preview, tmp_path
     try:
         assert dlg.colour_blind is colour_blind
         colour = np.array(pp._rgb(getattr(pp, palette)[gp.KIND["FILL"]][0]), dtype=np.float32)
-        assert dlg.view.lines.col[fill_rows(dlg.view)] == pytest.approx(np.tile(colour, (2, 1)))
+        top = dlg.view.lines.col[fill_rows(dlg.view)].astype(float) / 255
+        assert top == pytest.approx(np.tile(colour, (2, 1)), abs=1 / 255)
     finally:
         dlg.close()
         win.close()

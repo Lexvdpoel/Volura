@@ -9,6 +9,10 @@ can play the layer back as the printer would print it.
 
 The times come from length and feed rate, scaled per layer so they add up to the times CuraEngine
 writes after every layer (`;TIME_ELAPSED:`), which include acceleration.
+
+Every printed move also gets the width of the line it lays down: the filament it pushes out,
+spread over its length and the height of the layer, so the preview can draw the lines as wide as
+they print and neighbouring lines touch the way they do on the bed.
 """
 from __future__ import annotations
 
@@ -22,6 +26,9 @@ KIND_NAMES = ("travel", "WALL-OUTER", "WALL-INNER", "SKIN", "FILL", "SUPPORT",
               "SUPPORT-INTERFACE", "SKIRT", "PRIME-TOWER", "OTHER")
 KIND = {name: i for i, name in enumerate(KIND_NAMES)}
 TRAVEL = KIND["travel"]
+#: the narrowest and widest line the preview believes (a short move that primes or wipes can
+#: push out much more or less than a real line)
+WIDTH_MIN, WIDTH_MAX = 0.1, 3.0
 
 _WORD = re.compile(r"([A-Z])\s*(-?\d*\.?\d+)")
 
@@ -32,6 +39,8 @@ class Layer:
 
     `seg` holds one row per move: x0, y0, x1, y1; `kind` the kind of each (TRAVEL for a move that
     does not extrude) and `t` the moment, in seconds from the start of the layer, the move ends.
+    `height` is how thick the layer is and `width` the width of the line of every move (0 for a
+    travel move).
     """
 
     number: int
@@ -39,6 +48,8 @@ class Layer:
     seg: np.ndarray
     kind: np.ndarray
     t: np.ndarray
+    height: float = 0.2
+    width: np.ndarray | None = None
 
     @property
     def seconds(self) -> float:
@@ -71,19 +82,23 @@ class Preview:
         return sum(layer.seconds for layer in self.layers)
 
 
-def read_gcode(path: str) -> Preview:
-    """The layers of the G-code at `path`; moves before the first ;LAYER: are left out."""
+def read_gcode(path: str, filament: float = 1.75) -> Preview:
+    """The layers of the G-code at `path`; moves before the first ;LAYER: are left out.
+
+    `filament` is the diameter of the filament in mm, for the width of the lines.
+    """
     with open(path, encoding="utf-8", errors="replace") as fh:
-        return parse(fh)
+        return parse(fh, filament)
 
 
-def parse(lines) -> Preview:
+def parse(lines, filament: float = 1.75) -> Preview:
     x = y = z = e = 0.0
     feed = 1500.0                               # mm/min until the G-code says otherwise
     abs_pos = abs_e = True
     kind = KIND["OTHER"]
     layers = []
-    cur = None                                  # [number, z, rows, kinds, seconds, elapsed]
+    area = np.pi * (filament / 2.0) ** 2 if filament > 0 else np.pi * 0.875 ** 2
+    cur = None                                  # [number, z, rows, kinds, seconds, filament]
 
     def close(elapsed=None):
         if cur is None:
@@ -94,7 +109,17 @@ def parse(lines) -> Preview:
         total = float(secs.sum())
         if elapsed is not None and elapsed > 0 and total > 0:
             secs *= elapsed / total             # CuraEngine's own time includes acceleration
-        layers.append(Layer(cur[0], cur[1], rows, kinds, np.cumsum(secs)))
+        below = layers[-1].z if layers else 0.0
+        height = cur[1] - below
+        if not 0.01 < height < 2.0:
+            height = layers[-1].height if layers else 0.2
+        length = np.hypot(rows[:, 2] - rows[:, 0], rows[:, 3] - rows[:, 1])
+        pushed = np.asarray(cur[5], dtype=np.float64)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            width = pushed * area / (length * height)
+        width = np.where(kinds == TRAVEL, 0.0,
+                         np.clip(np.nan_to_num(width), WIDTH_MIN, WIDTH_MAX)).astype(np.float32)
+        layers.append(Layer(cur[0], cur[1], rows, kinds, np.cumsum(secs), height, width))
 
     last_elapsed = 0.0
     pending_elapsed = None
@@ -110,7 +135,7 @@ def parse(lines) -> Preview:
                     number = int(line[7:])
                 except ValueError:
                     number = len(layers)
-                cur = [number, z, [], [], []]
+                cur = [number, z, [], [], [], []]
             elif line.startswith(";TYPE:"):
                 kind = KIND.get(line[6:].strip(), KIND["OTHER"])
             elif line.startswith(";TIME_ELAPSED:"):
@@ -147,6 +172,7 @@ def parse(lines) -> Preview:
                     cur[2].extend((x, y, nx, ny))
                     cur[3].append(kind if extrudes else TRAVEL)
                     cur[4].append(length / feed * 60.0)
+                    cur[5].append(ne - e if extrudes else 0.0)
             x, y, z, e = nx, ny, nz, ne
         elif head == "G90":
             abs_pos = True

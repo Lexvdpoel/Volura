@@ -1009,7 +1009,9 @@ class PrintMixin:
             result = slicer.slice_meshes(stacks, meshes, path, engine,
                                          on_progress=lambda f: report(0.9 * f, tr("Slicing…")))
             report(0.95, tr("Reading the G-code…"))
-            return result, gcode_preview.read_gcode(path)
+            filament = (float(stacks.extruders[0].get("material_diameter") or 1.75)
+                        if stacks.extruders else 1.75)
+            return result, gcode_preview.read_gcode(path, filament)
 
         def done(made):
             result, preview = made

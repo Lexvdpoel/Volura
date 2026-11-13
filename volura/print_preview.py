@@ -1,9 +1,10 @@
 """The print preview: the sliced G-code in 3D, layer by layer, with a virtual printer that prints it.
 
 After File > Slice the G-code goes here first instead of straight to a file. The view shows the
-print in 3D on the bed: every layer up to the chosen one, in the colour of what it prints (outer
-wall, inner wall, top and bottom, infill, support, skirt), the layers below it dimmed, the travel
-moves of the chosen layer as thin lines when you want them, and the nozzle where it is. Drag with
+print in 3D on the bed: every layer up to the chosen one, its lines as wide and high as they print
+and in the colour of what they print (outer wall, inner wall, top and bottom, infill, support,
+skirt), the layers below it dimmed, the travel moves of the chosen layer as thin lines when you
+want them, and the nozzle where it is. Drag with
 the left mouse button to turn the view, with the right or middle button (or Shift and the left) to
 move it; the wheel zooms towards the mouse and a double-click shows the whole print again. Top and
 3D switch the view; Only this layer hides the layers below. Play moves the nozzle through the layer
@@ -46,6 +47,14 @@ SPEEDS = (1, 5, 20, 100)
 FPS = 30
 #: how bright the layers below the chosen one are, against its own colours
 DIM = 0.5
+#: the cross-section of a printed line, from one bottom edge over the top to the other: for
+#: every point how far across (in half widths), how far down (in layer heights) and how bright
+#: against the colour of the line, so a line looks round on top and lines lying side by side
+#: stand apart
+PROFILE = ((-1.0, 1.0, 0.45), (-1.0, 0.35, 0.72), (0.0, 0.0, 1.0), (1.0, 0.35, 0.72),
+           (1.0, 1.0, 0.45))
+#: vertices of one printed line (see `_beads`)
+VERTS = 2 * len(PROFILE)
 #: the colours of the background, the bed and its grid
 BACKGROUND, BED, GRID = "#20242a", "#2b3038", "#3a404a"
 
@@ -67,36 +76,69 @@ def _rgb(hex_color) -> tuple:
     return c.redF(), c.greenF(), c.blueF()
 
 
+def _beads(seg, width, z, height):
+    """The vertices of printed lines as bars, `VERTS` per line, for a GL_QUAD_STRIP each.
+
+    Every line is as wide as it prints and as high as its layer and runs half its width past both
+    ends, so lines that meet at a corner close it. Each strip runs along the line through the
+    points of `PROFILE`, from one bottom edge over the top to the other.
+    """
+    p0, p1 = seg[:, :2].astype(np.float64), seg[:, 2:].astype(np.float64)
+    d = p1 - p0
+    length = np.maximum(np.hypot(d[:, 0], d[:, 1]), 1e-9)[:, None]
+    u = d / length * (np.asarray(width, dtype=np.float64) / 2.0)[:, None]
+    n = np.column_stack([-u[:, 1], u[:, 0]])          # across the line, half a width long
+    a, b = p0 - u, p1 + u
+    out = np.empty((len(seg), VERTS, 3), dtype=np.float32)
+    for k, (side, down, _light) in enumerate(PROFILE):
+        out[:, 2 * k, :2] = a + side * n
+        out[:, 2 * k + 1, :2] = b + side * n
+        out[:, 2 * k:2 * k + 2, 2] = z - down * height
+    return out.reshape(-1, 3)
+
+
 class _Lines:
     """Every printed line of the print as one array of vertices and colours, layer after layer.
 
-    `start[i]` is the first vertex of layer `i` (and `start[-1]` the end); `done[i]` counts, for
-    every move of layer `i`, the printed lines up to and including it, so a layer that is half
-    printed draws only those.
+    Each line is a flat bar of `VERTS` vertices (see `_beads`) as wide as it prints, its top in
+    the colour of its kind and its sides darker towards the bottom, so the lines of a layer lie
+    against each other as they do on the bed and still stand apart. `start[i]` is the first line
+    of layer `i` (and `start[-1]` the end); `done[i]` counts, for every move of layer `i`, the
+    printed lines up to and including it, so a layer that is half printed draws only those.
     """
 
     def __init__(self, preview: gp.Preview, colour_blind=False):
         colours = np.array([_rgb(c) for c, _name in kind_style(colour_blind)], dtype=np.float32)
+        shade = np.repeat(np.array([p[2] for p in PROFILE], dtype=np.float32), 2)[:, None]
         pos, col, travel, start, tstart, done = [], [], [], [0], [0], []
         for layer in preview.layers:
             printed = layer.kind != gp.TRAVEL
             seg = layer.seg[printed]
-            z = np.full((len(seg), 1), layer.z, dtype=np.float32)
-            pos.append(np.hstack([seg[:, :2], z, seg[:, 2:], z]).reshape(-1, 3))
-            col.append(np.repeat(colours[layer.kind[printed]], 2, axis=0))
+            width = (layer.width[printed] if layer.width is not None
+                     else np.full(len(seg), 0.4, dtype=np.float32))
+            pos.append(_beads(seg, width, layer.z, layer.height))
+            col.append((colours[layer.kind[printed]][:, None, :] * shade).reshape(-1, 3))
             trav = layer.seg[~printed]
-            zt = np.full((len(trav), 1), layer.z, dtype=np.float32)
+            zt = np.full((len(trav), 1), layer.z + 0.02, dtype=np.float32)   # above the tops
             travel.append(np.hstack([trav[:, :2], zt, trav[:, 2:], zt]).reshape(-1, 3))
-            start.append(start[-1] + 2 * len(seg))
+            start.append(start[-1] + len(seg))
             tstart.append(tstart[-1] + 2 * len(trav))
             done.append(np.cumsum(printed))
         empty = np.zeros((0, 3), dtype=np.float32)
         self.pos = np.ascontiguousarray(np.vstack(pos) if pos else empty, dtype=np.float32)
-        self.col = np.ascontiguousarray(np.vstack(col) if col else empty, dtype=np.float32)
-        self.dim = np.ascontiguousarray(self.col * DIM, dtype=np.float32)
+        col = np.vstack(col) if col else empty
+        self.col = np.ascontiguousarray(np.round(col * 255), dtype=np.uint8)
+        self.dim = np.ascontiguousarray(np.round(col * DIM * 255), dtype=np.uint8)
         self.travel = np.ascontiguousarray(np.vstack(travel) if travel else empty,
                                            dtype=np.float32)
         self.start, self.tstart, self.done = start, tstart, done
+        self.first = np.arange(0, start[-1] * VERTS, VERTS, dtype=np.int32)
+        self.count = np.full(start[-1], VERTS, dtype=np.int32)
+
+    def draw(self, lo: int, hi: int):
+        """Draw lines `lo` up to `hi`, with the vertex and colour pointers set already."""
+        if hi > lo:
+            gl.glMultiDrawArrays(gl.GL_QUAD_STRIP, self.first[lo:hi], self.count[lo:hi], hi - lo)
 
 
 class LayerView(QOpenGLWidget):
@@ -200,18 +242,15 @@ class LayerView(QOpenGLWidget):
         if self.at is not None:
             layer = self.preview.layers[i]
             moves = min(len(layer.t), int(np.searchsorted(layer.t, self.at, side="right")) + 1)
-            end = first + 2 * (int(ln.done[i][moves - 1]) if moves else 0)
+            end = first + (int(ln.done[i][moves - 1]) if moves else 0)
         gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
         gl.glEnableClientState(gl.GL_COLOR_ARRAY)
         gl.glVertexPointer(3, gl.GL_FLOAT, 0, ln.pos)
-        gl.glLineWidth(1.0)
         if first > 0 and not self.only_layer:
-            gl.glColorPointer(3, gl.GL_FLOAT, 0, ln.dim)
-            gl.glDrawArrays(gl.GL_LINES, 0, first)
-        gl.glLineWidth(2.0)
-        gl.glColorPointer(3, gl.GL_FLOAT, 0, ln.col)
-        if end > first:
-            gl.glDrawArrays(gl.GL_LINES, first, end - first)
+            gl.glColorPointer(3, gl.GL_UNSIGNED_BYTE, 0, ln.dim)
+            ln.draw(0, first)
+        gl.glColorPointer(3, gl.GL_UNSIGNED_BYTE, 0, ln.col)
+        ln.draw(first, end)
         gl.glDisableClientState(gl.GL_COLOR_ARRAY)
         if self.show_travel and ln.tstart[i + 1] > ln.tstart[i]:
             gl.glLineWidth(1.0)
