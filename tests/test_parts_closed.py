@@ -31,7 +31,7 @@ from volura import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, 
                     gridfinity,
                     grommet, hinge, hose_adapter, knob, label_plate, lithophane, pegboard,
                     phone_stand,
-                    plant_pot, spool_adapter, standoff, storage_bin, text3d, tie_mount, wall_hook)
+                    plant_pot, screw_jar, spool_adapter, standoff, storage_bin, text3d, tie_mount, wall_hook)
 from volura import ops  # noqa: E402
 from volura.model import Document  # noqa: E402
 
@@ -288,6 +288,15 @@ CASES = [
         width=40.0, thin=0.4, thick=1.0, border=0.0, pixel=0.1)),
     ("lithophane large inverted coarse", lambda: photo(
         rows=40, cols=60, width=250.0, thin=2.0, thick=6.0, border=10.0, invert=True, pixel=1.0)),
+
+    ("screw-top jar default", lambda: screw_jar.screw_jar()),
+    ("screw-top jar small coarse smooth lid", lambda: screw_jar.screw_jar(
+        diameter=20.0, height=15.0, wall=1.6, pitch=5.0, thread_len=6.0, clearance=0.1, grip=0)),
+    ("screw-top jar large fine many ribs", lambda: screw_jar.screw_jar(
+        diameter=150.0, height=200.0, wall=4.0, pitch=2.0, thread_len=20.0, clearance=0.6,
+        grip=48)),
+    ("screw-top jar coarse thread on a thin wall", lambda: screw_jar.screw_jar(
+        diameter=60.0, height=40.0, wall=1.6, pitch=5.0, thread_len=10.0, grip=24)),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

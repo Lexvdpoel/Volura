@@ -235,6 +235,12 @@ The interface is available in English and Dutch (*Window > Preferences > General
   thing gives a negative. It prints standing up on its border, which is how a lithophane gets its
   quality: the layers go through the thickness of the picture instead of across it, so the photo
   shows no layer lines, and it needs no support
+- **Screw-Top Jar** (Draw > Parts): a round jar and the lid that screws onto it. Enter the inside
+  diameter (20 to 150 mm) and depth (15 to 200 mm), the wall (1.6 to 4 mm), the thread pitch (2 to
+  5 mm) and length (6 to 20 mm), the play between the threads (0.1 to 0.6 mm) and how many grip
+  ribs the lid gets; the dialog says how big the closed jar is and how much it holds. The thread
+  is the ISO profile of the thread tools, bevelled at both ends; the jar prints standing on its
+  floor and the lid on its top, both without support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

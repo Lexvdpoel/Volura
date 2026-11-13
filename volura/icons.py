@@ -375,6 +375,11 @@ SVG = {
                     f'stroke-width="1.3" stroke-linecap="round"/>',
     # lithophane: a standing plate of squares, thick where the photo is dark and thin where it is
     # light, with the light behind it
+    # screw-top jar: a jar with the thread round its neck and the lid above it
+    "screw_jar": f'<rect x="5" y="9" width="14" height="12.5" rx="1.6" fill="#eef2f7" {S()}/>'
+                 f'<rect x="4" y="2.5" width="16" height="4.5" rx="1" fill="#cfe0f5" {S()}/>'
+                 f'<path d="M6 9.5 L18 8.5 M6 11.5 L18 10.5" {N} stroke="#3b7dd8" '
+                 f'stroke-width="1.4" stroke-linecap="round"/>',
     "lithophane": f'<rect x="4" y="3" width="12" height="18" rx="1.6" fill="#eef2f7" {S()}/>'
                   f'<rect x="6" y="5.5" width="3.4" height="3.4" fill="#3b7dd8"/>'
                   f'<rect x="10.6" y="5.5" width="3.4" height="3.4" fill="#8fa6c3"/>'

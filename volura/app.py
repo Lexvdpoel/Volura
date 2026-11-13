@@ -29,7 +29,7 @@ from . import (__version__, background, battery_holder, bin_rack, bit_holder, bo
                cable_chain, cable_clip, cable_winder, cam, card_holder, drawer_organizer, dxf, enclosure, errors,
                fan_guard,
                fileio, gcode, gears, gridfinity, grommet, hinge, hose_adapter, i18n, joints,
-               keyschemes, knob, label_plate, linking, lithophane,
+               keyschemes, knob, label_plate, linking, lithophane, screw_jar,
                nesting, ops, pegboard, phone_stand, plant_pot, sheet3d, sheettools,
                svg,
                spacemouse, spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
@@ -1101,6 +1101,23 @@ class Settings:
         self.lithophane_invert = self._bool("lithophane_invert", False)
         self.lithophane_image = str(self.q.value("lithophane_image", "") or "")
         for key, default, lo, hi in (
+                ("screw_jar_diameter", 60.0, screw_jar.D_MIN, screw_jar.D_MAX),
+                ("screw_jar_height", 60.0, screw_jar.HEIGHT_MIN, screw_jar.HEIGHT_MAX),
+                ("screw_jar_wall", 2.0, screw_jar.WALL_MIN, screw_jar.WALL_MAX),
+                ("screw_jar_pitch", 3.0, screw_jar.PITCH_MIN, screw_jar.PITCH_MAX),
+                ("screw_jar_thread_len", 10.0, screw_jar.THREAD_MIN, screw_jar.THREAD_MAX),
+                ("screw_jar_clearance", 0.3, screw_jar.CLEARANCE_MIN, screw_jar.CLEARANCE_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        try:
+            grip = int(self.q.value("screw_jar_grip", 24))
+        except (TypeError, ValueError):
+            grip = 24
+        self.screw_jar_grip = max(0, min(screw_jar.GRIP_MAX, grip))
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1350,6 +1367,9 @@ class Settings:
         for key in ("lithophane_image", "lithophane_width", "lithophane_thin",
                     "lithophane_thick", "lithophane_border", "lithophane_pixel",
                     "lithophane_invert"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("screw_jar_diameter", "screw_jar_height", "screw_jar_wall", "screw_jar_pitch",
+                    "screw_jar_thread_len", "screw_jar_clearance", "screw_jar_grip"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2326,6 +2346,13 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                  "is thick and light is thin, so with a light behind the plate the "
                                  "photo appears; it prints standing up, which is how it gets its "
                                  "quality"))
+        # ---- screw-top jar
+        self.a_screw_jar = A(tr("Screw-Top Jar…"),
+                             lambda checked=False: self.screw_jar_dialog(), None, "screw_jar",
+                             False,
+                             tr("Add a round jar with a lid that screws on: the jar prints "
+                                "standing on its floor and the lid on its top, both without "
+                                "support, with play between the threads so the lid turns"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2446,7 +2473,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_tie_mount, self.a_bit_holder, self.a_card_holder,
                           self.a_wall_hook, self.a_phone_stand, self.a_spool_adapter,
                           self.a_drawer_organizer, self.a_plant_pot, self.a_cable_winder,
-                          self.a_lithophane))
+                          self.a_lithophane, self.a_screw_jar))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

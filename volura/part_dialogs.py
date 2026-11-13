@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                cable_winder, card_holder, drawer_organizer, enclosure, fan_guard, fonts, gears,
                gridfinity, grommet, hinge, hose_adapter, knob, label_plate, lithophane, pegboard,
-               phone_stand, plant_pot, spool_adapter, standoff, storage_bin, text3d, threads,
+               phone_stand, plant_pot, screw_jar, spool_adapter, standoff, storage_bin, text3d, threads,
                tie_mount, wall_hook)
 from .i18n import tr
 
@@ -2027,6 +2027,84 @@ class LithophaneDialog(QDialog):
                 "thin": round(self.thin.value(), 6), "thick": round(self.thick.value(), 6),
                 "border": round(self.border.value(), 6),
                 "pixel": float(self.detail.currentData()), "invert": self.invert.isChecked()}
+
+
+class ScrewJarDialog(QDialog):
+    """The "Screw-Top Jar…" dialog: a round jar with a lid that screws on.
+
+    The diameter and the height are the inside of the jar, the wall how thick its plastic is, the
+    pitch and the thread length the thread it closes with and the clearance the play between the
+    threads; the grip ribs make the lid easy to turn. Under the fields the size of the closed jar
+    and what it holds. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Screw-Top Jar"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0, decimals=1):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(decimals)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.diameter = spin(screw_jar.D_MIN, screw_jar.D_MAX, s.screw_jar_diameter, 5.0)
+        self.diameter.setToolTip(tr("How wide the jar is inside"))
+        self.height = spin(screw_jar.HEIGHT_MIN, screw_jar.HEIGHT_MAX, s.screw_jar_height, 5.0)
+        self.height.setToolTip(tr("How deep the jar is inside, above its floor"))
+        self.wall = spin(screw_jar.WALL_MIN, screw_jar.WALL_MAX, s.screw_jar_wall, 0.2)
+        self.wall.setToolTip(tr("How thick the plastic of the jar and the lid is"))
+        self.pitch = spin(screw_jar.PITCH_MIN, screw_jar.PITCH_MAX, s.screw_jar_pitch, 0.5)
+        self.pitch.setToolTip(tr("How far the lid goes down in one turn; a coarse thread prints "
+                                 "best and closes quickly"))
+        self.thread_len = spin(screw_jar.THREAD_MIN, screw_jar.THREAD_MAX,
+                               s.screw_jar_thread_len, 1.0)
+        self.thread_len.setToolTip(tr("How long the thread is: the longer, the more firmly the "
+                                      "lid holds"))
+        self.clearance = spin(screw_jar.CLEARANCE_MIN, screw_jar.CLEARANCE_MAX,
+                              s.screw_jar_clearance, 0.05, 2)
+        self.clearance.setToolTip(tr("Play between the threads of the jar and the lid, so the lid "
+                                     "turns freely after printing; more if it is too tight"))
+        self.grip = QSpinBox()
+        self.grip.setRange(0, screw_jar.GRIP_MAX)
+        self.grip.setValue(int(s.screw_jar_grip))
+        self.grip.setToolTip(tr("Ribs round the lid so it turns in a wet hand; 0 leaves it smooth"))
+        self.info = QLabel()
+        lay.addRow(tr("Inside diameter"), self.diameter)
+        lay.addRow(tr("Inside height"), self.height)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Thread pitch"), self.pitch)
+        lay.addRow(tr("Thread length"), self.thread_len)
+        lay.addRow(tr("Clearance"), self.clearance)
+        lay.addRow(tr("Grip ribs"), self.grip)
+        lay.addRow("", self.info)
+        for w in (self.diameter, self.height, self.wall, self.pitch, self.thread_len,
+                  self.clearance):
+            w.valueChanged.connect(self._changed)
+        self.grip.valueChanged.connect(self._changed)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._changed()
+
+    def _changed(self, *_):
+        s = screw_jar.sizes(**self.options())
+        self.info.setText(tr("Closed {d:.0f} × {h:.0f} mm · holds {v:.0f} ml")
+                          .format(d=max(s["jar_outside"], s["lid_outside"]),
+                                  h=s["closed_height"], v=s["volume"]))
+
+    def options(self) -> dict:
+        return {"diameter": round(self.diameter.value(), 6),
+                "height": round(self.height.value(), 6), "wall": round(self.wall.value(), 6),
+                "pitch": round(self.pitch.value(), 6),
+                "thread_len": round(self.thread_len.value(), 6),
+                "clearance": round(self.clearance.value(), 6), "grip": int(self.grip.value())}
 
 
 class HoseAdapterDialog(QDialog):

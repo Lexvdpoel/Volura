@@ -448,10 +448,6 @@ def test_the_dialog_builds_a_pot_and_a_saucer_as_two_groups_and_remembers_it(mon
         w.close()
 
 
-if __name__ == "__main__":
-    sys.exit(pytest.main([__file__, "-q"]))
-
-
 @pytest.mark.parametrize("shape", ("round", "hexagon"))
 def test_the_bead_grows_out_of_the_wall_at_45_degrees(shape):
     """The rim prints upright without support: under the bead nothing sticks out flat."""
@@ -461,3 +457,7 @@ def test_the_bead_grows_out_of_the_wall_at_45_degrees(shape):
         _wx, below = width(m, top - dz - 0.05, top - dz)
         _wx, above = width(m, top - dz + 0.2, top - dz + 0.25)
         assert above - below <= 2.0 * 0.3 + 1e-3, f"the bead overhangs at {top - dz + 0.25:.2f} mm"
+
+
+if __name__ == "__main__":
+    sys.exit(pytest.main([__file__, "-q"]))
