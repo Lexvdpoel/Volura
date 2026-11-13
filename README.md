@@ -257,10 +257,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   - Where parts with different colors overlap, the part made later wins
 - **Slice** (File > Slice): G-code for your printer without a separate slicer. Choose the maker
   and the printer from the printer profiles of Cura and OrcaSlicer (nearly 1000 printers), then
-  the nozzle, the filament brand and material and the quality, and set infill, support and bed
-  adhesion; Volura works out the profile the way Cura does and slices with CuraEngine, which comes
-  with the download. The print preview then shows the G-code in 3D, layer by layer (turn, move
-  and zoom it with the mouse), with a virtual printer that plays each layer as the printer will
+  the nozzle, the filament brand and material and the quality, and set infill and its pattern,
+  support and bed adhesion; Volura works out the profile the way Cura does and slices with CuraEngine, which comes
+  with the download. The print preview then shows the G-code in 3D, layer by layer, every line as
+  wide as it prints (turn, move and zoom it with the mouse), with a virtual printer that plays each layer as the printer will
   print it, the print time and the filament; save the G-code from there
 - **Slice for Resin** (File > Slice for Resin): layer images for more than 150 resin (MSLA)
   printers of Anycubic, Elegoo, Phrozen, Creality, EPAX and others, in the printer's own file

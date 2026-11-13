@@ -100,6 +100,36 @@ def test_a_cube_slices_for_the_ender_3(tmp_path):
     assert 0.5 * (lo + hi) == pytest.approx(117.5, abs=1.0), "in the middle of the 235 mm bed"
 
 
+def _fill(text):
+    """The infill moves of a G-code: every G1 under ;TYPE:FILL."""
+    moves, on = [], False
+    for line in text.splitlines():
+        if line.startswith(";TYPE:"):
+            on = line == ";TYPE:FILL"
+        elif on and line.startswith("G1"):
+            moves.append(line)
+    return moves
+
+
+@needs_engine
+def test_every_infill_pattern_of_the_slice_dialog_slices_its_own_way(tmp_path):
+    from volura.slice_dialog import INFILL_PATTERNS
+    lib = cura_profiles.Library(RESOURCES)
+    p = lib.printer("creality_ender3")
+    v = p.default_variant()
+    m = p.default_material(v)
+    seen = {}
+    for _label, pattern in INFILL_PATTERNS[1:]:
+        st = p.stacks(v, m, "standard", {"infill_sparse_density": 20.0,
+                                         "infill_pattern": pattern})
+        out = tmp_path / f"{pattern}.gcode"
+        slicer.slice_meshes(st, [_cube(20.0, (40.0, 40.0, 0.0)) + (0,)], str(out))
+        seen[pattern] = "\n".join(_fill(out.read_text(encoding="utf-8")))
+    assert all(seen[k] for k in seen if k != "lightning"), "a pattern without infill"
+    same = [(a, b) for a in seen for b in seen if a < b and seen[a] == seen[b]]
+    assert not same, f"these patterns slice the same: {same}"
+
+
 @needs_engine
 def test_slice_from_the_file_menu(monkeypatch, tmp_path):
     from PySide6.QtCore import QCoreApplication
@@ -137,6 +167,8 @@ def test_slice_from_the_file_menu(monkeypatch, tmp_path):
         assert "235" in dlg.info.text(), "the build volume of the printer"
         dlg.infill.setValue(15)
         dlg.support.setCurrentIndex(1)
+        dlg.pattern.setCurrentIndex([k for _l, k in sd.INFILL_PATTERNS].index("gyroid"))
+        assert dlg.user_values()["infill_pattern"] == "gyroid"
         seen["opened"] = True
         return QDialog.Accepted
 
@@ -175,6 +207,7 @@ def test_slice_from_the_file_menu(monkeypatch, tmp_path):
         assert seen["layers"] > 10 and str(out) in w.hint.text()
         assert w.settings.slice_printer == "creality_ender3"
         assert w.settings.slice_infill == 15 and w.settings.slice_support == 1
+        assert w.settings.slice_infill_pattern == "gyroid"
         text = out.read_text(encoding="utf-8")
         assert ";FLAVOR:Marlin" in text
     finally:

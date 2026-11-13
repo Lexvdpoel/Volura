@@ -886,7 +886,7 @@ class Settings:
         self.bracket_gussets = self._bool("bracket_gussets", True)
         # File > Slice: the printer, nozzle, material and quality last sliced with
         for key in ("slice_printer", "slice_variant", "slice_material", "slice_quality",
-                    "slice_adhesion"):
+                    "slice_adhesion", "slice_infill_pattern"):
             setattr(self, key, str(self.q.value(key, "") or ""))
         if not self.slice_printer:
             self.slice_printer = "creality_ender3"
@@ -1262,7 +1262,7 @@ class Settings:
                     "bracket_gussets"):
             self.q.setValue(key, getattr(self, key))
         for key in ("slice_printer", "slice_variant", "slice_material", "slice_quality",
-                    "slice_adhesion", "slice_infill", "slice_support"):
+                    "slice_adhesion", "slice_infill", "slice_support", "slice_infill_pattern"):
             self.q.setValue(key, getattr(self, key))
         for key in ("resin_printer", "resin_level", "resin_layer", "resin_exposure",
                     "resin_bottom_exposure", "resin_bottom_layers", "resin_density",

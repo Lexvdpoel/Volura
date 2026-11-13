@@ -2,8 +2,8 @@
 
 The printers come from the Cura profile library that Volura brings along (see
 `volura.cura_profiles`): first the maker, then the printer, then what that printer offers. A few
-settings that you change on almost every print sit underneath - infill, support and how the print
-sticks to the bed; everything else comes from the profile. The choice is remembered in Settings.
+settings that you change on almost every print sit underneath - infill and its pattern, support and
+how the print sticks to the bed; everything else comes from the profile. The choice is remembered in Settings.
 """
 from __future__ import annotations
 
@@ -23,6 +23,13 @@ SUPPORTS = [(tr_noop("None"), False, "buildplate"),
 #: the bed adhesion choices: (label, adhesion_type or "" for the printer's own)
 ADHESION = [(tr_noop("As the printer has it"), ""), (tr_noop("Skirt"), "skirt"),
             (tr_noop("Brim"), "brim"), (tr_noop("Raft"), "raft"), (tr_noop("None"), "none")]
+#: the infill patterns: (label, infill_pattern or "" for the profile's own)
+INFILL_PATTERNS = [(tr_noop("As the profile has it"), ""), (tr_noop("Grid"), "grid"),
+                   (tr_noop("Lines"), "lines"), (tr_noop("Triangles"), "triangles"),
+                   (tr_noop("Tri-Hexagon"), "trihexagon"), (tr_noop("Cubic"), "cubic"),
+                   (tr_noop("Gyroid"), "gyroid"), (tr_noop("Honeycomb"), "honeycomb"),
+                   (tr_noop("Concentric"), "concentric"), (tr_noop("Zig Zag"), "zigzag"),
+                   (tr_noop("Cross"), "cross"), (tr_noop("Lightning"), "lightning")]
 
 
 def is_loaded(resources: str) -> bool:
@@ -60,6 +67,15 @@ class SliceDialog(QDialog):
         self.infill.setSuffix(" %")
         self.infill.setValue(int(s.slice_infill))
         self.infill.setToolTip(tr("How full the inside of the print is"))
+        self.pattern = QComboBox()
+        for label, _kind in INFILL_PATTERNS:
+            self.pattern.addItem(tr(label))
+        patterns = [k for _label, k in INFILL_PATTERNS]
+        self.pattern.setCurrentIndex(patterns.index(s.slice_infill_pattern)
+                                     if s.slice_infill_pattern in patterns else 0)
+        self.pattern.setToolTip(tr("The shape the inside of the print is filled with: gyroid and "
+                                   "cubic are strong in every direction, lines and zig zag print "
+                                   "fastest, lightning only holds up the top"))
         self.support = QComboBox()
         for label, _on, _kind in SUPPORTS:
             self.support.addItem(tr(label))
@@ -79,6 +95,7 @@ class SliceDialog(QDialog):
         lay.addRow(tr("Material"), self.material)
         lay.addRow(tr("Quality"), self.quality)
         lay.addRow(tr("Infill"), self.infill)
+        lay.addRow(tr("Infill pattern"), self.pattern)
         lay.addRow(tr("Support"), self.support)
         lay.addRow(tr("Bed adhesion"), self.adhesion)
         lay.addRow("", self.info)
@@ -226,6 +243,9 @@ class SliceDialog(QDialog):
         adhesion = ADHESION[self.adhesion.currentIndex()][1]
         if adhesion:
             values["adhesion_type"] = adhesion
+        pattern = INFILL_PATTERNS[self.pattern.currentIndex()][1]
+        if pattern:
+            values["infill_pattern"] = pattern
         return values
 
     def choice(self) -> dict:
@@ -236,7 +256,8 @@ class SliceDialog(QDialog):
                 "material": self.material.currentData() or "",
                 "quality": self.quality.currentData() or "",
                 "infill": self.infill.value(), "support": self.support.currentIndex(),
-                "adhesion": ADHESION[self.adhesion.currentIndex()][1]}
+                "adhesion": ADHESION[self.adhesion.currentIndex()][1],
+                "infill_pattern": INFILL_PATTERNS[self.pattern.currentIndex()][1]}
 
     def stacks(self) -> cura_profiles.Stacks:
         """The settings to slice with."""
