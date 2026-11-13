@@ -29,7 +29,8 @@ from volura import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, 
                     cable_clip, cable_winder, card_holder, drawer_organizer, enclosure, fan_guard,
                     fonts, gears,
                     gridfinity,
-                    grommet, hinge, hose_adapter, knob, label_plate, pegboard, phone_stand,
+                    grommet, hinge, hose_adapter, knob, label_plate, lithophane, pegboard,
+                    phone_stand,
                     plant_pot, spool_adapter, standoff, storage_bin, text3d, tie_mount, wall_hook)
 from volura import ops  # noqa: E402
 from volura.model import Document  # noqa: E402
@@ -92,6 +93,13 @@ def winder(**kw):
     if str(kw.get("label", "")).strip():
         need_fonts()
     return [cable_winder.cable_winder(**kw)]
+
+
+def photo(**kw):
+    """A lithophane of a small picture: a gradient, so every thickness between is in it."""
+    rows, cols = int(kw.pop("rows", 12)), int(kw.pop("cols", 16))
+    gray = np.linspace(0.0, 1.0, rows * cols).reshape(rows, cols)
+    return [lithophane.lithophane(gray, **kw)]
 
 
 CASES = [
@@ -274,6 +282,12 @@ CASES = [
         length=40.0, width=20.0, thickness=2.0, slot=8.0, depth=5.0, keyhole=False)),
     ("cable winder large labelled", lambda: winder(
         length=200.0, width=100.0, thickness=6.0, slot=30.0, depth=60.0, label="VOLURA")),
+
+    ("lithophane default", lambda: photo()),
+    ("lithophane small without border", lambda: photo(
+        width=40.0, thin=0.4, thick=1.0, border=0.0, pixel=0.1)),
+    ("lithophane large inverted coarse", lambda: photo(
+        rows=40, cols=60, width=250.0, thin=2.0, thick=6.0, border=10.0, invert=True, pixel=1.0)),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

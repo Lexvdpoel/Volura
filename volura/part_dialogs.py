@@ -7,16 +7,19 @@ build live in `volura/app.py`.
 """
 from __future__ import annotations
 
-from PySide6.QtGui import QFont
+import os
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont, QImage, QPixmap
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-                               QFontComboBox, QFormLayout, QLabel, QLineEdit, QPlainTextEdit,
-                               QSpinBox)
+                               QFileDialog, QFontComboBox, QFormLayout, QHBoxLayout, QLabel,
+                               QLineEdit, QPlainTextEdit, QPushButton, QSpinBox)
 
 from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                cable_winder, card_holder, drawer_organizer, enclosure, fan_guard, fonts, gears,
-               gridfinity, grommet, hinge, hose_adapter, knob, label_plate, pegboard, phone_stand,
-               plant_pot, spool_adapter, standoff, storage_bin, text3d, threads, tie_mount,
-               wall_hook)
+               gridfinity, grommet, hinge, hose_adapter, knob, label_plate, lithophane, pegboard,
+               phone_stand, plant_pot, spool_adapter, standoff, storage_bin, text3d, threads,
+               tie_mount, wall_hook)
 from .i18n import tr
 
 
@@ -1895,6 +1898,135 @@ class CableWinderDialog(QDialog):
                 "thickness": round(self.thickness.value(), 6),
                 "slot": round(self.slot.value(), 6), "depth": round(self.depth.value(), 6),
                 "keyhole": self.keyhole.isChecked(), "label": self.label.text()}
+
+
+class LithophaneDialog(QDialog):
+    """The "Lithophane…" dialog: a plate whose thickness is the brightness of a photo.
+
+    The picture comes off the disk and is shown small, because no number says whether it is the
+    right photo. The width is how wide the picture is printed and the height follows the photo
+    itself; the two thicknesses are the plastic where the picture is white and where it is black,
+    the border is the flat frame the plate stands on and the detail is how big one cell of the grid
+    is. Under the fields the whole plate stands in figures, because that is what the bed has to
+    agree to. OK waits until there is a picture that can be read. The values come from Settings and
+    are remembered, the picture with them.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Lithophane"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.image = QLineEdit(s.lithophane_image)
+        self.image.setPlaceholderText(tr("No picture"))
+        self.image.setToolTip(tr("The photo the plate is made of: a png, jpg, bmp, gif or webp"))
+        self.browse = QPushButton(tr("Browse…"))
+        self.browse.setToolTip(tr("Look for the photo on your computer"))
+        self.browse.clicked.connect(self._browse)
+        row = QHBoxLayout()
+        row.addWidget(self.image)
+        row.addWidget(self.browse)
+        self.width = spin(lithophane.WIDTH_MIN, lithophane.WIDTH_MAX, s.lithophane_width, 5.0)
+        self.width.setToolTip(tr("How wide the picture is printed; how high it is follows the "
+                                 "photo itself"))
+        self.thin = spin(lithophane.THIN_MIN, lithophane.THIN_MAX, s.lithophane_thin, 0.1)
+        self.thin.setToolTip(tr("How thick the plastic is where the picture is white; the light "
+                                "places let the most light through"))
+        self.thick = spin(lithophane.THICK_MIN, lithophane.THICK_MAX, s.lithophane_thick, 0.5)
+        self.thick.setToolTip(tr("How thick the plastic is where the picture is black; the darker "
+                                 "a place is, the further it comes out"))
+        self.border = spin(lithophane.BORDER_MIN, lithophane.BORDER_MAX, s.lithophane_border, 1.0)
+        self.border.setToolTip(tr("How wide the flat frame of thick plastic round the picture is; "
+                                  "it is what the plate stands on and what keeps it from breaking"))
+        self.detail = QComboBox()
+        for name, value in ((tr("Very fine"), 0.1), (tr("Fine"), 0.2), (tr("Normal"), 0.4),
+                            (tr("Coarse"), 0.8)):
+            self.detail.addItem(f"{name} {value:g} mm", value)
+        self.detail.setCurrentIndex(self._nearest(s.lithophane_pixel))
+        self.detail.setToolTip(tr("How big one cell of the grid is: fine keeps every detail of the "
+                                  "photo, coarse makes a plate of big pixels and prints faster"))
+        self.invert = QCheckBox(tr("Invert"))
+        self.invert.setChecked(bool(s.lithophane_invert))
+        self.invert.setToolTip(tr("Make the dark places thin and the light places thick, for a "
+                                  "negative of the photo"))
+        self.preview = QLabel()
+        self.preview.setMinimumHeight(90)
+        self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.info = QLabel()
+        lay.addRow(tr("Picture"), row)
+        lay.addRow("", self.preview)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Thinnest (white)"), self.thin)
+        lay.addRow(tr("Thickest (black)"), self.thick)
+        lay.addRow(tr("Border"), self.border)
+        lay.addRow(tr("Detail"), self.detail)
+        lay.addRow("", self.invert)
+        lay.addRow("", self.info)
+        self.image.textChanged.connect(self._reload)
+        for w in (self.width, self.thin, self.thick, self.border):
+            w.valueChanged.connect(self._changed)
+        self.detail.currentIndexChanged.connect(self._changed)
+        self.invert.toggled.connect(self._changed)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        lay.addRow(self.buttonBox)
+        self._reload()
+
+    def _nearest(self, value) -> int:
+        """The entry of the detail list whose cell is closest to `value`."""
+        return min(range(self.detail.count()),
+                   key=lambda i: abs(float(self.detail.itemData(i)) - float(value)))
+
+    def _browse(self):
+        """The formats people have their photos in."""
+        path, _filter = QFileDialog.getOpenFileName(
+            self, tr("Picture"), os.path.dirname(self.image.text()),
+            tr("Pictures") + " (*.png *.jpg *.jpeg *.bmp *.gif *.webp)")
+        if path:
+            self.image.setText(path)
+
+    def _reload(self, *_):
+        """The preview of the picture, and OK as soon as one can be read.
+
+        The path is read as it is typed, so a picture that is there is accepted without the user
+        having to press anything; a half-typed path simply fails to open and stays refused.
+        """
+        self.gray = None
+        self.preview.clear()
+        path = self.image.text().strip()
+        if path:
+            img = QImage(path)
+            if not img.isNull():
+                self.gray = img.convertToFormat(QImage.Format_Grayscale8)
+                self.preview.setPixmap(QPixmap.fromImage(
+                    img.scaled(220, 140, Qt.AspectRatioMode.KeepAspectRatio,
+                               Qt.TransformationMode.SmoothTransformation)))
+        self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(self.gray is not None)
+        self._changed()
+
+    def _changed(self, *_):
+        shape = (self.gray.height(), self.gray.width()) if self.gray is not None else (3, 4)
+        size = {k: v for k, v in self.options().items() if k != "image"}
+        s = lithophane.sizes(shape, **size)
+        self.info.setText(tr("{w:.1f} by {h:.1f} mm, {d:.1f} mm deep").format(
+            w=s["outside_width"], h=s["outside_height"], d=s["thick"]))
+
+    def options(self) -> dict:
+        return {"image": self.image.text().strip(), "width": round(self.width.value(), 6),
+                "thin": round(self.thin.value(), 6), "thick": round(self.thick.value(), 6),
+                "border": round(self.border.value(), 6),
+                "pixel": float(self.detail.currentData()), "invert": self.invert.isChecked()}
 
 
 class HoseAdapterDialog(QDialog):

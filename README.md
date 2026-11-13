@@ -226,6 +226,15 @@ The interface is available in English and Dutch (*Window > Preferences > General
   nothing snags the cable, and an optional keyhole pinches the end of the cable while you wind. An
   optional label engraves itself 0.6 mm deep in the top face of the middle part. It prints lying
   flat, so every wall is pulled straight up and nothing overhangs or needs support
+- **Lithophane** (Draw > Parts): a plate whose thickness is the brightness of a photo, so with a
+  light behind it the photo appears. Pick any png, jpg, bmp, gif or webp and enter how wide the
+  picture is printed (40 to 250 mm) - how high it gets follows the picture itself - the thickness
+  where the picture is white (0.4 to 2 mm) and where it is black (1 to 6 mm), the flat frame of
+  thick plastic round it (0 to 10 mm) and how big one cell of the grid is (0.1 to 1 mm). Dark
+  places come further out and let less light through, the back stays flat and inverting the whole
+  thing gives a negative. It prints standing up on its border, which is how a lithophane gets its
+  quality: the layers go through the thickness of the picture instead of across it, so the photo
+  shows no layer lines, and it needs no support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

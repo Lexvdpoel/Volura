@@ -373,6 +373,16 @@ SVG = {
                     f'<path d="M10.2 9.8 A1.8 2.6 0 0 0 13.8 9.8 M10.2 14.2 A1.8 2.6 0 0 1 13.8 '
                     f'14.2 M10.2 12 A1.8 1.4 0 0 0 13.8 12" {N} stroke="#3b7dd8" '
                     f'stroke-width="1.3" stroke-linecap="round"/>',
+    # lithophane: a standing plate of squares, thick where the photo is dark and thin where it is
+    # light, with the light behind it
+    "lithophane": f'<rect x="4" y="3" width="12" height="18" rx="1.6" fill="#eef2f7" {S()}/>'
+                  f'<rect x="6" y="5.5" width="3.4" height="3.4" fill="#3b7dd8"/>'
+                  f'<rect x="10.6" y="5.5" width="3.4" height="3.4" fill="#8fa6c3"/>'
+                  f'<rect x="6" y="10.3" width="3.4" height="3.4" fill="#cfe0f5"/>'
+                  f'<rect x="10.6" y="10.3" width="3.4" height="3.4" fill="#3b7dd8"/>'
+                  f'<rect x="8.3" y="15.1" width="3.4" height="3.4" fill="#8fa6c3"/>'
+                  f'<path d="M18.5 6 L22 4.5 M18.5 12 L22 12 M18.5 18 L22 19.5" {N} '
+                  f'stroke="#f2c230" stroke-width="1.5" stroke-linecap="round"/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

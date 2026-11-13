@@ -29,7 +29,7 @@ from . import (__version__, background, battery_holder, bin_rack, bit_holder, bo
                cable_chain, cable_clip, cable_winder, cam, card_holder, drawer_organizer, dxf, enclosure, errors,
                fan_guard,
                fileio, gcode, gears, gridfinity, grommet, hinge, hose_adapter, i18n, joints,
-               keyschemes, knob, label_plate, linking,
+               keyschemes, knob, label_plate, linking, lithophane,
                nesting, ops, pegboard, phone_stand, plant_pot, sheet3d, sheettools,
                svg,
                spacemouse, spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
@@ -1088,6 +1088,19 @@ class Settings:
         self.cable_winder_keyhole = self._bool("cable_winder_keyhole", True)
         self.cable_winder_label = str(self.q.value("cable_winder_label", "") or "")
         for key, default, lo, hi in (
+                ("lithophane_width", 100.0, lithophane.WIDTH_MIN, lithophane.WIDTH_MAX),
+                ("lithophane_thin", 0.8, lithophane.THIN_MIN, lithophane.THIN_MAX),
+                ("lithophane_thick", 3.0, lithophane.THICK_MIN, lithophane.THICK_MAX),
+                ("lithophane_border", 3.0, lithophane.BORDER_MIN, lithophane.BORDER_MAX),
+                ("lithophane_pixel", 0.2, lithophane.PIXEL_MIN, lithophane.PIXEL_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        self.lithophane_invert = self._bool("lithophane_invert", False)
+        self.lithophane_image = str(self.q.value("lithophane_image", "") or "")
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1333,6 +1346,10 @@ class Settings:
         for key in ("cable_winder_length", "cable_winder_width", "cable_winder_thickness",
                     "cable_winder_slot", "cable_winder_depth", "cable_winder_keyhole",
                     "cable_winder_label"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("lithophane_image", "lithophane_width", "lithophane_thin",
+                    "lithophane_thick", "lithophane_border", "lithophane_pixel",
+                    "lithophane_invert"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2301,6 +2318,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                    "from each end so the cable winds on the middle part, the ends "
                                    "keep it in, a keyhole clamps its end and it prints lying flat "
                                    "without support"))
+        # ---- lithophane
+        self.a_lithophane = A(tr("Lithophane…"),
+                              lambda checked=False: self.lithophane_dialog(), None, "lithophane",
+                              False,
+                              tr("Add a plate whose thickness is the brightness of a photo: dark "
+                                 "is thick and light is thin, so with a light behind the plate the "
+                                 "photo appears; it prints standing up, which is how it gets its "
+                                 "quality"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2420,7 +2445,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_hose_adapter, self.a_fan_guard, self.a_grommet, self.a_bracket,
                           self.a_tie_mount, self.a_bit_holder, self.a_card_holder,
                           self.a_wall_hook, self.a_phone_stand, self.a_spool_adapter,
-                          self.a_drawer_organizer, self.a_plant_pot, self.a_cable_winder))
+                          self.a_drawer_organizer, self.a_plant_pot, self.a_cable_winder,
+                          self.a_lithophane))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
