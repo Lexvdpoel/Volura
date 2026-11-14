@@ -3,6 +3,13 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.54 — 2026-11-14
+
+### Fixed
+- File > Slice for Resin could hang now and then: the layers are drawn in several threads at
+  once, and two of them could wait on each other for good. It no longer does.
+- The Linux download of 0.2.53 was missing; this release has it again.
+
 ## 0.2.53 — 2026-11-14
 
 ### New
