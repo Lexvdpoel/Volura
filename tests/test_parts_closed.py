@@ -27,7 +27,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain,  # noqa: E402
                     cable_clip, cable_winder, card_holder, coaster, drawer_organizer,
-                    enclosure, fan_guard, fonts, gears,
+                    enclosure, fan_guard, filament_clip, fonts, gears,
                     gridfinity,
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
                     pegboard,
@@ -321,6 +321,12 @@ CASES = [
         shape="hexagon", size=60.0, thickness=3.0, rim=0.0, pattern="none")]),
     ("coaster large square grid", lambda: [coaster.coaster(
         shape="square", size=150.0, thickness=8.0, rim=3.0, pattern="grid")]),
+
+    ("filament clip default", lambda: [filament_clip.filament_clip()]),
+    ("filament clip thin rim two holes", lambda: [filament_clip.filament_clip(
+        flange=1.0, filament="2.85", count=2, thickness=4.0)]),
+    ("filament clip thick rim three holes", lambda: [filament_clip.filament_clip(
+        flange=6.0, filament="2.85", count=3, thickness=10.0)]),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

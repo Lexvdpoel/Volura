@@ -270,6 +270,17 @@ The interface is available in English and Dutch (*Window > Preferences > General
   top is cut out to the plate up to 3 mm inside the edge, which leaves that edge standing as a rim,
   and the grooves are cut 0.8 mm deep and stop 2 mm before the wall of the recess. It prints lying
   flat, so every face is horizontal or vertical and nothing needs support
+- **Filament Clip** (Draw > Parts): a small clip that pushes onto the rim of a filament spool and
+  holds the loose end of the thread, so the spool does not unwind. You enter how thick the rim of
+  the spool is (1 to 6 mm), which filament it holds (1.75 or 2.85 mm), how many holes the clip has
+  (1 to 3) and how high it prints (4 to 10 mm); the dialog says how big the clip lies on the bed.
+  Two jaws of 2.2 mm straddle the rim in a gap as wide as the rim itself, and a bump of 0.3 mm on
+  the inside of each jaw pinches it so the clip stays put; the outer bottom corner of each jaw is
+  chamfered 1 mm, so the clip slides onto the rim instead of digging into it. The tab beside it
+  carries a hole for every end, 0.4 mm wider than the thread, and every hole opens to the edge of
+  the tab through a slit of 0.6 times the thread: the filament is pushed in sideways and the
+  narrower slit holds it. It prints lying flat, so every face is horizontal or vertical and nothing
+  needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

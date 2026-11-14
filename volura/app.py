@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
 
 from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_holder, boxgen, bracket,
                cable_chain, cable_clip, cable_winder, cam, card_holder, coaster, drawer_organizer,
-               dxf, enclosure, errors, fan_guard,
+               dxf, enclosure, errors, fan_guard, filament_clip,
                fileio, gcode, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, screw_jar,
                nesting, ops, pegboard, phone_stand, plant_pot, sheet3d, sheettools,
@@ -1161,6 +1161,25 @@ class Settings:
             except (TypeError, ValueError):
                 value = default
             setattr(self, key, max(lo, min(hi, value)))
+        self.filament_clip_filament = str(
+            self.q.value("filament_clip_filament", filament_clip.FILAMENTS[0]))
+        if self.filament_clip_filament not in filament_clip.FILAMENTS:
+            self.filament_clip_filament = filament_clip.FILAMENTS[0]
+        for key, default, lo, hi in (
+                ("filament_clip_flange", 2.5, filament_clip.FLANGE_MIN, filament_clip.FLANGE_MAX),
+                ("filament_clip_thickness", 5.0, filament_clip.THICKNESS_MIN,
+                 filament_clip.THICKNESS_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        try:
+            value = int(self.q.value("filament_clip_count", filament_clip.COUNT_MIN))
+        except (TypeError, ValueError):
+            value = filament_clip.COUNT_MIN
+        self.filament_clip_count = max(filament_clip.COUNT_MIN,
+                                       min(filament_clip.COUNT_MAX, value))
         for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
@@ -1424,6 +1443,9 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("coaster_shape", "coaster_size", "coaster_thickness", "coaster_rim",
                     "coaster_pattern"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("filament_clip_flange", "filament_clip_filament", "filament_clip_count",
+                    "filament_clip_thickness"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2431,6 +2453,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                            tr("Add a flat coaster with a rim that catches what runs down a glass: "
                               "round, hexagonal or square, with rings or a grid grooved into the "
                               "top for grip; it prints lying flat without support"))
+        # ---- filament clip
+        self.a_filament_clip = A(tr("Filament Clip…"),
+                                 lambda checked=False: self.filament_clip_dialog(), None,
+                                 "filament_clip", False,
+                                 tr("Add a clip that pushes onto the rim of a filament spool and "
+                                    "holds the loose end of the thread: two jaws grip the flange "
+                                    "and the filament snaps sideways into a hole that a narrower "
+                                    "slit holds; it prints lying flat without support"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2552,7 +2582,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_wall_hook, self.a_phone_stand, self.a_spool_adapter,
                           self.a_drawer_organizer, self.a_plant_pot, self.a_cable_winder,
                           self.a_lithophane, self.a_hex_key_holder,
-                          self.a_screw_jar, self.a_bag_clip, self.a_coaster))
+                          self.a_screw_jar, self.a_bag_clip, self.a_coaster,
+                          self.a_filament_clip))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

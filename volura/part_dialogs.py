@@ -16,10 +16,11 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QLineEdit, QPlainTextEdit, QPushButton, QSpinBox)
 
 from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
-               cable_winder, card_holder, coaster, drawer_organizer, enclosure, fan_guard, fonts,
-               gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate,
-               lithophane, pegboard, phone_stand, plant_pot, screw_jar, spool_adapter, standoff,
-               storage_bin, text3d, threads, tie_mount, wall_hook)
+               cable_winder, card_holder, coaster, drawer_organizer, enclosure, fan_guard,
+               filament_clip, fonts, gears, gridfinity, grommet, hex_key_holder, hinge,
+               hose_adapter, knob, label_plate, lithophane, pegboard, phone_stand, plant_pot,
+               screw_jar, spool_adapter, standoff, storage_bin, text3d, threads, tie_mount,
+               wall_hook)
 from .i18n import tr
 
 
@@ -2350,6 +2351,76 @@ class CoasterDialog(QDialog):
         return {"shape": self.shape.currentData(), "size": round(self.size.value(), 6),
                 "thickness": round(self.thickness.value(), 6),
                 "rim": round(self.rim.value(), 6), "pattern": self.pattern.currentData()}
+
+
+class FilamentClipDialog(QDialog):
+    """The "Filament Clip…" dialog: a clip that pushes onto the rim of a spool and holds the thread.
+
+    The flange is how thick the rim of the spool is that the clip grips and the filament which
+    thread it holds; the holes say how many ends the clip takes and the thickness how high it
+    prints. Under the fields the clip lies in figures, because that is what the bed has to agree
+    to. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Filament clip"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.flange = spin(filament_clip.FLANGE_MIN, filament_clip.FLANGE_MAX,
+                           s.filament_clip_flange, 0.5)
+        self.flange.setToolTip(tr("How thick the rim of the spool is that the clip pushes onto"))
+        self.filament = QComboBox()
+        for name in filament_clip.FILAMENTS:
+            self.filament.addItem(f"{name} mm", name)
+        self.filament.setCurrentIndex(
+            max(0, self.filament.findData(s.filament_clip_filament)))
+        self.filament.setToolTip(tr("How thick the filament is: the hole is a little wider than "
+                                    "the thread and the slit that holds it a little narrower"))
+        self.count = QSpinBox()
+        self.count.setRange(filament_clip.COUNT_MIN, filament_clip.COUNT_MAX)
+        self.count.setValue(int(s.filament_clip_count))
+        self.count.setToolTip(tr("How many ends of filament the clip holds, one end per hole"))
+        self.thickness = spin(filament_clip.THICKNESS_MIN, filament_clip.THICKNESS_MAX,
+                              s.filament_clip_thickness, 0.5)
+        self.thickness.setToolTip(tr("How high the clip prints: thick enough to grip the rim, thin "
+                                     "enough to push it onto the spool by hand"))
+        self.info = QLabel()
+        lay.addRow(tr("Flange thickness"), self.flange)
+        lay.addRow(tr("Filament"), self.filament)
+        lay.addRow(tr("Holes"), self.count)
+        lay.addRow(tr("Thickness"), self.thickness)
+        lay.addRow("", self.info)
+        for w in (self.flange, self.thickness):
+            w.valueChanged.connect(self._changed)
+        self.count.valueChanged.connect(self._changed)
+        self.filament.currentIndexChanged.connect(self._changed)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        lay.addRow(self.buttonBox)
+        self._changed()
+
+    def _changed(self, *_):
+        """The clip these figures make, lying on the bed."""
+        s = filament_clip.sizes(**self.options())
+        self.info.setText(tr("{l:.1f} by {w:.1f} mm, {t:.1f} mm thick").format(
+            l=s["length"], w=s["width"], t=s["thickness"]))
+
+    def options(self) -> dict:
+        return {"flange": round(self.flange.value(), 6),
+                "filament": self.filament.currentData(), "count": self.count.value(),
+                "thickness": round(self.thickness.value(), 6)}
 
 
 class HoseAdapterDialog(QDialog):

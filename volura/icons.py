@@ -392,6 +392,14 @@ SVG = {
                f'<circle cx="12" cy="12" r="7.4" {N} stroke="#3b7dd8" stroke-width="1.3"/>'
                f'<circle cx="12" cy="12" r="4.6" {N} stroke="#3b7dd8" stroke-width="1.3"/>'
                f'<circle cx="12" cy="12" r="1.8" {N} stroke="#3b7dd8" stroke-width="1.3"/>',
+    # filament clip: a clip that straddles the rim of a spool, the thread pushed in sideways
+    "filament_clip": f'<path d="M2.5 15 L2.5 4 L19.6 4 A1.4 1.4 0 0 1 21 5.4 L21 8.6 '
+                     f'A1.4 1.4 0 0 1 19.6 10 L10 10 L10 15 L7.6 15 L7.6 6.4 L4.9 6.4 L4.9 15 Z" '
+                     f'fill="#eef2f7" {S()}/>'
+                     f'<circle cx="15" cy="7" r="1.7" fill="#fff" {S(w=1.1)}/>'
+                     f'<path d="M15 8.7 L15 10.1" {N} stroke="#2b2b2b" stroke-width="1.1"/>'
+                     f'<path d="M21.6 13.2 Q16.6 13.4 15.2 8.7" {N} stroke="#3b7dd8" '
+                     f'stroke-width="1.8" stroke-linecap="round"/>',
     "lithophane": f'<rect x="4" y="3" width="12" height="18" rx="1.6" fill="#eef2f7" {S()}/>'
                   f'<rect x="6" y="5.5" width="3.4" height="3.4" fill="#3b7dd8"/>'
                   f'<rect x="10.6" y="5.5" width="3.4" height="3.4" fill="#8fa6c3"/>'
