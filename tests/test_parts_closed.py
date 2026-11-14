@@ -31,7 +31,7 @@ from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cab
                     gridfinity,
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
                     pegboard,
-                    phone_stand,
+                    phone_stand, plant_label,
                     plant_pot, screw_jar, spool_adapter, standoff, storage_bin, text3d, tie_mount, wall_hook)
 from volura import ops  # noqa: E402
 from volura.model import Document  # noqa: E402
@@ -327,6 +327,13 @@ CASES = [
         flange=1.0, filament="2.85", count=2, thickness=4.0)]),
     ("filament clip thick rim three holes", lambda: [filament_clip.filament_clip(
         flange=6.0, filament="2.85", count=3, thickness=10.0)]),
+
+    ("plant label default", lambda: [plant_label.plant_label()]),
+    ("plant label small empty plate", lambda: [plant_label.plant_label(
+        text="", width=30.0, head=12.0, stake=30.0, thickness=1.6, raised=0.4)]),
+    ("plant label long name on a large head", lambda: [plant_label.plant_label(
+        text="ROSEMARY FOR THE KITCHEN WINDOW", width=120.0, head=40.0, stake=200.0,
+        thickness=4.0, raised=2.0)]),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

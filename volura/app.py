@@ -30,7 +30,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                dxf, enclosure, errors, fan_guard, filament_clip,
                fileio, gcode, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, screw_jar,
-               nesting, ops, pegboard, phone_stand, plant_pot, sheet3d, sheettools,
+               nesting, ops, pegboard, phone_stand, plant_label, plant_pot, sheet3d, sheettools,
                svg,
                spacemouse, spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers)
@@ -1180,6 +1180,19 @@ class Settings:
             value = filament_clip.COUNT_MIN
         self.filament_clip_count = max(filament_clip.COUNT_MIN,
                                        min(filament_clip.COUNT_MAX, value))
+        self.plant_label_text = str(self.q.value("plant_label_text", "Basil") or "")
+        for key, default, lo, hi in (
+                ("plant_label_width", 60.0, plant_label.WIDTH_MIN, plant_label.WIDTH_MAX),
+                ("plant_label_head", 20.0, plant_label.HEAD_MIN, plant_label.HEAD_MAX),
+                ("plant_label_stake", 80.0, plant_label.STAKE_MIN, plant_label.STAKE_MAX),
+                ("plant_label_thickness", 2.4, plant_label.THICKNESS_MIN,
+                 plant_label.THICKNESS_MAX),
+                ("plant_label_raised", 0.8, plant_label.RAISED_MIN, plant_label.RAISED_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
         for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
@@ -1446,6 +1459,9 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("filament_clip_flange", "filament_clip_filament", "filament_clip_count",
                     "filament_clip_thickness"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("plant_label_text", "plant_label_width", "plant_label_head",
+                    "plant_label_stake", "plant_label_thickness", "plant_label_raised"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2461,6 +2477,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                     "holds the loose end of the thread: two jaws grip the flange "
                                     "and the filament snaps sideways into a hole that a narrower "
                                     "slit holds; it prints lying flat without support"))
+        # ---- plant label
+        self.a_plant_label = A(tr("Plant Label…"),
+                               lambda checked=False: self.plant_label_dialog(), None,
+                               "plant_label", False,
+                               tr("Add a stake you push into the soil of a pot, with a flat head "
+                                  "that carries the name of the plant in letters standing out of "
+                                  "the plastic: the stake is 8 mm wide and pointed, so it is easy "
+                                  "to push in, and the label prints lying flat without support"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2583,7 +2607,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_drawer_organizer, self.a_plant_pot, self.a_cable_winder,
                           self.a_lithophane, self.a_hex_key_holder,
                           self.a_screw_jar, self.a_bag_clip, self.a_coaster,
-                          self.a_filament_clip))
+                          self.a_filament_clip, self.a_plant_label))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

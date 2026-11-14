@@ -400,6 +400,15 @@ SVG = {
                      f'<path d="M15 8.7 L15 10.1" {N} stroke="#2b2b2b" stroke-width="1.1"/>'
                      f'<path d="M21.6 13.2 Q16.6 13.4 15.2 8.7" {N} stroke="#3b7dd8" '
                      f'stroke-width="1.8" stroke-linecap="round"/>',
+    # plant label: a head that carries the name, on a pointed stake in the soil
+    "plant_label": f'<rect x="5.6" y="2.6" width="12.8" height="8.4" rx="1.8" '
+                   f'fill="#eef2f7" {S()}/>'
+                   f'<path d="M8.4 5.4 L15.6 5.4 M8.4 8 L13.4 8" {N} stroke="#3b7dd8" '
+                   f'stroke-width="1.6" stroke-linecap="round"/>'
+                   f'<path d="M10.5 11 L13.5 11 L13.5 17.6 L12 20.8 L10.5 17.6 Z" '
+                   f'fill="#cfe0f5" {S(w=1.3)}/>'
+                   f'<path d="M3.6 20.8 L20.4 20.8" {N} stroke="#2b2b2b" stroke-width="1.4" '
+                   f'stroke-linecap="round"/>',
     "lithophane": f'<rect x="4" y="3" width="12" height="18" rx="1.6" fill="#eef2f7" {S()}/>'
                   f'<rect x="6" y="5.5" width="3.4" height="3.4" fill="#3b7dd8"/>'
                   f'<rect x="10.6" y="5.5" width="3.4" height="3.4" fill="#8fa6c3"/>'

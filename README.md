@@ -281,6 +281,16 @@ The interface is available in English and Dutch (*Window > Preferences > General
   the tab through a slit of 0.6 times the thread: the filament is pushed in sideways and the
   narrower slit holds it. It prints lying flat, so every face is horizontal or vertical and nothing
   needs support
+- **Plant Label** (Draw > Parts): a stake you push into the soil of a pot, with a flat head that
+  carries the name of the plant in letters standing out of the plastic, so you know again what it
+  was you sowed there. You enter the name, how wide the head is (30 to 120 mm) and how high it
+  stands (12 to 40 mm), how long the stake is that goes into the soil (30 to 200 mm), how thick the
+  plate is (1.6 to 4 mm) and how high the letters stand (0.4 to 2 mm); the dialog says how long the
+  label lies on the bed. The head is a rectangle whose four corners round with 3 mm and the stake
+  below it is an 8 mm wide strip that ends in a point, so the label is easy to push in. The name is
+  half as high as the head and shrunk until it fits, so it always stays inside the head, and empty
+  text leaves a plain plate to write on. It prints lying flat, so every face is horizontal or
+  vertical and nothing needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

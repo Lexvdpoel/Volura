@@ -18,9 +18,9 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                cable_winder, card_holder, coaster, drawer_organizer, enclosure, fan_guard,
                filament_clip, fonts, gears, gridfinity, grommet, hex_key_holder, hinge,
-               hose_adapter, knob, label_plate, lithophane, pegboard, phone_stand, plant_pot,
-               screw_jar, spool_adapter, standoff, storage_bin, text3d, threads, tie_mount,
-               wall_hook)
+               hose_adapter, knob, label_plate, lithophane, pegboard, phone_stand, plant_label,
+               plant_pot, screw_jar, spool_adapter, standoff, storage_bin, text3d, threads,
+               tie_mount, wall_hook)
 from .i18n import tr
 
 
@@ -2421,6 +2421,81 @@ class FilamentClipDialog(QDialog):
         return {"flange": round(self.flange.value(), 6),
                 "filament": self.filament.currentData(), "count": self.count.value(),
                 "thickness": round(self.thickness.value(), 6)}
+
+
+class PlantLabelDialog(QDialog):
+    """The "Plant Label…" dialog: a stake for a pot whose head carries the name of the plant.
+
+    The text is the name that stands on the head and the two head numbers say how big that head
+    is; the stake is how far the label goes into the soil, the thickness how thick the plate is
+    and the letter height how high the name stands out of it. Under the fields the whole label
+    lies in figures, because that is what the bed has to agree to. The values come from Settings
+    and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Plant label"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.text = QLineEdit(s.plant_label_text)
+        self.text.setPlaceholderText(tr("No name"))
+        self.text.setToolTip(tr("The name of the plant that stands on the head; leave it empty "
+                                 "for a plain plate to write on"))
+        self.width = spin(plant_label.WIDTH_MIN, plant_label.WIDTH_MAX, s.plant_label_width)
+        self.width.setToolTip(tr("How wide the head is; its corners round with 3 mm, so nothing "
+                                 "is sharp enough to cut a hand"))
+        self.head = spin(plant_label.HEAD_MIN, plant_label.HEAD_MAX, s.plant_label_head)
+        self.head.setToolTip(tr("How high the head stands above the soil; the letters are half "
+                                "as high as it is"))
+        self.stake = spin(plant_label.STAKE_MIN, plant_label.STAKE_MAX, s.plant_label_stake, 5.0)
+        self.stake.setToolTip(tr("How long the stake is that goes into the soil; its end is "
+                                 "pointed, so the label is easy to push in"))
+        self.thickness = spin(plant_label.THICKNESS_MIN, plant_label.THICKNESS_MAX,
+                              s.plant_label_thickness, 0.2)
+        self.thickness.setToolTip(tr("How thick the plate is: thick enough to push the stake into "
+                                     "the soil, thin enough to print flat in a few minutes"))
+        self.raised = spin(plant_label.RAISED_MIN, plant_label.RAISED_MAX, s.plant_label_raised,
+                           0.2)
+        self.raised.setToolTip(tr("How high the letters stand out of the head, so the name is to "
+                                  "be read and not only felt"))
+        self.info = QLabel()
+        lay.addRow(tr("Text"), self.text)
+        lay.addRow(tr("Head width"), self.width)
+        lay.addRow(tr("Head height"), self.head)
+        lay.addRow(tr("Stake length"), self.stake)
+        lay.addRow(tr("Thickness"), self.thickness)
+        lay.addRow(tr("Letter height"), self.raised)
+        lay.addRow("", self.info)
+        for w in (self.width, self.head, self.stake, self.thickness, self.raised):
+            w.valueChanged.connect(self._changed)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        lay.addRow(self.buttonBox)
+        self._changed()
+
+    def _changed(self, *_):
+        """The label these figures make, lying on the bed."""
+        s = plant_label.sizes(**self.options())
+        self.info.setText(tr("{l:.1f} by {w:.1f} mm, {h:.1f} mm high").format(
+            l=s["length"], w=s["width"], h=s["thickness"] + s["raised"]))
+
+    def options(self) -> dict:
+        return {"text": self.text.text(), "width": round(self.width.value(), 6),
+                "head": round(self.head.value(), 6), "stake": round(self.stake.value(), 6),
+                "thickness": round(self.thickness.value(), 6),
+                "raised": round(self.raised.value(), 6)}
 
 
 class HoseAdapterDialog(QDialog):
