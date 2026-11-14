@@ -5,7 +5,8 @@ Step 2 of splitting `volura/app.py`: the methods that build or change a printed 
 here verbatim, into a plain mixin that `MainWindow` inherits. The spur gear, the project
 box, the knob, the standoff, the label plate, the 3D text, the cable clip, the solid tools
 and the simplify, the mouse ears, the parts on the bed, the screw thread and the screw hole,
-the clearance and the overhang test, the cut & join, the print check and the help.
+the clearance, the overhang and the calibration cube, the cut & join, the print check and the
+help.
 
 The methods that ask something with a message box or an input dialog stay in
 `volura/app.py`, together with the actions that call all of this; the window still owns
@@ -26,11 +27,11 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QSpinBox, QTextBrowser, QVBoxLayout)
 
 from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain,
-               cable_clip, cable_winder, card_holder, coaster, drawer_organizer, enclosure,
-               fan_guard, filament_clip, gears, gridfinity, grommet, hex_key_holder, hinge,
-               hose_adapter, joints, knob, label_plate, lithophane, ops, pegboard, phone_stand,
-               plant_label, plant_pot, screw_jar, slicer, spool_adapter, standoff, storage_bin,
-               text3d, theme, threads, tie_mount, wall_hook)
+               cable_clip, cable_winder, calibration_cube, card_holder, coaster,
+               drawer_organizer, enclosure, fan_guard, filament_clip, gears, gridfinity, grommet,
+               hex_key_holder, hinge, hose_adapter, joints, knob, label_plate, lithophane, ops,
+               pegboard, phone_stand, plant_label, plant_pot, screw_jar, slicer, spool_adapter,
+               standoff, storage_bin, text3d, theme, threads, tie_mount, wall_hook)
 from . import gcode_preview
 from .print_preview import PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
@@ -2885,6 +2886,68 @@ class PrintMixin:
             self.view.set_status(tr("Overhang test failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the overhang test…"),
+                       on_done=done, on_error=failed)
+    # ----------------------------------------------------------- calibration cube
+
+    def calibration_cube_dialog(self):
+        """3D Printing > Calibration Cube…: the classic XYZ cube, so the user measures with
+        calipers whether this printer keeps to size."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Calibration Cube"))
+        form = QFormLayout(dlg)
+        size_sp = self._spin(10.0, 50.0, self.settings.calibration_cube_size, 1, " mm", 1.0)
+        size_sp.setToolTip(tr("The edge of the cube, and what a good print measures everywhere"))
+        letters_cb = QCheckBox(tr("Letters on the faces"))
+        letters_cb.setToolTip(tr("The axis of every direction engraved in the face it runs along"))
+        letters_cb.setChecked(self.settings.calibration_cube_letters)
+        depth_sp = self._spin(0.4, 1.2, self.settings.calibration_cube_depth, 1, " mm", 0.1)
+        depth_sp.setToolTip(tr("How deep the letters are cut into the face, so they stay readable"))
+        form.addRow(tr("Size"), size_sp)
+        form.addRow("", letters_cb)
+        form.addRow(tr("Letter depth"), depth_sp)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        size, depth = float(size_sp.value()), float(depth_sp.value())
+        letters = bool(letters_cb.isChecked())
+        self.settings.calibration_cube_size = size
+        self.settings.calibration_cube_letters = letters
+        self.settings.calibration_cube_depth = depth
+        self.settings.save()
+        self._apply_calibration_cube(size, letters, depth)
+
+    def _apply_calibration_cube(self, size, letters, depth):
+        doc = self.doc
+        bb = doc.model_bbox()
+        x0 = 0.0 if bb is None else float(bb[1][0]) + 10.0   # mm to the right of the model
+
+        def work(report):
+            # the letters are the slow part of a cube with fonts, so it happens here and the
+            # window keeps responding
+            report(0.1, tr("Building the calibration cube…"))
+            cube = calibration_cube.calibration_cube(size=size, letters=letters, depth=depth)
+            if cube.status() != mf.Error.NoError or cube.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            # the cube is drawn centred on the origin: move it to the free spot on the bed
+            dx = x0 - float(np.asarray(cube.bounding_box())[0])
+            return cube.translate((dx, 0.0, 0.0))
+
+        def done(result):
+            doc.checkpoint()                # one undo takes the cube away again
+            new = ops.group_from_manifold(doc, result, self.settings.current_color,
+                                          tr("Calibration cube"))
+            doc.set_selection([("g", new.id, new.id)])
+            doc.notify()
+            self.view.set_status(tr("Print it and measure it with a caliper: a printer that is "
+                                    "to size gives the edge you asked for on every side."))
+
+        def failed(exc):
+            self.view.set_status(tr("Calibration cube failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the calibration cube…"),
                        on_done=done, on_error=failed)
     # ------------------------------------------------------------ cut & join
     # (label, joints.KINDS identifier; the identifiers stay Dutch)

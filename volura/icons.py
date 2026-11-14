@@ -228,6 +228,17 @@ SVG = {
                 f'stroke-linecap="round"/>'
                 f'<path d="M20 9 L20 6 M17 6 L17 9 M14 6 L14 9" {N} stroke="#d23b3b" '
                 f'stroke-width="1.5" stroke-linecap="round"/>',
+    # calibration cube: a cube with the axis it measures named on every face
+    "calibration_cube": f'<path d="M4 8 L12 3.5 L20 8 L12 12.5 Z" fill="#e8eef7" {S()}/>'
+                        f'<path d="M4 8 L4 17 L12 21.5 L12 12.5 Z" fill="#cfe0f5" {S()}/>'
+                        f'<path d="M20 8 L20 17 L12 21.5 L12 12.5 Z" fill="#b8c9de" {S()}/>'
+                        f'<path d="M9.4 6.2 L11.6 6.2 L9.4 8.6 L11.6 8.6" {N} stroke="#d23b3b" '
+                        f'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>'
+                        f'<path d="M8.4 15.4 L10.6 18.2 M10.6 15.4 L8.4 18.2" {N} '
+                        f'stroke="#d23b3b" stroke-width="1.4" stroke-linecap="round"/>'
+                        f'<path d="M13.6 15.6 L15.8 15.6 L14.7 17.1 L15.8 18.6 L13.6 18.6" {N} '
+                        f'stroke="#d23b3b" stroke-width="1.4" stroke-linecap="round" '
+                        f'stroke-linejoin="round"/>',
     # vent pattern: a plate with a field of round holes
     "vent": f'<rect x="2.5" y="4" width="19" height="16" rx="1" fill="#eef2f7" {S()}/>'
             f'<circle cx="7" cy="9" r="1.7" fill="#fff" stroke="#d23b3b" stroke-width="1.2"/>'

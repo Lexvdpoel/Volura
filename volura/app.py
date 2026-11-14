@@ -312,6 +312,17 @@ class Settings:
             self.overhang_test_count = 6
         self.overhang_test_count = max(1, min(10, self.overhang_test_count))
         try:
+            self.calibration_cube_size = float(self.q.value("calibration_cube_size", 20.0))
+        except (TypeError, ValueError):
+            self.calibration_cube_size = 20.0
+        self.calibration_cube_size = max(10.0, min(50.0, self.calibration_cube_size))
+        self.calibration_cube_letters = self._bool("calibration_cube_letters", True)
+        try:
+            self.calibration_cube_depth = float(self.q.value("calibration_cube_depth", 0.6))
+        except (TypeError, ValueError):
+            self.calibration_cube_depth = 0.6
+        self.calibration_cube_depth = max(0.4, min(1.2, self.calibration_cube_depth))
+        try:
             self.hinge_slit = float(self.q.value("hinge_slit", 15.0))
         except (TypeError, ValueError):
             self.hinge_slit = 15.0
@@ -1282,6 +1293,9 @@ class Settings:
         self.q.setValue("overhang_test_first", self.overhang_test_first)
         self.q.setValue("overhang_test_step", self.overhang_test_step)
         self.q.setValue("overhang_test_count", self.overhang_test_count)
+        self.q.setValue("calibration_cube_size", self.calibration_cube_size)
+        self.q.setValue("calibration_cube_letters", self.calibration_cube_letters)
+        self.q.setValue("calibration_cube_depth", self.calibration_cube_depth)
         self.q.setValue("hinge_slit", self.hinge_slit)
         self.q.setValue("hinge_gap", self.hinge_gap)
         self.q.setValue("hinge_pitch", self.hinge_pitch)
@@ -2079,6 +2093,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                  False,
                                  tr("A small test print that shows up to which angle your "
                                     "printer prints an overhang without support"))
+        self.a_calibration_cube = A(tr("Calibration Cube…"),
+                                    lambda checked=False: self.calibration_cube_dialog(), None,
+                                    "calibration_cube", False,
+                                    tr("A cube with the axes engraved in its faces: measure it "
+                                       "with a caliper to see if your printer is to size"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -2651,7 +2670,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                       self.a_orient_print, self.a_drop, self.a_center, self.a_arrange, None,
                       self.a_cutplane, self.a_cut_join, None,
                       self.a_elephant, self.a_mouse_ears, None,
-                      self.a_clearance_test, self.a_overhang_test))
+                      self.a_clearance_test, self.a_overhang_test, self.a_calibration_cube))
 
         # ---- Laser and Mill: what only matters for the machine
         m = mb.addMenu(tr("&Laser and Mill"))

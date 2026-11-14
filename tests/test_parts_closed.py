@@ -26,8 +26,8 @@ import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain,  # noqa: E402
-                    cable_clip, cable_winder, card_holder, coaster, drawer_organizer,
-                    enclosure, fan_guard, filament_clip, fonts, gears,
+                    cable_clip, cable_winder, calibration_cube, card_holder, coaster,
+                    drawer_organizer, enclosure, fan_guard, filament_clip, fonts, gears,
                     gridfinity,
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
                     pegboard,
@@ -108,6 +108,13 @@ def holder(**kw):
     if kw.get("labels", True):
         need_fonts()
     return [hex_key_holder.hex_key_holder(**kw)]
+
+
+def calib(**kw):
+    """A calibration cube, whose engraved axes need the fonts of this system when it has them."""
+    if kw.get("letters", True):
+        need_fonts()
+    return [calibration_cube.calibration_cube(**kw)]
 
 
 CASES = [
@@ -343,6 +350,11 @@ CASES = [
     ("spur gear default", lambda: gear(12)),
     ("spur gear with bore", lambda: gear(20, module=1.5, thickness=6.0, bore=8.0)),
     ("spur gear many teeth", lambda: gear(48, module=1.0, thickness=10.0, backlash=0.2)),
+
+    ("calibration cube default", lambda: calib()),
+    ("calibration cube small without letters", lambda: calib(
+        size=10.0, letters=False, depth=0.4)),
+    ("calibration cube large deep axes", lambda: calib(size=50.0, depth=1.2)),
 ]
 
 

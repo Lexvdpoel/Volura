@@ -129,6 +129,7 @@ MENUS = [
         "---",
         ("Clearance Test", None),
         ("Overhang Test", None),
+        ("Calibration Cube", None),
     ]),
     ("Laser and Mill", [                    # Volura: only on the 2D worksheet
         ("Sheet", None),

@@ -71,6 +71,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
   printer prints an overhang without support: a plate with a row of fins that lean further over
   from left to right, each with its angle in raised letters; print it and read the largest angle
   that still came out clean
+- **Calibration Cube** (3D Printing): the classic XYZ test print: a cube of the edge you ask for
+  (20 mm by default) with the axis of every direction engraved in the face it runs along, Z in the
+  top, X in the front and Y in the right side; print it and measure it with a caliper to see
+  whether your printer keeps to size. The letters are cut into the faces instead of stood on them,
+  so the cube stays the edge you asked for and nothing has to be subtracted from the measurement
 - **Project Box** (Draw > Parts): an enclosure with a lid that fits into it: enter the
   inside length, width and height that your electronics need, with the wall, the floor, the
   rounding of the corners and the clearance between the lip of the lid and the wall. With a
