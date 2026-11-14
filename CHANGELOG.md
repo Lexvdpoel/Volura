@@ -3,6 +3,14 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.55 — 2026-11-14
+
+### New
+- **Calibration Cube** (3D Printing): the XYZ cube to check with calipers that the printer's
+  axes are to size, with X, Y and Z engraved on their own faces.
+- **Bridge Test** (3D Printing): a row of bridges over gaps that get wider, each with its span
+  engraved, to see how far the printer bridges without support.
+
 ## 0.2.54 — 2026-11-14
 
 ### Fixed
