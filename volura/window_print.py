@@ -25,8 +25,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
                                QSpinBox, QTextBrowser, QVBoxLayout)
 
-from . import (background, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
-               cable_winder, card_holder, drawer_organizer, enclosure, fan_guard, gears,
+from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain,
+               cable_clip, cable_winder, card_holder, drawer_organizer, enclosure, fan_guard, gears,
                gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob, label_plate,
                lithophane, ops, pegboard, phone_stand, plant_pot, screw_jar, slicer, spool_adapter, standoff,
                storage_bin, text3d, theme, threads, tie_mount, wall_hook)
@@ -37,7 +37,8 @@ from .brep import Entities
 from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
-from .part_dialogs import (BatteryHolderDialog, BinRackDialog, BitHolderDialog, BracketDialog,
+from .part_dialogs import (BagClipDialog, BatteryHolderDialog, BinRackDialog,
+                           BitHolderDialog, BracketDialog,
                            CableChainDialog, CableClipDialog, CableWinderDialog, CardHolderDialog,
                            DrawerOrganizerDialog, FanGuardDialog,
                            GridfinityDialog, GrommetDialog, HexKeyHolderDialog,
@@ -1809,6 +1810,52 @@ class PrintMixin:
             self.view.set_status(tr("Screw-top jar failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the screw-top jar…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ bag clip
+    def bag_clip_dialog(self):
+        """Draw > Parts > Bag Clip…: a flat spring clip that closes a bag."""
+        dlg = BagClipDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("length", "arm", "thickness", "gap", "loop", "teeth"):
+            setattr(self.settings, "bag_clip_" + key, options[key])
+        self.settings.save()
+        made = self.make_bag_clip_model(options)
+        self.setFocus()
+        return made
+
+    def make_bag_clip_model(self, options):
+        """The clip lying flat as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("length", "arm", "thickness", "gap", "loop", "teeth")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the bag clip…"))
+            m = bag_clip.bag_clip(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the clip away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Bag clip"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Bag clip added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Bag clip failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the bag clip…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter

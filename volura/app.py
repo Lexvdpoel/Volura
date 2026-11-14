@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QTextBrowser,
                                QToolBar, QToolButton, QVBoxLayout)
 
-from . import (__version__, background, battery_holder, bin_rack, bit_holder, boxgen, bracket,
+from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_holder, boxgen, bracket,
                cable_chain, cable_clip, cable_winder, cam, card_holder, drawer_organizer, dxf, enclosure, errors,
                fan_guard,
                fileio, gcode, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
@@ -1135,6 +1135,18 @@ class Settings:
         self.hex_key_holder_steps = self._bool("hex_key_holder_steps", True)
         self.hex_key_holder_labels = self._bool("hex_key_holder_labels", True)
         for key, default, lo, hi in (
+                ("bag_clip_length", 100.0, bag_clip.LENGTH_MIN, bag_clip.LENGTH_MAX),
+                ("bag_clip_arm", 5.0, bag_clip.ARM_MIN, bag_clip.ARM_MAX),
+                ("bag_clip_thickness", 6.0, bag_clip.THICKNESS_MIN, bag_clip.THICKNESS_MAX),
+                ("bag_clip_gap", 1.0, bag_clip.GAP_MIN, bag_clip.GAP_MAX),
+                ("bag_clip_loop", 4.0, bag_clip.LOOP_MIN, bag_clip.LOOP_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        self.bag_clip_teeth = self._bool("bag_clip_teeth", True)
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1391,6 +1403,9 @@ class Settings:
         for key in ("hex_key_holder_sizes", "hex_key_holder_clearance", "hex_key_holder_depth",
                     "hex_key_holder_gap", "hex_key_holder_margin", "hex_key_holder_steps",
                     "hex_key_holder_labels"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("bag_clip_length", "bag_clip_arm", "bag_clip_thickness", "bag_clip_gap",
+                    "bag_clip_loop", "bag_clip_teeth"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2383,6 +2398,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                              tr("Add a round jar with a lid that screws on: the jar prints "
                                 "standing on its floor and the lid on its top, both without "
                                 "support, with play between the threads so the lid turns"))
+        # ---- bag clip
+        self.a_bag_clip = A(tr("Bag Clip…"),
+                            lambda checked=False: self.bag_clip_dialog(), None, "bag_clip",
+                            False,
+                            tr("Add a flat spring clip that closes a bag: two arms with a gap "
+                               "between them are joined by a loop that flexes, a hook snaps over "
+                               "the upper arm and teeth bite into the bag; it prints lying flat "
+                               "without support"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2504,7 +2527,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_wall_hook, self.a_phone_stand, self.a_spool_adapter,
                           self.a_drawer_organizer, self.a_plant_pot, self.a_cable_winder,
                           self.a_lithophane, self.a_hex_key_holder,
-                          self.a_screw_jar))
+                          self.a_screw_jar, self.a_bag_clip))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

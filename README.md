@@ -252,6 +252,16 @@ The interface is available in English and Dutch (*Window > Preferences > General
   top is flat. The size of every key engraves itself 0.6 mm deep in the top face in front of its
   hole and the vertical outside edges round with 2 mm. It prints on its bottom, so nothing overhangs
   and nothing needs support
+- **Bag Clip** (Draw > Parts): a flat spring clip that closes a bag of coffee or flour. You enter
+  how long the arms are (50 to 200 mm), how wide each arm is (3 to 10 mm), how high the clip prints
+  (4 to 12 mm), the gap the bag goes in (0.4 to 3 mm) and how big the spring loop is (2 to 10 mm);
+  the dialog says how big the clip lies on the bed. The two arms lie side by side and are joined at
+  the back by a half ring whose wall flexes, so squeezing the arms opens the gap, and at the front
+  the lower arm rises into a hook whose lip snaps over the upper arm - that arm stops 0.4 mm short
+  of the upright and 0.3 mm under the lip, so the clip is one piece that still opens. Optional teeth
+  of 0.6 mm stand on the inner faces of both arms and interleave, so the clip holds a bag instead of
+  sliding off it. It prints lying flat, so every wall is vertical and nothing overhangs or needs
+  support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

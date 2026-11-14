@@ -25,7 +25,7 @@ import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from volura import (battery_holder, bin_rack, bit_holder, bracket, cable_chain,  # noqa: E402
+from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain,  # noqa: E402
                     cable_clip, cable_winder, card_holder, drawer_organizer, enclosure, fan_guard,
                     fonts, gears,
                     gridfinity,
@@ -309,6 +309,12 @@ CASES = [
     ("screw-top jar large fine many ribs", lambda: screw_jar.screw_jar(
         diameter=150.0, height=200.0, wall=4.0, pitch=2.0, thread_len=20.0, clearance=0.6,
         grip=48)),
+
+    ("bag clip default", lambda: [bag_clip.bag_clip()]),
+    ("bag clip small without teeth", lambda: [bag_clip.bag_clip(
+        length=50.0, arm=3.0, thickness=4.0, gap=0.4, loop=2.0, teeth=False)]),
+    ("bag clip large thick", lambda: [bag_clip.bag_clip(
+        length=200.0, arm=10.0, thickness=12.0, gap=3.0, loop=10.0)]),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

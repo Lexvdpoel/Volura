@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QFileDialog, QFontComboBox, QFormLayout, QHBoxLayout, QLabel,
                                QLineEdit, QPlainTextEdit, QPushButton, QSpinBox)
 
-from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
+from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                cable_winder, card_holder, drawer_organizer, enclosure, fan_guard, fonts, gears,
                gridfinity, grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate,
                lithophane, pegboard, phone_stand, plant_pot, screw_jar, spool_adapter, standoff, storage_bin,
@@ -2199,6 +2199,79 @@ class ScrewJarDialog(QDialog):
                 "pitch": round(self.pitch.value(), 6),
                 "thread_len": round(self.thread_len.value(), 6),
                 "clearance": round(self.clearance.value(), 6), "grip": int(self.grip.value())}
+
+
+class BagClipDialog(QDialog):
+    """The "Bag Clip…" dialog: a flat spring clip that closes a bag.
+
+    The length is how long the two arms are and the arm width how wide each of them is; the
+    thickness is how high the piece prints, the gap is the room the bag goes in and the spring loop
+    how far the arms are joined at the back. The teeth serrate the inner faces for grip and ask a
+    little more gap to bite in. Under the fields the clip lies in figures, because that is what the
+    bed has to agree to. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Bag Clip"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.length = spin(bag_clip.LENGTH_MIN, bag_clip.LENGTH_MAX, s.bag_clip_length, 5.0)
+        self.length.setToolTip(tr("How long the arms are: the longer, the wider a bag they close"))
+        self.arm = spin(bag_clip.ARM_MIN, bag_clip.ARM_MAX, s.bag_clip_arm, 0.5)
+        self.arm.setToolTip(tr("How wide each arm is; the wall of the loop and the hook are made of "
+                               "the same plastic"))
+        self.thickness = spin(bag_clip.THICKNESS_MIN, bag_clip.THICKNESS_MAX, s.bag_clip_thickness,
+                              0.5)
+        self.thickness.setToolTip(tr("How high the clip prints: thick enough to spring back, thin "
+                                     "enough to squeeze by hand"))
+        self.gap = spin(bag_clip.GAP_MIN, bag_clip.GAP_MAX, s.bag_clip_gap, 0.1)
+        self.gap.setToolTip(tr("The room between the arms the bag goes in; the teeth need a little "
+                               "more of it to bite in"))
+        self.loop = spin(bag_clip.LOOP_MIN, bag_clip.LOOP_MAX, s.bag_clip_loop, 0.5)
+        self.loop.setToolTip(tr("How big the spring loop is that joins the arms: a bigger loop "
+                                "flexes easier"))
+        self.teeth = QCheckBox(tr("Teeth"))
+        self.teeth.setChecked(bool(s.bag_clip_teeth))
+        self.teeth.setToolTip(tr("Small teeth on the inner faces of the arms, so the clip holds a "
+                                 "bag instead of sliding off it"))
+        self.info = QLabel()
+        lay.addRow(tr("Length"), self.length)
+        lay.addRow(tr("Arm width"), self.arm)
+        lay.addRow(tr("Thickness"), self.thickness)
+        lay.addRow(tr("Gap"), self.gap)
+        lay.addRow(tr("Spring loop"), self.loop)
+        lay.addRow("", self.teeth)
+        lay.addRow("", self.info)
+        for w in (self.length, self.arm, self.thickness, self.gap, self.loop):
+            w.valueChanged.connect(self._changed)
+        self.teeth.toggled.connect(self._changed)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        lay.addRow(self.buttonBox)
+        self._changed()
+
+    def _changed(self, *_):
+        """The clip these figures make, lying on the bed."""
+        s = bag_clip.sizes(**self.options())
+        self.info.setText(tr("{l:.1f} by {w:.1f} mm, {t:.1f} mm thick").format(
+            l=s["outside_length"], w=s["outside_width"], t=s["thickness"]))
+
+    def options(self) -> dict:
+        return {"length": round(self.length.value(), 6), "arm": round(self.arm.value(), 6),
+                "thickness": round(self.thickness.value(), 6), "gap": round(self.gap.value(), 6),
+                "loop": round(self.loop.value(), 6), "teeth": self.teeth.isChecked()}
 
 
 class HoseAdapterDialog(QDialog):

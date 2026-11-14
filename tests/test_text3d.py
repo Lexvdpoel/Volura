@@ -263,7 +263,7 @@ def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, mo
 
 def test_the_command_is_in_the_draw_menu_after_the_parts(win):
     labels = [clean(a.text()) for a in win.flat_actions(win.menuBar())]
-    assert labels.index("3D Text") == labels.index("Screw-Top Jar") + 1
+    assert labels.index("3D Text") == labels.index("Bag Clip") + 1
 
 
 def test_the_command_is_only_there_in_3d(win):
