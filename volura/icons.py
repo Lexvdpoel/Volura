@@ -388,6 +388,15 @@ SVG = {
                   f'<rect x="8.3" y="15.1" width="3.4" height="3.4" fill="#8fa6c3"/>'
                   f'<path d="M18.5 6 L22 4.5 M18.5 12 L22 12 M18.5 18 L22 19.5" {N} '
                   f'stroke="#f2c230" stroke-width="1.5" stroke-linecap="round"/>',
+    # hex key holder: a stepped block with hexagonal holes and an Allen key standing in one of them
+    "hex_key_holder": f'<path d="M2.5 21 L2.5 13.5 L9 13.5 L9 9.5 L15 9.5 L15 6 L21.5 6 L21.5 21 Z" '
+                      f'fill="#eef2f7" {S()}/>'
+                      f'<path d="M4.6 13.5 L5.6 11.8 L7.6 11.8 L8.6 13.5 L7.6 15.2 L5.6 15.2 Z" '
+                      f'fill="#cfe0f5" {S(w=1.1)}/>'
+                      f'<path d="M10.6 9.5 L11.6 7.8 L13.6 7.8 L14.6 9.5 L13.6 11.2 L11.6 11.2 Z" '
+                      f'fill="#cfe0f5" {S(w=1.1)}/>'
+                      f'<path d="M17.4 6 L17.4 2.6 L20.2 2.6" {N} stroke="#3b7dd8" '
+                      f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     # hose adapter: a wide spigot below, a collar, a narrow spigot on top
     "hose": f'<path d="M7 21.5 L7 14 L4.5 14 L4.5 11 L19.5 11 L19.5 14 L17 14 L17 21.5" '
             f'fill="#eef2f7" {S()}/>'

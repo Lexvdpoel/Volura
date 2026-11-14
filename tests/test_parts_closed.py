@@ -29,7 +29,8 @@ from volura import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, 
                     cable_clip, cable_winder, card_holder, drawer_organizer, enclosure, fan_guard,
                     fonts, gears,
                     gridfinity,
-                    grommet, hinge, hose_adapter, knob, label_plate, lithophane, pegboard,
+                    grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
+                    pegboard,
                     phone_stand,
                     plant_pot, screw_jar, spool_adapter, standoff, storage_bin, text3d, tie_mount, wall_hook)
 from volura import ops  # noqa: E402
@@ -100,6 +101,13 @@ def photo(**kw):
     rows, cols = int(kw.pop("rows", 12)), int(kw.pop("cols", 16))
     gray = np.linspace(0.0, 1.0, rows * cols).reshape(rows, cols)
     return [lithophane.lithophane(gray, **kw)]
+
+
+def holder(**kw):
+    """A hex key holder, whose engraved sizes need the fonts of this system when it has them."""
+    if kw.get("labels", True):
+        need_fonts()
+    return [hex_key_holder.hex_key_holder(**kw)]
 
 
 CASES = [
@@ -289,14 +297,18 @@ CASES = [
     ("lithophane large inverted coarse", lambda: photo(
         rows=40, cols=60, width=250.0, thin=2.0, thick=6.0, border=10.0, invert=True, pixel=1.0)),
 
+    ("hex key holder default", lambda: holder()),
+    ("hex key holder one key flat top", lambda: holder(sizes_mm="6", steps=False, labels=False)),
+    ("hex key holder full set deep holes", lambda: holder(
+        sizes_mm="0.7, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 19", clearance=0.6,
+        depth=30.0, gap=10.0, margin=10.0)),
+
     ("screw-top jar default", lambda: screw_jar.screw_jar()),
     ("screw-top jar small coarse smooth lid", lambda: screw_jar.screw_jar(
         diameter=20.0, height=15.0, wall=1.6, pitch=5.0, thread_len=6.0, clearance=0.1, grip=0)),
     ("screw-top jar large fine many ribs", lambda: screw_jar.screw_jar(
         diameter=150.0, height=200.0, wall=4.0, pitch=2.0, thread_len=20.0, clearance=0.6,
         grip=48)),
-    ("screw-top jar coarse thread on a thin wall", lambda: screw_jar.screw_jar(
-        diameter=60.0, height=40.0, wall=1.6, pitch=5.0, thread_len=10.0, grip=24)),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

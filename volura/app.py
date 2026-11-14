@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
 from . import (__version__, background, battery_holder, bin_rack, bit_holder, boxgen, bracket,
                cable_chain, cable_clip, cable_winder, cam, card_holder, drawer_organizer, dxf, enclosure, errors,
                fan_guard,
-               fileio, gcode, gears, gridfinity, grommet, hinge, hose_adapter, i18n, joints,
+               fileio, gcode, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, screw_jar,
                nesting, ops, pegboard, phone_stand, plant_pot, sheet3d, sheettools,
                svg,
@@ -1117,6 +1117,23 @@ class Settings:
         except (TypeError, ValueError):
             grip = 24
         self.screw_jar_grip = max(0, min(screw_jar.GRIP_MAX, grip))
+        self.hex_key_holder_sizes = str(self.q.value("hex_key_holder_sizes",
+                                                     hex_key_holder.SIZES_TEXT) or "")
+        for key, default, lo, hi in (
+                ("hex_key_holder_clearance", 0.3, hex_key_holder.CLEARANCE_MIN,
+                 hex_key_holder.CLEARANCE_MAX),
+                ("hex_key_holder_depth", 12.0, hex_key_holder.DEPTH_MIN,
+                 hex_key_holder.DEPTH_MAX),
+                ("hex_key_holder_gap", 3.0, hex_key_holder.GAP_MIN, hex_key_holder.GAP_MAX),
+                ("hex_key_holder_margin", 4.0, hex_key_holder.MARGIN_MIN,
+                 hex_key_holder.MARGIN_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        self.hex_key_holder_steps = self._bool("hex_key_holder_steps", True)
+        self.hex_key_holder_labels = self._bool("hex_key_holder_labels", True)
         for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
@@ -1370,6 +1387,10 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("screw_jar_diameter", "screw_jar_height", "screw_jar_wall", "screw_jar_pitch",
                     "screw_jar_thread_len", "screw_jar_clearance", "screw_jar_grip"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("hex_key_holder_sizes", "hex_key_holder_clearance", "hex_key_holder_depth",
+                    "hex_key_holder_gap", "hex_key_holder_margin", "hex_key_holder_steps",
+                    "hex_key_holder_labels"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2346,6 +2367,15 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                  "is thick and light is thin, so with a light behind the plate the "
                                  "photo appears; it prints standing up, which is how it gets its "
                                  "quality"))
+        # ---- hex key holder
+        self.a_hex_key_holder = A(tr("Hex Key Holder…"),
+                                  lambda checked=False: self.hex_key_holder_dialog(), None,
+                                  "hex_key_holder", False,
+                                  tr("Add a block that holds a set of hex keys upright: every key "
+                                     "stands the short leg down in a hexagonal hole of its own, the "
+                                     "top steps down towards the small keys so they stick out as "
+                                     "far as the long ones and the sizes engrave themselves in "
+                                     "front of the holes"))
         # ---- screw-top jar
         self.a_screw_jar = A(tr("Screw-Top Jar…"),
                              lambda checked=False: self.screw_jar_dialog(), None, "screw_jar",
@@ -2473,7 +2503,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_tie_mount, self.a_bit_holder, self.a_card_holder,
                           self.a_wall_hook, self.a_phone_stand, self.a_spool_adapter,
                           self.a_drawer_organizer, self.a_plant_pot, self.a_cable_winder,
-                          self.a_lithophane, self.a_screw_jar))
+                          self.a_lithophane, self.a_hex_key_holder,
+                          self.a_screw_jar))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

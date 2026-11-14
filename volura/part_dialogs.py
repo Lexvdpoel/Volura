@@ -17,9 +17,9 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 
 from . import (battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                cable_winder, card_holder, drawer_organizer, enclosure, fan_guard, fonts, gears,
-               gridfinity, grommet, hinge, hose_adapter, knob, label_plate, lithophane, pegboard,
-               phone_stand, plant_pot, screw_jar, spool_adapter, standoff, storage_bin, text3d, threads,
-               tie_mount, wall_hook)
+               gridfinity, grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate,
+               lithophane, pegboard, phone_stand, plant_pot, screw_jar, spool_adapter, standoff, storage_bin,
+               text3d, threads, tie_mount, wall_hook)
 from .i18n import tr
 
 
@@ -2027,6 +2027,100 @@ class LithophaneDialog(QDialog):
                 "thin": round(self.thin.value(), 6), "thick": round(self.thick.value(), 6),
                 "border": round(self.border.value(), 6),
                 "pixel": float(self.detail.currentData()), "invert": self.invert.isChecked()}
+
+
+class HexKeyHolderDialog(QDialog):
+    """The "Hex Key Holder…" dialog: a block that stands a set of Allen keys upright.
+
+    The key sizes are the sizes of the keys across their flats in millimetres, separated by spaces
+    or commas, because that is what is stamped on them, and the smallest gets the leftmost hole. The
+    clearance is the play a key has in its hole and the hole depth how far its short leg goes in;
+    the gap is the plastic between two holes and the margin the plastic round the row. The stepped
+    top lowers the block towards the small keys, so every key sticks out as far as the others, and
+    the sizes engrave themselves in front of their holes. Under the fields the block stands in
+    figures, because that is what the bed has to agree to, and OK waits until the text names at
+    least one key. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Hex Key Holder"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0, suffix=" mm"):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(suffix)
+            sp.setValue(float(value))
+            return sp
+
+        self.sizes = QLineEdit(s.hex_key_holder_sizes)
+        self.sizes.setPlaceholderText(hex_key_holder.SIZES_TEXT)
+        self.sizes.setToolTip(tr("The sizes of the keys across their flats in millimetres, "
+                                 "separated by spaces or commas; the smallest gets the leftmost "
+                                 "hole"))
+        self.clearance = spin(hex_key_holder.CLEARANCE_MIN, hex_key_holder.CLEARANCE_MAX,
+                              s.hex_key_holder_clearance, 0.1)
+        self.clearance.setToolTip(tr("The play between a key and the wall of its hole; too little "
+                                     "and the key does not go in, too much and it falls out"))
+        self.depth = spin(hex_key_holder.DEPTH_MIN, hex_key_holder.DEPTH_MAX,
+                          s.hex_key_holder_depth, 1.0)
+        self.depth.setToolTip(tr("How deep a hole is cut from the top above it; the short leg of "
+                                 "the key goes in up to there"))
+        self.gap = spin(hex_key_holder.GAP_MIN, hex_key_holder.GAP_MAX, s.hex_key_holder_gap, 1.0)
+        self.gap.setToolTip(tr("How much plastic stays between two holes"))
+        self.margin = spin(hex_key_holder.MARGIN_MIN, hex_key_holder.MARGIN_MAX,
+                           s.hex_key_holder_margin, 1.0)
+        self.margin.setToolTip(tr("How much plastic stays round the row of holes"))
+        self.steps = QCheckBox(tr("Stepped top"))
+        self.steps.setChecked(bool(s.hex_key_holder_steps))
+        self.steps.setToolTip(tr("The top steps down towards the small keys, so every key sticks "
+                                 "out as far as the others and a short key is easy to take out"))
+        self.labels = QCheckBox(tr("Size labels"))
+        self.labels.setChecked(bool(s.hex_key_holder_labels))
+        self.labels.setToolTip(tr("The size of every key engraved in the top face in front of its "
+                                  "own hole"))
+        self.info = QLabel()
+        lay.addRow(tr("Key sizes"), self.sizes)
+        lay.addRow(tr("Clearance"), self.clearance)
+        lay.addRow(tr("Hole depth"), self.depth)
+        lay.addRow(tr("Gap"), self.gap)
+        lay.addRow(tr("Margin"), self.margin)
+        lay.addRow("", self.steps)
+        lay.addRow("", self.labels)
+        lay.addRow("", self.info)
+        self.sizes.textChanged.connect(self._changed)
+        for w in (self.clearance, self.depth, self.gap, self.margin):
+            w.valueChanged.connect(self._changed)
+        self.steps.toggled.connect(self._changed)
+        self.labels.toggled.connect(self._changed)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        lay.addRow(self.buttonBox)
+        self._changed()
+
+    def _changed(self, *_):
+        """The block the holder makes, and OK as soon as the text names at least one key."""
+        try:
+            s = hex_key_holder.sizes(**self.options())
+        except ValueError:
+            self.info.setText(tr("Enter at least one key size"))
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
+            return
+        self.info.setText(tr("{l:.1f} by {w:.1f} mm, {h:.1f} mm high").format(
+            l=s["length"], w=s["width"], h=s["height"]))
+        self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(True)
+
+    def options(self) -> dict:
+        return {"sizes_mm": self.sizes.text(),
+                "clearance": round(self.clearance.value(), 6),
+                "depth": round(self.depth.value(), 6), "gap": round(self.gap.value(), 6),
+                "margin": round(self.margin.value(), 6), "steps": self.steps.isChecked(),
+                "labels": self.labels.isChecked()}
 
 
 class ScrewJarDialog(QDialog):

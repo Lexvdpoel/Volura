@@ -27,9 +27,9 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 
 from . import (background, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                cable_winder, card_holder, drawer_organizer, enclosure, fan_guard, gears,
-               gridfinity, grommet, hinge, hose_adapter, joints, knob, label_plate, lithophane, ops,
-               pegboard, phone_stand, plant_pot, screw_jar, slicer, spool_adapter, standoff, storage_bin,
-               text3d, theme, threads, tie_mount, wall_hook)
+               gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob, label_plate,
+               lithophane, ops, pegboard, phone_stand, plant_pot, screw_jar, slicer, spool_adapter, standoff,
+               storage_bin, text3d, theme, threads, tie_mount, wall_hook)
 from . import gcode_preview
 from .print_preview import PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
@@ -40,7 +40,7 @@ from .model import ROOT
 from .part_dialogs import (BatteryHolderDialog, BinRackDialog, BitHolderDialog, BracketDialog,
                            CableChainDialog, CableClipDialog, CableWinderDialog, CardHolderDialog,
                            DrawerOrganizerDialog, FanGuardDialog,
-                           GridfinityDialog, GrommetDialog,
+                           GridfinityDialog, GrommetDialog, HexKeyHolderDialog,
                            HingeDialog, HoseAdapterDialog, KnobDialog, LabelPlateDialog,
                            LithophaneDialog, PegboardDialog, PhoneStandDialog,
                            PlantPotDialog, ProjectBoxDialog, ScrewJarDialog, SpoolAdapterDialog,
@@ -1709,6 +1709,54 @@ class PrintMixin:
             self.view.set_status(tr("Lithophane failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the lithophane…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ hex key holder
+    def hex_key_holder_dialog(self):
+        """Draw > Parts > Hex Key Holder…: a block that stands a set of Allen keys upright."""
+        dlg = HexKeyHolderDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.hex_key_holder_sizes = options["sizes_mm"]
+        for key in ("clearance", "depth", "gap", "margin", "steps", "labels"):
+            setattr(self.settings, "hex_key_holder_" + key, options[key])
+        self.settings.save()
+        made = self.make_hex_key_holder_model(options)
+        self.setFocus()
+        return made
+
+    def make_hex_key_holder_model(self, options):
+        """The holder standing on its bottom as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("sizes_mm", "clearance", "depth", "gap", "margin",
+                                        "steps", "labels")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the hex key holder…"))
+            m = hex_key_holder.hex_key_holder(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the holder away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Hex key holder"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Hex key holder added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Hex key holder failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the hex key holder…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ screw-top jar

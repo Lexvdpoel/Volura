@@ -241,6 +241,17 @@ The interface is available in English and Dutch (*Window > Preferences > General
   ribs the lid gets; the dialog says how big the closed jar is and how much it holds. The thread
   is the ISO profile of the thread tools, bevelled at both ends; the jar prints standing on its
   floor and the lid on its top, both without support
+- **Hex Key Holder** (Draw > Parts): a block that stands a set of hex (Allen) keys upright with the
+  short leg down in a hole of their own. You type the sizes of the keys across their flats in
+  millimetres - "1.5 2 2.5 3 4 5 6 8 10" is the common set - and every key gets a hexagonal hole of
+  its size plus the clearance (0.1 to 0.6 mm) across the flats and 6 to 30 mm deep, in one row with
+  the smallest on the left, `gap` mm of plastic between two holes (2 to 10) and `margin` mm round the
+  row (3 to 10). A set of keys grows with its sizes, so the top steps down from the biggest key to
+  the smallest - never more than half a hole depth per step - while every hole keeps its full depth
+  below its own step, which is what makes a short key stick out as far as a long one; without it the
+  top is flat. The size of every key engraves itself 0.6 mm deep in the top face in front of its
+  hole and the vertical outside edges round with 2 mm. It prints on its bottom, so nothing overhangs
+  and nothing needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is
