@@ -3,6 +3,14 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.52 — 2026-11-14
+
+### New
+- **Bag Clip** (Draw > Parts): a flat spring clip that closes a bag: two arms joined by a spring
+  loop, a hook that snaps over the upper arm and optional teeth for grip. It prints lying flat.
+- **Coaster** (Draw > Parts): a round, hexagonal or square coaster with a raised rim and rings or
+  a grid grooved into the top.
+
 ## 0.2.51 — 2026-11-14
 
 ### New
