@@ -31,7 +31,8 @@ from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, brack
                drawer_organizer, enclosure, fan_guard, filament_clip, gears, gridfinity, grommet,
                hex_key_holder, hinge, hose_adapter, joints, knob, label_plate, lithophane, ops,
                pegboard, phone_stand, plant_label, plant_pot, screw_jar, slicer, spool_adapter,
-               standoff, storage_bin, text3d, theme, threads, tie_mount, wall_hook)
+               standoff, storage_bin, stringing_test, text3d, theme, threads, tie_mount,
+               wall_hook)
 from . import gcode_preview
 from .print_preview import PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
@@ -3041,6 +3042,101 @@ class PrintMixin:
             self.view.set_status(tr("Bridge test failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the bridge test…"),
+                       on_done=done, on_error=failed)
+    # ------------------------------------------------------------ stringing test
+
+    def stringing_test_dialog(self):
+        """3D Printing > Stringing Test…: thin towers the nozzle travels between, so the user
+        sees whether this printer leaves hairs of plastic in the air."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Stringing Test"))
+        form = QFormLayout(dlg)
+        towers_sp = QSpinBox()
+        towers_sp.setRange(2, 4)
+        towers_sp.setValue(self.settings.stringing_test_towers)
+        towers_sp.setToolTip(tr("How many towers stand in the row; the nozzle travels between "
+                                "every two of them on every layer"))
+        distance_sp = self._spin(10.0, 100.0, self.settings.stringing_test_distance, 1, " mm",
+                                 1.0)
+        distance_sp.setToolTip(tr("How far two neighbouring towers are apart, between their "
+                                  "centres"))
+        height_sp = self._spin(10.0, 80.0, self.settings.stringing_test_height, 1, " mm", 1.0)
+        height_sp.setToolTip(tr("How high a tower stands, so the nozzle has a long way to travel "
+                                "between the towers"))
+        diameter_sp = self._spin(3.0, 12.0, self.settings.stringing_test_diameter, 1, " mm", 1.0)
+        diameter_sp.setToolTip(tr("How thick a tower is: a thinner tower shows even a few hairs "
+                                  "of plastic"))
+        cone_cb = QCheckBox(tr("Pointed tops"))
+        cone_cb.setToolTip(tr("Every tower ends in a point, so the nozzle travels to a tip and "
+                              "the hairs are easy to see"))
+        cone_cb.setChecked(self.settings.stringing_test_cone)
+        info = QLabel()
+        form.addRow(tr("Towers"), towers_sp)
+        form.addRow(tr("Distance"), distance_sp)
+        form.addRow(tr("Height"), height_sp)
+        form.addRow(tr("Diameter"), diameter_sp)
+        form.addRow("", cone_cb)
+        form.addRow("", info)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+
+        def show(*_):
+            # towers drop out when the row grows past the bed, so what stands here is what prints
+            s = stringing_test.sizes(int(towers_sp.value()), float(distance_sp.value()),
+                                     float(height_sp.value()), float(diameter_sp.value()))
+            length, depth, top = s["size"]
+            info.setText(tr("Outside size: {length} × {depth} × {height} mm")
+                         .format(length=f"{length:g}", depth=f"{depth:g}", height=f"{top:g}"))
+
+        for sp in (distance_sp, height_sp, diameter_sp):
+            sp.valueChanged.connect(show)
+        towers_sp.valueChanged.connect(show)
+        show()
+        if dlg.exec() != QDialog.Accepted:
+            return
+        towers, cone = int(towers_sp.value()), bool(cone_cb.isChecked())
+        distance, height = float(distance_sp.value()), float(height_sp.value())
+        diameter = float(diameter_sp.value())
+        self.settings.stringing_test_towers = towers
+        self.settings.stringing_test_distance = distance
+        self.settings.stringing_test_height = height
+        self.settings.stringing_test_diameter = diameter
+        self.settings.stringing_test_cone = cone
+        self.settings.save()
+        self._apply_stringing_test(towers, distance, height, diameter, cone)
+
+    def _apply_stringing_test(self, towers, distance, height, diameter, cone):
+        doc = self.doc
+        bb = doc.model_bbox()
+        x0 = 0.0 if bb is None else float(bb[1][0]) + 10.0   # mm to the right of the model
+
+        def work(report):
+            # a row of towers is a row of circles, so it happens here and the window keeps
+            # responding
+            report(0.1, tr("Building the stringing test…"))
+            row = stringing_test.stringing_test(towers=towers, distance=distance, height=height,
+                                                diameter=diameter, cone=cone)
+            if row.status() != mf.Error.NoError or row.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            # the row is drawn centred on the origin: move it to the free spot on the bed
+            dx = x0 - float(np.asarray(row.bounding_box())[0])
+            return row.translate((dx, 0.0, 0.0))
+
+        def done(result):
+            doc.checkpoint()                # one undo takes the row away again
+            new = ops.group_from_manifold(doc, result, self.settings.current_color,
+                                          tr("Stringing test"))
+            doc.set_selection([("g", new.id, new.id)])
+            doc.notify()
+            self.view.set_status(tr("Print it and look between the towers: hairs of plastic "
+                                    "there say that filament kept oozing."))
+
+        def failed(exc):
+            self.view.set_status(tr("Stringing test failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the stringing test…"),
                        on_done=done, on_error=failed)
     # ------------------------------------------------------------ cut & join
     # (label, joints.KINDS identifier; the identifiers stay Dutch)

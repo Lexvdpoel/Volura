@@ -80,6 +80,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   without support: a row of bridges over gaps that grow by a step from left to right, each hanging
   above the bed with its span engraved in the top of it; print it and read the widest gap that
   still came out clean
+- **Stringing Test** (3D Printing): a small test print that shows whether your printer strings:
+  two to four thin towers, some distance apart, that the nozzle travels between on every layer;
+  every tower can end in a point, so the hairs of plastic that retraction and temperature leave
+  behind are easy to see
 - **Project Box** (Draw > Parts): an enclosure with a lid that fits into it: enter the
   inside length, width and height that your electronics need, with the wall, the floor, the
   rounding of the corners and the clearance between the lip of the lid and the wall. With a

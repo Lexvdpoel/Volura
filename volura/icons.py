@@ -248,6 +248,14 @@ SVG = {
                    f'{S(w=1.2)}/>'
                    f'<rect x="9.5" y="5.8" width="11.1" height="2.6" rx="0.6" fill="#f2c230" '
                    f'{S(w=1.2)}/>',
+    # stringing test: two thin pointed towers on a strip, with a hair between them
+    "stringing_test": f'<rect x="2.5" y="17.5" width="19" height="3" rx="0.8" fill="#cfe0f5" {S()}/>'
+                      f'<path d="M6.2 17.5 L6.2 7 L7.4 4.5 L8.6 7 L8.6 17.5 Z" fill="#e8eef7" '
+                      f'{S(w=1.2)}/>'
+                      f'<path d="M15.4 17.5 L15.4 7 L16.6 4.5 L17.8 7 L17.8 17.5 Z" '
+                      f'fill="#e8eef7" {S(w=1.2)}/>'
+                      f'<path d="M8.6 9.5 C10.4 12.2 13.6 12.2 15.4 9.5" {N} stroke="#d23b3b" '
+                      f'stroke-width="1.3" stroke-linecap="round"/>',
     # vent pattern: a plate with a field of round holes
     "vent": f'<rect x="2.5" y="4" width="19" height="16" rx="1" fill="#eef2f7" {S()}/>'
             f'<circle cx="7" cy="9" r="1.7" fill="#fff" stroke="#d23b3b" stroke-width="1.2"/>'

@@ -348,6 +348,27 @@ class Settings:
             self.bridge_test_width = 8.0
         self.bridge_test_width = max(5.0, min(20.0, self.bridge_test_width))
         try:
+            self.stringing_test_towers = int(float(self.q.value("stringing_test_towers", 2)))
+        except (TypeError, ValueError):
+            self.stringing_test_towers = 2
+        self.stringing_test_towers = max(2, min(4, self.stringing_test_towers))
+        try:
+            self.stringing_test_distance = float(self.q.value("stringing_test_distance", 40.0))
+        except (TypeError, ValueError):
+            self.stringing_test_distance = 40.0
+        self.stringing_test_distance = max(10.0, min(100.0, self.stringing_test_distance))
+        try:
+            self.stringing_test_height = float(self.q.value("stringing_test_height", 30.0))
+        except (TypeError, ValueError):
+            self.stringing_test_height = 30.0
+        self.stringing_test_height = max(10.0, min(80.0, self.stringing_test_height))
+        try:
+            self.stringing_test_diameter = float(self.q.value("stringing_test_diameter", 6.0))
+        except (TypeError, ValueError):
+            self.stringing_test_diameter = 6.0
+        self.stringing_test_diameter = max(3.0, min(12.0, self.stringing_test_diameter))
+        self.stringing_test_cone = self._bool("stringing_test_cone", True)
+        try:
             self.hinge_slit = float(self.q.value("hinge_slit", 15.0))
         except (TypeError, ValueError):
             self.hinge_slit = 15.0
@@ -1326,6 +1347,11 @@ class Settings:
         self.q.setValue("bridge_test_count", self.bridge_test_count)
         self.q.setValue("bridge_test_height", self.bridge_test_height)
         self.q.setValue("bridge_test_width", self.bridge_test_width)
+        self.q.setValue("stringing_test_towers", self.stringing_test_towers)
+        self.q.setValue("stringing_test_distance", self.stringing_test_distance)
+        self.q.setValue("stringing_test_height", self.stringing_test_height)
+        self.q.setValue("stringing_test_diameter", self.stringing_test_diameter)
+        self.q.setValue("stringing_test_cone", self.stringing_test_cone)
         self.q.setValue("hinge_slit", self.hinge_slit)
         self.q.setValue("hinge_gap", self.hinge_gap)
         self.q.setValue("hinge_pitch", self.hinge_pitch)
@@ -2133,6 +2159,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                "bridge_test", False,
                                tr("A row of bridges over gaps that grow wider: print it and "
                                   "read how far your printer bridges without support"))
+        self.a_stringing_test = A(tr("Stringing Test…"),
+                                  lambda checked=False: self.stringing_test_dialog(), None,
+                                  "stringing_test", False,
+                                  tr("Thin towers the nozzle travels between: print it and see "
+                                     "whether your printer leaves strings between them"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -2706,7 +2737,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                       self.a_cutplane, self.a_cut_join, None,
                       self.a_elephant, self.a_mouse_ears, None,
                       self.a_clearance_test, self.a_overhang_test, self.a_calibration_cube,
-                      self.a_bridge_test))
+                      self.a_bridge_test, self.a_stringing_test))
 
         # ---- Laser and Mill: what only matters for the machine
         m = mb.addMenu(tr("&Laser and Mill"))

@@ -131,6 +131,7 @@ MENUS = [
         ("Overhang Test", None),
         ("Calibration Cube", None),
         ("Bridge Test", None),
+        ("Stringing Test", None),
     ]),
     ("Laser and Mill", [                    # Volura: only on the 2D worksheet
         ("Sheet", None),

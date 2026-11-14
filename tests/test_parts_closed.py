@@ -32,7 +32,8 @@ from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, bri
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
                     pegboard,
                     phone_stand, plant_label,
-                    plant_pot, screw_jar, spool_adapter, standoff, storage_bin, text3d, tie_mount, wall_hook)
+                    plant_pot, screw_jar, spool_adapter, standoff, storage_bin, stringing_test,
+                    text3d, tie_mount, wall_hook)
 from volura import ops  # noqa: E402
 from volura.model import Document  # noqa: E402
 
@@ -121,6 +122,11 @@ def bridges(**kw):
     """A bridge test, whose engraved spans need the fonts of this system when it has them."""
     need_fonts()
     return [bridge_test.bridge_test(**kw)]
+
+
+def stringing(**kw):
+    """A stringing test: thin towers the nozzle travels between on every layer."""
+    return [stringing_test.stringing_test(**kw)]
 
 
 CASES = [
@@ -367,6 +373,12 @@ CASES = [
         first=5.0, step=5.0, count=2, height=4.0, width=5.0)),
     ("bridge test wide row clamped to the bed", lambda: bridges(
         first=30.0, step=20.0, count=8, height=20.0, width=20.0)),
+
+    ("stringing test default", lambda: stringing()),
+    ("stringing test thin towers without points", lambda: stringing(
+        towers=4, distance=20.0, height=10.0, diameter=3.0, cone=False)),
+    ("stringing test wide row clamped to the bed", lambda: stringing(
+        towers=4, distance=100.0, height=80.0, diameter=12.0)),
 ]
 
 
