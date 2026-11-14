@@ -16,10 +16,10 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QLineEdit, QPlainTextEdit, QPushButton, QSpinBox)
 
 from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
-               cable_winder, card_holder, drawer_organizer, enclosure, fan_guard, fonts, gears,
-               gridfinity, grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate,
-               lithophane, pegboard, phone_stand, plant_pot, screw_jar, spool_adapter, standoff, storage_bin,
-               text3d, threads, tie_mount, wall_hook)
+               cable_winder, card_holder, coaster, drawer_organizer, enclosure, fan_guard, fonts,
+               gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate,
+               lithophane, pegboard, phone_stand, plant_pot, screw_jar, spool_adapter, standoff,
+               storage_bin, text3d, threads, tie_mount, wall_hook)
 from .i18n import tr
 
 
@@ -2272,6 +2272,84 @@ class BagClipDialog(QDialog):
         return {"length": round(self.length.value(), 6), "arm": round(self.arm.value(), 6),
                 "thickness": round(self.thickness.value(), 6), "gap": round(self.gap.value(), 6),
                 "loop": round(self.loop.value(), 6), "teeth": self.teeth.isChecked()}
+
+
+class CoasterDialog(QDialog):
+    """The "Coaster…" dialog: a flat plate with a rim that catches what runs down a glass.
+
+    The shape is the outline of the plate and the size how big it is: the diameter of the circle,
+    the distance across the flats of the hexagon and the side of the square, which all feel the
+    same size in the hand. The thickness is the plate and the rim how high its edge stands above
+    it, so 0 leaves the top flat. The pattern is grooved into the top for grip. Under the fields
+    the coaster lies in figures, because that is what the bed has to agree to. The values come from
+    Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Coaster"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.shape = QComboBox()
+        for label, key in ((tr("Round"), "round"), (tr("Hexagon"), "hexagon"),
+                           (tr("Square"), "square")):
+            self.shape.addItem(label, key)
+        self.shape.setCurrentIndex(max(0, self.shape.findData(s.coaster_shape)))
+        self.shape.setToolTip(tr("A hexagon is measured across its flats and a square has its "
+                                 "corners rounded, so all three feel the same size in the hand"))
+        self.size = spin(coaster.SIZE_MIN, coaster.SIZE_MAX, s.coaster_size, 5.0)
+        self.size.setToolTip(tr("How big the coaster is: the diameter of the circle, the distance "
+                                "across the flats of the hexagon and the side of the square"))
+        self.thickness = spin(coaster.THICKNESS_MIN, coaster.THICKNESS_MAX, s.coaster_thickness,
+                              0.5)
+        self.thickness.setToolTip(tr("How thick the plate is under the rim"))
+        self.rim = spin(coaster.RIM_MIN, coaster.RIM_MAX, s.coaster_rim, 0.5)
+        self.rim.setToolTip(tr("How high the edge stands above the plate to catch what runs down a "
+                               "glass; 0 leaves the top flat"))
+        self.pattern = QComboBox()
+        for name, label in (("rings", tr("Rings")), ("grid", tr("Grid")),
+                            ("none", tr("None"))):
+            self.pattern.addItem(label, name)
+        self.pattern.setCurrentIndex(max(0, self.pattern.findData(s.coaster_pattern)))
+        self.pattern.setToolTip(tr("Grooves in the top, so a glass does not slide on a wet surface "
+                                   "and the coaster does not suck itself on the glass"))
+        self.info = QLabel()
+        lay.addRow(tr("Shape"), self.shape)
+        lay.addRow(tr("Size"), self.size)
+        lay.addRow(tr("Thickness"), self.thickness)
+        lay.addRow(tr("Rim"), self.rim)
+        lay.addRow(tr("Pattern"), self.pattern)
+        lay.addRow("", self.info)
+        for w in (self.size, self.thickness, self.rim):
+            w.valueChanged.connect(self._changed)
+        self.shape.currentIndexChanged.connect(self._changed)
+        self.pattern.currentIndexChanged.connect(self._changed)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        lay.addRow(self.buttonBox)
+        self._changed()
+
+    def _changed(self, *_):
+        """The coaster these figures make, lying on the bed."""
+        s = coaster.sizes(**self.options())
+        self.info.setText(tr("{w:.1f} mm across, {h:.1f} mm high").format(
+            w=s["outside"], h=s["height"]))
+
+    def options(self) -> dict:
+        return {"shape": self.shape.currentData(), "size": round(self.size.value(), 6),
+                "thickness": round(self.thickness.value(), 6),
+                "rim": round(self.rim.value(), 6), "pattern": self.pattern.currentData()}
 
 
 class HoseAdapterDialog(QDialog):

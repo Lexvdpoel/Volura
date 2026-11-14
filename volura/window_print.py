@@ -26,10 +26,11 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QSpinBox, QTextBrowser, QVBoxLayout)
 
 from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain,
-               cable_clip, cable_winder, card_holder, drawer_organizer, enclosure, fan_guard, gears,
-               gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob, label_plate,
-               lithophane, ops, pegboard, phone_stand, plant_pot, screw_jar, slicer, spool_adapter, standoff,
-               storage_bin, text3d, theme, threads, tie_mount, wall_hook)
+               cable_clip, cable_winder, card_holder, coaster, drawer_organizer, enclosure,
+               fan_guard, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints,
+               knob, label_plate, lithophane, ops, pegboard, phone_stand, plant_pot, screw_jar,
+               slicer, spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
+               wall_hook)
 from . import gcode_preview
 from .print_preview import PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
@@ -40,6 +41,7 @@ from .model import ROOT
 from .part_dialogs import (BagClipDialog, BatteryHolderDialog, BinRackDialog,
                            BitHolderDialog, BracketDialog,
                            CableChainDialog, CableClipDialog, CableWinderDialog, CardHolderDialog,
+                           CoasterDialog,
                            DrawerOrganizerDialog, FanGuardDialog,
                            GridfinityDialog, GrommetDialog, HexKeyHolderDialog,
                            HingeDialog, HoseAdapterDialog, KnobDialog, LabelPlateDialog,
@@ -1856,6 +1858,52 @@ class PrintMixin:
             self.view.set_status(tr("Bag clip failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the bag clip…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ coaster
+    def coaster_dialog(self):
+        """Draw > Parts > Coaster…: a flat plate with a rim that catches what runs down a glass."""
+        dlg = CoasterDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("shape", "size", "thickness", "rim", "pattern"):
+            setattr(self.settings, "coaster_" + key, options[key])
+        self.settings.save()
+        made = self.make_coaster_model(options)
+        self.setFocus()
+        return made
+
+    def make_coaster_model(self, options):
+        """The coaster lying flat as it prints: one undo step, next to the model."""
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("shape", "size", "thickness", "rim", "pattern")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the coaster…"))
+            m = coaster.coaster(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the coaster away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Coaster"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Coaster added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Coaster failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the coaster…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter

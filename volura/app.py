@@ -26,8 +26,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_holder, boxgen, bracket,
-               cable_chain, cable_clip, cable_winder, cam, card_holder, drawer_organizer, dxf, enclosure, errors,
-               fan_guard,
+               cable_chain, cable_clip, cable_winder, cam, card_holder, coaster, drawer_organizer,
+               dxf, enclosure, errors, fan_guard,
                fileio, gcode, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, screw_jar,
                nesting, ops, pegboard, phone_stand, plant_pot, sheet3d, sheettools,
@@ -1146,6 +1146,21 @@ class Settings:
                 value = default
             setattr(self, key, max(lo, min(hi, value)))
         self.bag_clip_teeth = self._bool("bag_clip_teeth", True)
+        self.coaster_shape = str(self.q.value("coaster_shape", coaster.SHAPES[0]))
+        if self.coaster_shape not in coaster.SHAPES:
+            self.coaster_shape = coaster.SHAPES[0]
+        self.coaster_pattern = str(self.q.value("coaster_pattern", coaster.PATTERNS[0]))
+        if self.coaster_pattern not in coaster.PATTERNS:
+            self.coaster_pattern = coaster.PATTERNS[0]
+        for key, default, lo, hi in (
+                ("coaster_size", 95.0, coaster.SIZE_MIN, coaster.SIZE_MAX),
+                ("coaster_thickness", 4.0, coaster.THICKNESS_MIN, coaster.THICKNESS_MAX),
+                ("coaster_rim", 1.5, coaster.RIM_MIN, coaster.RIM_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
         for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
@@ -1406,6 +1421,9 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("bag_clip_length", "bag_clip_arm", "bag_clip_thickness", "bag_clip_gap",
                     "bag_clip_loop", "bag_clip_teeth"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("coaster_shape", "coaster_size", "coaster_thickness", "coaster_rim",
+                    "coaster_pattern"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2406,6 +2424,13 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                "between them are joined by a loop that flexes, a hook snaps over "
                                "the upper arm and teeth bite into the bag; it prints lying flat "
                                "without support"))
+        # ---- coaster
+        self.a_coaster = A(tr("Coaster…"),
+                           lambda checked=False: self.coaster_dialog(), None, "coaster",
+                           False,
+                           tr("Add a flat coaster with a rim that catches what runs down a glass: "
+                              "round, hexagonal or square, with rings or a grid grooved into the "
+                              "top for grip; it prints lying flat without support"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2527,7 +2552,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_wall_hook, self.a_phone_stand, self.a_spool_adapter,
                           self.a_drawer_organizer, self.a_plant_pot, self.a_cable_winder,
                           self.a_lithophane, self.a_hex_key_holder,
-                          self.a_screw_jar, self.a_bag_clip))
+                          self.a_screw_jar, self.a_bag_clip, self.a_coaster))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

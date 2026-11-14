@@ -262,6 +262,14 @@ The interface is available in English and Dutch (*Window > Preferences > General
   of 0.6 mm stand on the inner faces of both arms and interleave, so the clip holds a bag instead of
   sliding off it. It prints lying flat, so every wall is vertical and nothing overhangs or needs
   support
+- **Coaster** (Draw > Parts): a flat plate with a rim that catches what runs down a glass. You pick
+  the shape - a circle, a hexagon across its flats or a square with rounded corners - and how big it
+  is (60 to 150 mm), how thick the plate is (3 to 8 mm), how high the rim stands above it (0 to
+  3 mm, and 0 leaves the top flat) and what is grooved into the top for grip: rings every 6 mm, a
+  grid every 8 mm or nothing; the dialog says how wide the coaster is and how high it stands. The
+  top is cut out to the plate up to 3 mm inside the edge, which leaves that edge standing as a rim,
+  and the grooves are cut 0.8 mm deep and stop 2 mm before the wall of the recess. It prints lying
+  flat, so every face is horizontal or vertical and nothing needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

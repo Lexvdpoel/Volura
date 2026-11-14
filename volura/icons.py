@@ -387,6 +387,11 @@ SVG = {
                 f'stroke-width="2.6" stroke-linecap="round"/>'
                 f'<path d="M20.2 14.8 L20.2 4.2 L15.4 4.2 L17.6 7.4" {N} stroke="#2b2b2b" '
                 f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    # coaster: a plate with a rim standing round its edge and rings grooved in its top
+    "coaster": f'<circle cx="12" cy="12" r="9.2" fill="#eef2f7" {S()}/>'
+               f'<circle cx="12" cy="12" r="7.4" {N} stroke="#3b7dd8" stroke-width="1.3"/>'
+               f'<circle cx="12" cy="12" r="4.6" {N} stroke="#3b7dd8" stroke-width="1.3"/>'
+               f'<circle cx="12" cy="12" r="1.8" {N} stroke="#3b7dd8" stroke-width="1.3"/>',
     "lithophane": f'<rect x="4" y="3" width="12" height="18" rx="1.6" fill="#eef2f7" {S()}/>'
                   f'<rect x="6" y="5.5" width="3.4" height="3.4" fill="#3b7dd8"/>'
                   f'<rect x="10.6" y="5.5" width="3.4" height="3.4" fill="#8fa6c3"/>'
