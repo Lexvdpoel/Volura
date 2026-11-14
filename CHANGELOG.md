@@ -3,6 +3,14 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.53 — 2026-11-14
+
+### New
+- **Filament Clip** (Draw > Parts): a small clip that pushes onto the rim of a spool and holds
+  the loose end of the filament (1.75 or 2.85 mm), so the spool does not unwind.
+- **Plant Label** (Draw > Parts): a stake to push into a pot with the name of the plant in
+  raised letters on its head. It prints lying flat.
+
 ## 0.2.52 — 2026-11-14
 
 ### New
