@@ -39,6 +39,15 @@ from PySide6.QtGui import QBrush, QImage, QPainter, QPainterPath, QPolygonF, QTr
 from .sla_profiles import (ResinPrinter, ResinPrint, ResinSettings, converter,
                            converter_environment)
 
+#: the Qt values the layers are drawn with, looked up once here: PySide makes an enum the first
+#: time it is used, and the layers are drawn in several threads at once, which could then wait
+#: on each other for good while making the same enum
+_GRAY = QImage.Format_Grayscale8
+_ODD_EVEN = Qt.OddEvenFill
+_ANTIALIAS = QPainter.Antialiasing
+_NO_PEN = Qt.NoPen
+_WHITE = Qt.white
+
 #: the name of the layers inside the archive
 JOB = "volura"
 #: seconds a layer takes besides its light: the plate lifts out of the resin and comes back
@@ -76,19 +85,19 @@ def image_transform(printer: ResinPrinter) -> QTransform:
 
 def layer_image(polygons, printer: ResinPrinter, transform: QTransform) -> QImage:
     """The image of one layer: its polygons (in mm on the plate) white on black."""
-    img = QImage(printer.pixels_x, printer.pixels_y, QImage.Format_Grayscale8)
+    img = QImage(printer.pixels_x, printer.pixels_y, _GRAY)
     img.fill(0)
     if polygons:
         path = QPainterPath()
-        path.setFillRule(Qt.OddEvenFill)
+        path.setFillRule(_ODD_EVEN)
         for poly in polygons:
             path.addPolygon(QPolygonF([QPointF(float(x), float(y)) for x, y in poly]))
             path.closeSubpath()
         p = QPainter(img)
-        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(_ANTIALIAS)
         p.setTransform(transform)
-        p.setPen(Qt.NoPen)
-        p.setBrush(QBrush(Qt.white))
+        p.setPen(_NO_PEN)
+        p.setBrush(QBrush(_WHITE))
         p.drawPath(path)
         p.end()
     return img
@@ -189,18 +198,18 @@ def layer_png(polygons, printer: ResinPrinter, transform: QTransform) -> bytes:
     y1 = min(h, int(math.ceil(max(c.y() for c in corners))) + 2)
     if x1 <= x0 or y1 <= y0:
         return _png(w, h, np.zeros((0, 0), dtype=np.uint8), 0, 0)
-    img = QImage(x1 - x0, y1 - y0, QImage.Format_Grayscale8)
+    img = QImage(x1 - x0, y1 - y0, _GRAY)
     img.fill(0)
     path = QPainterPath()
-    path.setFillRule(Qt.OddEvenFill)
+    path.setFillRule(_ODD_EVEN)
     for poly in pts:
         path.addPolygon(QPolygonF([QPointF(float(x), float(y)) for x, y in poly]))
         path.closeSubpath()
     p = QPainter(img)
-    p.setRenderHint(QPainter.Antialiasing)
+    p.setRenderHint(_ANTIALIAS)
     p.setTransform(transform * QTransform.fromTranslate(-x0, -y0))
-    p.setPen(Qt.NoPen)
-    p.setBrush(QBrush(Qt.white))
+    p.setPen(_NO_PEN)
+    p.setBrush(QBrush(_WHITE))
     p.drawPath(path)
     p.end()
     return _png(w, h, _pixels(img).copy(), x0, y0)
