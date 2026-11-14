@@ -5,8 +5,8 @@ Step 2 of splitting `volura/app.py`: the methods that build or change a printed 
 here verbatim, into a plain mixin that `MainWindow` inherits. The spur gear, the project
 box, the knob, the standoff, the label plate, the 3D text, the cable clip, the solid tools
 and the simplify, the mouse ears, the parts on the bed, the screw thread and the screw hole,
-the clearance, the overhang and the calibration cube, the cut & join, the print check and the
-help.
+the clearance, the overhang, the calibration cube and the bridge test, the cut & join, the print
+check and the help.
 
 The methods that ask something with a message box or an input dialog stay in
 `volura/app.py`, together with the actions that call all of this; the window still owns
@@ -26,8 +26,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
                                QSpinBox, QTextBrowser, QVBoxLayout)
 
-from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain,
-               cable_clip, cable_winder, calibration_cube, card_holder, coaster,
+from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,
+               cable_chain, cable_clip, cable_winder, calibration_cube, card_holder, coaster,
                drawer_organizer, enclosure, fan_guard, filament_clip, gears, gridfinity, grommet,
                hex_key_holder, hinge, hose_adapter, joints, knob, label_plate, lithophane, ops,
                pegboard, phone_stand, plant_label, plant_pot, screw_jar, slicer, spool_adapter,
@@ -2948,6 +2948,99 @@ class PrintMixin:
             self.view.set_status(tr("Calibration cube failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the calibration cube…"),
+                       on_done=done, on_error=failed)
+    # ---------------------------------------------------------------- bridge test
+
+    def bridge_test_dialog(self):
+        """3D Printing > Bridge Test…: a row of bridges over gaps that grow, so the user learns
+        how wide a gap this printer bridges without support."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Bridge Test"))
+        form = QFormLayout(dlg)
+        first_sp = self._spin(5.0, 30.0, self.settings.bridge_test_first, 1, " mm", 1.0)
+        first_sp.setToolTip(tr("The gap of the first bridge, the one that always comes out"))
+        step_sp = self._spin(5.0, 20.0, self.settings.bridge_test_step, 1, " mm", 1.0)
+        step_sp.setToolTip(tr("How much wider every next bridge is than the one before it"))
+        count_sp = QSpinBox()
+        count_sp.setRange(2, 8)
+        count_sp.setValue(self.settings.bridge_test_count)
+        count_sp.setToolTip(tr("How many bridges are in the row, over the shortest and the "
+                               "widest gap"))
+        height_sp = self._spin(4.0, 20.0, self.settings.bridge_test_height, 1, " mm", 1.0)
+        height_sp.setToolTip(tr("How high the bridges hang above the bed, so nothing holds "
+                                "them up there"))
+        width_sp = self._spin(5.0, 20.0, self.settings.bridge_test_width, 1, " mm", 1.0)
+        width_sp.setToolTip(tr("How wide a bridge is, measured across the row"))
+        info = QLabel()
+        form.addRow(tr("Shortest span"), first_sp)
+        form.addRow(tr("Step"), step_sp)
+        form.addRow(tr("Bridges"), count_sp)
+        form.addRow(tr("Height"), height_sp)
+        form.addRow(tr("Width"), width_sp)
+        form.addRow("", info)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+
+        def show(*_):
+            # the widest spans drop out when the row grows past the bed, so what stands here is
+            # what prints
+            s = bridge_test.sizes(float(first_sp.value()), float(step_sp.value()),
+                                  int(count_sp.value()), float(height_sp.value()),
+                                  float(width_sp.value()))
+            length, depth, top = s["size"]
+            info.setText(tr("Spans: {spans}\nOutside size: {length} × {depth} × {height} mm")
+                         .format(spans="  ".join(f"{v:g}" for v in s["spans"]),
+                                 length=f"{length:g}", depth=f"{depth:g}", height=f"{top:g}"))
+
+        for sp in (first_sp, step_sp, height_sp, width_sp):
+            sp.valueChanged.connect(show)
+        count_sp.valueChanged.connect(show)
+        show()
+        if dlg.exec() != QDialog.Accepted:
+            return
+        first, step = float(first_sp.value()), float(step_sp.value())
+        count, height = int(count_sp.value()), float(height_sp.value())
+        width = float(width_sp.value())
+        self.settings.bridge_test_first = first
+        self.settings.bridge_test_step = step
+        self.settings.bridge_test_count = count
+        self.settings.bridge_test_height = height
+        self.settings.bridge_test_width = width
+        self.settings.save()
+        self._apply_bridge_test(first, step, count, height, width)
+
+    def _apply_bridge_test(self, first, step, count, height, width):
+        doc = self.doc
+        bb = doc.model_bbox()
+        x0 = 0.0 if bb is None else float(bb[1][0]) + 10.0   # mm to the right of the model
+
+        def work(report):
+            # the numbers of the spans are the slow part of a row with many bridges, so it
+            # happens here and the window keeps responding
+            report(0.1, tr("Building the bridge test…"))
+            row = bridge_test.bridge_test(first=first, step=step, count=count, height=height,
+                                          width=width)
+            if row.status() != mf.Error.NoError or row.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            # the row is drawn centred on the origin: move it to the free spot on the bed
+            dx = x0 - float(np.asarray(row.bounding_box())[0])
+            return row.translate((dx, 0.0, 0.0))
+
+        def done(result):
+            doc.checkpoint()                # one undo takes the row away again
+            new = ops.group_from_manifold(doc, result, self.settings.current_color,
+                                          tr("Bridge test"))
+            doc.set_selection([("g", new.id, new.id)])
+            doc.notify()
+            self.view.set_status(tr("Print it and read the widest gap that still came out "
+                                    "clean: that is how far this printer bridges."))
+
+        def failed(exc):
+            self.view.set_status(tr("Bridge test failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the bridge test…"),
                        on_done=done, on_error=failed)
     # ------------------------------------------------------------ cut & join
     # (label, joints.KINDS identifier; the identifiers stay Dutch)

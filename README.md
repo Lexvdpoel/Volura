@@ -76,6 +76,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   top, X in the front and Y in the right side; print it and measure it with a caliper to see
   whether your printer keeps to size. The letters are cut into the faces instead of stood on them,
   so the cube stays the edge you asked for and nothing has to be subtracted from the measurement
+- **Bridge Test** (3D Printing): a small test print that shows how far your printer bridges a gap
+  without support: a row of bridges over gaps that grow by a step from left to right, each hanging
+  above the bed with its span engraved in the top of it; print it and read the widest gap that
+  still came out clean
 - **Project Box** (Draw > Parts): an enclosure with a lid that fits into it: enter the
   inside length, width and height that your electronics need, with the wall, the floor, the
   rounding of the corners and the clearance between the lip of the lid and the wall. With a

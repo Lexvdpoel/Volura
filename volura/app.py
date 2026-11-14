@@ -323,6 +323,31 @@ class Settings:
             self.calibration_cube_depth = 0.6
         self.calibration_cube_depth = max(0.4, min(1.2, self.calibration_cube_depth))
         try:
+            self.bridge_test_first = float(self.q.value("bridge_test_first", 10.0))
+        except (TypeError, ValueError):
+            self.bridge_test_first = 10.0
+        self.bridge_test_first = max(5.0, min(30.0, self.bridge_test_first))
+        try:
+            self.bridge_test_step = float(self.q.value("bridge_test_step", 10.0))
+        except (TypeError, ValueError):
+            self.bridge_test_step = 10.0
+        self.bridge_test_step = max(5.0, min(20.0, self.bridge_test_step))
+        try:
+            self.bridge_test_count = int(float(self.q.value("bridge_test_count", 5)))
+        except (TypeError, ValueError):
+            self.bridge_test_count = 5
+        self.bridge_test_count = max(2, min(8, self.bridge_test_count))
+        try:
+            self.bridge_test_height = float(self.q.value("bridge_test_height", 8.0))
+        except (TypeError, ValueError):
+            self.bridge_test_height = 8.0
+        self.bridge_test_height = max(4.0, min(20.0, self.bridge_test_height))
+        try:
+            self.bridge_test_width = float(self.q.value("bridge_test_width", 8.0))
+        except (TypeError, ValueError):
+            self.bridge_test_width = 8.0
+        self.bridge_test_width = max(5.0, min(20.0, self.bridge_test_width))
+        try:
             self.hinge_slit = float(self.q.value("hinge_slit", 15.0))
         except (TypeError, ValueError):
             self.hinge_slit = 15.0
@@ -1296,6 +1321,11 @@ class Settings:
         self.q.setValue("calibration_cube_size", self.calibration_cube_size)
         self.q.setValue("calibration_cube_letters", self.calibration_cube_letters)
         self.q.setValue("calibration_cube_depth", self.calibration_cube_depth)
+        self.q.setValue("bridge_test_first", self.bridge_test_first)
+        self.q.setValue("bridge_test_step", self.bridge_test_step)
+        self.q.setValue("bridge_test_count", self.bridge_test_count)
+        self.q.setValue("bridge_test_height", self.bridge_test_height)
+        self.q.setValue("bridge_test_width", self.bridge_test_width)
         self.q.setValue("hinge_slit", self.hinge_slit)
         self.q.setValue("hinge_gap", self.hinge_gap)
         self.q.setValue("hinge_pitch", self.hinge_pitch)
@@ -2098,6 +2128,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                     "calibration_cube", False,
                                     tr("A cube with the axes engraved in its faces: measure it "
                                        "with a caliper to see if your printer is to size"))
+        self.a_bridge_test = A(tr("Bridge Test…"),
+                               lambda checked=False: self.bridge_test_dialog(), None,
+                               "bridge_test", False,
+                               tr("A row of bridges over gaps that grow wider: print it and "
+                                  "read how far your printer bridges without support"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -2670,7 +2705,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                       self.a_orient_print, self.a_drop, self.a_center, self.a_arrange, None,
                       self.a_cutplane, self.a_cut_join, None,
                       self.a_elephant, self.a_mouse_ears, None,
-                      self.a_clearance_test, self.a_overhang_test, self.a_calibration_cube))
+                      self.a_clearance_test, self.a_overhang_test, self.a_calibration_cube,
+                      self.a_bridge_test))
 
         # ---- Laser and Mill: what only matters for the machine
         m = mb.addMenu(tr("&Laser and Mill"))

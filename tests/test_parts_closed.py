@@ -25,8 +25,8 @@ import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain,  # noqa: E402
-                    cable_clip, cable_winder, calibration_cube, card_holder, coaster,
+from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,  # noqa: E402
+                    cable_chain, cable_clip, cable_winder, calibration_cube, card_holder, coaster,
                     drawer_organizer, enclosure, fan_guard, filament_clip, fonts, gears,
                     gridfinity,
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
@@ -115,6 +115,12 @@ def calib(**kw):
     if kw.get("letters", True):
         need_fonts()
     return [calibration_cube.calibration_cube(**kw)]
+
+
+def bridges(**kw):
+    """A bridge test, whose engraved spans need the fonts of this system when it has them."""
+    need_fonts()
+    return [bridge_test.bridge_test(**kw)]
 
 
 CASES = [
@@ -355,6 +361,12 @@ CASES = [
     ("calibration cube small without letters", lambda: calib(
         size=10.0, letters=False, depth=0.4)),
     ("calibration cube large deep axes", lambda: calib(size=50.0, depth=1.2)),
+
+    ("bridge test default", lambda: bridges()),
+    ("bridge test short row low bridges", lambda: bridges(
+        first=5.0, step=5.0, count=2, height=4.0, width=5.0)),
+    ("bridge test wide row clamped to the bed", lambda: bridges(
+        first=30.0, step=20.0, count=8, height=20.0, width=20.0)),
 ]
 
 

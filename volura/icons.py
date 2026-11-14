@@ -239,6 +239,15 @@ SVG = {
                         f'<path d="M13.6 15.6 L15.8 15.6 L14.7 17.1 L15.8 18.6 L13.6 18.6" {N} '
                         f'stroke="#d23b3b" stroke-width="1.4" stroke-linecap="round" '
                         f'stroke-linejoin="round"/>',
+    # bridge test: bridges over gaps that grow, on a plate
+    "bridge_test": f'<rect x="2.5" y="17.5" width="19" height="3" rx="0.8" fill="#cfe0f5" {S()}/>'
+                   f'<rect x="3.5" y="8" width="2.6" height="9.5" fill="#e8eef7" {S(w=1.2)}/>'
+                   f'<rect x="9.5" y="8" width="2.6" height="9.5" fill="#e8eef7" {S(w=1.2)}/>'
+                   f'<rect x="18" y="8" width="2.6" height="9.5" fill="#e8eef7" {S(w=1.2)}/>'
+                   f'<rect x="3.5" y="5.8" width="8.6" height="2.6" rx="0.6" fill="#f2c230" '
+                   f'{S(w=1.2)}/>'
+                   f'<rect x="9.5" y="5.8" width="11.1" height="2.6" rx="0.6" fill="#f2c230" '
+                   f'{S(w=1.2)}/>',
     # vent pattern: a plate with a field of round holes
     "vent": f'<rect x="2.5" y="4" width="19" height="16" rx="1" fill="#eef2f7" {S()}/>'
             f'<circle cx="7" cy="9" r="1.7" fill="#fff" stroke="#d23b3b" stroke-width="1.2"/>'
