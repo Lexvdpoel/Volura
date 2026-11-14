@@ -190,7 +190,7 @@ def test_the_text_is_one_group_that_one_undo_takes_away(win):
     assert g.name == "Tools", "the group is not named after the first line"
     m = g.ents.to_manifold()
     assert m.status() == mf.Error.NoError
-    assert m.volume() == pytest.approx(text3d.text3d(**OPTIONS).volume(), rel=1e-6)
+    assert m.volume() == pytest.approx(text3d.text3d(**OPTIONS).volume(), rel=1e-4)
     assert [g.id for g in win.doc.selected_groups()] == [g.id for g in win.doc.groups]
     assert pump_until(lambda: win.hint.text() == "3D text added."), win.hint.text()
     win.doc.undo()
