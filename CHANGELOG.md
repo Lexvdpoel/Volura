@@ -3,6 +3,16 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.51 — 2026-11-14
+
+### New
+- **Screw-Top Jar** (Draw > Parts): a round jar and the lid that screws onto it, with an ISO
+  thread, play between the threads and grip ribs on the lid. The jar prints on its floor and the
+  lid on its top, both without support.
+- **Hex Key Holder** (Draw > Parts): a block with a hexagonal hole for every key size, smallest
+  left, a top that steps down towards the small keys and the sizes engraved in front of their
+  holes.
+
 ## 0.2.50 — 2026-11-13
 
 ### New
