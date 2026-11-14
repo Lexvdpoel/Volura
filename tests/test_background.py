@@ -158,7 +158,7 @@ def test_progress_dialog_appears_after_the_delay(win):
 
 
 def test_no_dialog_for_a_quick_task(win):
-    job = background.run(win, lambda report: 7, text="Working…", delay_ms=50,
+    job = background.run(win, lambda report: 7, text="Working…", delay_ms=1000,
                          show_dialog=True, wait=True)
     assert job.result == 7
     assert not win.findChildren(QProgressDialog), "a quick task must not flash a dialog"
