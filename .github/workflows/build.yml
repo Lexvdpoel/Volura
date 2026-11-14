@@ -72,6 +72,7 @@ jobs:
           if [ ! -f uvtools/VERSION ]; then python tools/fetch_uvtools.py; fi
 
       - name: Tests
+        timeout-minutes: 30          # a run takes a few minutes; a test that hangs fails here
         run: python -m pytest -q -n auto tests     # spread over the cores of the runner
 
       - name: Build the standalone version
