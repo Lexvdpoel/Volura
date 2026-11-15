@@ -3,6 +3,14 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.58 — 2026-11-15
+
+### New
+- **Door Wedge** (Draw > Parts): a wedge to hold a door open, with grip ridges on its slope and
+  a hole to hang it up. It prints lying on its side.
+- **Soap Dish** (Draw > Parts): a tray with ribs the soap lies on and slots in the floor between
+  them, so the water runs off and the soap dries.
+
 ## 0.2.57 — 2026-11-15
 
 ### New
