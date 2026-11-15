@@ -25,6 +25,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import zipfile
 import zlib
@@ -39,9 +40,12 @@ from PySide6.QtGui import QBrush, QImage, QPainter, QPainterPath, QPolygonF, QTr
 from .sla_profiles import (ResinPrinter, ResinPrint, ResinSettings, converter,
                            converter_environment)
 
-#: the Qt values the layers are drawn with, looked up once here: PySide makes an enum the first
-#: time it is used, and the layers are drawn in several threads at once, which could then wait
-#: on each other for good while making the same enum
+#: the layers are drawn in several threads at once, but PySide makes an enum (and a value of a
+#: flag) the first time it is used, and two threads making the same one could wait on each other
+#: for good; so the drawing itself goes one layer at a time, and only the PNG, which takes most
+#: of the time, is made in parallel
+_DRAW = threading.Lock()
+#: the Qt values the layers are drawn with, looked up once here
 _GRAY = QImage.Format_Grayscale8
 _ODD_EVEN = Qt.OddEvenFill
 _ANTIALIAS = QPainter.Antialiasing
@@ -198,21 +202,23 @@ def layer_png(polygons, printer: ResinPrinter, transform: QTransform) -> bytes:
     y1 = min(h, int(math.ceil(max(c.y() for c in corners))) + 2)
     if x1 <= x0 or y1 <= y0:
         return _png(w, h, np.zeros((0, 0), dtype=np.uint8), 0, 0)
-    img = QImage(x1 - x0, y1 - y0, _GRAY)
-    img.fill(0)
-    path = QPainterPath()
-    path.setFillRule(_ODD_EVEN)
-    for poly in pts:
-        path.addPolygon(QPolygonF([QPointF(float(x), float(y)) for x, y in poly]))
-        path.closeSubpath()
-    p = QPainter(img)
-    p.setRenderHint(_ANTIALIAS)
-    p.setTransform(transform * QTransform.fromTranslate(-x0, -y0))
-    p.setPen(_NO_PEN)
-    p.setBrush(QBrush(_WHITE))
-    p.drawPath(path)
-    p.end()
-    return _png(w, h, _pixels(img).copy(), x0, y0)
+    with _DRAW:
+        img = QImage(x1 - x0, y1 - y0, _GRAY)
+        img.fill(0)
+        path = QPainterPath()
+        path.setFillRule(_ODD_EVEN)
+        for poly in pts:
+            path.addPolygon(QPolygonF([QPointF(float(x), float(y)) for x, y in poly]))
+            path.closeSubpath()
+        p = QPainter(img)
+        p.setRenderHint(_ANTIALIAS)
+        p.setTransform(transform * QTransform.fromTranslate(-x0, -y0))
+        p.setPen(_NO_PEN)
+        p.setBrush(QBrush(_WHITE))
+        p.drawPath(path)
+        p.end()
+        pixels = _pixels(img).copy()
+    return _png(w, h, pixels, x0, y0)
 
 
 def layer_heights(top: float, layer_height: float) -> list[float]:
@@ -288,6 +294,9 @@ def write_sl1(path, printer: ResinPrinter, profile: ResinPrint | None, settings:
               "printerProfile": printer.name, "printerVariant": "default",
               "prusaSlicerVersion": "Volura", "usedMaterial": f"{ml:.3f}"}
     workers = workers or max(1, min(8, (os.cpu_count() or 2) - 1))
+    # one small layer drawn here first, so every Qt enum and flag value the drawing needs
+    # exists before the threads start: made in a thread, one could hang for good
+    layer_png([[(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]], printer, transform)
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("config.ini", _ini(config))
         z.writestr("prusaslicer.ini", _ini(values))
