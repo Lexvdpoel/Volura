@@ -181,6 +181,8 @@ def test_slice_from_the_file_menu(monkeypatch, tmp_path):
     def look(dlg):
         """The preview: layers to look at, a nozzle that plays, then Save G-code…"""
         seen["layers"] = len(dlg.preview.layers)
+        assert " g filament (" in dlg.summary.text() and "≈ " in dlg.summary.text(), \
+            "the summary does not say what the filament costs"
         dlg.slider.setValue(5)
         dlg.play.setChecked(True)
         dlg._tick()

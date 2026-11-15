@@ -1037,10 +1037,11 @@ class PrintMixin:
         def done(made):
             result, preview = made
             hours, rest = divmod(int(round(result.seconds)), 3600)
-            summary = tr("{printer}: {h} h {m:02d} min, {g:.0f} g filament ({l:.2f} m), "
-                         "{n} layers").format(printer=printer_name, h=hours, m=rest // 60,
-                                              g=result.grams, l=sum(result.filament_m),
-                                              n=len(preview.layers))
+            cost = result.grams / 1000.0 * self.settings.filament_price
+            summary = tr("{printer}: {h} h {m:02d} min, {g:.0f} g filament ({l:.2f} m, "
+                         "≈ {cost:.2f}), {n} layers").format(
+                printer=printer_name, h=hours, m=rest // 60, g=result.grams,
+                l=sum(result.filament_m), cost=cost, n=len(preview.layers))
 
             def ask():
                 target, _ = QFileDialog.getSaveFileName(self, tr("Save G-code"),

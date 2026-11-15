@@ -2174,7 +2174,7 @@ TRANSLATIONS = {
     'Prime tower': 'Primetoren',
     'Filament brand': 'Filamentmerk',
     'Reading the G-code…': 'G-code inlezen…',
-    '{printer}: {h} h {m:02d} min, {g:.0f} g filament ({l:.2f} m), {n} layers': '{printer}: {h} u {m:02d} min, {g:.0f} g filament ({l:.2f} m), {n} lagen',
+    '{printer}: {h} h {m:02d} min, {g:.0f} g filament ({l:.2f} m, ≈ {cost:.2f}), {n} layers': '{printer}: {h} u {m:02d} min, {g:.0f} g filament ({l:.2f} m, ≈ {cost:.2f}), {n} lagen',
     'Sliced: {summary}: {path}': 'Gesliced: {summary}: {path}',
     'Sliced, not saved: {summary}': 'Gesliced, niet opgeslagen: {summary}',
     'Reading the printer profiles… The first time this can take a few minutes.': 'Printerprofielen inlezen… De eerste keer kan dit enkele minuten duren.',
