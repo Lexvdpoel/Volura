@@ -28,11 +28,11 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 
 from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,
                cable_chain, cable_clip, cable_winder, calibration_cube, card_holder, coaster,
-               drawer_organizer, enclosure, fan_guard, filament_clip, gears, gridfinity, grommet,
-               hex_key_holder, hinge, hose_adapter, joints, knob, label_plate, lithophane, ops,
-               pegboard, phone_stand, plant_label, plant_pot, screw_jar, slicer, spool_adapter,
-               standoff, storage_bin, stringing_test, text3d, theme, threads, tie_mount,
-               wall_hook)
+               drawer_organizer, enclosure, fan_guard, filament_clip, first_layer_test, gears,
+               gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
+               label_plate, lithophane, ops, pegboard, phone_stand, plant_label, plant_pot,
+               screw_jar, slicer, spool_adapter, standoff, storage_bin, stringing_test, text3d,
+               theme, threads, tie_mount, wall_hook)
 from . import gcode_preview
 from .print_preview import PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
@@ -3138,6 +3138,88 @@ class PrintMixin:
 
         background.run(self, work, text=tr("Building the stringing test…"),
                        on_done=done, on_error=failed)
+    # --------------------------------------------------------- first layer test
+
+    def first_layer_test_dialog(self):
+        """3D Printing > First Layer Test…: thin squares in the corners and the middle of the
+        bed, so the user sees whether the bed is level and the first layer is squashed right."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("First Layer Test"))
+        form = QFormLayout(dlg)
+        size_sp = self._spin(10.0, 60.0, self.settings.first_layer_test_size, 1, " mm", 1.0)
+        size_sp.setToolTip(tr("How wide a square is: a wider square covers more of the bed"))
+        height_sp = self._spin(0.1, 1.0, self.settings.first_layer_test_height, 2, " mm", 0.1)
+        height_sp.setToolTip(tr("How thick a square is: one layer of plastic at 0.3 mm, two of "
+                                "them at 0.6 mm"))
+        margin_sp = self._spin(5.0, 50.0, self.settings.first_layer_test_margin, 1, " mm", 1.0)
+        margin_sp.setToolTip(tr("How far a corner square stands from the edge of the bed"))
+        info = QLabel()
+        form.addRow(tr("Size"), size_sp)
+        form.addRow(tr("Height"), height_sp)
+        form.addRow(tr("Margin"), margin_sp)
+        form.addRow("", info)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+
+        def show(*_):
+            # a square shrinks when the five of them would overlap or leave the bed, so what
+            # stands here is what prints
+            bx, by = self.settings.bed_size[0], self.settings.bed_size[1]
+            s = first_layer_test.sizes(bx, by, float(size_sp.value()),
+                                       float(height_sp.value()), float(margin_sp.value()))
+            info.setText(tr("Bed: {x} × {y} mm\nSquare: {size} mm wide")
+                         .format(x=f"{s['bed_x']:g}", y=f"{s['bed_y']:g}",
+                                 size=f"{s['size']:g}"))
+
+        for sp in (size_sp, height_sp, margin_sp):
+            sp.valueChanged.connect(show)
+        show()
+        if dlg.exec() != QDialog.Accepted:
+            return
+        size, height = float(size_sp.value()), float(height_sp.value())
+        margin = float(margin_sp.value())
+        self.settings.first_layer_test_size = size
+        self.settings.first_layer_test_height = height
+        self.settings.first_layer_test_margin = margin
+        self.settings.save()
+        self._apply_first_layer_test(size, height, margin)
+
+    def _apply_first_layer_test(self, size, height, margin):
+        doc = self.doc
+        bx, by = self.settings.bed_size[0], self.settings.bed_size[1]
+        names = (tr("First layer front left"), tr("First layer front right"),
+                 tr("First layer back left"), tr("First layer back right"),
+                 tr("First layer middle"))
+
+        def work(report):
+            # five squares are quick, but they are five volumes to build and to check
+            report(0.1, tr("Building the first layer test…"))
+            squares = first_layer_test.first_layer_test(bed_x=bx, bed_y=by, size=size,
+                                                        height=height, margin=margin)
+            for m in squares:
+                if m.status() != mf.Error.NoError or m.is_empty():
+                    raise ValueError(tr("the result is not a valid volume"))
+            # the squares stay where they lie: which corner of the bed they touch is the test, so
+            # nothing here is moved next to the model or centred
+            return squares
+
+        def done(squares):
+            doc.checkpoint()                # one undo takes the five squares away again
+            groups = [ops.group_from_manifold(doc, m, self.settings.current_color, names[i])
+                      for i, m in enumerate(squares)]
+            doc.set_selection([("g", g.id, g.id) for g in groups])
+            doc.notify()
+            self.view.set_status(tr("Print it and look at the five squares: one that peels off "
+                                    "or drags says the bed is not level there."))
+
+        def failed(exc):
+            self.view.set_status(tr("First layer test failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the first layer test…"), on_done=done,
+                       on_error=failed)
+
     # ------------------------------------------------------------ cut & join
     # (label, joints.KINDS identifier; the identifiers stay Dutch)
     CUT_JOINTS = [(tr("No joint (cut only)"), "geen"),

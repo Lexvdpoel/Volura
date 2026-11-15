@@ -27,8 +27,8 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,  # noqa: E402
                     cable_chain, cable_clip, cable_winder, calibration_cube, card_holder, coaster,
-                    drawer_organizer, enclosure, fan_guard, filament_clip, fonts, gears,
-                    gridfinity,
+                    drawer_organizer, enclosure, fan_guard, filament_clip, first_layer_test,
+                    fonts, gears, gridfinity,
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
                     pegboard,
                     phone_stand, plant_label,
@@ -127,6 +127,12 @@ def bridges(**kw):
 def stringing(**kw):
     """A stringing test: thin towers the nozzle travels between on every layer."""
     return [stringing_test.stringing_test(**kw)]
+
+
+def first_layer(**kw):
+    """A first layer test: five thin squares on the bed, four in its corners and one in the
+    middle."""
+    return first_layer_test.first_layer_test(**kw)
 
 
 CASES = [
@@ -379,6 +385,12 @@ CASES = [
         towers=4, distance=20.0, height=10.0, diameter=3.0, cone=False)),
     ("stringing test wide row clamped to the bed", lambda: stringing(
         towers=4, distance=100.0, height=80.0, diameter=12.0)),
+
+    ("first layer test default", lambda: first_layer()),
+    ("first layer test wide bed thin squares", lambda: first_layer(
+        bed_x=300.0, bed_y=200.0, size=12.0, height=0.2, margin=8.0)),
+    ("first layer test small bed clamped", lambda: first_layer(
+        bed_x=80.0, bed_y=80.0, size=60.0, height=1.0, margin=5.0)),
 ]
 
 

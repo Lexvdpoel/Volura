@@ -84,6 +84,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   two to four thin towers, some distance apart, that the nozzle travels between on every layer;
   every tower can end in a point, so the hairs of plastic that retraction and temperature leave
   behind are easy to see
+- **First Layer Test** (3D Printing): five thin squares, one or two layers high, that stand in the
+  four corners and the middle of the bed: print them and see whether your bed is level and the
+  first layer is squashed right everywhere, because a square that peels off or drags says which
+  place on the bed is off
 - **Project Box** (Draw > Parts): an enclosure with a lid that fits into it: enter the
   inside length, width and height that your electronics need, with the wall, the floor, the
   rounding of the corners and the clearance between the lip of the lid and the wall. With a

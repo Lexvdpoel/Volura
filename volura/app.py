@@ -369,6 +369,21 @@ class Settings:
         self.stringing_test_diameter = max(3.0, min(12.0, self.stringing_test_diameter))
         self.stringing_test_cone = self._bool("stringing_test_cone", True)
         try:
+            self.first_layer_test_size = float(self.q.value("first_layer_test_size", 30.0))
+        except (TypeError, ValueError):
+            self.first_layer_test_size = 30.0
+        self.first_layer_test_size = max(10.0, min(60.0, self.first_layer_test_size))
+        try:
+            self.first_layer_test_height = float(self.q.value("first_layer_test_height", 0.3))
+        except (TypeError, ValueError):
+            self.first_layer_test_height = 0.3
+        self.first_layer_test_height = max(0.1, min(1.0, self.first_layer_test_height))
+        try:
+            self.first_layer_test_margin = float(self.q.value("first_layer_test_margin", 15.0))
+        except (TypeError, ValueError):
+            self.first_layer_test_margin = 15.0
+        self.first_layer_test_margin = max(5.0, min(50.0, self.first_layer_test_margin))
+        try:
             self.hinge_slit = float(self.q.value("hinge_slit", 15.0))
         except (TypeError, ValueError):
             self.hinge_slit = 15.0
@@ -1352,6 +1367,9 @@ class Settings:
         self.q.setValue("stringing_test_height", self.stringing_test_height)
         self.q.setValue("stringing_test_diameter", self.stringing_test_diameter)
         self.q.setValue("stringing_test_cone", self.stringing_test_cone)
+        self.q.setValue("first_layer_test_size", self.first_layer_test_size)
+        self.q.setValue("first_layer_test_height", self.first_layer_test_height)
+        self.q.setValue("first_layer_test_margin", self.first_layer_test_margin)
         self.q.setValue("hinge_slit", self.hinge_slit)
         self.q.setValue("hinge_gap", self.hinge_gap)
         self.q.setValue("hinge_pitch", self.hinge_pitch)
@@ -2164,6 +2182,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                   "stringing_test", False,
                                   tr("Thin towers the nozzle travels between: print it and see "
                                      "whether your printer leaves strings between them"))
+        self.a_first_layer_test = A(tr("First Layer Test…"),
+                                    lambda checked=False: self.first_layer_test_dialog(), None,
+                                    "first_layer_test", False,
+                                    tr("Thin squares in the corners and the middle of the bed: "
+                                       "print them and see whether your bed is level"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -2737,7 +2760,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                       self.a_cutplane, self.a_cut_join, None,
                       self.a_elephant, self.a_mouse_ears, None,
                       self.a_clearance_test, self.a_overhang_test, self.a_calibration_cube,
-                      self.a_bridge_test, self.a_stringing_test))
+                      self.a_bridge_test, self.a_stringing_test, self.a_first_layer_test))
 
         # ---- Laser and Mill: what only matters for the machine
         m = mb.addMenu(tr("&Laser and Mill"))
