@@ -3,6 +3,17 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.56 — 2026-11-15
+
+### New
+- **Stringing Test** (3D Printing): thin towers some distance apart; the hairs the nozzle leaves
+  between them show whether retraction and temperature are right.
+- **First Layer Test** (3D Printing): thin squares in the four corners and the middle of the
+  bed, left where they lie, to see whether the bed is level and the first layer right everywhere.
+
+### Fixed
+- File > Slice for Resin could still hang now and then while drawing the layers; it no longer does.
+
 ## 0.2.55 — 2026-11-14
 
 ### New
