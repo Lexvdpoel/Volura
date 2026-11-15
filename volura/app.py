@@ -31,8 +31,8 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                dxf, enclosure, errors, fan_guard, filament_clip,
                fileio, gcode, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar,
-               nesting, ops, pegboard, phone_stand, plant_label, plant_pot, sheet3d, sheettools,
-               svg,
+               nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
+               sheet3d, sheettools, svg,
                spacemouse, spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers)
 from .brep import Entities
@@ -1306,6 +1306,22 @@ class Settings:
             ribs = 7
         self.soap_dish_ribs = max(soap_dish.RIBS_MIN, min(soap_dish.RIBS_MAX, ribs))
         for key, default, lo, hi in (
+                ("pen_cup_diameter", 75.0, pen_cup.DIAMETER_MIN, pen_cup.DIAMETER_MAX),
+                ("pen_cup_height", 100.0, pen_cup.HEIGHT_MIN, pen_cup.HEIGHT_MAX),
+                ("pen_cup_wall", 2.4, pen_cup.WALL_MIN, pen_cup.WALL_MAX),
+                ("pen_cup_floor", 2.4, pen_cup.FLOOR_MIN, pen_cup.FLOOR_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        try:
+            columns = int(self.q.value("pen_cup_columns", 12))
+        except (TypeError, ValueError):
+            columns = 12
+        self.pen_cup_columns = max(pen_cup.COLUMNS_MIN, min(pen_cup.COLUMNS_MAX, columns))
+        self.pen_cup_windows = self._bool("pen_cup_windows", True)
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1599,6 +1615,9 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("soap_dish_length", "soap_dish_width", "soap_dish_rim", "soap_dish_wall",
                     "soap_dish_ribs"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("pen_cup_diameter", "pen_cup_height", "pen_cup_wall", "pen_cup_floor",
+                    "pen_cup_columns", "pen_cup_windows"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2667,6 +2686,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                 "tray but on ribs, and every gap between two ribs has a slot "
                                 "through the floor so the water runs off and the soap dries; it "
                                 "prints flat on its floor without support"))
+        # ---- pen cup
+        self.a_pen_cup = A(tr("Pen Cup…"),
+                           lambda checked=False: self.pen_cup_dialog(), None, "pen_cup",
+                           False,
+                           tr("Add a round cup that stands on your desk and holds pens: its wall "
+                              "carries a band of diamond windows, and because the sides of every "
+                              "diamond lean at 45 degrees the band prints open while the cup stands "
+                              "on its own floor - nothing needs support"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2790,7 +2817,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_lithophane, self.a_hex_key_holder,
                           self.a_screw_jar, self.a_bag_clip, self.a_coaster,
                           self.a_filament_clip, self.a_plant_label, self.a_desk_hook,
-                          self.a_door_wedge, self.a_soap_dish))
+                          self.a_door_wedge, self.a_soap_dish, self.a_pen_cup))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

@@ -31,7 +31,7 @@ from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, bri
                     first_layer_test,
                     fonts, gears, gridfinity,
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
-                    pegboard,
+                    pegboard, pen_cup,
                     phone_stand, plant_label,
                     plant_pot, screw_jar, soap_dish, spool_adapter, standoff, storage_bin,
                     stringing_test,
@@ -379,6 +379,12 @@ CASES = [
         length=70.0, width=50.0, rim=8.0, wall=4.0, ribs=3)]),
     ("soap dish large with all the ribs", lambda: [soap_dish.soap_dish(
         length=160.0, width=120.0, rim=30.0, wall=1.6, ribs=15)]),
+
+    ("pen cup default", lambda: [pen_cup.pen_cup()]),
+    ("pen cup small with a whole wall", lambda: [pen_cup.pen_cup(
+        diameter=40.0, height=50.0, wall=1.6, floor=1.6, windows=False, columns=6)]),
+    ("pen cup large with all the columns", lambda: [pen_cup.pen_cup(
+        diameter=120.0, height=160.0, wall=4.0, floor=4.0, columns=24)]),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

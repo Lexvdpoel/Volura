@@ -341,6 +341,18 @@ The interface is available in English and Dutch (*Window > Preferences > General
   closer together than 6 mm, because a narrower gap clogs with soap. The four corners round with
   10 mm. It prints flat on its floor - every face is vertical or horizontal - so nothing overhangs
   and nothing needs support
+- **Pen Cup** (Draw > Parts): a round cup that stands on your desk and holds pens, with a band of
+  diamond windows in its wall so the cup weighs little and you see what stands in it. You enter how
+  wide the cup is (40 to 120 mm), how tall it stands (50 to 160 mm), how thick its wall (1.6 to
+  4 mm) and the floor it stands on (1.6 to 4 mm) are and how many diamonds stand round the cup (6 to
+  24); the dialog says how big the cup stands on the bed and how many windows it has. A diamond is a
+  square turned 45 degrees, so it has a corner on top and one at the bottom and its sides lean at 45
+  degrees - the angle a printer bridges on its own - and every diamond is as wide as 60 percent of
+  its column, so 40 percent of the wall is left between two of them. The band hangs 15 mm clear of
+  the rim and of the floor and the rows interleave: every second row stands half a column further
+  round, so there is wall between two rows instead of one hole straight through the wall. Without
+  the windows the wall stands whole. It prints standing on its floor - nothing above the bed points
+  down by more than 45 degrees - so nothing needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

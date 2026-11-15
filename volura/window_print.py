@@ -31,8 +31,8 @@ from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, brack
                desk_hook, door_wedge, drawer_organizer, enclosure, fan_guard, filament_clip,
                first_layer_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
-               label_plate, lithophane, ops, pegboard, phone_stand, plant_label, plant_pot,
-               screw_jar, soap_dish, slicer, spool_adapter, standoff, storage_bin,
+               label_plate, lithophane, ops, pegboard, pen_cup, phone_stand, plant_label,
+               plant_pot, screw_jar, soap_dish, slicer, spool_adapter, standoff, storage_bin,
                stringing_test, text3d,
                theme, threads, tie_mount, wall_hook)
 from . import gcode_preview
@@ -49,10 +49,10 @@ from .part_dialogs import (BagClipDialog, BatteryHolderDialog, BinRackDialog,
                            DrawerOrganizerDialog, FanGuardDialog, FilamentClipDialog,
                            GridfinityDialog, GrommetDialog, HexKeyHolderDialog,
                            HingeDialog, HoseAdapterDialog, KnobDialog, LabelPlateDialog,
-                           LithophaneDialog, PegboardDialog, PhoneStandDialog, PlantLabelDialog,
-                           PlantPotDialog, ProjectBoxDialog, ScrewJarDialog, SoapDishDialog,
-                           SpoolAdapterDialog, StandoffDialog, StorageBinDialog, Text3DDialog,
-                           TieMountDialog, WallHookDialog)
+                           LithophaneDialog, PegboardDialog, PenCupDialog, PhoneStandDialog,
+                           PlantLabelDialog, PlantPotDialog, ProjectBoxDialog, ScrewJarDialog,
+                           SoapDishDialog, SpoolAdapterDialog, StandoffDialog, StorageBinDialog,
+                           Text3DDialog, TieMountDialog, WallHookDialog)
 
 
 TOOL_INFO = [
@@ -2167,6 +2167,59 @@ class PrintMixin:
             self.view.set_status(tr("Soap dish failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the soap dish…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ pen cup
+    def pen_cup_dialog(self):
+        """Draw > Parts > Pen Cup…: a round cup for pens with a band of windows in its wall."""
+        dlg = PenCupDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("diameter", "height", "wall", "floor", "windows", "columns"):
+            setattr(self.settings, "pen_cup_" + key, options[key])
+        self.settings.save()
+        made = self.make_pen_cup_model(options)
+        self.setFocus()
+        return made
+
+    def make_pen_cup_model(self, options):
+        """The pen cup standing on its floor as it prints: one undo step, next to the model.
+
+        A wide cup carries a band of several hundred diamonds and every one of them is a cut through
+        the wall, so it is built in the background like the soap dish and the window keeps
+        responding. It stands in the middle of the free bed, or on the free place 10 mm to the right
+        of what is already in the model, so a second cup does not land in the first one.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("diameter", "height", "wall", "floor", "windows",
+                                        "columns")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the pen cup…"))
+            m = pen_cup.pen_cup(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the cup away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Pen cup"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Pen cup added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Pen cup failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the pen cup…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter

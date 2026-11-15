@@ -18,9 +18,9 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                cable_winder, card_holder, coaster, desk_hook, door_wedge, drawer_organizer,
                enclosure, fan_guard, filament_clip, fonts, gears, gridfinity, grommet,
-               hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane, pegboard,
-               phone_stand, plant_label, plant_pot, screw_jar, soap_dish, spool_adapter, standoff,
-               storage_bin, text3d, threads, tie_mount, wall_hook)
+               hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
+               pegboard, pen_cup, phone_stand, plant_label, plant_pot, screw_jar, soap_dish,
+               spool_adapter, standoff, storage_bin, text3d, threads, tie_mount, wall_hook)
 from .i18n import tr
 
 
@@ -2708,6 +2708,83 @@ class SoapDishDialog(QDialog):
         return {"length": round(self.length.value(), 6), "width": round(self.width.value(), 6),
                 "rim": round(self.rim.value(), 6), "wall": round(self.wall.value(), 6),
                 "ribs": int(self.ribs.value())}
+
+
+class PenCupDialog(QDialog):
+    """The "Pen Cup…" dialog: a round cup for pens with a band of diamond windows in its wall.
+
+    The diameter and the height say how the cup stands on the desk, the wall and the floor how much
+    plastic goes into it; the windows are the diamonds cut through that wall and the columns how many
+    of them stand round the cup, greyed out when the wall is to stay whole. Under the fields the cup
+    stands in figures, with the number of windows it will have. The values come from Settings and are
+    remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Pen cup"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.diameter = spin(pen_cup.DIAMETER_MIN, pen_cup.DIAMETER_MAX, s.pen_cup_diameter, 5.0)
+        self.diameter.setToolTip(tr("How wide the cup is across: room for a handful of pens and "
+                                    "narrow enough to stand next to the keyboard"))
+        self.height = spin(pen_cup.HEIGHT_MIN, pen_cup.HEIGHT_MAX, s.pen_cup_height, 5.0)
+        self.height.setToolTip(tr("How tall the cup stands: the pens go in as deep as the cup is "
+                                  "tall and still stick out far enough to pick up"))
+        self.wall = spin(pen_cup.WALL_MIN, pen_cup.WALL_MAX, s.pen_cup_wall, 0.5)
+        self.wall.setToolTip(tr("How thick the wall is that the windows are cut through; its "
+                                "diamonds lean at 45 degrees, so the cup prints without support"))
+        self.floor = spin(pen_cup.FLOOR_MIN, pen_cup.FLOOR_MAX, s.pen_cup_floor, 0.5)
+        self.floor.setToolTip(tr("How thick the bottom is the cup stands on; heavy pens make a cup "
+                                 "topple, and that bottom is what keeps it upright"))
+        self.windows = QCheckBox(tr("Windows"))
+        self.windows.setChecked(bool(s.pen_cup_windows))
+        self.windows.setToolTip(tr("Cut a band of diamond windows through the wall, so the cup "
+                                   "weighs little and you see what stands in it"))
+        self.columns = QSpinBox()
+        self.columns.setRange(pen_cup.COLUMNS_MIN, pen_cup.COLUMNS_MAX)
+        self.columns.setValue(int(s.pen_cup_columns))
+        self.columns.setToolTip(tr("How many diamonds stand round the cup; every second row stands "
+                                   "half a column further round, so the rows interleave"))
+        self.info = QLabel()
+        lay.addRow(tr("Diameter"), self.diameter)
+        lay.addRow(tr("Height"), self.height)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Floor"), self.floor)
+        lay.addRow("", self.windows)
+        lay.addRow(tr("Columns"), self.columns)
+        lay.addRow("", self.info)
+        for w in (self.diameter, self.height, self.wall, self.floor, self.columns):
+            w.valueChanged.connect(self._changed)
+        self.windows.toggled.connect(self._changed)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        lay.addRow(self.buttonBox)
+        self._changed()
+
+    def _changed(self, *_):
+        """The cup these figures make, standing on the bed, and how many windows it has."""
+        self.columns.setEnabled(self.windows.isChecked())
+        s = pen_cup.sizes(**self.options())
+        self.info.setText(tr("{d:.1f} mm across, {h:.1f} mm high, {n} windows").format(
+            d=s["size_x"], h=s["size_z"], n=s["rows"] * s["columns"]))
+
+    def options(self) -> dict:
+        return {"diameter": round(self.diameter.value(), 6),
+                "height": round(self.height.value(), 6), "wall": round(self.wall.value(), 6),
+                "floor": round(self.floor.value(), 6), "windows": self.windows.isChecked(),
+                "columns": int(self.columns.value())}
 
 
 class HoseAdapterDialog(QDialog):

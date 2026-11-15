@@ -465,6 +465,13 @@ SVG = {
                  f'{S(w=1.3)}/>'
                  f'<path d="M12 19.2 C13.1 20.7 13.5 21.3 13.5 21.9 A1.6 1.6 0 0 1 10.5 21.9 '
                  f'C10.5 21.3 10.9 20.7 12 19.2 Z" fill="#2f6fd6" {S(w=1.1)}/>',
+    # pen cup: pens standing in a cup whose wall carries a band of diamond windows
+    "pen_cup": f'<path d="M9.4 10 L7.2 3.2 M14 10 L16.2 4" {N} stroke="#2f6fd6" '
+               f'stroke-width="2.2" stroke-linecap="round"/>'
+               f'<path d="M5.4 9.2 L18.6 9.2 L17.4 20 Q17.3 21.2 16.1 21.2 L7.9 21.2 '
+               f'Q6.7 21.2 6.6 20 Z" fill="#cfe0f5" {S()}/>'
+               f'<path d="M9.4 12.4 L11.3 14.6 L9.4 16.8 L7.5 14.6 Z M14.6 12.4 L16.5 14.6 '
+               f'L14.6 16.8 L12.7 14.6 Z" fill="#fff" {S(w=1.1)}/>',
     "lithophane": f'<rect x="4" y="3" width="12" height="18" rx="1.6" fill="#eef2f7" {S()}/>'
                   f'<rect x="6" y="5.5" width="3.4" height="3.4" fill="#3b7dd8"/>'
                   f'<rect x="10.6" y="5.5" width="3.4" height="3.4" fill="#8fa6c3"/>'
