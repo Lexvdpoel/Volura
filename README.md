@@ -308,6 +308,17 @@ The interface is available in English and Dutch (*Window > Preferences > General
   half as high as the head and shrunk until it fits, so it always stays inside the head, and empty
   text leaves a plain plate to write on. It prints lying flat, so every face is horizontal or
   vertical and nothing needs support
+- **Desk Hook** (Draw > Parts): a hook that slides over the edge of a desk top without a single
+  screw and hangs below it, for the headphones or the bag you take off. You enter how thick the
+  desk top is (10 to 50 mm), how far the hook reaches over it (20 to 80 mm), how far it hangs below
+  it (20 to 120 mm), how wide the opening of the hook is (15 to 60 mm), how thick the wall is (4 to
+  10 mm) and how wide the hook is (15 to 50 mm); the dialog says how big the hook stands on the
+  bed. An arm lies on the desk, an upright runs down along its edge 0.3 mm clear of it and an under
+  arm clamps against the bottom, where a bump of 0.2 mm presses into the wood so the hook stays
+  put. Below it a U opens upwards whose lip reaches 0.6 times the opening up, so a bag band or a
+  headband slides in and out easily. Outside corners round with 2 mm and inside ones with 3 mm. It
+  prints lying on its side - one side profile pulled straight up - so every wall is vertical,
+  nothing overhangs and nothing needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

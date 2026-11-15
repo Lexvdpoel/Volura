@@ -27,7 +27,8 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,  # noqa: E402
                     cable_chain, cable_clip, cable_winder, calibration_cube, card_holder, coaster,
-                    drawer_organizer, enclosure, fan_guard, filament_clip, first_layer_test,
+                    desk_hook, drawer_organizer, enclosure, fan_guard, filament_clip,
+                    first_layer_test,
                     fonts, gears, gridfinity,
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
                     pegboard,
@@ -359,6 +360,12 @@ CASES = [
     ("plant label long name on a large head", lambda: [plant_label.plant_label(
         text="ROSEMARY FOR THE KITCHEN WINDOW", width=120.0, head=40.0, stake=200.0,
         thickness=4.0, raised=2.0)]),
+
+    ("desk hook default", lambda: [desk_hook.desk_hook()]),
+    ("desk hook thin wall on a thin desk", lambda: [desk_hook.desk_hook(
+        desk=10.0, grip=20.0, drop=20.0, hook=15.0, wall=4.0, width=15.0)]),
+    ("desk hook thick desk and wide opening", lambda: [desk_hook.desk_hook(
+        desk=50.0, grip=80.0, drop=120.0, hook=60.0, wall=10.0, width=50.0)]),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

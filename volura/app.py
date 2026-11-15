@@ -26,7 +26,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_holder, boxgen, bracket,
-               cable_chain, cable_clip, cable_winder, cam, card_holder, coaster, drawer_organizer,
+               cable_chain, cable_clip, cable_winder, cam, card_holder, coaster, desk_hook,
+               drawer_organizer,
                dxf, enclosure, errors, fan_guard, filament_clip,
                fileio, gcode, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, screw_jar,
@@ -1266,6 +1267,18 @@ class Settings:
                 value = default
             setattr(self, key, max(lo, min(hi, value)))
         for key, default, lo, hi in (
+                ("desk_hook_desk", 25.0, desk_hook.DESK_MIN, desk_hook.DESK_MAX),
+                ("desk_hook_grip", 40.0, desk_hook.GRIP_MIN, desk_hook.GRIP_MAX),
+                ("desk_hook_drop", 50.0, desk_hook.DROP_MIN, desk_hook.DROP_MAX),
+                ("desk_hook_hook", 30.0, desk_hook.HOOK_MIN, desk_hook.HOOK_MAX),
+                ("desk_hook_wall", 6.0, desk_hook.WALL_MIN, desk_hook.WALL_MAX),
+                ("desk_hook_width", 25.0, desk_hook.WIDTH_MIN, desk_hook.WIDTH_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1550,6 +1563,9 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("plant_label_text", "plant_label_width", "plant_label_head",
                     "plant_label_stake", "plant_label_thickness", "plant_label_raised"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("desk_hook_desk", "desk_hook_grip", "desk_hook_drop", "desk_hook_hook",
+                    "desk_hook_wall", "desk_hook_width"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2593,6 +2609,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                   "that carries the name of the plant in letters standing out of "
                                   "the plastic: the stake is 8 mm wide and pointed, so it is easy "
                                   "to push in, and the label prints lying flat without support"))
+        # ---- desk hook
+        self.a_desk_hook = A(tr("Desk Hook…"),
+                             lambda checked=False: self.desk_hook_dialog(), None, "desk_hook",
+                             False,
+                             tr("Add a hook that slides over the edge of a desk top without a "
+                                "single screw and hangs below it, for headphones or a bag: an arm "
+                                "lies on the desk and a bump clamps under it while a U hangs down; "
+                                "it prints lying on its side without support"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2715,7 +2739,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_drawer_organizer, self.a_plant_pot, self.a_cable_winder,
                           self.a_lithophane, self.a_hex_key_holder,
                           self.a_screw_jar, self.a_bag_clip, self.a_coaster,
-                          self.a_filament_clip, self.a_plant_label))
+                          self.a_filament_clip, self.a_plant_label, self.a_desk_hook))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

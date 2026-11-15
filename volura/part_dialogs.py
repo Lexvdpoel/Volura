@@ -16,8 +16,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QLineEdit, QPlainTextEdit, QPushButton, QSpinBox)
 
 from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
-               cable_winder, card_holder, coaster, drawer_organizer, enclosure, fan_guard,
-               filament_clip, fonts, gears, gridfinity, grommet, hex_key_holder, hinge,
+               cable_winder, card_holder, coaster, desk_hook, drawer_organizer, enclosure,
+               fan_guard, filament_clip, fonts, gears, gridfinity, grommet, hex_key_holder, hinge,
                hose_adapter, knob, label_plate, lithophane, pegboard, phone_stand, plant_label,
                plant_pot, screw_jar, spool_adapter, standoff, storage_bin, text3d, threads,
                tie_mount, wall_hook)
@@ -2496,6 +2496,76 @@ class PlantLabelDialog(QDialog):
                 "head": round(self.head.value(), 6), "stake": round(self.stake.value(), 6),
                 "thickness": round(self.thickness.value(), 6),
                 "raised": round(self.raised.value(), 6)}
+
+
+class DeskHookDialog(QDialog):
+    """The "Desk Hook…" dialog: a hook that slides over the edge of a desk top and hangs below it.
+
+    The desk is how thick the desk top is that the hook slides over, the reach how far the arm lies
+    on top of it and the drop how far the hook hangs below it; the opening says how wide the U at
+    the bottom is, and the wall and the width say how much plastic goes into it. Under the fields
+    the hook stands in figures, because that is what the bed has to agree to. The values come from
+    Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Desk hook"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.desk = spin(desk_hook.DESK_MIN, desk_hook.DESK_MAX, s.desk_hook_desk)
+        self.desk.setToolTip(tr("How thick the desk top is that the hook slides over"))
+        self.grip = spin(desk_hook.GRIP_MIN, desk_hook.GRIP_MAX, s.desk_hook_grip, 5.0)
+        self.grip.setToolTip(tr("How far the arm reaches over the top of the desk; the more it "
+                                "reaches, the less the hook tips when something hangs in it"))
+        self.drop = spin(desk_hook.DROP_MIN, desk_hook.DROP_MAX, s.desk_hook_drop, 5.0)
+        self.drop.setToolTip(tr("How far the hook hangs below the desk, so what hangs in it clears "
+                                "the desk top"))
+        self.hook = spin(desk_hook.HOOK_MIN, desk_hook.HOOK_MAX, s.desk_hook_hook, 5.0)
+        self.hook.setToolTip(tr("The inside width of the hook's opening, wide enough for the band "
+                                "of a bag or the headband of headphones"))
+        self.wall = spin(desk_hook.WALL_MIN, desk_hook.WALL_MAX, s.desk_hook_wall, 0.5)
+        self.wall.setToolTip(tr("How thick the plastic is: thick enough to hold a heavy bag, thin "
+                                "enough to print quickly"))
+        self.width = spin(desk_hook.WIDTH_MIN, desk_hook.WIDTH_MAX, s.desk_hook_width, 5.0)
+        self.width.setToolTip(tr("How wide the hook is; it prints lying on its side, so this is how "
+                                 "it stands on the bed"))
+        self.info = QLabel()
+        lay.addRow(tr("Desk thickness"), self.desk)
+        lay.addRow(tr("Reach over the desk"), self.grip)
+        lay.addRow(tr("Drop"), self.drop)
+        lay.addRow(tr("Hook opening"), self.hook)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow("", self.info)
+        for w in (self.desk, self.grip, self.drop, self.hook, self.wall, self.width):
+            w.valueChanged.connect(self._changed)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        lay.addRow(self.buttonBox)
+        self._changed()
+
+    def _changed(self, *_):
+        """The hook these figures make, standing on the bed."""
+        s = desk_hook.sizes(**self.options())
+        self.info.setText(tr("{w:.1f} by {h:.1f} mm, {d:.1f} mm wide").format(
+            w=s["size_x"], h=s["size_y"], d=s["width"]))
+
+    def options(self) -> dict:
+        return {"desk": round(self.desk.value(), 6), "grip": round(self.grip.value(), 6),
+                "drop": round(self.drop.value(), 6), "hook": round(self.hook.value(), 6),
+                "wall": round(self.wall.value(), 6), "width": round(self.width.value(), 6)}
 
 
 class HoseAdapterDialog(QDialog):
