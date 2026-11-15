@@ -19,8 +19,8 @@ from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_ch
                cable_winder, card_holder, coaster, desk_hook, door_wedge, drawer_organizer,
                enclosure, fan_guard, filament_clip, fonts, gears, gridfinity, grommet,
                hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane, pegboard,
-               phone_stand, plant_label, plant_pot, screw_jar, spool_adapter, standoff, storage_bin,
-               text3d, threads, tie_mount, wall_hook)
+               phone_stand, plant_label, plant_pot, screw_jar, soap_dish, spool_adapter, standoff,
+               storage_bin, text3d, threads, tie_mount, wall_hook)
 from .i18n import tr
 
 
@@ -2639,6 +2639,75 @@ class DoorWedgeDialog(QDialog):
         return {"length": round(self.length.value(), 6), "height": round(self.height.value(), 6),
                 "tip": round(self.tip.value(), 6), "width": round(self.width.value(), 6),
                 "ridges": self.ridges.isChecked(), "hole": self.hole.isChecked()}
+
+
+class SoapDishDialog(QDialog):
+    """The "Soap Dish…" dialog: a dish a bar of soap lies on while the water runs off it.
+
+    The length and the width say what the dish covers on the shelf, the rim how high its edge
+    stands and the wall how much plastic goes into it; the ribs are the bars the soap lies on, so
+    the water runs down beside them instead of pooling under the soap. Under the fields the dish
+    stands in figures, because that is what the shelf has to agree to. The values come from
+    Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Soap dish"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.length = spin(soap_dish.LENGTH_MIN, soap_dish.LENGTH_MAX, s.soap_dish_length, 5.0)
+        self.length.setToolTip(tr("How long the dish is: a bar of soap lies on it with room left "
+                                  "at both ends"))
+        self.width = spin(soap_dish.WIDTH_MIN, soap_dish.WIDTH_MAX, s.soap_dish_width, 5.0)
+        self.width.setToolTip(tr("How wide the dish is; it prints flat on its floor, so this is "
+                                 "how it stands on the bed"))
+        self.rim = spin(soap_dish.RIM_MIN, soap_dish.RIM_MAX, s.soap_dish_rim, 5.0)
+        self.rim.setToolTip(tr("How high the rim stands: high enough that the soap does not slide "
+                               "off, low enough to lift it off again"))
+        self.wall = spin(soap_dish.WALL_MIN, soap_dish.WALL_MAX, s.soap_dish_wall, 0.5)
+        self.wall.setToolTip(tr("How thick the wall of the dish is; the floor under the ribs is "
+                                "always 2 mm, so the water runs through it quickly"))
+        self.ribs = QSpinBox()
+        self.ribs.setRange(soap_dish.RIBS_MIN, soap_dish.RIBS_MAX)
+        self.ribs.setValue(int(s.soap_dish_ribs))
+        self.ribs.setToolTip(tr("How many bars the soap lies on; fewer are stood up when they "
+                                "would stand closer together than 6 mm, because that clogs"))
+        self.info = QLabel()
+        lay.addRow(tr("Length"), self.length)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Rim height"), self.rim)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Ribs"), self.ribs)
+        lay.addRow("", self.info)
+        for w in (self.length, self.width, self.rim, self.wall, self.ribs):
+            w.valueChanged.connect(self._changed)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        lay.addRow(self.buttonBox)
+        self._changed()
+
+    def _changed(self, *_):
+        """The dish these figures make, standing on the bed."""
+        s = soap_dish.sizes(**self.options())
+        self.info.setText(tr("{l:.1f} by {w:.1f} mm, {h:.1f} mm high").format(
+            l=s["size_x"], w=s["size_y"], h=s["size_z"]))
+
+    def options(self) -> dict:
+        return {"length": round(self.length.value(), 6), "width": round(self.width.value(), 6),
+                "rim": round(self.rim.value(), 6), "wall": round(self.wall.value(), 6),
+                "ribs": int(self.ribs.value())}
 
 
 class HoseAdapterDialog(QDialog):

@@ -33,7 +33,8 @@ from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, bri
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
                     pegboard,
                     phone_stand, plant_label,
-                    plant_pot, screw_jar, spool_adapter, standoff, storage_bin, stringing_test,
+                    plant_pot, screw_jar, soap_dish, spool_adapter, standoff, storage_bin,
+                    stringing_test,
                     text3d, tie_mount, wall_hook)
 from volura import ops  # noqa: E402
 from volura.model import Document  # noqa: E402
@@ -372,6 +373,12 @@ CASES = [
         length=60.0, height=10.0, tip=1.0, width=20.0, ridges=False, hole=False)]),
     ("door wedge long and high with ridges and hole", lambda: [door_wedge.door_wedge(
         length=200.0, height=50.0, tip=5.0, width=60.0)]),
+
+    ("soap dish default", lambda: [soap_dish.soap_dish()]),
+    ("soap dish small with three ribs", lambda: [soap_dish.soap_dish(
+        length=70.0, width=50.0, rim=8.0, wall=4.0, ribs=3)]),
+    ("soap dish large with all the ribs", lambda: [soap_dish.soap_dish(
+        length=160.0, width=120.0, rim=30.0, wall=1.6, ribs=15)]),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

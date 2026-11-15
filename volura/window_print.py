@@ -32,7 +32,8 @@ from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, brack
                first_layer_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
                label_plate, lithophane, ops, pegboard, phone_stand, plant_label, plant_pot,
-               screw_jar, slicer, spool_adapter, standoff, storage_bin, stringing_test, text3d,
+               screw_jar, soap_dish, slicer, spool_adapter, standoff, storage_bin,
+               stringing_test, text3d,
                theme, threads, tie_mount, wall_hook)
 from . import gcode_preview
 from .print_preview import PrintPreviewDialog
@@ -49,9 +50,9 @@ from .part_dialogs import (BagClipDialog, BatteryHolderDialog, BinRackDialog,
                            GridfinityDialog, GrommetDialog, HexKeyHolderDialog,
                            HingeDialog, HoseAdapterDialog, KnobDialog, LabelPlateDialog,
                            LithophaneDialog, PegboardDialog, PhoneStandDialog, PlantLabelDialog,
-                           PlantPotDialog, ProjectBoxDialog, ScrewJarDialog, SpoolAdapterDialog,
-                           StandoffDialog, StorageBinDialog, Text3DDialog, TieMountDialog,
-                           WallHookDialog)
+                           PlantPotDialog, ProjectBoxDialog, ScrewJarDialog, SoapDishDialog,
+                           SpoolAdapterDialog, StandoffDialog, StorageBinDialog, Text3DDialog,
+                           TieMountDialog, WallHookDialog)
 
 
 TOOL_INFO = [
@@ -2113,6 +2114,59 @@ class PrintMixin:
             self.view.set_status(tr("Door wedge failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the door wedge…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ soap dish
+    def soap_dish_dialog(self):
+        """Draw > Parts > Soap Dish…: a dish a bar of soap lies on while the water runs off it."""
+        dlg = SoapDishDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("length", "width", "rim", "wall", "ribs"):
+            setattr(self.settings, "soap_dish_" + key, options[key])
+        self.settings.save()
+        made = self.make_soap_dish_model(options)
+        self.setFocus()
+        return made
+
+    def make_soap_dish_model(self, options):
+        """The soap dish flat on the bed as it prints: one undo step, next to the model.
+
+        A dish for a wide bar of soap is well over a hundred millimetres across and its floor is
+        cut full of drain slots, so it is built in the background like the desk hook and the window
+        keeps responding. It stands on the bed in the middle of the free bed, or on the free place
+        10 mm to the right of what is already in the model, so a second dish does not land in the
+        first one.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("length", "width", "rim", "wall", "ribs")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the soap dish…"))
+            m = soap_dish.soap_dish(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the dish away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Soap dish"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Soap dish added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Soap dish failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the soap dish…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter

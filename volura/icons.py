@@ -457,6 +457,14 @@ SVG = {
                   f'<circle cx="5.4" cy="12.6" r="1.5" fill="#fff" {S(w=1.1)}/>'
                   f'<path d="M2 20.6 L22 20.6" {N} stroke="#2b2b2b" stroke-width="1.4" '
                   f'stroke-linecap="round"/>',
+    # soap dish: a bar of soap on ribs, over a floor the water runs through
+    "soap_dish": f'<path d="M2.6 12.6 L21.4 12.6 L21.4 19 L2.6 19 Z" fill="#eef2f7" {S()}/>'
+                 f'<path d="M6.6 15.4 L6.6 18.4 M10.2 15.4 L10.2 18.4 M13.8 15.4 L13.8 18.4 '
+                 f'M17.4 15.4 L17.4 18.4" {N} stroke="#8fa6c3" stroke-width="1.5"/>'
+                 f'<rect x="5.6" y="7.2" width="12.8" height="5.4" rx="1.8" fill="#cfe0f5" '
+                 f'{S(w=1.3)}/>'
+                 f'<path d="M12 19.2 C13.1 20.7 13.5 21.3 13.5 21.9 A1.6 1.6 0 0 1 10.5 21.9 '
+                 f'C10.5 21.3 10.9 20.7 12 19.2 Z" fill="#2f6fd6" {S(w=1.1)}/>',
     "lithophane": f'<rect x="4" y="3" width="12" height="18" rx="1.6" fill="#eef2f7" {S()}/>'
                   f'<rect x="6" y="5.5" width="3.4" height="3.4" fill="#3b7dd8"/>'
                   f'<rect x="10.6" y="5.5" width="3.4" height="3.4" fill="#8fa6c3"/>'

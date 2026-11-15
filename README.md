@@ -329,6 +329,18 @@ The interface is available in English and Dutch (*Window > Preferences > General
   hole of 8 mm through the thick end hangs it on a hook when it is not working. The two corners of
   the thick end round with 3 mm. It prints lying on its side - one side profile pulled straight up -
   so every wall is vertical, nothing overhangs and nothing needs support
+- **Soap Dish** (Draw > Parts): a dish a bar of soap lies on while the water runs off it, so the
+  soap dries instead of dissolving in a puddle. You enter how long the dish is (70 to 160 mm), how
+  wide it is (50 to 120 mm), how high its rim stands (8 to 30 mm), how thick the wall is (1.6 to
+  4 mm) and how many ribs the soap lies on (3 to 15); the dialog says how big the dish stands on
+  the bed. The soap does not lie in the tray but on ribs of 2.4 mm that stand on the floor of 2 mm
+  and run from wall to wall, and every gap between two neighbouring ribs carries a slot of 3 mm
+  through that floor, halfway between them, so the water runs down under the soap and the soap
+  never lies over the hole it drains through. The first and the last rib stand 12 mm from the inside
+  of the end walls and the rest is evenly between them; fewer ribs are stood up when they would come
+  closer together than 6 mm, because a narrower gap clogs with soap. The four corners round with
+  10 mm. It prints flat on its floor - every face is vertical or horizontal - so nothing overhangs
+  and nothing needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

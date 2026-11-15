@@ -30,7 +30,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                door_wedge, drawer_organizer,
                dxf, enclosure, errors, fan_guard, filament_clip,
                fileio, gcode, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
-               keyschemes, knob, label_plate, linking, lithophane, screw_jar,
+               keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar,
                nesting, ops, pegboard, phone_stand, plant_label, plant_pot, sheet3d, sheettools,
                svg,
                spacemouse, spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
@@ -1291,6 +1291,21 @@ class Settings:
         self.door_wedge_ridges = self._bool("door_wedge_ridges", True)
         self.door_wedge_hole = self._bool("door_wedge_hole", True)
         for key, default, lo, hi in (
+                ("soap_dish_length", 110.0, soap_dish.LENGTH_MIN, soap_dish.LENGTH_MAX),
+                ("soap_dish_width", 75.0, soap_dish.WIDTH_MIN, soap_dish.WIDTH_MAX),
+                ("soap_dish_rim", 15.0, soap_dish.RIM_MIN, soap_dish.RIM_MAX),
+                ("soap_dish_wall", 2.4, soap_dish.WALL_MIN, soap_dish.WALL_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        try:
+            ribs = int(self.q.value("soap_dish_ribs", 7))
+        except (TypeError, ValueError):
+            ribs = 7
+        self.soap_dish_ribs = max(soap_dish.RIBS_MIN, min(soap_dish.RIBS_MAX, ribs))
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1581,6 +1596,9 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("door_wedge_length", "door_wedge_height", "door_wedge_tip",
                     "door_wedge_width", "door_wedge_ridges", "door_wedge_hole"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("soap_dish_length", "soap_dish_width", "soap_dish_rim", "soap_dish_wall",
+                    "soap_dish_ribs"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2641,6 +2659,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                  "the floor when the door tries to push it out and a hole through "
                                  "the thick end to hang it on a hook; it prints lying on its side "
                                  "without support"))
+        # ---- soap dish
+        self.a_soap_dish = A(tr("Soap Dish…"),
+                             lambda checked=False: self.soap_dish_dialog(), None, "soap_dish",
+                             False,
+                             tr("Add a dish a bar of soap lies on: the soap does not lie in the "
+                                "tray but on ribs, and every gap between two ribs has a slot "
+                                "through the floor so the water runs off and the soap dries; it "
+                                "prints flat on its floor without support"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2764,7 +2790,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_lithophane, self.a_hex_key_holder,
                           self.a_screw_jar, self.a_bag_clip, self.a_coaster,
                           self.a_filament_clip, self.a_plant_label, self.a_desk_hook,
-                          self.a_door_wedge))
+                          self.a_door_wedge, self.a_soap_dish))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
