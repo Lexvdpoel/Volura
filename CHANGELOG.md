@@ -3,6 +3,17 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.57 — 2026-11-15
+
+### New
+- **Desk Hook** (Draw > Parts): a hook that slides over the edge of a desk top without screws,
+  clamped by a small bump under the desk, with a U below it for headphones or a bag. It prints
+  lying on its side.
+
+### Improved
+- After slicing, the summary also says what the filament costs, with the price per kg from
+  Printer Setup.
+
 ## 0.2.56 — 2026-11-15
 
 ### New
