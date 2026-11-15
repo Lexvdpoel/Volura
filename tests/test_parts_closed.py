@@ -27,7 +27,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,  # noqa: E402
                     cable_chain, cable_clip, cable_winder, calibration_cube, card_holder, coaster,
-                    desk_hook, drawer_organizer, enclosure, fan_guard, filament_clip,
+                    desk_hook, door_wedge, drawer_organizer, enclosure, fan_guard, filament_clip,
                     first_layer_test,
                     fonts, gears, gridfinity,
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
@@ -366,6 +366,12 @@ CASES = [
         desk=10.0, grip=20.0, drop=20.0, hook=15.0, wall=4.0, width=15.0)]),
     ("desk hook thick desk and wide opening", lambda: [desk_hook.desk_hook(
         desk=50.0, grip=80.0, drop=120.0, hook=60.0, wall=10.0, width=50.0)]),
+
+    ("door wedge default", lambda: [door_wedge.door_wedge()]),
+    ("door wedge low and plain without ridges or hole", lambda: [door_wedge.door_wedge(
+        length=60.0, height=10.0, tip=1.0, width=20.0, ridges=False, hole=False)]),
+    ("door wedge long and high with ridges and hole", lambda: [door_wedge.door_wedge(
+        length=200.0, height=50.0, tip=5.0, width=60.0)]),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

@@ -449,6 +449,14 @@ SVG = {
                  f'<path d="M3.5 6.6 L12.8 6.6 L12.8 18.6 L19.6 18.6 L19.6 20.4 L11.3 20.4 '
                  f'L11.3 14.2 L5.5 14.2 L5.5 12.7 L11.3 12.7 L11.3 8.4 L3.5 8.4 Z" '
                  f'fill="#cfe0f5" {S(w=1.3)}/>',
+    # door wedge: a slope that is thick at one end, teeth that bite and a hole to hang it up
+    "door_wedge": f'<path d="M3.4 18.4 L20.6 18.4 L20.6 15.4 L3.4 5.6 Z" fill="#cfe0f5" {S()}/>'
+                  f'<path d="M6.5 7.4 L9.5 7.4 L9.5 9.1 L11 9.9 L14 9.9 L14 11.6 L15.5 12.5 '
+                  f'L18.5 12.5 L18.5 14.2" {N} stroke="#3b7dd8" stroke-width="1.3" '
+                  f'stroke-linecap="round" stroke-linejoin="round"/>'
+                  f'<circle cx="5.4" cy="12.6" r="1.5" fill="#fff" {S(w=1.1)}/>'
+                  f'<path d="M2 20.6 L22 20.6" {N} stroke="#2b2b2b" stroke-width="1.4" '
+                  f'stroke-linecap="round"/>',
     "lithophane": f'<rect x="4" y="3" width="12" height="18" rx="1.6" fill="#eef2f7" {S()}/>'
                   f'<rect x="6" y="5.5" width="3.4" height="3.4" fill="#3b7dd8"/>'
                   f'<rect x="10.6" y="5.5" width="3.4" height="3.4" fill="#8fa6c3"/>'

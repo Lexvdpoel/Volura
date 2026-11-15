@@ -28,7 +28,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 
 from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,
                cable_chain, cable_clip, cable_winder, calibration_cube, card_holder, coaster,
-               desk_hook, drawer_organizer, enclosure, fan_guard, filament_clip, first_layer_test,
+               desk_hook, door_wedge, drawer_organizer, enclosure, fan_guard, filament_clip,
+               first_layer_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
                label_plate, lithophane, ops, pegboard, phone_stand, plant_label, plant_pot,
                screw_jar, slicer, spool_adapter, standoff, storage_bin, stringing_test, text3d,
@@ -43,7 +44,7 @@ from .model import ROOT
 from .part_dialogs import (BagClipDialog, BatteryHolderDialog, BinRackDialog,
                            BitHolderDialog, BracketDialog,
                            CableChainDialog, CableClipDialog, CableWinderDialog, CardHolderDialog,
-                           CoasterDialog, DeskHookDialog,
+                           CoasterDialog, DeskHookDialog, DoorWedgeDialog,
                            DrawerOrganizerDialog, FanGuardDialog, FilamentClipDialog,
                            GridfinityDialog, GrommetDialog, HexKeyHolderDialog,
                            HingeDialog, HoseAdapterDialog, KnobDialog, LabelPlateDialog,
@@ -2060,6 +2061,58 @@ class PrintMixin:
             self.view.set_status(tr("Desk hook failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the desk hook…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ door wedge
+    def door_wedge_dialog(self):
+        """Draw > Parts > Door Wedge…: a wedge you push under a door to hold it open."""
+        dlg = DoorWedgeDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("length", "height", "tip", "width", "ridges", "hole"):
+            setattr(self.settings, "door_wedge_" + key, options[key])
+        self.settings.save()
+        made = self.make_door_wedge_model(options)
+        self.setFocus()
+        return made
+
+    def make_door_wedge_model(self, options):
+        """The door wedge lying as it prints: one undo step, next to the model.
+
+        A wedge for a thick door is well over a hundred millimetres long and its slope carries a
+        row of teeth, so it is built in the background like the desk hook and the window keeps
+        responding. It stands on the bed in the middle of the free bed, or on the free place 10 mm
+        to the right of what is already in the model, so a second wedge does not land in the first.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("length", "height", "tip", "width", "ridges", "hole")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the door wedge…"))
+            m = door_wedge.door_wedge(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the wedge away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Door wedge"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Door wedge added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Door wedge failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the door wedge…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter

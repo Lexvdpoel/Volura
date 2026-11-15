@@ -16,11 +16,11 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QLineEdit, QPlainTextEdit, QPushButton, QSpinBox)
 
 from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
-               cable_winder, card_holder, coaster, desk_hook, drawer_organizer, enclosure,
-               fan_guard, filament_clip, fonts, gears, gridfinity, grommet, hex_key_holder, hinge,
-               hose_adapter, knob, label_plate, lithophane, pegboard, phone_stand, plant_label,
-               plant_pot, screw_jar, spool_adapter, standoff, storage_bin, text3d, threads,
-               tie_mount, wall_hook)
+               cable_winder, card_holder, coaster, desk_hook, door_wedge, drawer_organizer,
+               enclosure, fan_guard, filament_clip, fonts, gears, gridfinity, grommet,
+               hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane, pegboard,
+               phone_stand, plant_label, plant_pot, screw_jar, spool_adapter, standoff, storage_bin,
+               text3d, threads, tie_mount, wall_hook)
 from .i18n import tr
 
 
@@ -2566,6 +2566,79 @@ class DeskHookDialog(QDialog):
         return {"desk": round(self.desk.value(), 6), "grip": round(self.grip.value(), 6),
                 "drop": round(self.drop.value(), 6), "hook": round(self.hook.value(), 6),
                 "wall": round(self.wall.value(), 6), "width": round(self.width.value(), 6)}
+
+
+class DoorWedgeDialog(QDialog):
+    """The "Door Wedge…" dialog: a wedge you push under a door to hold it open.
+
+    The length is how long the wedge is, the height how high it stands at its thick end - which is
+    how far the door is held open - and the tip how thin its other end is, which is what slides
+    under the door; the width says how wide the wedge stands on the bed. The ridges are the teeth
+    that bite into the floor and the hole hangs the wedge on a hook when it is not working. Under
+    the fields the wedge stands in figures, with the angle of its slope, because that is what holds
+    the door. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Door wedge"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.length = spin(door_wedge.LENGTH_MIN, door_wedge.LENGTH_MAX, s.door_wedge_length, 5.0)
+        self.length.setToolTip(tr("How long the wedge is: it has to reach under the door and still "
+                                  "lie on the floor"))
+        self.height = spin(door_wedge.HEIGHT_MIN, door_wedge.HEIGHT_MAX, s.door_wedge_height)
+        self.height.setToolTip(tr("How high the wedge stands at its thick end, which is how far the "
+                                  "door is held open"))
+        self.tip = spin(door_wedge.TIP_MIN, door_wedge.TIP_MAX, s.door_wedge_tip, 0.5)
+        self.tip.setToolTip(tr("How high the thin end is: thin enough to slide under the door"))
+        self.width = spin(door_wedge.WIDTH_MIN, door_wedge.WIDTH_MAX, s.door_wedge_width, 5.0)
+        self.width.setToolTip(tr("How wide the wedge is; it prints lying on its side, so this is "
+                                 "how it stands on the bed"))
+        self.ridges = QCheckBox(tr("Grip ridges"))
+        self.ridges.setChecked(bool(s.door_wedge_ridges))
+        self.ridges.setToolTip(tr("Small teeth on the slope, so the wedge bites into the floor "
+                                  "instead of sliding out when the door pushes it"))
+        self.hole = QCheckBox(tr("Hanging hole"))
+        self.hole.setChecked(bool(s.door_wedge_hole))
+        self.hole.setToolTip(tr("A hole through the thick end to hang the wedge on a hook; a wedge "
+                                "too low to carry it gets none"))
+        self.info = QLabel()
+        lay.addRow(tr("Length"), self.length)
+        lay.addRow(tr("Height"), self.height)
+        lay.addRow(tr("Tip"), self.tip)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow("", self.ridges)
+        lay.addRow("", self.hole)
+        lay.addRow("", self.info)
+        for w in (self.length, self.height, self.tip, self.width):
+            w.valueChanged.connect(self._changed)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        lay.addRow(self.buttonBox)
+        self._changed()
+
+    def _changed(self, *_):
+        """The wedge these figures make, standing on the bed, and how steep its slope is."""
+        s = door_wedge.sizes(**self.options())
+        self.info.setText(tr("{a:.1f}° slope, {l:.1f} by {h:.1f} by {w:.1f} mm").format(
+            a=s["angle"], l=s["size_x"], h=s["size_y"], w=s["size_z"]))
+
+    def options(self) -> dict:
+        return {"length": round(self.length.value(), 6), "height": round(self.height.value(), 6),
+                "tip": round(self.tip.value(), 6), "width": round(self.width.value(), 6),
+                "ridges": self.ridges.isChecked(), "hole": self.hole.isChecked()}
 
 
 class HoseAdapterDialog(QDialog):

@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
 
 from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_holder, boxgen, bracket,
                cable_chain, cable_clip, cable_winder, cam, card_holder, coaster, desk_hook,
-               drawer_organizer,
+               door_wedge, drawer_organizer,
                dxf, enclosure, errors, fan_guard, filament_clip,
                fileio, gcode, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, screw_jar,
@@ -1279,6 +1279,18 @@ class Settings:
                 value = default
             setattr(self, key, max(lo, min(hi, value)))
         for key, default, lo, hi in (
+                ("door_wedge_length", 120.0, door_wedge.LENGTH_MIN, door_wedge.LENGTH_MAX),
+                ("door_wedge_height", 25.0, door_wedge.HEIGHT_MIN, door_wedge.HEIGHT_MAX),
+                ("door_wedge_tip", 2.0, door_wedge.TIP_MIN, door_wedge.TIP_MAX),
+                ("door_wedge_width", 35.0, door_wedge.WIDTH_MIN, door_wedge.WIDTH_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        self.door_wedge_ridges = self._bool("door_wedge_ridges", True)
+        self.door_wedge_hole = self._bool("door_wedge_hole", True)
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1566,6 +1578,9 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("desk_hook_desk", "desk_hook_grip", "desk_hook_drop", "desk_hook_hook",
                     "desk_hook_wall", "desk_hook_width"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("door_wedge_length", "door_wedge_height", "door_wedge_tip",
+                    "door_wedge_width", "door_wedge_ridges", "door_wedge_hole"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2617,6 +2632,15 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                 "single screw and hangs below it, for headphones or a bag: an arm "
                                 "lies on the desk and a bump clamps under it while a U hangs down; "
                                 "it prints lying on its side without support"))
+        # ---- door wedge
+        self.a_door_wedge = A(tr("Door Wedge…"),
+                              lambda checked=False: self.door_wedge_dialog(), None, "door_wedge",
+                              False,
+                              tr("Add a wedge you push under a door to hold it open: thick at one "
+                                 "end and thin at the other, with teeth on the slope that bite into "
+                                 "the floor when the door tries to push it out and a hole through "
+                                 "the thick end to hang it on a hook; it prints lying on its side "
+                                 "without support"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2739,7 +2763,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_drawer_organizer, self.a_plant_pot, self.a_cable_winder,
                           self.a_lithophane, self.a_hex_key_holder,
                           self.a_screw_jar, self.a_bag_clip, self.a_coaster,
-                          self.a_filament_clip, self.a_plant_label, self.a_desk_hook))
+                          self.a_filament_clip, self.a_plant_label, self.a_desk_hook,
+                          self.a_door_wedge))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

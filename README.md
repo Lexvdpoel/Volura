@@ -319,6 +319,16 @@ The interface is available in English and Dutch (*Window > Preferences > General
   headband slides in and out easily. Outside corners round with 2 mm and inside ones with 3 mm. It
   prints lying on its side - one side profile pulled straight up - so every wall is vertical,
   nothing overhangs and nothing needs support
+- **Door Wedge** (Draw > Parts): a wedge you push under a door to hold it open, thick at one end and
+  thin at the other so the thin end slides under the door and the door leans on the slope. You enter
+  how long the wedge is (60 to 200 mm), how high it stands at its thick end (10 to 50 mm) and how
+  high its thin end is (1 to 5 mm), and how wide it is (20 to 60 mm); the dialog says how steep the
+  slope is and how big the wedge stands on the bed. Grip ridges - small saw teeth every 6 mm over the
+  slope, from 15 mm in at either end, that stand 1.2 mm above it with their steep side towards the
+  thin end - let the wedge slide in but dig into the floor when the door tries to push it out, and a
+  hole of 8 mm through the thick end hangs it on a hook when it is not working. The two corners of
+  the thick end round with 3 mm. It prints lying on its side - one side profile pulled straight up -
+  so every wall is vertical, nothing overhangs and nothing needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is
