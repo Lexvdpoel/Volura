@@ -20,13 +20,16 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout, QGridLayout,
-                               QGroupBox, QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit,
-                               QProgressBar, QPushButton, QVBoxLayout)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
+                               QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
+                               QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
+                               QVBoxLayout)
 
 from . import gcode, grbl, laser, panels
+from . import laser_profiles as profiles
 from .i18n import tr
 from .settings import qsettings
+from .sheet_dialogs import GCODE_DYNAMIC_KEY, GCODE_S_MAX_KEY
 
 #: how many lines of what the board said the window keeps
 LOG_LINES = 400
@@ -110,12 +113,58 @@ class LaserWindow(QDialog):
         self.b_connect = QPushButton(tr("Connect"))
         self.b_connect.setToolTip(tr("Open the port and ask the board who it is"))
         self.port_hint = panels.note("")
+        self.machine_box = QComboBox()
+        for key, label in profiles.choices():
+            self.machine_box.addItem(label, key)
+        self.machine_box.setToolTip(tr("A laser of the list: its work area and what its "
+                                       "board is set to"))
+        self.travel_x = QLineEdit()
+        self.travel_x.setPlaceholderText("X")
+        self.travel_x.setToolTip(tr("How far the head goes in X, in millimetres"))
+        self.travel_y = QLineEdit()
+        self.travel_y.setPlaceholderText("Y")
+        self.travel_y.setToolTip(tr("How far the head goes in Y, in millimetres"))
+        travel = QHBoxLayout()
+        travel.addWidget(self.travel_x)
+        travel.addWidget(QLabel("×"))
+        travel.addWidget(self.travel_y)
+        travel.addWidget(QLabel("mm"))
+        self.clamp_check = QCheckBox(tr("Stay on the machine"))
+        self.clamp_check.setToolTip(tr("Refuse a jog that would move the head past the "
+                                       "end of the machine"))
+        self.clamp_check.setChecked(qsettings().value(profiles.CLAMP_KEY, True)
+                                    in (True, "true", "1", 1))
+        self.b_apply = QPushButton(tr("Settings to the board…"))
+        self.b_apply.setToolTip(tr("Set laser mode, the S maximum and the travel of the "
+                                   "board to what this machine is"))
+        self.b_take = QPushButton(tr("Take from the board"))
+        self.b_take.setToolTip(tr("Read the work area and the S maximum out of what the "
+                                  "board answered to $$"))
+        buttons = QHBoxLayout()
+        buttons.addWidget(self.b_apply)
+        buttons.addWidget(self.b_take)
+        self.machine_hint = panels.note("")
         form.addRow(tr("Port"), ports)
         form.addRow(tr("Speed"), self.baud_box)
         form.addRow(self.b_connect)
         form.addRow(self.port_hint)
+        form.addRow(tr("Machine"), self.machine_box)
+        form.addRow(tr("Work area"), travel)
+        form.addRow(self.clamp_check)
+        form.addRow(buttons)
+        form.addRow(self.machine_hint)
         self.b_refresh.clicked.connect(self.refresh_ports)
         self.b_connect.clicked.connect(self.toggle_connection)
+        self.b_apply.clicked.connect(self.apply_settings)
+        self.b_take.clicked.connect(self.take_from_board)
+        self.machine_box.currentIndexChanged.connect(self.choose_machine)
+        self.clamp_check.toggled.connect(
+            lambda on: (qsettings().setValue(profiles.CLAMP_KEY, bool(on)), qsettings().sync()))
+        for edit, key in ((self.travel_x, profiles.TRAVEL_X_KEY),
+                          (self.travel_y, profiles.TRAVEL_Y_KEY)):
+            edit.editingFinished.connect(
+                lambda e=edit, k=key: qsettings().setValue(k, e.text().strip()))
+        self._restore_machine()
         return box
 
     def refresh_ports(self):
@@ -138,6 +187,118 @@ class LaserWindow(QDialog):
                                       "the computer?"))
         else:
             self.port_hint.setText("")
+
+    # ------------------------------------------------------------------ the machine
+    @property
+    def machine(self) -> profiles.Machine:
+        """The preset that is chosen in the combo box."""
+        return profiles.find(self.machine_box.currentData())
+
+    def travel_size(self) -> tuple:
+        """The work area on the screen, in millimetres; zero where nothing stands."""
+        out = []
+        for edit in (self.travel_x, self.travel_y):
+            try:
+                out.append(max(0.0, float(edit.text().replace(",", "."))))
+            except ValueError:
+                out.append(0.0)
+        return tuple(out)
+
+    def _restore_machine(self):
+        """The machine of the last time, with the work area as it was left."""
+        key = str(qsettings().value(profiles.MACHINE_KEY, "grbl32"))
+        i = self.machine_box.findData(key)
+        self.machine_box.blockSignals(True)
+        self.machine_box.setCurrentIndex(max(0, i))
+        self.machine_box.blockSignals(False)
+        machine = profiles.find(key)
+        for edit, key2, value in ((self.travel_x, profiles.TRAVEL_X_KEY, machine.x),
+                                  (self.travel_y, profiles.TRAVEL_Y_KEY, machine.y)):
+            was = str(qsettings().value(key2, "") or "").strip()
+            edit.setText(was or (f"{float(value):g}" if float(value) > 0 else ""))
+        self._say_machine()
+
+    def choose_machine(self, *_):
+        """A preset is chosen: its work area onto the screen and its S word into the G-code."""
+        machine = self.machine
+        qsettings().setValue(profiles.MACHINE_KEY, machine.key)
+        if machine.known:
+            self.travel_x.setText(f"{machine.x:g}")
+            self.travel_y.setText(f"{machine.y:g}")
+            qsettings().setValue(profiles.TRAVEL_X_KEY, self.travel_x.text())
+            qsettings().setValue(profiles.TRAVEL_Y_KEY, self.travel_y.text())
+        self._set_jog_feed(machine.jog)
+        q = qsettings()
+        q.setValue(GCODE_S_MAX_KEY, int(machine.s_max))
+        q.setValue(GCODE_DYNAMIC_KEY, bool(machine.dynamic))
+        q.sync()
+        self._say_machine()
+
+    def _set_jog_feed(self, feed):
+        """The speed of the pad nearest to what this machine moves at."""
+        feeds = [self.feed_box.itemData(n) for n in range(self.feed_box.count())]
+        if feeds:
+            self.feed_box.setCurrentIndex(min(range(len(feeds)), key=lambda n: abs(feeds[n] - feed)))
+
+    def _say_machine(self):
+        """Under the combo box: what the chosen machine is and what the board says about it."""
+        machine = self.machine
+        bits = [machine.note] if machine.note else []
+        x, y = self.travel_size()
+        bits.append(tr("work area {x} × {y} mm").format(x=f"{x:g}", y=f"{y:g}") if x and y
+                    else tr("the work area is unknown"))
+        bits.append(tr("S up to {n}").format(n=machine.s_max))
+        if profiles.laser_mode(self.session.settings) is False:
+            bits.append(tr("the board says laser mode is off"))
+        self.machine_hint.setText(" · ".join(bits))
+
+    def apply_settings(self):
+        """Set the board to what the machine is; every block is shown before it goes out."""
+        if not self.connected:
+            QMessageBox.information(self, tr("Laser Controller"), tr("Connect to the board first."))
+            return
+        if self.session.running:
+            QMessageBox.information(self, tr("Laser Controller"),
+                                    tr("A job is running; a board takes new settings between jobs."))
+            return
+        lines = self.machine.settings(self.travel_size())
+        answer = QMessageBox.question(
+            self, tr("Laser Controller"),
+            tr("Set the board to this?\n\n{lines}").format(lines="\n".join(lines)),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        for line in lines:
+            self.session.send(line)
+            self.say("> " + line)
+        self.session.send(grbl.SETTINGS)
+
+    def take_from_board(self):
+        """The work area and the S maximum out of what the board answered to `$$`."""
+        if not self.session.settings:
+            QMessageBox.information(self, tr("Laser Controller"),
+                                    tr("The board has not answered yet. Disconnect and "
+                                       "connect again to ask it."))
+            return
+        x, y = profiles.travel_of(self.session.settings)
+        s_max = profiles.s_max_of(self.session.settings, self.machine.s_max)
+        if x and y:
+            self.travel_x.setText(f"{x:g}")
+            self.travel_y.setText(f"{y:g}")
+            qsettings().setValue(profiles.TRAVEL_X_KEY, self.travel_x.text())
+            qsettings().setValue(profiles.TRAVEL_Y_KEY, self.travel_y.text())
+        q = qsettings()
+        q.setValue(GCODE_S_MAX_KEY, int(s_max))
+        q.sync()
+        same = profiles.match(x, y, s_max) if x and y else None
+        i = self.machine_box.findData(same.key if same else profiles.CUSTOM.key)
+        self.machine_box.blockSignals(True)
+        self.machine_box.setCurrentIndex(max(0, i))
+        self.machine_box.blockSignals(False)
+        self.say(tr("the board: S up to {s}, work area {x} × {y} mm").format(
+            s=s_max, x=f"{x:g}" if x else "?", y=f"{y:g}" if y else "?"))
+        self._say_machine()
 
     @property
     def connected(self) -> bool:
@@ -279,9 +440,20 @@ class LaserWindow(QDialog):
         """One step of the pad: a relative move the board makes in jog mode."""
         step = float(self.step_box.currentData() or 0.0)
         feed = float(self.feed_box.currentData() or 0.0)
+        if self.clamp_check.isChecked() and self.session.mpos is not None:
+            x = float(self.session.mpos[0]) + dx * step
+            y = float(self.session.mpos[1]) + dy * step
+            if not self._on_machine(x, y):
+                self.say(tr("that would move the head past the end of the machine"))
+                return
         block = grbl.jog(dx * step, dy * step, dz * step, feed)
         if block:
             self.session.send(block)
+
+    def _on_machine(self, x, y) -> bool:
+        """Whether a machine position is on the work area of the machine."""
+        w, h = self.travel_size()
+        return not (w and h) or (0.0 <= float(x) <= w and 0.0 <= float(y) <= h)
 
     def go_to_origin(self):
         self.session.send(grbl.move(x=0.0, y=0.0))
@@ -473,6 +645,7 @@ class LaserWindow(QDialog):
         """Show the session as it is now; the thread is the only one that changes it."""
         s = self.session
         self._listen()
+        self._say_machine()
         self.state_label.setText(s.state_label or "—")
         self.mpos_label.setText(_pos(s.mpos))
         self.wpos_label.setText(_pos(s.wpos))
@@ -496,6 +669,8 @@ class LaserWindow(QDialog):
             b.setEnabled(free)
         self.b_check.setEnabled(self.connected)
         self.b_reset.setEnabled(self.connected)
+        self.b_apply.setEnabled(self.connected)
+        self.b_take.setEnabled(bool(s.settings))
         self.b_start.setEnabled(self.connected and not s.running and bool(self.job))
         self.b_pause.setEnabled(self.connected and s.running)
         self.b_stop.setEnabled(self.connected and s.running)

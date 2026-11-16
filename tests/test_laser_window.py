@@ -26,6 +26,7 @@ from PySide6.QtCore import QCoreApplication  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import grbl, laser  # noqa: E402
+from volura import laser_profiles as profiles  # noqa: E402
 from volura.i18n import tr  # noqa: E402
 from volura.laser_window import LaserWindow  # noqa: E402
 from test_laser import FakePort  # noqa: E402
@@ -54,17 +55,53 @@ def pick(box, value):
     return [box.itemData(i) for i in range(box.count())].index(value)
 
 
+class Buttons:
+    """What a question can answer, without the real message box on the screen."""
+
+    Yes = 1
+    No = 2
+
+
 class Box:
     """The message boxes of the window, caught instead of shown."""
 
+    StandardButton = Buttons
+
     def __init__(self):
         self.messages = []
+        self.answer = Buttons.Yes
 
     def _say(self, parent, title, text, *a, **k):
         self.messages.append(text)
         return 0
 
     information = warning = critical = _say
+
+    def question(self, parent, title, text, *a, **k):
+        self.messages.append(text)
+        return self.answer
+
+
+class AnsweringPort(FakePort):
+    """A board that answers `$$` with what it is set to, like a real one does."""
+
+    SETTINGS = ("$30=255.000 (max spindle speed)",
+                "$32=0 (laser mode)",
+                "$130=300.000 (x max travel)",
+                "$131=180.000 (y max travel)")
+
+    def _answer(self, data):
+        if data == b"?":
+            self.say(self.report)
+            return
+        for block in data.decode("ascii", "replace").split("\n"):
+            block = block.strip()
+            if block == "$$":
+                for line in self.SETTINGS:
+                    self.say(line)
+                self.say("ok")
+            elif block:
+                self.say("ok")
 
 
 class SlowPort(FakePort):
@@ -83,8 +120,11 @@ class SlowPort(FakePort):
 def machine_choices():
     """Every test starts with a board of its own: nothing remembered from the last one."""
     from volura.settings import qsettings
+    from volura.sheet_dialogs import GCODE_DYNAMIC_KEY, GCODE_S_MAX_KEY
     q = qsettings()
-    for key in (laser.PORT_KEY, laser.BAUD_KEY, laser.STEP_KEY, laser.FEED_KEY):
+    for key in (laser.PORT_KEY, laser.BAUD_KEY, laser.STEP_KEY, laser.FEED_KEY,
+                profiles.MACHINE_KEY, profiles.TRAVEL_X_KEY, profiles.TRAVEL_Y_KEY,
+                profiles.CLAMP_KEY, GCODE_S_MAX_KEY, GCODE_DYNAMIC_KEY):
         q.remove(key)
     q.sync()
     yield q
@@ -438,3 +478,117 @@ def test_closing_the_window_hides_it_and_lets_the_job_run(dlg, slow):
     assert dlg.connected and dlg.session.running
     dlg.shutdown()
     assert not dlg.connected and slow.closed
+
+
+# ------------------------------------------------------------------ the machine it is
+def test_a_preset_puts_its_work_area_on_the_screen(dlg):
+    dlg.machine_box.setCurrentIndex(pick(dlg.machine_box, "s9"))
+    assert dlg.travel_x.text() == "400" and dlg.travel_y.text() == "415"
+    assert "400 × 415 mm" in dlg.machine_hint.text()
+    assert "S up to 1000" in dlg.machine_hint.text()
+
+
+def test_a_preset_moves_the_s_word_of_the_g_code(dlg, machine_choices):
+    from volura.sheet_dialogs import GCODE_DYNAMIC_KEY, GCODE_S_MAX_KEY
+    dlg.machine_box.setCurrentIndex(pick(dlg.machine_box, "grbl8"))
+    assert int(machine_choices.value(GCODE_S_MAX_KEY)) == 255
+    dlg.machine_box.setCurrentIndex(pick(dlg.machine_box, "z2"))
+    assert int(machine_choices.value(GCODE_S_MAX_KEY)) == 1000
+    assert str(machine_choices.value(GCODE_DYNAMIC_KEY)).lower() in ("false", "0")
+
+
+def test_the_machine_of_the_last_time_comes_back(dlg):
+    dlg.machine_box.setCurrentIndex(pick(dlg.machine_box, "lm2"))
+    other = LaserWindow(dlg.win)
+    other.show()
+    QCoreApplication.processEvents()
+    try:
+        assert other.machine_box.currentData() == "lm2"
+        assert other.travel_x.text() == "400" and other.travel_y.text() == "350"
+    finally:
+        other.shutdown()
+
+
+def test_the_work_area_someone_measured_stays_put(dlg, machine_choices):
+    dlg.travel_x.setText("395")
+    dlg.travel_x.editingFinished.emit()
+    assert machine_choices.value(profiles.TRAVEL_X_KEY) == "395"
+    assert dlg.travel_size() == (395.0, 400.0)
+
+
+def test_a_jog_past_the_end_of_the_machine_is_refused(dlg, board):
+    dlg.travel_x.setText("20")
+    dlg.travel_y.setText("20")
+    dlg.step_box.setCurrentIndex(pick(dlg.step_box, 50.0))
+    assert pump(dlg, lambda: dlg.session.mpos is not None)
+    dlg.pad_buttons["→"].click()
+    QCoreApplication.processEvents()
+    assert "past the end" in dlg.log.toPlainText()
+    assert b"$J=G21 G91 X50.000" not in b"".join(board.written)
+
+
+def test_the_same_jog_is_fine_when_staying_on_the_machine_is_off(dlg, board):
+    dlg.travel_x.setText("20")
+    dlg.travel_y.setText("20")
+    dlg.clamp_check.setChecked(False)
+    dlg.step_box.setCurrentIndex(pick(dlg.step_box, 50.0))
+    assert pump(dlg, lambda: dlg.session.mpos is not None)
+    dlg.pad_buttons["→"].click()
+    assert pump(dlg, lambda: b"$J=G21 G91 X50.000" in b"".join(board.written))
+
+
+def test_a_machine_of_which_the_size_is_unknown_jogs_anywhere(dlg, board):
+    dlg.travel_x.setText("")
+    dlg.travel_y.setText("")
+    dlg.step_box.setCurrentIndex(pick(dlg.step_box, 50.0))
+    assert pump(dlg, lambda: dlg.session.mpos is not None)
+    dlg.pad_buttons["→"].click()
+    assert pump(dlg, lambda: b"$J=G21 G91 X50.000" in b"".join(board.written))
+
+
+def test_the_board_says_what_it_is_and_the_window_believes_it(dlg, monkeypatch):
+    connect(dlg, monkeypatch, AnsweringPort)
+    assert pump(dlg, lambda: dlg.b_take.isEnabled())
+    dlg.b_take.click()
+    assert dlg.travel_x.text() == "300" and dlg.travel_y.text() == "180"
+    assert dlg.machine_box.currentData() == "grbl8"
+    assert "S up to 255" in dlg.log.toPlainText()
+    assert "laser mode" in dlg.machine_hint.text()
+
+
+def test_a_board_that_has_not_answered_cannot_be_asked(dlg, boxes):
+    assert not dlg.b_take.isEnabled()
+    dlg.take_from_board()                       # the information box, not a crash
+    assert "has not answered" in boxes.messages[-1]
+
+
+def test_the_settings_go_to_the_board_after_asking(dlg, monkeypatch, boxes):
+    port = connect(dlg, monkeypatch)
+    dlg.machine_box.setCurrentIndex(pick(dlg.machine_box, "s9"))
+    dlg.b_apply.click()
+    assert "Set the board to this?" in boxes.messages[-1]
+    assert pump(dlg, lambda: "$32=1" in port.text())
+    text = port.text()
+    assert "$30=1000" in text and "$110=6000" in text
+    assert "$130=400" in text and "$131=415" in text
+
+
+def test_the_user_can_say_no(dlg, monkeypatch, boxes):
+    boxes.answer = Buttons.No
+    port = connect(dlg, monkeypatch)
+    dlg.b_apply.click()
+    assert "$32=1" not in port.text()
+
+
+def test_a_board_that_is_cutting_takes_no_new_settings(dlg, slow, boxes):
+    dlg.set_job(["G1 X10.000 Y10.000 F1000"] * 8, "test")
+    dlg.start_job()
+    assert pump(dlg, lambda: dlg.session.running)
+    dlg.b_apply.click()
+    assert "A job is running" in boxes.messages[-1]
+    assert "$32=1" not in slow.text()
+
+
+def test_the_machine_buttons_wait_for_a_cable(dlg):
+    assert not dlg.b_apply.isEnabled()
+    assert not dlg.b_take.isEnabled()

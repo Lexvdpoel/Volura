@@ -464,7 +464,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Laser controller**: Laser and Mill > *Laser Controller…* puts the board on the screen
   instead of in a file: the serial port, where the head is, a jog pad, the origin of the
   work under the head, feed and power overrides while it cuts, and the job of the worksheet
-  with its progress - block by block with character counting, so nothing is lost
+  with its progress - block by block with character counting, so nothing is lost.
+  Presets of the known lasers - the open boards (BlackBird, Workhorse 3500) and the
+  GRBL machines of the shop - fill in the work area and the highest S word, and what
+  the board answers to $$ can be taken from it, so the machine stays the truth
 - **Model and worksheet together**: right-click a face or sheet > *Laser / Mill* puts it on a layer of
   the worksheet; *Parts to 3D Model* places everything that is cut as a sheet with the sheet thickness
   in 3D. Every outline stays linked to its part: a linked face keeps its face when you turn the part

@@ -1823,6 +1823,7 @@ volura</code></pre>
     <p class="where" lang="nl">Waar: <b>Laser en frees &gt; Laserbesturing…</b></p>
     <ul lang="en">
       <li><b>The board</b>: the serial port and its speed, what the board is doing (Idle, Cutting, Paused), the machine and work position and the feed it is moving at. Connecting resets the board, asks its settings (<kbd>$$</kbd>) and unlocks it (<kbd>$X</kbd>).</li>
+      <li><b>Machine</b>: the presets of the lasers that are known - the open ones (a GRBL board of your own, OpenBuilds BlackBird, Workhorse 3500) and the ones of the shop that speak GRBL (Sculpfun, Ortur, Atomstack, Creality, TwoTrees, Longrun, NEJE). A preset says how big the work area is and what the board is set to; <b>Settings to the board…</b> sends <kbd>$32</kbd>, <kbd>$30</kbd>, <kbd>$110/$111</kbd> and <kbd>$130/$131</kbd> - never the steps per millimetre and never the limits - and <b>Take from the board</b> reads back what <kbd>$$</kbd> answered, so the board stays the truth. <b>Stay on the machine</b> refuses a jog past the end of the work area on the screen.</li>
       <li><b>Jog</b>: the arrows move one step of 0.1 to 50 mm at the speed you choose; <b>&#8962;</b> travels to the origin of the work.</li>
       <li><b>Work origin</b>: <b>Zero here</b> puts X0 Y0 under the head, so the job is cut around the point you pointed at.</li>
       <li><b>Overrides</b>: feed and power in steps of 10% and the rapid at 25, 50 or 100%, while the job runs.</li>
@@ -1831,10 +1832,11 @@ volura</code></pre>
     </ul>
     <ul lang="nl">
       <li><b>De controller</b>: de seriële poort en zijn snelheid, wat de controller doet (Inactief, Snijden, Gepauzeerd), de machine- en werkpositie en het voeren waarmee hij beweegt. Bij het verbinden wordt de controller gereset, naar zijn instellingen (<kbd>$$</kbd>) gevraagd en ontgrendeld (<kbd>$X</kbd>).</li>
-      <li><b>Joggen</b>: de pijlen bewegen één stap van 0,1 tot 50 mm op de snelheid die je kiest; <b>&#8962;</b> rijdt naar de oorsprong van het werk.</li>
-      <li><b>Oorsprong van het werk</b>: <b>Nul hier</b> zet X0 Y0 onder de kop, zodat de taak rond dat punt wordt gesneden.</li>
-      <li><b>Oversturingen</b>: voeren en vermogen in stappen van 10% en de snelbeweging op 25, 50 of 100%, terwijl de taak loopt.</li>
-      <li><b>Taak</b>: de G-code van het werkblad, met de lagen en het vermogen van het exportvenster, of een G-code-bestand, blok voor blok gestuurd zo snel als de controller ze aanneemt. Pauze is een voerstop; stoppen beëindigt de taak en legt weg wat de controller had opgewacht.</li>
+      <li><b>Machine</b>: de presets van de bekende lasers - de open (een eigen GRBL-kaart, OpenBuilds BlackBird, Workhorse 3500) en de commerciële die GRBL spreken (Sculpfun, Ortur, Atomstack, Creality, TwoTrees, Longrun, NEJE). Een preset zegt hoe groot het werkvlak is en wat de controller is ingesteld; <b>Instellingen naar de controller…</b> stuurt <kbd>$32</kbd>, <kbd>$30</kbd>, <kbd>$110/$111</kbd> en <kbd>$130/$131</kbd> - nooit de stappen per millimeter en nooit de grenzen - en <b>Overnemen uit de controller</b> leest terug wat <kbd>$$</kbd> antwoordde, zodat de controller de waarheid blijft. <b>Blijf op de machine</b> weigert een stap voorbij het einde van het werkvlak op het scherm.</li>      
+      <li><b>Joggen</b>: de pijlen bewegen één stap van 0,1 tot 50 mm op de snelheid die je kiest; <b>&#8962;</b> rijdt naar de oorsprong van het werk.</li>      
+      <li><b>Oorsprong van het werk</b>: <b>Nul hier</b> zet X0 Y0 onder de kop, zodat de taak rond dat punt wordt gesneden.</li>      
+      <li><b>Oversturingen</b>: voeren en vermogen in stappen van 10% en de snelbeweging op 25, 50 of 100%, terwijl de taak loopt.</li>      
+      <li><b>Taak</b>: de G-code van het werkblad, met de lagen en het vermogen van het exportvenster, of een G-code-bestand, blok voor blok gestuurd zo snel als de controller ze aanneemt. Pauze is een voerstop; stoppen beëindigt de taak en legt weg wat de controller had opgewacht.</li>      
       <li><b>Controleren</b> (<kbd>$C</kbd>) plant de taak en beweegt niets, en wat de controller zei staat eronder.</li>
     </ul>
     <h3><span lang="en">Importing a drawing</span><span lang="nl">Een tekening importeren</span></h3>

@@ -30,6 +30,7 @@ import time
 from collections import deque
 
 from . import grbl
+from . import laser_profiles as profiles
 from .i18n import tr
 
 #: how often the window looks at the session (seconds)
@@ -130,6 +131,7 @@ class Session:
         self.power_override = 100.0
         self.boot = ""                  #: what the board said when the cable was opened
         self.messages: list[str] = []   #: what $$ and [MSG:] answered, newest last
+        self.settings: dict = {}        #: what $$ answered, as {number: value}
         self.errors: list[str] = []     #: what the board refused, newest last
         self.sender: grbl.Sender | None = None
         self._urgent: deque = deque()   #: the bytes that may not wait for the job
@@ -235,10 +237,12 @@ class Session:
             self.errors.append(rest)
         elif kind == "message":
             self.messages.append(rest)
+            self.settings.update(profiles.parse_settings((rest,)))
         elif kind == "text":
             # the first thing a board says is who it is; the rest is the answer of $$
             if self.boot:
                 self.messages.append(rest)
+                self.settings.update(profiles.parse_settings((rest,)))
             else:
                 self.boot = rest
 
