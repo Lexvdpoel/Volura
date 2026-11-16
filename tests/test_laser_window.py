@@ -26,9 +26,10 @@ from PySide6.QtCore import QCoreApplication, Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import grbl, laser  # noqa: E402
-from volura import laser_profiles as profiles  # noqa: E402
+from volura import laser_image, laser_profiles as profiles  # noqa: E402
 from volura.i18n import tr  # noqa: E402
-from volura.laser_window import LaserWindow  # noqa: E402
+from volura.laser_window import LaserWindow, image_gray  # noqa: E402
+from volura.settings import qsettings  # noqa: E402
 from test_laser import FakePort  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
@@ -119,12 +120,14 @@ class SlowPort(FakePort):
 @pytest.fixture(autouse=True)
 def machine_choices():
     """Every test starts with a board of its own: nothing remembered from the last one."""
-    from volura.settings import qsettings
     from volura.sheet_dialogs import GCODE_DYNAMIC_KEY, GCODE_S_MAX_KEY
     q = qsettings()
     for key in (laser.PORT_KEY, laser.BAUD_KEY, laser.STEP_KEY, laser.FEED_KEY,
                 profiles.MACHINE_KEY, profiles.TRAVEL_X_KEY, profiles.TRAVEL_Y_KEY,
                 profiles.CLAMP_KEY, profiles.PRESETS_KEY,
+                laser.DOT_KEY, laser.RASTER_FEED_KEY, laser.IMAGE_MODE_KEY,
+                laser.IMAGE_POWER_KEY, laser.IMAGE_PASSES_KEY,
+                laser.IMAGE_INVERT_KEY, laser.IMAGE_ONEWAY_KEY,
                 GCODE_S_MAX_KEY, GCODE_DYNAMIC_KEY):
         q.remove(key)
     q.sync()
@@ -722,3 +725,115 @@ def test_presets_go_to_a_file_and_come_back(dlg, monkeypatch, tmp_path):
     d.import_presets()
     d.done(0)
     assert profiles.find_preset("Atelier")["y"] == 200.0
+
+
+# ------------------------------------------------------------------ a picture to engrave
+def picture(path, width=6, height=4, dark=(0, 0, 4, 4)):
+    """A PNG on disk: a dark rectangle on the left, white paper on the right."""
+    from PySide6.QtGui import QColor, QImage, QPainter
+    image = QImage(width, height, QImage.Format_RGB32)
+    image.fill(QColor(255, 255, 255))
+    painter = QPainter(image)
+    painter.fillRect(dark[0], dark[1], dark[2], dark[3], QColor(0, 0, 0))
+    painter.end()
+    assert image.save(str(path))
+    return str(path)
+
+
+def set_mode(dlg, mode):
+    dlg.mode_box.setCurrentIndex(pick(dlg.mode_box, mode))
+    QCoreApplication.processEvents()
+
+
+def test_the_picture_box_offers_the_modes_of_lightburn(dlg):
+    assert [dlg.mode_box.itemData(n) for n in range(dlg.mode_box.count())] == \
+        ["gray", "threshold", "halftone", "dither"]
+    assert [dlg.style_box.itemData(n) for n in range(dlg.style_box.count())] == \
+        list(laser_image.DITHERS)
+
+
+def test_the_matrix_of_the_box_is_the_one_of_the_mode(dlg):
+    set_mode(dlg, "halftone")
+    assert [dlg.style_box.itemData(n) for n in range(dlg.style_box.count())] == \
+        list(laser_image.HALFTONES)
+    set_mode(dlg, "gray")
+    assert dlg.style_box.count() == 0 and not dlg.style_box.isEnabled()
+
+
+def test_a_picture_on_disk_becomes_grey_values(dlg, tmp_path):
+    path = picture(tmp_path / "p.png")
+    gray = image_gray(path)
+    assert gray.shape == (4, 6)
+    assert gray[0, 0] == pytest.approx(0.0) and gray[0, 5] == pytest.approx(1.0)
+
+
+def test_a_file_that_is_not_a_picture_says_so(dlg, tmp_path):
+    path = tmp_path / "geen.png"
+    path.write_text("this is not a picture")
+    with pytest.raises(ValueError):
+        image_gray(str(path))
+
+
+def test_a_picture_is_read_through_the_dialog_and_shows_what_it_costs(dlg, monkeypatch,
+                                                                     tmp_path):
+    from volura import laser_window as lw
+    path = picture(tmp_path / "p.png")
+    monkeypatch.setattr(lw.QFileDialog, "getOpenFileName",
+                        staticmethod(lambda *a, **k: (path, "")))
+    dlg.b_image.click()
+    assert dlg.image is not None and dlg.image_name == "p.png"
+    assert "0.6 × 0.4 mm" in dlg.image_hint.text()
+
+
+def test_without_a_picture_the_window_says_so(dlg, boxes):
+    assert dlg.image is None
+    dlg.image_job()
+    assert "Choose a picture first." in boxes.messages[-1]
+
+
+def test_engraving_a_picture_makes_a_job_of_the_raster(dlg, tmp_path):
+    dlg.image = image_gray(picture(tmp_path / "p.png"))
+    dlg.image_name = "p.png"
+    set_mode(dlg, "threshold")
+    dlg.dot_box.setCurrentIndex(pick(dlg.dot_box, 1.0))
+    dlg.power_spin.setValue(50)
+    dlg.b_image_job.click()
+    text = "\n".join(dlg.job)
+    assert "G21" in text and "M3" in text and "S500" in text
+    assert dlg.job_name == "p.png"
+    assert "the picture is 6 × 4 mm" in dlg.log.toPlainText()
+
+
+def test_the_darkest_pixel_of_the_picture_gets_the_chosen_power(dlg, tmp_path):
+    dlg.image = np.ones((2, 2))
+    dlg.dot_box.setCurrentIndex(pick(dlg.dot_box, 1.0))
+    dlg.power_spin.setValue(25)
+    dlg.b_image_job.click()
+    assert "S250" in "\n".join(dlg.job)          # 25 % of a board that counts to 1000
+
+
+def test_inverting_the_picture_burns_the_other_half(dlg, tmp_path):
+    dlg.image = image_gray(picture(tmp_path / "p.png"))
+    set_mode(dlg, "threshold")
+    dlg.dot_box.setCurrentIndex(pick(dlg.dot_box, 1.0))
+    before = dlg.image_dots()
+    dlg.invert_check.setChecked(True)
+    assert np.array_equal(before, 1.0 - dlg.image_dots())
+
+
+def test_the_board_of_the_machine_decides_the_highest_S_word(dlg, monkeypatch, tmp_path):
+    from volura.sheet_dialogs import GCODE_S_MAX_KEY
+    qsettings().setValue(GCODE_S_MAX_KEY, 255)
+    dlg.image = np.ones((2, 2))
+    dlg.dot_box.setCurrentIndex(pick(dlg.dot_box, 1.0))
+    dlg.power_spin.setValue(100)
+    dlg.b_image_job.click()
+    assert "S255" in "\n".join(dlg.job)
+
+
+def test_the_number_of_passes_is_the_number_of_times_over(dlg, tmp_path):
+    dlg.image = np.ones((2, 2))
+    dlg.dot_box.setCurrentIndex(pick(dlg.dot_box, 1.0))
+    dlg.passes_spin.setValue(3)
+    dlg.b_image_job.click()
+    assert "\n".join(dlg.job).count("M5") == 2 * 3

@@ -17,21 +17,27 @@ window back. The cable is only let go when the program closes (`shutdown`).
 """
 from __future__ import annotations
 
+import math
 import os
+
+import numpy as np
 
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QDialogButtonBox, QFileDialog, QFormLayout, QGridLayout,
                                QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                                QListWidget, QMessageBox, QPlainTextEdit, QProgressBar,
-                               QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout)
+                               QPushButton, QSpinBox, QTableWidget, QTableWidgetItem,
+                               QVBoxLayout)
 
-from . import gcode, grbl, laser, panels
+from . import gcode, grbl, laser, laser_image, panels
 from . import laser_profiles as profiles
 from .i18n import tr
 from .settings import qsettings
-from .sheet_dialogs import GCODE_DYNAMIC_KEY, GCODE_S_MAX_KEY
+from .sheet_dialogs import (GCODE_DYNAMIC_KEY, GCODE_S_MAX_KEY, fmt_time,
+                           gcode_export_defaults)
 
 #: how many lines of what the board said the window keeps
 LOG_LINES = 400
@@ -288,6 +294,36 @@ class PresetsDialog(QDialog):
         self.reload(profiles.presets())
 
 
+def image_gray(path, max_pixels=4000000):
+    """The grey values of a picture on disk, with what is transparent laid over white.
+
+    QImage reads the file - it knows PNG, JPEG, BMP, GIF, TIFF and the rest without
+    another package in the build - and the pixels go to numpy from there. A picture of
+    forty million dots engraves for a day and needs more blocks than a board can hold in
+    its head, so a bigger one is made smaller first, keeping its shape.
+    """
+    image = QImage(str(path))
+    if image.isNull():
+        raise ValueError(tr("{file} is not a picture Volura can read.").format(
+            file=os.path.basename(str(path))))
+    if image.width() * image.height() > max_pixels:
+        scale = math.sqrt(max_pixels / float(image.width() * image.height()))
+        image = image.scaled(max(1, int(image.width() * scale)),
+                             max(1, int(image.height() * scale)),
+                             Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    has_alpha = image.hasAlphaChannel()
+    image = image.convertToFormat(QImage.Format_RGBA8888)
+    width, height, line = image.width(), image.height(), image.bytesPerLine()
+    data = np.frombuffer(image.constBits(), dtype=np.uint8,
+                         count=line * height).reshape(height, line)[:, :width * 4]
+    data = data.reshape(height, width, 4).astype(float)
+    if has_alpha:
+        alpha = data[:, :, 3:4] / 255.0
+        data = data[:, :, :3] * alpha + 255.0 * (1.0 - alpha)
+    return laser_image.to_gray(data)
+
+
+
 class LaserWindow(QDialog):
     """The window that drives a GRBL laser: cable, board, jog, origin, overrides, job."""
 
@@ -299,6 +335,8 @@ class LaserWindow(QDialog):
         self.worker = None
         self.job: list[str] = []
         self.job_name = ""
+        self.image = None
+        self.image_name = ""
         self._boot_said = False
         self._messages = 0
         self._errors = 0
@@ -312,6 +350,7 @@ class LaserWindow(QDialog):
         right = QVBoxLayout()
         right.addWidget(self._origin_box())
         right.addWidget(self._override_box())
+        right.addWidget(self._image_box())
         right.addWidget(self._job_box())
         columns.addLayout(left)
         columns.addLayout(right)
@@ -788,6 +827,179 @@ class LaserWindow(QDialog):
             b.clicked.connect(lambda checked=False, a=action: self.session.override("rapid", a))
             row.addWidget(b)
         return row
+
+
+    # ------------------------------------------------------------------ a picture to engrave
+    def _image_box(self):
+        """A photograph or a logo, engraved as a raster: the modes of LightBurn."""
+        box = QGroupBox(tr("Picture"))
+        form = QFormLayout(box)
+        self.b_image = QPushButton(tr("Picture…"))
+        self.b_image.setToolTip(tr("A photograph or a logo to engrave where the head is now"))
+        self.mode_box = QComboBox()
+        for key, label in laser_image.MODES:
+            self.mode_box.addItem(label, key)
+        self.mode_box.setToolTip(tr("What a pixel of the picture becomes on the sheet"))
+        self.style_box = QComboBox()
+        self.style_box.setToolTip(tr("The matrix that makes the dots"))
+        self.dot_box = QComboBox()
+        for mm in laser.DOT_SIZES:
+            self.dot_box.addItem(tr("{n} mm").format(n=f"{mm:g}"), mm)
+        self.dot_box.setToolTip(tr("How big one pixel of the picture becomes on the sheet"))
+        self.raster_feed_box = QComboBox()
+        for f in laser.RASTER_FEEDS:
+            self.raster_feed_box.addItem(tr("{n} mm/min").format(n=f), f)
+        self.raster_feed_box.setToolTip(tr("How fast the head moves while it engraves"))
+        self.power_spin = QSpinBox()
+        self.power_spin.setRange(1, 100)
+        self.power_spin.setValue(int(qsettings().value(laser.IMAGE_POWER_KEY, 30)))
+        self.power_spin.setSuffix(" %")
+        self.power_spin.setToolTip(tr("The power of the beam on the darkest pixel of the picture"))
+        self.passes_spin = QSpinBox()
+        self.passes_spin.setRange(1, 20)
+        self.passes_spin.setValue(int(qsettings().value(laser.IMAGE_PASSES_KEY, 1)))
+        self.passes_spin.setToolTip(tr("How often the whole picture is burned in"))
+        self.invert_check = QCheckBox(tr("Invert"))
+        self.invert_check.setToolTip(tr("Burn the dark pixels instead of the light ones"))
+        self.one_way_check = QCheckBox(tr("One way"))
+        self.one_way_check.setToolTip(tr("Come back over the row with the beam off instead of "
+                                         "turning around: slower, but no burn-in on the return"))
+        self.b_image_job = QPushButton(tr("Engrave the picture"))
+        self.b_image_job.setToolTip(tr("Make the raster of the picture and put it in the job"))
+        self.image_hint = panels.note(tr("There is no picture to engrave yet."))
+        form.addRow(self.b_image)
+        form.addRow(tr("Mode"), self.mode_box)
+        form.addRow(tr("Matrix"), self.style_box)
+        form.addRow(tr("Dot"), self.dot_box)
+        form.addRow(tr("Speed"), self.raster_feed_box)
+        form.addRow(tr("Power"), self.power_spin)
+        form.addRow(tr("Passes"), self.passes_spin)
+        form.addRow(self.invert_check)
+        form.addRow(self.one_way_check)
+        form.addRow(self.b_image_job)
+        form.addRow(self.image_hint)
+        self.b_image.clicked.connect(self.load_image)
+        self.b_image_job.clicked.connect(self.image_job)
+        self.mode_box.currentIndexChanged.connect(self._mode_changed)
+        self.invert_check.setChecked(qsettings().value(laser.IMAGE_INVERT_KEY, False)
+                                     in (True, "true", "1", 1))
+        self.one_way_check.setChecked(qsettings().value(laser.IMAGE_ONEWAY_KEY, False)
+                                      in (True, "true", "1", 1))
+        self._remember(self.dot_box, laser.DOT_KEY, laser.DOT_SIZES[3])
+        self._remember(self.raster_feed_box, laser.RASTER_FEED_KEY, 3000)
+        self._pick(self.mode_box, laser.IMAGE_MODE_KEY, "dither")
+        self._fill_styles()
+        self.power_spin.valueChanged.connect(
+            lambda v: (qsettings().setValue(laser.IMAGE_POWER_KEY, int(v)), self.refresh_image()))
+        self.passes_spin.valueChanged.connect(
+            lambda v: (qsettings().setValue(laser.IMAGE_PASSES_KEY, int(v)), self.refresh_image()))
+        self.invert_check.toggled.connect(
+            lambda on: (qsettings().setValue(laser.IMAGE_INVERT_KEY, bool(on)),
+                        self.refresh_image()))
+        self.one_way_check.toggled.connect(
+            lambda on: (qsettings().setValue(laser.IMAGE_ONEWAY_KEY, bool(on)),
+                        self.refresh_image()))
+        self.dot_box.currentIndexChanged.connect(self.refresh_image)
+        self.raster_feed_box.currentIndexChanged.connect(self.refresh_image)
+        self.style_box.currentIndexChanged.connect(self.refresh_image)
+        return box
+
+    def _pick(self, box, key, default):
+        """Put the saved choice of a combo box back, and keep it for the next time."""
+        data = [box.itemData(n) for n in range(box.count())]
+        want = str(qsettings().value(key, default))
+        box.blockSignals(True)
+        box.setCurrentIndex(data.index(want) if want in data else 0)
+        box.blockSignals(False)
+        box.currentIndexChanged.connect(
+            lambda _n, b=box, k=key: qsettings().setValue(k, b.currentData()))
+
+    def _mode_changed(self, *_):
+        """Another mode: the matrices that belong to it, and the picture again."""
+        self._fill_styles()
+        self.refresh_image()
+
+    def _fill_styles(self):
+        """The matrices of the chosen mode: the names of the dithering, or 4x4 and 8x8."""
+        mode = self.mode_box.currentData()
+        self.style_box.blockSignals(True)
+        self.style_box.clear()
+        if mode == "dither":
+            for key, (label, _taps, _total) in laser_image.DITHERS.items():
+                self.style_box.addItem(label, key)
+        elif mode == "halftone":
+            for key in laser_image.HALFTONES:
+                self.style_box.addItem(tr("{n} by {n}").format(n=key), key)
+        self.style_box.blockSignals(False)
+        self.style_box.setEnabled(self.style_box.count() > 0)
+
+    def load_image(self):
+        """A picture from disk, as grey values."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, tr("Picture to engrave"), "",
+            "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tif *.tiff);;All files (*)")
+        if not path:
+            return
+        try:
+            self.image = image_gray(path)
+        except ValueError as e:
+            QMessageBox.warning(self, tr("Laser Controller"), str(e))
+            return
+        self.image_name = os.path.basename(path)
+        self.refresh_image()
+
+    def image_dots(self):
+        """The picture as the machine should burn it; nothing when there is no picture."""
+        if self.image is None:
+            return None
+        style = self.style_box.currentData()
+        gray = laser_image.adjust(self.image, invert=self.invert_check.isChecked())
+        return laser_image.bitmap(gray, self.mode_box.currentData(),
+                                  style or "floyd", style or "8x8")
+
+    def image_job(self):
+        """The raster of the picture as the job, at the origin of the work."""
+        dots = self.image_dots()
+        if dots is None:
+            QMessageBox.information(self, tr("Laser Controller"),
+                                    tr("Choose a picture first."))
+            return
+        dot = float(self.dot_box.currentData() or 0.1)
+        feed = float(self.raster_feed_box.currentData() or 3000)
+        text = laser_image.engrave(dots, dot=dot, feed=feed,
+                                   power=float(self.power_spin.value()),
+                                   s_max=int(gcode_export_defaults()["s_max"]),
+                                   one_way=self.one_way_check.isChecked(),
+                                   passes=self.passes_spin.value(),
+                                   title=self.image_name)
+        self.set_job(grbl.job_lines(text), self.image_name)
+        self.say(tr("the picture is {w} × {h} mm and takes about {t}").format(
+            w=f"{dots.shape[1] * dot:g}", h=f"{dots.shape[0] * dot:g}",
+            t=fmt_time(self.image_seconds())))
+
+    def image_seconds(self) -> float:
+        """How long the engraving of the picture takes, as the estimate says."""
+        dots = self.image_dots()
+        if dots is None:
+            return 0.0
+        return laser_image.estimate(
+            dots, float(self.dot_box.currentData() or 0.1),
+            float(self.raster_feed_box.currentData() or 3000),
+            self.one_way_check.isChecked(), self.passes_spin.value())["seconds"]
+
+    def refresh_image(self):
+        """Under the buttons: how big the picture becomes and what it costs."""
+        if self.image is None:
+            self.image_hint.setText(tr("There is no picture to engrave yet."))
+            return
+        dot = float(self.dot_box.currentData() or 0.1)
+        info = laser_image.estimate(self.image_dots(), dot,
+                                    float(self.raster_feed_box.currentData() or 3000),
+                                    self.one_way_check.isChecked(), self.passes_spin.value())
+        self.image_hint.setText(tr("{w} × {h} mm, {rows} rows, about {t}").format(
+            w=f"{info['width']:g}", h=f"{info['height']:g}", rows=info["rows"],
+            t=fmt_time(info["seconds"])))
+
 
     # ------------------------------------------------------------------ the job
     def _job_box(self):

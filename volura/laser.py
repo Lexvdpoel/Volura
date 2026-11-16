@@ -45,11 +45,24 @@ JOG_STEPS = (0.1, 1.0, 5.0, 10.0, 50.0)
 #: the speeds of the jog pad, in millimetres per minute
 JOG_FEEDS = (500, 1000, 3000, 6000)
 
+#: the sizes of an engraved dot, in millimetres: how big one pixel of an image becomes
+DOT_SIZES = (0.05, 0.0625, 0.08, 0.1, 0.125, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.8, 1.0)
+
+#: the feeds of an engraving run, mm/min: raster goes slower than a contour does
+RASTER_FEEDS = (500, 1000, 2000, 3000, 4000, 6000, 8000, 10000)
+
 #: the settings keys of the window, so the board of yesterday is the board of today
 PORT_KEY = "laser/port"
 BAUD_KEY = "laser/baud"
 STEP_KEY = "laser/step"
 FEED_KEY = "laser/jog_feed"
+DOT_KEY = "laser/dot"
+RASTER_FEED_KEY = "laser/raster_feed"
+IMAGE_MODE_KEY = "laser/image_mode"
+IMAGE_POWER_KEY = "laser/image_power"
+IMAGE_INVERT_KEY = "laser/image_invert"
+IMAGE_ONEWAY_KEY = "laser/image_one_way"
+IMAGE_PASSES_KEY = "laser/image_passes"
 
 
 class CableError(RuntimeError):

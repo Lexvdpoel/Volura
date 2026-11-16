@@ -469,7 +469,10 @@ The interface is available in English and Dutch (*Window > Preferences > General
   GRBL machines of the shop - fill in the work area and the highest S word, and what
   the board answers to $$ can be taken from it, so the machine stays the truth. A
   K40 on a GRBL board is among them, and *Presets…* keeps every setting a board
-  answered under a name and gives them back to it, setting by setting
+  answered under a name and gives them back to it, setting by setting.
+  *Picture* engraves a photograph or a logo with the image modes of LightBurn:
+  grayscale, threshold, halftone 4x4 and 8x8, and the dithering of Floyd-Steinberg,
+  Atkinson, Jarvis-Judice-Ninke, Stucki, Burrows, Sierra and Sierra Lite
 - **Model and worksheet together**: right-click a face or sheet > *Laser / Mill* puts it on a layer of
   the worksheet; *Parts to 3D Model* places everything that is cut as a sheet with the sheet thickness
   in 3D. Every outline stays linked to its part: a linked face keeps its face when you turn the part
