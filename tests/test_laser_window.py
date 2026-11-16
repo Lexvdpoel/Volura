@@ -246,11 +246,11 @@ def test_the_port_and_the_speed_are_remembered_for_next_time(dlg, board):
 
 
 def test_the_board_that_answered_stands_on_the_screen(dlg, board):
-    board.say("<Idle|MPos:12.000,3.000,0.000|WPos:2.000,1.000,0.000|FS:800,0>")
-    assert pump(dlg, lambda: "12.000" in dlg.mpos_label.text())
+    board.report = "<Idle|MPos:12.000,3.000,0.000|WPos:2.000,1.000,0.000|FS:800,0>"
+    assert pump(dlg, lambda: "12.000" in dlg.mpos_label.text()
+                and "800" in dlg.feed_label.text())
     assert "2.000" in dlg.wpos_label.text()
     assert dlg.state_label.text() == grbl.state_label("Idle")
-    assert "800" in dlg.feed_label.text()
 
 
 def test_a_cable_that_breaks_is_said_and_the_window_lets_go(dlg, board):
