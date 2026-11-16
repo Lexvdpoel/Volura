@@ -3,6 +3,38 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.59 — 2026-11-16
+
+### New
+- **Laser Controller** (Laser and Mill > *Laser Controller…*): the board between the
+  computer and the laser, in the window. The serial port and its speed, what the board is
+  doing, the machine and work position, a jog pad, the origin of the work under the head,
+  feed, power and rapid overrides while it cuts, and the job of the worksheet or a G-code
+  file, sent block by block with character counting so nothing is lost. Check (`$C`) plans
+  a job without moving, and everything the board said stands below it.
+- **Machine presets**: the known lasers with their work area and what their board is set
+  to — the open ones (a GRBL board of your own, OpenBuilds BlackBird, LEAD/Leadstone,
+  Workhorse 3500), the K40 on a GRBL board, and the machines of the shop that speak plain
+  GRBL. A preset fills in the work area and the highest S word of the G-code and offers to
+  set the board's laser mode, travel and maximum feed; it never touches the steps per
+  millimetre or the limits. What the board answered to `$$` can be taken from it instead.
+- **Presets…**: everything the board answered to `$$`, saved under a name and given back
+  to it later, setting by setting. The calibration and the limits are kept like the rest
+  but go to a board only when they are ticked, because they belong to one machine. Presets
+  go to a JSON file and come back from one.
+- **Engraving a picture** in the controller: a photograph or a logo with the image modes of
+  LightBurn — grayscale, threshold, halftone 4x4 and 8x8, and the dithering of
+  Floyd-Steinberg, Atkinson, Jarvis-Judice-Ninke, Stucki, Burrows, Sierra and Sierra Lite.
+  The dot size says how big a pixel becomes on the sheet, and the window says how large the
+  picture gets and how long it takes before anything burns.
+- **Stay on the machine**: the pad refuses a jog that would move the head past the end of
+  the work area on the screen.
+
+### Changed
+- `pyserial` is a dependency now, opened where it is used, so a build without it still
+  starts and says what is missing.
+
+
 ## 0.2.58 — 2026-11-15
 
 ### New
