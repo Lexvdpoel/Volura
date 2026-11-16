@@ -289,12 +289,17 @@ class Worker(threading.Thread):
         self.session = session if session is not None else Session()
         self.poll = float(poll)
         self.problem = ""
-        self._stop = threading.Event()
+        self._quit = threading.Event()
         self._left = b""
+
+    @property
+    def stopped(self) -> bool:
+        """Whether the thread was asked to let go of the cable."""
+        return self._quit.is_set()
 
     def run(self) -> None:
         asked = time.monotonic()
-        while not self._stop.is_set():
+        while not self._quit.is_set():
             try:
                 self._read()
                 out = self.session.pending()
@@ -308,7 +313,7 @@ class Worker(threading.Thread):
             except Exception as e:                      # the cable is gone: say so and end
                 self.problem = str(e) or type(e).__name__
                 break
-        self._stop.set()
+        self._quit.set()
         self._let_go()
 
     def _read(self) -> None:
@@ -326,9 +331,12 @@ class Worker(threading.Thread):
 
     def shutdown(self, timeout=3.0) -> None:
         """Stop the thread and let go of the port, so the next board can be opened."""
-        self._stop.set()
+        self._quit.set()
         if self.is_alive():
             self.join(timeout)
+        # a thread that is waiting for a cable that says nothing cannot hear the
+        # word to stop; closing the port under it ends that wait with an error, and
+        # the thread ends saying what happened - the window does not wait for it
         self._let_go()
 
     def _let_go(self) -> None:
