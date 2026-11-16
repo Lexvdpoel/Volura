@@ -2300,6 +2300,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                 "job_estimate", False,
                                 tr("How long the laser takes for the worksheet and how many "
                                    "metres it cuts"))
+        self.a_laser_controller = A(tr("Laser Controller…"),
+                                    lambda checked=False: self.laser_controller(), None, None,
+                                    False,
+                                    tr("Drive the laser on the serial port yourself: jog, "
+                                       "origin, overrides and the job"))
         self.a_sheet_to_model = A(tr("Parts to &3D Model"), self.sheet_to_model, None, "to_model",
                                   False, tr("Put what is cut into the 3D model as plates with the "
                                             "sheet thickness"))
@@ -2871,7 +2876,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.fill(m, (self.a_sheet_plaat, self.a_sheet_nest, None,
                       self.a_fit_test, None,
                       self.a_holding_tabs, self.a_dogbone_corners, None,
-                      self.a_job_estimate))
+                      self.a_job_estimate, None, self.a_laser_controller))
 
         # ---- Window and Help
         m = mb.addMenu(tr("&Window"))
@@ -2977,7 +2982,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
              (self.a_sheet_plaat, self.a_sheet_nest, None,
               self.a_box_joint, self.a_spur_gear, self.a_fit_test, None,
               self.a_holding_tabs, self.a_dogbone_corners, None,
-              self.a_sheet_to_model, self.a_job_estimate)),
+              self.a_sheet_to_model, self.a_job_estimate, self.a_laser_controller)),
         )
         made = []
         for name, title, items in bars:
@@ -3051,6 +3056,22 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                      "layer with the arrow.").format(name=name))
                 return False
         return self.sheet_view.move_to_layer(name)
+
+    def laser_controller(self):
+        """Laser and Mill > Laser Controller…: the window that drives the board.
+
+        One window per Volura, kept open between the calls so a job that runs is not
+        lost by looking at something else. The window asks the worksheet for its G-code
+        when the user asks for it; nothing of the drawing is read while the cable works.
+        """
+        from .laser_window import LaserWindow
+        dlg = getattr(self, "_laser_controller", None)
+        if dlg is None:
+            dlg = self._laser_controller = LaserWindow(self)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+        return dlg
 
     def job_estimate_dialog(self):
         """Edit > Job Estimate…: what the worksheet takes on the laser, per layer."""
@@ -4898,6 +4919,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             return
         self.autosave_timer.stop()
         self.spacemouse.stop()
+        controller = getattr(self, "_laser_controller", None)
+        if controller is not None:
+            controller.shutdown()     # let go of the cable; a job that runs is stopped
         workers.shutdown()          # stop the worker processes on the way out
         view = getattr(self, "view", None)
         if view is not None and view.isVisible():

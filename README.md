@@ -461,6 +461,15 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **G-code for a GRBL laser**: File > Export > *G-code for a GRBL Laser* writes the laser
   layers as plain G-code for the machine, with the S maximum and M3 or M4 of the controller
   and the time of the job in the status bar
+- **Laser controller**: Laser and Mill > *Laser Controller…* puts the board on the screen
+  instead of in a file: the serial port, where the head is, a jog pad, the origin of the
+  work under the head, feed and power overrides while it cuts, and the job of the worksheet
+  with its progress - block by block with character counting, so nothing is lost.
+  Presets of the known lasers - the open boards (BlackBird, Workhorse 3500) and the
+  GRBL machines of the shop - fill in the work area and the highest S word, and what
+  the board answers to $$ can be taken from it, so the machine stays the truth. A
+  K40 on a GRBL board is among them, and *Presets…* keeps every setting a board
+  answered under a name and gives them back to it, setting by setting
 - **Model and worksheet together**: right-click a face or sheet > *Laser / Mill* puts it on a layer of
   the worksheet; *Parts to 3D Model* places everything that is cut as a sheet with the sheet thickness
   in 3D. Every outline stays linked to its part: a linked face keeps its face when you turn the part

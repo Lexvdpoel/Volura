@@ -1816,6 +1816,31 @@ volura</code></pre>
       <li>Het venster vraagt het hoogste S-woord van de controller (<kbd>$30</kbd>: 1000 op een moderne kaart, 255 op een oude 8-bit) en of de straal de snelheid volgt (<b>M4</b>, zodat hij in een hoek minder brandt) of vast blijft op één vermogen (<b>M3</b>); allebei komen volgende keer terug, want ze horen bij de machine.</li>
       <li>De statusbalk eindigt met hoe lang het werk duurt, dezelfde schatting als <b>Laser en frees &gt; Tijdsschatting…</b></li>
     </ul>
+    <h3><span lang="en">Driving the laser yourself</span><span lang="nl">De laser zelf besturen</span></h3>
+    <p lang="en">The board between the computer and the laser, in the window: jog it, point it and send the job without a second program.</p>
+    <p lang="nl">De controller tussen de computer en de laser, in het venster: joggen, richten en de taak sturen zonder een tweede programma.</p>
+    <p class="where" lang="en">Where: <b>Laser and Mill &gt; Laser Controller…</b></p>
+    <p class="where" lang="nl">Waar: <b>Laser en frees &gt; Laserbesturing…</b></p>
+    <ul lang="en">
+      <li><b>The board</b>: the serial port and its speed, what the board is doing (Idle, Cutting, Paused), the machine and work position and the feed it is moving at. Connecting resets the board, asks its settings (<kbd>$$</kbd>) and unlocks it (<kbd>$X</kbd>).</li>
+      <li><b>Machine</b>: the presets of the lasers that are known - the open ones (a GRBL board of your own, OpenBuilds BlackBird, Workhorse 3500) and the ones of the shop that speak GRBL (Sculpfun, Ortur, Atomstack, Creality, TwoTrees, Longrun, NEJE). A preset says how big the work area is and what the board is set to; <b>Settings to the board…</b> sends <kbd>$32</kbd>, <kbd>$30</kbd>, <kbd>$110/$111</kbd> and <kbd>$130/$131</kbd> - never the steps per millimetre and never the limits - and <b>Take from the board</b> reads back what <kbd>$$</kbd> answered, so the board stays the truth. <b>Stay on the machine</b> refuses a jog past the end of the work area on the screen. A K40 on a GRBL board is in the list - the original M2 board of a K40 does not speak GRBL.</li>
+      <li><b>Presets…</b>: everything the board answered to <kbd>$$</kbd> is kept under a name and goes back to it later, setting by setting; the steps per millimetre and the limits are kept too but stay unticked, because they belong to one machine. Presets go to a JSON file and come back from one.</li>
+      <li><b>Jog</b>: the arrows move one step of 0.1 to 50 mm at the speed you choose; <b>&#8962;</b> travels to the origin of the work.</li>
+      <li><b>Work origin</b>: <b>Zero here</b> puts X0 Y0 under the head, so the job is cut around the point you pointed at.</li>
+      <li><b>Overrides</b>: feed and power in steps of 10% and the rapid at 25, 50 or 100%, while the job runs.</li>
+      <li><b>Job</b>: the G-code of the worksheet, with the layers and the power of the export dialog, or a G-code file, sent block by block as fast as the board takes them. Pause is a feed hold; stop ends the job and empties what the board had queued.</li>
+      <li><b>Check</b> (<kbd>$C</kbd>) plans the job and moves nothing, and everything the board said stands below it.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>De controller</b>: de seriële poort en zijn snelheid, wat de controller doet (Inactief, Snijden, Gepauzeerd), de machine- en werkpositie en het voeren waarmee hij beweegt. Bij het verbinden wordt de controller gereset, naar zijn instellingen (<kbd>$$</kbd>) gevraagd en ontgrendeld (<kbd>$X</kbd>).</li>
+      <li><b>Machine</b>: de presets van de bekende lasers - de open (een eigen GRBL-kaart, OpenBuilds BlackBird, Workhorse 3500) en de commerciële die GRBL spreken (Sculpfun, Ortur, Atomstack, Creality, TwoTrees, Longrun, NEJE). Een preset zegt hoe groot het werkvlak is en wat de controller is ingesteld; <b>Instellingen naar de controller…</b> stuurt <kbd>$32</kbd>, <kbd>$30</kbd>, <kbd>$110/$111</kbd> en <kbd>$130/$131</kbd> - nooit de stappen per millimeter en nooit de grenzen - en <b>Overnemen uit de controller</b> leest terug wat <kbd>$$</kbd> antwoordde, zodat de controller de waarheid blijft. <b>Blijf op de machine</b> weigert een stap voorbij het einde van het werkvlak op het scherm. Een K40 op een GRBL-kaart staat in de lijst - de originele M2-kaart van een K40 spreekt geen GRBL.</li>
+      <li><b>Presets…</b>: alles wat de controller op <kbd>$$</kbd> antwoordde wordt onder een naam bewaard en gaat later terug, instelling voor instelling; de stappen per millimeter en de grenzen blijven aangevinkt uit, want ze horen bij één machine. Presets gaan naar een JSON-bestand en komen eruit terug.</li>      
+      <li><b>Joggen</b>: de pijlen bewegen één stap van 0,1 tot 50 mm op de snelheid die je kiest; <b>&#8962;</b> rijdt naar de oorsprong van het werk.</li>      
+      <li><b>Oorsprong van het werk</b>: <b>Nul hier</b> zet X0 Y0 onder de kop, zodat de taak rond dat punt wordt gesneden.</li>      
+      <li><b>Oversturingen</b>: voeren en vermogen in stappen van 10% en de snelbeweging op 25, 50 of 100%, terwijl de taak loopt.</li>      
+      <li><b>Taak</b>: de G-code van het werkblad, met de lagen en het vermogen van het exportvenster, of een G-code-bestand, blok voor blok gestuurd zo snel als de controller ze aanneemt. Pauze is een voerstop; stoppen beëindigt de taak en legt weg wat de controller had opgewacht.</li>      
+      <li><b>Controleren</b> (<kbd>$C</kbd>) plant de taak en beweegt niets, en wat de controller zei staat eronder.</li>
+    </ul>
     <h3><span lang="en">Importing a drawing</span><span lang="nl">Een tekening importeren</span></h3>
     <p lang="en">A vector drawing from elsewhere, as geometry you can push into a part.</p>
     <p lang="nl">Een vectortekening van elders, als geometrie die je tot een onderdeel kunt duwen.</p>

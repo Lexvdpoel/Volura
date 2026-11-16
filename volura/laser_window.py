@@ -1,0 +1,944 @@
+"""The laser controller: the board on the cable, driven from the screen.
+
+Laser and Mill > Laser Controller… opens the window. What a laser program has next to its
+drawing, Volura has here: the port the board hangs on, where the head is, a pad to jog
+with, the origin of the work, the overrides of feed and power while a job runs, and the
+job of the worksheet with its progress. Volura makes the G-code (`volura/gcode.py`) and
+knows the protocol (`volura/grbl.py`); this window is what turns that into a machine you
+can point at a piece of plywood.
+
+The conversation itself lives in `volura/laser.py`: a session and a thread that reads the
+cable. This file only shows it, on a timer of `laser.UPDATE_SECONDS` - the thread may not
+touch a widget, so the window comes and looks instead of being told. Everything the window
+sends goes into the session, which hands it to the board as fast as the board has room.
+
+Closing the window hides it and lets a running job run on; the same menu item brings the
+window back. The cable is only let go when the program closes (`shutdown`).
+"""
+from __future__ import annotations
+
+import os
+
+from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
+                               QDialogButtonBox, QFileDialog, QFormLayout, QGridLayout,
+                               QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+                               QListWidget, QMessageBox, QPlainTextEdit, QProgressBar,
+                               QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout)
+
+from . import gcode, grbl, laser, panels
+from . import laser_profiles as profiles
+from .i18n import tr
+from .settings import qsettings
+from .sheet_dialogs import GCODE_DYNAMIC_KEY, GCODE_S_MAX_KEY
+
+#: how many lines of what the board said the window keeps
+LOG_LINES = 400
+
+#: what the window can send: the same kinds as the export of the worksheet
+GCODE_FILTER = "G-code (*.gcode *.nc *.gc *.tap);;All files (*)"
+
+#: the arrows of the jog pad: text, which way it moves, and what to tell a screen reader
+PAD = (
+    ("↑", 0.0, 1.0, 0.0, tr("Jog one step up the sheet (+Y)")),
+    ("↓", 0.0, -1.0, 0.0, tr("Jog one step down the sheet (-Y)")),
+    ("←", -1.0, 0.0, 0.0, tr("Jog one step to the left (-X)")),
+    ("→", 1.0, 0.0, 0.0, tr("Jog one step to the right (+X)")),
+    ("Z ↑", 0.0, 0.0, 1.0, tr("Lift the head (+Z)")),
+    ("Z ↓", 0.0, 0.0, -1.0, tr("Lower the head (-Z)")),
+)
+
+#: where each arrow stands in the pad: row, column
+PAD_PLACE = {"↑": (0, 1), "↓": (2, 1), "←": (1, 0), "→": (1, 2), "Z ↑": (0, 2), "Z ↓": (2, 2)}
+
+
+def _pos(where) -> str:
+    """A position of the board as one line of numbers; a dash when the board has not said."""
+    if where is None:
+        return "—"
+    return "  ".join(f"{name} {v:.3f}" for name, v in zip("XYZ", where))
+
+
+class PresetsDialog(QDialog):
+    """The presets of the user: everything a board answered to `$$`, saved under a name.
+
+    A board knows more about itself than the list of machines does: the feed it allows,
+    the acceleration it was built for, the travel it was measured with. So a preset keeps
+    every number the board answered, and gives them back to a board of the same machine.
+
+    The numbers of the calibration (`$100` and further) and of the limits are kept too -
+    nothing is thrown away - but they do not go to a board unless the user ticks them,
+    because those are the numbers that belong to one machine and to no other.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        self.controller = win
+        self.setWindowTitle(tr("Laser presets"))
+        self.resize(560, 420)
+        lay = QHBoxLayout(self)
+
+        left = QVBoxLayout()
+        left.addWidget(QLabel(tr("Saved presets")))
+        self.list = QListWidget()
+        self.list.setAccessibleName(tr("Saved presets"))
+        self.list.currentItemChanged.connect(self._chosen)
+        left.addWidget(self.list, 1)
+        self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText(tr("Name of this machine"))
+        self.name_edit.setToolTip(tr("Under what name the settings of the board are kept"))
+        left.addWidget(self.name_edit)
+        self.b_save = QPushButton(tr("Save"))
+        self.b_save.setToolTip(tr("Keep the settings of the board under that name"))
+        self.b_delete = QPushButton(tr("Forget"))
+        self.b_delete.setToolTip(tr("Remove the chosen preset"))
+        row = QHBoxLayout()
+        row.addWidget(self.b_save)
+        row.addWidget(self.b_delete)
+        left.addLayout(row)
+        lay.addLayout(left, 1)
+
+        right = QVBoxLayout()
+        right.addWidget(QLabel(tr("What the preset holds")))
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels([tr("Send"), tr("Setting"), tr("Value")])
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.SelectedClicked)
+        self.table.setAccessibleName(tr("What the preset holds"))
+        right.addWidget(self.table, 1)
+        self.hint = panels.note(tr("The steps per millimetre and the limits belong to one "
+                                   "machine: only send them to the machine they came from."))
+        right.addWidget(self.hint)
+        self.b_apply = QPushButton(tr("Send this preset to the board"))
+        self.b_apply.clicked.connect(self.apply_preset)
+        right.addWidget(self.b_apply)
+        self.b_export = QPushButton(tr("Export…"))
+        self.b_export.setToolTip(tr("Write the presets to a file, to give to someone else"))
+        self.b_export.clicked.connect(self.export_presets)
+        self.b_import = QPushButton(tr("Import…"))
+        self.b_import.setToolTip(tr("Read presets from a file"))
+        self.b_import.clicked.connect(self.import_presets)
+        row = QHBoxLayout()
+        row.addWidget(self.b_export)
+        row.addWidget(self.b_import)
+        row.addStretch(1)
+        right.addLayout(row)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.reject)
+        buttons.accepted.connect(self.accept)
+        right.addWidget(buttons)
+        lay.addLayout(right, 2)
+
+        self.b_save.clicked.connect(self.save_preset)
+        self.b_delete.clicked.connect(self.delete_preset)
+        self.reload(profiles.presets(), self.controller.machine_box.currentData())
+        self.b_apply.setEnabled(self.controller.connected)
+
+    # ------------------------------------------------------------------ what is on the screen
+    def reload(self, items, want=None):
+        """Fill the list again and show one of the presets."""
+        self.list.blockSignals(True)
+        self.list.clear()
+        for item in items:
+            self.list.addItem(str(item.get("name", "")))
+        self.list.blockSignals(False)
+        i = self.list.findItems(str(want or ""), Qt.MatchExactly)
+        if i:
+            self.list.setCurrentItem(i[0])
+        elif self.list.count():
+            self.list.setCurrentRow(0)
+        else:
+            self.show_settings({})
+        self._refresh_buttons()
+
+    def chosen_name(self) -> str:
+        item = self.list.currentItem()
+        return item.text() if item is not None else ""
+
+    def _chosen(self, *_):
+        preset = profiles.find_preset(self.chosen_name())
+        self.name_edit.setText(self.chosen_name())
+        self.show_settings(preset or {})
+        self._refresh_buttons()
+
+    def show_settings(self, preset: dict):
+        """One row for every setting the preset holds, with the board's own on top."""
+        settings = {int(n): float(v) for n, v in (preset.get("settings") or {}).items()}
+        for n, v in (self.controller.session.settings or {}).items():
+            settings.setdefault(int(n), float(v))
+        send = {int(n) for n in (preset.get("send") or [])}
+        self.table.setRowCount(len(settings))
+        for row, n in enumerate(sorted(settings)):
+            check = QTableWidgetItem()
+            check.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            check.setCheckState(Qt.Checked if n in send else Qt.Unchecked)
+            check.setToolTip(tr("Send this setting to the board"))
+            self.table.setItem(row, 0, check)
+            what = QTableWidgetItem(profiles.setting_name(n))
+            what.setData(Qt.UserRole, n)
+            if profiles.is_risky(n):
+                what.setToolTip(tr("This belongs to one machine: the steps per millimetre "
+                                   "and the limits"))
+            self.table.setItem(row, 1, what)
+            value = QTableWidgetItem(f"{settings[n]:g}")
+            self.table.setItem(row, 2, value)
+        self.table.setColumnWidth(0, 54)
+
+    def _rows(self) -> list:
+        """The rows of the table as ``(number, value, send)``."""
+        out = []
+        for row in range(self.table.rowCount()):
+            out.append((self._number(row), self.table.item(row, 2).text(),
+                        self.table.item(row, 0).checkState() == Qt.Checked))
+        return out
+
+    def _number(self, row) -> int:
+        """The number of the setting of a row; the row keeps it with itself."""
+        return int(self.table.item(row, 1).data(Qt.UserRole))
+
+    def _refresh_buttons(self):
+        has = bool(self.chosen_name())
+        self.b_delete.setEnabled(has)
+        self.b_apply.setEnabled(self.controller.connected and has)
+
+    # ------------------------------------------------------------------ what the buttons do
+    def save_preset(self):
+        """Keep what is on the screen under the name that stands above it."""
+        name = self.name_edit.text().strip()
+        if not name:
+            QMessageBox.information(self, tr("Laser presets"), tr("A name first."))
+            return
+        settings, send = {}, []
+        for number, value, on in self._rows():
+            try:
+                settings[str(number)] = float(str(value).replace(",", "."))
+            except ValueError:
+                QMessageBox.warning(self, tr("Laser presets"),
+                                    tr("{what} is not a number.").format(
+                                        what=profiles.setting_name(number)))
+                return
+            if on:
+                send.append(number)
+        x, y = self.controller.travel_size()
+        machine = self.controller.machine
+        profiles.add_preset(profiles.new_preset(
+            name, settings, x, y, s_max=profiles.s_max_of(
+                {int(n): v for n, v in settings.items()}, machine.s_max),
+            dynamic=machine.dynamic, jog=machine.jog, rapid=machine.rapid,
+            baud=int(self.controller.baud_box.currentData() or 115200), send=send))
+        self.controller.refresh_machines()
+        self.reload(profiles.presets(), name)
+
+    def delete_preset(self):
+        name = self.chosen_name()
+        if not name:
+            return
+        answer = QMessageBox.question(
+            self, tr("Laser presets"), tr("Forget {name}?").format(name=name),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            profiles.remove_preset(name)
+            self.controller.refresh_machines()
+            self.reload(profiles.presets())
+
+    def apply_preset(self):
+        """Every setting that is ticked, to the board."""
+        preset = profiles.find_preset(self.chosen_name())
+        if preset is None:
+            return
+        lines = profiles.preset_lines(preset, [n for n, _v, on in self._rows() if on])
+        if not lines:
+            return
+        answer = QMessageBox.question(
+            self, tr("Laser presets"),
+            tr("Set the board to this?\n\n{lines}").format(lines="\n".join(lines)),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self.controller.send_settings(lines)
+
+    def export_presets(self):
+        path, _ = QFileDialog.getSaveFileName(self, tr("Export presets"), "volura-laser.json",
+                                              "JSON (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(profiles.presets_to_json(profiles.presets()))
+        except OSError as e:
+            QMessageBox.critical(self, tr("Laser presets"), str(e))
+
+    def import_presets(self):
+        path, _ = QFileDialog.getOpenFileName(self, tr("Import presets"), "", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                items = profiles.presets_from_json(fh.read())
+        except OSError as e:
+            QMessageBox.critical(self, tr("Laser presets"), str(e))
+            return
+        for item in items:
+            profiles.add_preset(item)
+        self.controller.refresh_machines()
+        self.reload(profiles.presets())
+
+
+class LaserWindow(QDialog):
+    """The window that drives a GRBL laser: cable, board, jog, origin, overrides, job."""
+
+    def __init__(self, win):
+        super().__init__(win)
+        self.win = win
+        self.setWindowTitle(tr("Laser Controller"))
+        self.session = laser.Session()
+        self.worker = None
+        self.job: list[str] = []
+        self.job_name = ""
+        self._boot_said = False
+        self._messages = 0
+        self._errors = 0
+
+        lay = QVBoxLayout(self)
+        columns = QHBoxLayout()
+        left = QVBoxLayout()
+        left.addWidget(self._connection_box())
+        left.addWidget(self._board_box())
+        left.addWidget(self._jog_box())
+        right = QVBoxLayout()
+        right.addWidget(self._origin_box())
+        right.addWidget(self._override_box())
+        right.addWidget(self._job_box())
+        columns.addLayout(left)
+        columns.addLayout(right)
+        lay.addLayout(columns)
+        lay.addWidget(self._log_box(), 1)
+
+        self.timer = QTimer(self)
+        self.timer.setInterval(int(laser.UPDATE_SECONDS * 1000))
+        self.timer.timeout.connect(self.refresh)
+        self.timer.start()
+        self.refresh_ports()
+        self.refresh()
+
+    # ------------------------------------------------------------------ the cable
+    def _connection_box(self):
+        box = QGroupBox(tr("Connection"))
+        form = QFormLayout(box)
+        self.port_box = QComboBox()
+        self.port_box.setToolTip(tr("The serial port the board hangs on"))
+        self.b_refresh = QPushButton(tr("Refresh"))
+        self.b_refresh.setToolTip(tr("Look again for the ports of the computer"))
+        ports = QHBoxLayout()
+        ports.addWidget(self.port_box, 1)
+        ports.addWidget(self.b_refresh)
+        self.baud_box = QComboBox()
+        for rate in grbl.BAUD_RATES:
+            self.baud_box.addItem(str(rate), rate)
+        self.baud_box.setToolTip(tr("How fast the board talks; 115200 is the default of GRBL 1.1"))
+        self.b_connect = QPushButton(tr("Connect"))
+        self.b_connect.setToolTip(tr("Open the port and ask the board who it is"))
+        self.port_hint = panels.note("")
+        self.machine_box = QComboBox()
+        for key, label in profiles.choices():
+            self.machine_box.addItem(label, key)
+        self.machine_box.setToolTip(tr("A laser of the list: its work area and what its "
+                                       "board is set to"))
+        self.travel_x = QLineEdit()
+        self.travel_x.setPlaceholderText("X")
+        self.travel_x.setToolTip(tr("How far the head goes in X, in millimetres"))
+        self.travel_y = QLineEdit()
+        self.travel_y.setPlaceholderText("Y")
+        self.travel_y.setToolTip(tr("How far the head goes in Y, in millimetres"))
+        travel = QHBoxLayout()
+        travel.addWidget(self.travel_x)
+        travel.addWidget(QLabel("×"))
+        travel.addWidget(self.travel_y)
+        travel.addWidget(QLabel("mm"))
+        self.clamp_check = QCheckBox(tr("Stay on the machine"))
+        self.clamp_check.setToolTip(tr("Refuse a jog that would move the head past the "
+                                       "end of the machine"))
+        self.clamp_check.setChecked(qsettings().value(profiles.CLAMP_KEY, True)
+                                    in (True, "true", "1", 1))
+        self.b_apply = QPushButton(tr("Settings to the board…"))
+        self.b_apply.setToolTip(tr("Set laser mode, the S maximum and the travel of the "
+                                   "board to what this machine is"))
+        self.b_take = QPushButton(tr("Take from the board"))
+        self.b_take.setToolTip(tr("Read the work area and the S maximum out of what the "
+                                  "board answered to $$"))
+        self.b_presets = QPushButton(tr("Presets…"))
+        self.b_presets.setToolTip(tr("Save all the settings of the board under a name, and "
+                                     "give them back to it later"))
+        buttons = QHBoxLayout()
+        buttons.addWidget(self.b_apply)
+        buttons.addWidget(self.b_take)
+        buttons.addWidget(self.b_presets)
+        self.machine_hint = panels.note("")
+        form.addRow(tr("Port"), ports)
+        form.addRow(tr("Speed"), self.baud_box)
+        form.addRow(self.b_connect)
+        form.addRow(self.port_hint)
+        form.addRow(tr("Machine"), self.machine_box)
+        form.addRow(tr("Work area"), travel)
+        form.addRow(self.clamp_check)
+        form.addRow(buttons)
+        form.addRow(self.machine_hint)
+        self.b_refresh.clicked.connect(self.refresh_ports)
+        self.b_connect.clicked.connect(self.toggle_connection)
+        self.b_apply.clicked.connect(self.apply_settings)
+        self.b_take.clicked.connect(self.take_from_board)
+        self.b_presets.clicked.connect(self.open_presets)
+        self.machine_box.currentIndexChanged.connect(self.choose_machine)
+        self.clamp_check.toggled.connect(
+            lambda on: (qsettings().setValue(profiles.CLAMP_KEY, bool(on)), qsettings().sync()))
+        for edit, key in ((self.travel_x, profiles.TRAVEL_X_KEY),
+                          (self.travel_y, profiles.TRAVEL_Y_KEY)):
+            edit.editingFinished.connect(
+                lambda e=edit, k=key: qsettings().setValue(k, e.text().strip()))
+        self._restore_machine()
+        return box
+
+    def refresh_ports(self):
+        """Fill the list of ports again, keeping the one that was chosen before."""
+        want = str(self.port_box.currentData()
+                   or qsettings().value(laser.PORT_KEY, "") or "")
+        self.port_box.clear()
+        for device, description in laser.ports():
+            self.port_box.addItem(f"{device}  {description}", device)
+        i = self.port_box.findData(want)
+        if i >= 0:
+            self.port_box.setCurrentIndex(i)
+        if self.worker is not None:
+            return
+        if not laser.has_serial():
+            self.port_hint.setText(tr("Volura needs the pyserial package to talk to a laser: "
+                                      "pip install pyserial"))
+        elif self.port_box.count() == 0:
+            self.port_hint.setText(tr("No serial port. Is the board on, and is its cable in "
+                                      "the computer?"))
+        else:
+            self.port_hint.setText("")
+
+    # ------------------------------------------------------------------ the machine
+    @property
+    def machine(self) -> profiles.Machine:
+        """The preset that is chosen in the combo box."""
+        return profiles.find(self.machine_box.currentData())
+
+    def travel_size(self) -> tuple:
+        """The work area on the screen, in millimetres; zero where nothing stands."""
+        out = []
+        for edit in (self.travel_x, self.travel_y):
+            try:
+                out.append(max(0.0, float(edit.text().replace(",", "."))))
+            except ValueError:
+                out.append(0.0)
+        return tuple(out)
+
+    def _restore_machine(self):
+        """The machine of the last time, with the work area as it was left."""
+        self._machine_rows()
+        key = str(qsettings().value(profiles.MACHINE_KEY, "grbl32"))
+        i = self.machine_box.findData(key)
+        self.machine_box.blockSignals(True)
+        self.machine_box.setCurrentIndex(max(0, i))
+        self.machine_box.blockSignals(False)
+        machine = profiles.find(key)
+        for edit, key2, value in ((self.travel_x, profiles.TRAVEL_X_KEY, machine.x),
+                                  (self.travel_y, profiles.TRAVEL_Y_KEY, machine.y)):
+            was = str(qsettings().value(key2, "") or "").strip()
+            edit.setText(was or (f"{float(value):g}" if float(value) > 0 else ""))
+        self._say_machine()
+
+    def choose_machine(self, *_):
+        """A preset is chosen: its work area onto the screen and its S word into the G-code."""
+        machine = self.machine
+        qsettings().setValue(profiles.MACHINE_KEY, machine.key)
+        if machine.known:
+            self.travel_x.setText(f"{machine.x:g}")
+            self.travel_y.setText(f"{machine.y:g}")
+            qsettings().setValue(profiles.TRAVEL_X_KEY, self.travel_x.text())
+            qsettings().setValue(profiles.TRAVEL_Y_KEY, self.travel_y.text())
+        self._set_jog_feed(machine.jog)
+        q = qsettings()
+        q.setValue(GCODE_S_MAX_KEY, int(machine.s_max))
+        q.setValue(GCODE_DYNAMIC_KEY, bool(machine.dynamic))
+        q.sync()
+        self._say_machine()
+
+    def _set_jog_feed(self, feed):
+        """The speed of the pad nearest to what this machine moves at."""
+        feeds = [self.feed_box.itemData(n) for n in range(self.feed_box.count())]
+        if feeds:
+            self.feed_box.setCurrentIndex(min(range(len(feeds)), key=lambda n: abs(feeds[n] - feed)))
+
+    def _say_machine(self):
+        """Under the combo box: what the chosen machine is and what the board says about it."""
+        machine = self.machine
+        bits = [machine.note] if machine.note else []
+        x, y = self.travel_size()
+        bits.append(tr("work area {x} × {y} mm").format(x=f"{x:g}", y=f"{y:g}") if x and y
+                    else tr("the work area is unknown"))
+        bits.append(tr("S up to {n}").format(n=machine.s_max))
+        if profiles.laser_mode(self.session.settings) is False:
+            bits.append(tr("the board says laser mode is off"))
+        self.machine_hint.setText(" · ".join(bits))
+
+    def apply_settings(self):
+        """Set the board to what the machine is; every block is shown before it goes out."""
+        if not self.connected:
+            QMessageBox.information(self, tr("Laser Controller"), tr("Connect to the board first."))
+            return
+        if self.session.running:
+            QMessageBox.information(self, tr("Laser Controller"),
+                                    tr("A job is running; a board takes new settings between jobs."))
+            return
+        lines = self.machine.settings(self.travel_size())
+        answer = QMessageBox.question(
+            self, tr("Laser Controller"),
+            tr("Set the board to this?\n\n{lines}").format(lines="\n".join(lines)),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self.send_settings(lines)
+
+    def take_from_board(self):
+        """The work area and the S maximum out of what the board answered to `$$`."""
+        if not self.session.settings:
+            QMessageBox.information(self, tr("Laser Controller"),
+                                    tr("The board has not answered yet. Disconnect and "
+                                       "connect again to ask it."))
+            return
+        x, y = profiles.travel_of(self.session.settings)
+        s_max = profiles.s_max_of(self.session.settings, self.machine.s_max)
+        if x and y:
+            self.travel_x.setText(f"{x:g}")
+            self.travel_y.setText(f"{y:g}")
+            qsettings().setValue(profiles.TRAVEL_X_KEY, self.travel_x.text())
+            qsettings().setValue(profiles.TRAVEL_Y_KEY, self.travel_y.text())
+        q = qsettings()
+        q.setValue(GCODE_S_MAX_KEY, int(s_max))
+        q.sync()
+        same = profiles.match(x, y, s_max) if x and y else None
+        i = self.machine_box.findData(same.key if same else profiles.CUSTOM.key)
+        self.machine_box.blockSignals(True)
+        self.machine_box.setCurrentIndex(max(0, i))
+        self.machine_box.blockSignals(False)
+        self.say(tr("the board: S up to {s}, work area {x} × {y} mm").format(
+            s=s_max, x=f"{x:g}" if x else "?", y=f"{y:g}" if y else "?"))
+        self._say_machine()
+
+    def _machine_rows(self):
+        """Fill the combo box again, keeping what is chosen."""
+        want = self.machine_box.currentData()
+        self.machine_box.blockSignals(True)
+        self.machine_box.clear()
+        for key, label in profiles.choices():
+            self.machine_box.addItem(label, key)
+        i = self.machine_box.findData(want)
+        self.machine_box.setCurrentIndex(max(0, i))
+        self.machine_box.blockSignals(False)
+
+    def refresh_machines(self):
+        """The presets may have changed: fill the list again and say what stands there."""
+        self._machine_rows()
+        self._say_machine()
+
+    def open_presets(self):
+        """The window that saves and brings back the settings of a board."""
+        dialog = PresetsDialog(self)
+        dialog.exec()
+        self.refresh_machines()
+        self._say_machine()
+
+    def send_settings(self, lines):
+        """Blocks to the board, one by one, written in the log as they go."""
+        for line in lines:
+            self.session.send(line)
+            self.say("> " + line)
+        self.session.send(grbl.SETTINGS)
+
+    @property
+    def connected(self) -> bool:
+        return self.worker is not None
+
+    def toggle_connection(self):
+        if self.connected:
+            self.disconnect_board()
+        else:
+            self.connect_board()
+
+    def connect_board(self):
+        """Open the port and hand the cable to the thread.
+
+        A board that was left in the alarm state answers nothing until it is unlocked,
+        and nobody knows why it got there, so opening the cable is also the moment to
+        reset the board, ask what it is set to and unlock it.
+        """
+        device = self.port_box.currentData()
+        if not device:
+            QMessageBox.information(self, tr("Laser Controller"), tr("Choose a port first."))
+            return
+        try:
+            port = laser.open_port(device, self.baud_box.currentData())
+        except laser.CableError as e:
+            QMessageBox.warning(self, tr("Laser Controller"), str(e))
+            return
+        qsettings().setValue(laser.PORT_KEY, str(device))
+        qsettings().setValue(laser.BAUD_KEY, int(self.baud_box.currentData()))
+        self.worker = laser.Worker(port, self.session, poll=laser.UPDATE_SECONDS)
+        self.worker.start()
+        self.session.realtime(grbl.RESET)
+        self.session.send(grbl.SETTINGS)
+        self.session.send(grbl.UNLOCK)
+        self.refresh()
+
+    def disconnect_board(self):
+        """Let go of the cable; a job that is running is stopped first."""
+        if self.session.running:
+            self.session.stop()
+        if self.worker is not None:
+            self.worker.shutdown()
+            self.worker = None
+        self.b_check.setChecked(False)        # check mode ends with the cable too
+        self.refresh()
+
+    def shutdown(self):
+        """The program is closing: stop the job and let go of the cable."""
+        self.timer.stop()
+        self.disconnect_board()
+
+    # ------------------------------------------------------------------ the board
+    def _board_box(self):
+        box = QGroupBox(tr("The board"))
+        form = QFormLayout(box)
+        self.state_label = QLabel("—")
+        self.mpos_label = QLabel("—")
+        self.wpos_label = QLabel("—")
+        self.feed_label = QLabel("—")
+        form.addRow(tr("State"), self.state_label)
+        form.addRow(tr("Machine"), self.mpos_label)
+        form.addRow(tr("Work"), self.wpos_label)
+        form.addRow(tr("Feed"), self.feed_label)
+        self.b_unlock = QPushButton(tr("Unlock"))
+        self.b_unlock.setToolTip(tr("$X: tell the board it may move again"))
+        self.b_home = QPushButton(tr("Home"))
+        self.b_home.setToolTip(tr("$H: find the origin of the machine"))
+        self.b_check = QPushButton(tr("Check"))
+        self.b_check.setCheckable(True)
+        self.b_check.setToolTip(tr("$C: plan the job and move nothing; again to stop"))
+        self.b_reset = QPushButton(tr("Reset"))
+        self.b_reset.setToolTip(tr("Empty what the board has queued; it lands in the alarm state"))
+        self.b_settings = QPushButton(tr("Settings"))
+        self.b_settings.setToolTip(tr("$$: ask the board what it is set to"))
+        row = QHBoxLayout()
+        for b in (self.b_unlock, self.b_home, self.b_check, self.b_reset, self.b_settings):
+            row.addWidget(b)
+        form.addRow(row)
+        self.b_unlock.clicked.connect(lambda checked=False: self.session.send(grbl.UNLOCK))
+        self.b_home.clicked.connect(lambda checked=False: self.session.send(grbl.HOME))
+        self.b_check.clicked.connect(self.toggle_check)
+        self.b_reset.clicked.connect(lambda checked=False: self.session.realtime(grbl.RESET))
+        self.b_settings.clicked.connect(lambda checked=False: self.session.send(grbl.SETTINGS))
+        return box
+
+    def toggle_check(self):
+        """Check mode is a switch on the board: the same block turns it on and off."""
+        self.session.send(grbl.CHECK)
+
+    # ------------------------------------------------------------------ the pad
+    def _jog_box(self):
+        box = QGroupBox(tr("Jog"))
+        lay = QVBoxLayout(box)
+        fields = QFormLayout()
+        self.step_box = QComboBox()
+        for mm in laser.JOG_STEPS:
+            self.step_box.addItem(f"{mm:g} mm", mm)
+        self.step_box.setToolTip(tr("How far one click of the pad moves the head"))
+        self.feed_box = QComboBox()
+        for f in laser.JOG_FEEDS:
+            self.feed_box.addItem(tr("{n} mm/min").format(n=f), f)
+        self.feed_box.setToolTip(tr("How fast the head moves while jogging"))
+        self._remember(self.step_box, laser.STEP_KEY, laser.JOG_STEPS[0])
+        self._remember(self.feed_box, laser.FEED_KEY, laser.JOG_FEEDS[0])
+        fields.addRow(tr("Step"), self.step_box)
+        fields.addRow(tr("Speed"), self.feed_box)
+        lay.addLayout(fields)
+
+        pad = QGridLayout()
+        self.pad_buttons = {}
+        for text, dx, dy, dz, said in PAD:
+            b = QPushButton(text)
+            b.setAccessibleName(said)
+            b.setToolTip(said)
+            b.clicked.connect(lambda checked=False, x=dx, y=dy, z=dz: self.jog(x, y, z))
+            r, c = PAD_PLACE[text]
+            pad.addWidget(b, r, c)
+            self.pad_buttons[text] = b
+        self.b_home_origin = QPushButton("⌂")
+        self.b_home_origin.setAccessibleName(tr("Go to the origin of the work"))
+        self.b_home_origin.setToolTip(tr("Rapid to X0 Y0 of the work"))
+        self.b_home_origin.clicked.connect(self.go_to_origin)
+        pad.addWidget(self.b_home_origin, 1, 1)
+        lay.addLayout(pad)
+        return box
+
+    def _remember(self, box, key, default):
+        """Put the saved choice of a combo box back, and keep it for the next time."""
+        try:
+            i = [box.itemData(n) for n in range(box.count())].index(float(qsettings()
+                                                                         .value(key, default)))
+        except (TypeError, ValueError):
+            i = 0
+        box.setCurrentIndex(max(0, i))
+        box.currentIndexChanged.connect(
+            lambda _n, b=box, k=key: qsettings().setValue(k, float(b.currentData())))
+
+    def jog(self, dx, dy, dz):
+        """One step of the pad: a relative move the board makes in jog mode."""
+        step = float(self.step_box.currentData() or 0.0)
+        feed = float(self.feed_box.currentData() or 0.0)
+        if self.clamp_check.isChecked() and self.session.mpos is not None:
+            x = float(self.session.mpos[0]) + dx * step
+            y = float(self.session.mpos[1]) + dy * step
+            if not self._on_machine(x, y):
+                self.say(tr("that would move the head past the end of the machine"))
+                return
+        block = grbl.jog(dx * step, dy * step, dz * step, feed)
+        if block:
+            self.session.send(block)
+
+    def _on_machine(self, x, y) -> bool:
+        """Whether a machine position is on the work area of the machine."""
+        w, h = self.travel_size()
+        return not (w and h) or (0.0 <= float(x) <= w and 0.0 <= float(y) <= h)
+
+    def go_to_origin(self):
+        self.session.send(grbl.move(x=0.0, y=0.0))
+
+    # ------------------------------------------------------------------ the work origin
+    def _origin_box(self):
+        box = QGroupBox(tr("Work origin"))
+        lay = QVBoxLayout(box)
+        row = QHBoxLayout()
+        self.b_zero_xy = QPushButton(tr("Zero here"))
+        self.b_zero_xy.setToolTip(tr("Put the origin of the work under the head"))
+        self.b_zero_x = QPushButton(tr("Zero X"))
+        self.b_zero_x.setToolTip(tr("Only the X of the work moves to the head"))
+        self.b_zero_y = QPushButton(tr("Zero Y"))
+        self.b_zero_y.setToolTip(tr("Only the Y of the work moves to the head"))
+        self.b_zero_z = QPushButton(tr("Zero Z"))
+        self.b_zero_z.setToolTip(tr("The Z of the work starts at the head"))
+        for b in (self.b_zero_xy, self.b_zero_x, self.b_zero_y, self.b_zero_z):
+            row.addWidget(b)
+        lay.addLayout(row)
+        lay.addWidget(panels.note(tr("The head is where the work starts; the job is cut "
+                                     "around that point.")))
+        self.b_zero_xy.clicked.connect(lambda checked=False: self.zero(x=True, y=True))
+        self.b_zero_x.clicked.connect(lambda checked=False: self.zero(x=True, y=False))
+        self.b_zero_y.clicked.connect(lambda checked=False: self.zero(x=False, y=True))
+        self.b_zero_z.clicked.connect(lambda checked=False: self.zero(x=False, y=False, z=True))
+        return box
+
+    def zero(self, x=True, y=True, z=False):
+        self.session.send(grbl.zero_here(x=x, y=y, z=z))
+
+    # ------------------------------------------------------------------ overrides
+    def _override_box(self):
+        box = QGroupBox(tr("Overrides"))
+        form = QFormLayout(box)
+        self.feed_override_label = QLabel("100%")
+        self.power_override_label = QLabel("100%")
+        self.rapid_override_label = QLabel("100%")
+        form.addRow(tr("Feed"), self._override_row("feed", self.feed_override_label,
+                                                   tr("feed rate")))
+        form.addRow(tr("Power"), self._override_row("power", self.power_override_label,
+                                                    tr("laser power")))
+        form.addRow(tr("Rapid"), self._rapid_row())
+        return box
+
+    def _override_row(self, kind, shown, what):
+        """The three buttons that change one override while the board is moving."""
+        row = QHBoxLayout()
+        row.addWidget(shown, 1)
+        down = QPushButton("-10%")
+        down.setAccessibleName(tr("Less {what}").format(what=what))
+        up = QPushButton("+10%")
+        up.setAccessibleName(tr("More {what}").format(what=what))
+        full = QPushButton("100%")
+        full.setAccessibleName(tr("{what} as the job says").format(what=what))
+        down.clicked.connect(lambda checked=False, k=kind: self.session.override(k, "down10"))
+        up.clicked.connect(lambda checked=False, k=kind: self.session.override(k, "up10"))
+        full.clicked.connect(lambda checked=False, k=kind: self.session.override(k, "set"))
+        for b in (down, up, full):
+            row.addWidget(b)
+        return row
+
+    def _rapid_row(self):
+        row = QHBoxLayout()
+        row.addWidget(self.rapid_override_label, 1)
+        for name, action in (("50%", "half"), ("25%", "quarter"), ("100%", "set")):
+            b = QPushButton(name)
+            b.setAccessibleName(tr("Rapid moves at {part}").format(part=name))
+            b.clicked.connect(lambda checked=False, a=action: self.session.override("rapid", a))
+            row.addWidget(b)
+        return row
+
+    # ------------------------------------------------------------------ the job
+    def _job_box(self):
+        box = QGroupBox(tr("Job"))
+        lay = QVBoxLayout(box)
+        self.job_label = panels.note(tr("There is no job to send yet."))
+        lay.addWidget(self.job_label)
+        row = QHBoxLayout()
+        self.b_load = QPushButton(tr("From the worksheet…"))
+        self.b_load.setToolTip(tr("Make G-code of the layers the laser follows"))
+        self.b_open = QPushButton(tr("Open G-code…"))
+        self.b_open.setToolTip(tr("Send a G-code file that is already there"))
+        self.b_start = QPushButton(tr("Start"))
+        self.b_start.setToolTip(tr("Send the job to the board"))
+        self.b_pause = QPushButton(tr("Pause"))
+        self.b_pause.setToolTip(tr("Feed hold: the head stops and the beam goes off"))
+        self.b_stop = QPushButton(tr("Stop"))
+        self.b_stop.setToolTip(tr("End the job and empty what the board has queued"))
+        for b in (self.b_load, self.b_open, self.b_start, self.b_pause, self.b_stop):
+            row.addWidget(b)
+        lay.addLayout(row)
+        self.bar = QProgressBar()
+        self.bar.setRange(0, 100)
+        self.bar.setTextVisible(False)
+        self.bar.setAccessibleName(tr("How far the job is"))
+        lay.addWidget(self.bar)
+        self.b_load.clicked.connect(self.load_job)
+        self.b_open.clicked.connect(self.open_job)
+        self.b_start.clicked.connect(self.start_job)
+        self.b_pause.clicked.connect(self.toggle_pause)
+        self.b_stop.clicked.connect(lambda checked=False: self.session.stop())
+        return box
+
+    def load_job(self):
+        """The worksheet as a job, with the layers and the power of the export dialog."""
+        options = self.win.sheet_export_options("gcode")
+        if not options:
+            return
+        try:
+            drawing = self.win.sheet_export_drawing(options)
+            text = gcode.grbl_laser(drawing, s_max=int(options.get("s_max") or 1000),
+                                    dynamic=bool(options.get("dynamic", True)))
+        except Exception as e:
+            QMessageBox.critical(self, tr("Laser Controller"), str(e))
+            return
+        self.set_job(grbl.job_lines(text), tr("the worksheet"))
+
+    def open_job(self):
+        """A G-code file from elsewhere, sent as it stands."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, tr("Open G-code"), "", GCODE_FILTER)
+        if not path:
+            return
+        try:
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+        except OSError as e:
+            QMessageBox.critical(self, tr("Laser Controller"), str(e))
+            return
+        self.set_job(grbl.job_lines(text), os.path.basename(path))
+
+    def set_job(self, lines, name):
+        """The blocks to send, and where they came from."""
+        self.job = [str(line) for line in lines]
+        self.job_name = str(name)
+        self.refresh()
+
+    def start_job(self):
+        """Begin the job: the thread sends it as fast as the board has room for it."""
+        if not self.job:
+            return
+        if not self.connected:
+            QMessageBox.information(self, tr("Laser Controller"),
+                                    tr("Connect to the board first."))
+            return
+        self.session.start(self.job)
+
+    def toggle_pause(self):
+        if self.session.paused:
+            self.session.resume()
+            self.b_pause.setText(tr("Pause"))
+        else:
+            self.session.pause()
+            self.b_pause.setText(tr("Resume"))
+
+    # ------------------------------------------------------------------ what it says
+    def _log_box(self):
+        box = QGroupBox(tr("What the board said"))
+        lay = QVBoxLayout(box)
+        self.log = QPlainTextEdit()
+        self.log.setReadOnly(True)
+        self.log.setAccessibleName(tr("What the board said"))
+        self.log.setMaximumHeight(110)
+        self.log.document().setMaximumBlockCount(LOG_LINES)
+        lay.addWidget(self.log)
+        return box
+
+    def say(self, text):
+        self.log.appendPlainText(str(text))
+
+    def _listen(self):
+        """Everything the session heard since the window last looked."""
+        if self.session.boot and not self._boot_said:
+            self._boot_said = True
+            self.say(self.session.boot)
+        while self._messages < len(self.session.messages):
+            self.say(self.session.messages[self._messages])
+            self._messages += 1
+        while self._errors < len(self.session.errors):
+            self.say(tr("Error: {why}").format(why=self.session.errors[self._errors]))
+            self._errors += 1
+        if self.worker is not None and self.worker.problem:
+            self.say(self.worker.problem)
+            self.disconnect_board()
+
+    # ------------------------------------------------------------------ every tick
+    def refresh(self):
+        """Show the session as it is now; the thread is the only one that changes it."""
+        s = self.session
+        self._listen()
+        self._say_machine()
+        self.state_label.setText(s.state_label or "—")
+        self.mpos_label.setText(_pos(s.mpos))
+        self.wpos_label.setText(_pos(s.wpos))
+        self.feed_label.setText(tr("{n} mm/min").format(n=int(round(s.feed_rate))))
+        self.feed_override_label.setText(f"{int(round(s.feed_override))}%")
+        self.power_override_label.setText(f"{int(round(s.power_override))}%")
+        self.rapid_override_label.setText(f"{int(round(s.rapid_override))}%")
+        self.job_label.setText(tr("{n} blocks from {where}").format(n=len(self.job),
+                                                                   where=self.job_name)
+                               if self.job else tr("There is no job to send yet."))
+        self.bar.setValue(int(round(s.fraction * 100.0)))
+        self.b_connect.setText(tr("Disconnect") if self.connected else tr("Connect"))
+        self.port_box.setEnabled(not self.connected)
+        self.b_refresh.setEnabled(not self.connected)
+        self.baud_box.setEnabled(not self.connected)
+        free = self.connected and not s.running
+        for b in list(self.pad_buttons.values()) + [self.b_home_origin, self.b_zero_xy,
+                                                    self.b_zero_x, self.b_zero_y,
+                                                    self.b_zero_z, self.b_home,
+                                                    self.b_unlock, self.b_settings]:
+            b.setEnabled(free)
+        self.b_check.setEnabled(self.connected)
+        self.b_reset.setEnabled(self.connected)
+        self.b_apply.setEnabled(self.connected)
+        self.b_take.setEnabled(bool(s.settings))
+        self.b_start.setEnabled(self.connected and not s.running and bool(self.job))
+        self.b_pause.setEnabled(self.connected and s.running)
+        self.b_stop.setEnabled(self.connected and s.running)
+
+    def closeEvent(self, e):
+        """Closing the window hides it: a job that runs must not stop because of that."""
+        e.ignore()
+        self.hide()
