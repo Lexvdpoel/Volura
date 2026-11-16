@@ -15,7 +15,25 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+import pytest  # noqa: E402
+
 from volura import laser_profiles as profiles  # noqa: E402
+
+@pytest.fixture(autouse=True)
+def no_saved_presets():
+    """A run of these tests sees no preset another test left behind."""
+    from volura.settings import qsettings
+    q = qsettings()
+    was = q.value(profiles.PRESETS_KEY)
+    q.remove(profiles.PRESETS_KEY)
+    q.sync()
+    yield
+    if was is None:
+        q.remove(profiles.PRESETS_KEY)
+    else:
+        q.setValue(profiles.PRESETS_KEY, was)
+    q.sync()
+
 
 ANSWER = [
     "Grbl 1.1h ['$' for help]",
@@ -146,3 +164,124 @@ def test_a_machine_that_matches_the_board_is_named():
     assert profiles.match(400, 415, 255) is None
     assert profiles.match(123, 45) is None
     assert profiles.match(0, 0) is None
+
+def test_the_k40_is_of_the_shop_and_small():
+    k40 = profiles.find("k40")
+    assert k40.key == "k40"
+    assert (k40.x, k40.y) == (300.0, 200.0)
+    assert k40.s_max == 255
+    assert "M2" in k40.note
+
+
+# ------------------------------------------------------------------ presets of the user
+@pytest.fixture()
+def stored():
+    """The presets of this test run, empty to start with."""
+    from volura.settings import qsettings
+    q = qsettings()
+    was = q.value(profiles.PRESETS_KEY)
+    q.remove(profiles.PRESETS_KEY)
+    q.sync()
+    yield q
+    if was is None:
+        q.remove(profiles.PRESETS_KEY)
+    else:
+        q.setValue(profiles.PRESETS_KEY, was)
+    q.sync()
+
+
+def board_answers():
+    return {"$30=255.000 (max spindle speed)", "$32=1 (laser mode)",
+            "$100=250.000 (x step pulse)", "$110=3000.000 (x max rate)",
+            "$130=300.000 (x max travel)", "$131=200.000 (y max travel)"}
+
+
+def test_a_preset_keeps_everything_the_board_answered():
+    preset = profiles.new_preset("Atelier", profiles.parse_settings(board_answers()),
+                                 300, 200, s_max=255)
+    assert set(preset["settings"]) == {"30", "32", "100", "110", "130", "131"}
+
+
+def test_a_preset_sends_its_calibration_to_nobody():
+    preset = profiles.new_preset("Atelier", profiles.parse_settings(board_answers()),
+                                 300, 200, s_max=255)
+    assert preset["send"] == [30, 32, 110, 130, 131]
+    lines = profiles.preset_lines(preset)
+    assert "$100=250" not in lines and "$130=300" in lines
+
+
+def test_a_user_who_ticks_the_calibration_gets_it_sent():
+    preset = profiles.new_preset("Atelier", profiles.parse_settings(board_answers()),
+                                 300, 200, s_max=255)
+    lines = profiles.preset_lines(preset, include=[30, 32, 100, 110, 130, 131])
+    assert "$100=250" in lines
+
+
+def test_a_preset_comes_back_out_of_the_settings(stored):
+    assert profiles.presets() == []
+    profiles.add_preset(profiles.new_preset("Atelier", {"30": 255}, 300, 200))
+    profiles.add_preset(profiles.new_preset("Zolder", {"30": 1000}, 400, 400))
+    assert [p["name"] for p in profiles.presets()] == ["Atelier", "Zolder"]
+    assert profiles.find_preset("Atelier")["x"] == 300.0
+    assert profiles.find_preset("Nooit") is None
+
+
+def test_saving_a_preset_again_replaces_it_and_keeps_the_place(stored):
+    profiles.add_preset(profiles.new_preset("Atelier", {"30": 255}, 300, 200))
+    profiles.add_preset(profiles.new_preset("Zolder", {"30": 1000}, 400, 400))
+    profiles.add_preset(profiles.new_preset("Atelier", {"30": 255}, 320, 210))
+    assert [p["name"] for p in profiles.presets()] == ["Zolder", "Atelier"]
+    assert profiles.find_preset("Atelier")["x"] == 320.0
+
+
+def test_forgetting_a_preset_leaves_the_others(stored):
+    profiles.add_preset(profiles.new_preset("Atelier", {"30": 255}, 300, 200))
+    profiles.add_preset(profiles.new_preset("Zolder", {"30": 1000}, 400, 400))
+    assert [p["name"] for p in profiles.remove_preset("Atelier")] == ["Zolder"]
+
+
+def test_presets_go_to_a_file_and_come_back(stored):
+    profiles.add_preset(profiles.new_preset("Atelier", {"30": 255, "32": 1}, 300, 200))
+    text = profiles.presets_to_json(profiles.presets())
+    assert profiles.presets_from_json(text)[0]["send"] == [30, 32]
+
+
+def test_a_file_that_is_not_presets_is_nothing_at_all():
+    for text in ("", "   ", "not json at all", "[]", "{}", '[{"x": 1}]', '{"a": 1}'):
+        assert profiles.presets_from_json(text) == [], text
+
+
+def test_a_preset_of_the_user_is_a_machine_of_the_list(stored):
+    profiles.add_preset(profiles.new_preset("Atelier", {"30": 255, "130": 300}, 300, 200))
+    machine = profiles.find(profiles.user_key("Atelier"))
+    assert machine.label == "Atelier"
+    assert (machine.x, machine.y) == (300.0, 200.0)
+    assert machine.s_max == 255
+    assert machine.settings() == ["$30=255", "$130=300"]
+    assert (profiles.user_key("Atelier"), "Atelier") in profiles.choices()
+
+
+def test_a_preset_that_was_forgotten_is_the_own_machine(stored):
+    assert profiles.find(profiles.user_key("Nooit")) is profiles.CUSTOM
+
+
+def test_the_own_machine_is_still_the_first_choice(stored):
+    profiles.add_preset(profiles.new_preset("Atelier", {"30": 255}, 300, 200))
+    keys = [key for key, _ in profiles.choices()]
+    assert keys[0] == profiles.CUSTOM.key
+    assert keys[1] == profiles.MACHINES[0].key
+    assert keys[-1] == profiles.user_key("Atelier")
+
+
+def test_a_setting_knows_what_it_is():
+    assert profiles.setting_name(110).endswith("(X)")
+    assert profiles.setting_name(101).endswith("(Y)")
+    assert profiles.setting_name(122).endswith("(Z)")
+    assert "(Z)" not in profiles.setting_name(32)
+    assert profiles.setting_name(32) == profiles.setting_group(32)
+    assert "999" in profiles.setting_name(999)
+
+
+def test_the_numbers_that_belong_to_one_machine_are_marked():
+    assert profiles.is_risky(100) and profiles.is_risky(20) and profiles.is_risky(132)
+    assert not profiles.is_risky(30) and not profiles.is_risky(32) and not profiles.is_risky(130)

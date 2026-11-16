@@ -467,7 +467,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
   with its progress - block by block with character counting, so nothing is lost.
   Presets of the known lasers - the open boards (BlackBird, Workhorse 3500) and the
   GRBL machines of the shop - fill in the work area and the highest S word, and what
-  the board answers to $$ can be taken from it, so the machine stays the truth
+  the board answers to $$ can be taken from it, so the machine stays the truth. A
+  K40 on a GRBL board is among them, and *Presets…* keeps every setting a board
+  answered under a name and gives them back to it, setting by setting
 - **Model and worksheet together**: right-click a face or sheet > *Laser / Mill* puts it on a layer of
   the worksheet; *Parts to 3D Model* places everything that is cut as a sheet with the sheet thickness
   in 3D. Every outline stays linked to its part: a linked face keeps its face when you turn the part

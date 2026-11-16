@@ -20,10 +20,12 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
-                               QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
-                               QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
-                               QVBoxLayout)
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
+                               QDialogButtonBox, QFileDialog, QFormLayout, QGridLayout,
+                               QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+                               QListWidget, QMessageBox, QPlainTextEdit, QProgressBar,
+                               QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
 from . import gcode, grbl, laser, panels
 from . import laser_profiles as profiles
@@ -56,6 +58,234 @@ def _pos(where) -> str:
     if where is None:
         return "—"
     return "  ".join(f"{name} {v:.3f}" for name, v in zip("XYZ", where))
+
+
+class PresetsDialog(QDialog):
+    """The presets of the user: everything a board answered to `$$`, saved under a name.
+
+    A board knows more about itself than the list of machines does: the feed it allows,
+    the acceleration it was built for, the travel it was measured with. So a preset keeps
+    every number the board answered, and gives them back to a board of the same machine.
+
+    The numbers of the calibration (`$100` and further) and of the limits are kept too -
+    nothing is thrown away - but they do not go to a board unless the user ticks them,
+    because those are the numbers that belong to one machine and to no other.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        self.controller = win
+        self.setWindowTitle(tr("Laser presets"))
+        self.resize(560, 420)
+        lay = QHBoxLayout(self)
+
+        left = QVBoxLayout()
+        left.addWidget(QLabel(tr("Saved presets")))
+        self.list = QListWidget()
+        self.list.setAccessibleName(tr("Saved presets"))
+        self.list.currentItemChanged.connect(self._chosen)
+        left.addWidget(self.list, 1)
+        self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText(tr("Name of this machine"))
+        self.name_edit.setToolTip(tr("Under what name the settings of the board are kept"))
+        left.addWidget(self.name_edit)
+        self.b_save = QPushButton(tr("Save"))
+        self.b_save.setToolTip(tr("Keep the settings of the board under that name"))
+        self.b_delete = QPushButton(tr("Forget"))
+        self.b_delete.setToolTip(tr("Remove the chosen preset"))
+        row = QHBoxLayout()
+        row.addWidget(self.b_save)
+        row.addWidget(self.b_delete)
+        left.addLayout(row)
+        lay.addLayout(left, 1)
+
+        right = QVBoxLayout()
+        right.addWidget(QLabel(tr("What the preset holds")))
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels([tr("Send"), tr("Setting"), tr("Value")])
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.SelectedClicked)
+        self.table.setAccessibleName(tr("What the preset holds"))
+        right.addWidget(self.table, 1)
+        self.hint = panels.note(tr("The steps per millimetre and the limits belong to one "
+                                   "machine: only send them to the machine they came from."))
+        right.addWidget(self.hint)
+        self.b_apply = QPushButton(tr("Send this preset to the board"))
+        self.b_apply.clicked.connect(self.apply_preset)
+        right.addWidget(self.b_apply)
+        self.b_export = QPushButton(tr("Export…"))
+        self.b_export.setToolTip(tr("Write the presets to a file, to give to someone else"))
+        self.b_export.clicked.connect(self.export_presets)
+        self.b_import = QPushButton(tr("Import…"))
+        self.b_import.setToolTip(tr("Read presets from a file"))
+        self.b_import.clicked.connect(self.import_presets)
+        row = QHBoxLayout()
+        row.addWidget(self.b_export)
+        row.addWidget(self.b_import)
+        row.addStretch(1)
+        right.addLayout(row)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.reject)
+        buttons.accepted.connect(self.accept)
+        right.addWidget(buttons)
+        lay.addLayout(right, 2)
+
+        self.b_save.clicked.connect(self.save_preset)
+        self.b_delete.clicked.connect(self.delete_preset)
+        self.reload(profiles.presets(), self.controller.machine_box.currentData())
+        self.b_apply.setEnabled(self.controller.connected)
+
+    # ------------------------------------------------------------------ what is on the screen
+    def reload(self, items, want=None):
+        """Fill the list again and show one of the presets."""
+        self.list.blockSignals(True)
+        self.list.clear()
+        for item in items:
+            self.list.addItem(str(item.get("name", "")))
+        self.list.blockSignals(False)
+        i = self.list.findItems(str(want or ""), Qt.MatchExactly)
+        if i:
+            self.list.setCurrentItem(i[0])
+        elif self.list.count():
+            self.list.setCurrentRow(0)
+        else:
+            self.show_settings({})
+        self._refresh_buttons()
+
+    def chosen_name(self) -> str:
+        item = self.list.currentItem()
+        return item.text() if item is not None else ""
+
+    def _chosen(self, *_):
+        preset = profiles.find_preset(self.chosen_name())
+        self.name_edit.setText(self.chosen_name())
+        self.show_settings(preset or {})
+        self._refresh_buttons()
+
+    def show_settings(self, preset: dict):
+        """One row for every setting the preset holds, with the board's own on top."""
+        settings = {int(n): float(v) for n, v in (preset.get("settings") or {}).items()}
+        for n, v in (self.controller.session.settings or {}).items():
+            settings.setdefault(int(n), float(v))
+        send = {int(n) for n in (preset.get("send") or [])}
+        self.table.setRowCount(len(settings))
+        for row, n in enumerate(sorted(settings)):
+            check = QTableWidgetItem()
+            check.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            check.setCheckState(Qt.Checked if n in send else Qt.Unchecked)
+            check.setToolTip(tr("Send this setting to the board"))
+            self.table.setItem(row, 0, check)
+            what = QTableWidgetItem(profiles.setting_name(n))
+            what.setData(Qt.UserRole, n)
+            if profiles.is_risky(n):
+                what.setToolTip(tr("This belongs to one machine: the steps per millimetre "
+                                   "and the limits"))
+            self.table.setItem(row, 1, what)
+            value = QTableWidgetItem(f"{settings[n]:g}")
+            self.table.setItem(row, 2, value)
+        self.table.setColumnWidth(0, 54)
+
+    def _rows(self) -> list:
+        """The rows of the table as ``(number, value, send)``."""
+        out = []
+        for row in range(self.table.rowCount()):
+            out.append((self._number(row), self.table.item(row, 2).text(),
+                        self.table.item(row, 0).checkState() == Qt.Checked))
+        return out
+
+    def _number(self, row) -> int:
+        """The number of the setting of a row; the row keeps it with itself."""
+        return int(self.table.item(row, 1).data(Qt.UserRole))
+
+    def _refresh_buttons(self):
+        has = bool(self.chosen_name())
+        self.b_delete.setEnabled(has)
+        self.b_apply.setEnabled(self.controller.connected and has)
+
+    # ------------------------------------------------------------------ what the buttons do
+    def save_preset(self):
+        """Keep what is on the screen under the name that stands above it."""
+        name = self.name_edit.text().strip()
+        if not name:
+            QMessageBox.information(self, tr("Laser presets"), tr("A name first."))
+            return
+        settings, send = {}, []
+        for number, value, on in self._rows():
+            try:
+                settings[str(number)] = float(str(value).replace(",", "."))
+            except ValueError:
+                QMessageBox.warning(self, tr("Laser presets"),
+                                    tr("{what} is not a number.").format(
+                                        what=profiles.setting_name(number)))
+                return
+            if on:
+                send.append(number)
+        x, y = self.controller.travel_size()
+        machine = self.controller.machine
+        profiles.add_preset(profiles.new_preset(
+            name, settings, x, y, s_max=profiles.s_max_of(
+                {int(n): v for n, v in settings.items()}, machine.s_max),
+            dynamic=machine.dynamic, jog=machine.jog, rapid=machine.rapid,
+            baud=int(self.controller.baud_box.currentData() or 115200), send=send))
+        self.controller.refresh_machines()
+        self.reload(profiles.presets(), name)
+
+    def delete_preset(self):
+        name = self.chosen_name()
+        if not name:
+            return
+        answer = QMessageBox.question(
+            self, tr("Laser presets"), tr("Forget {name}?").format(name=name),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            profiles.remove_preset(name)
+            self.controller.refresh_machines()
+            self.reload(profiles.presets())
+
+    def apply_preset(self):
+        """Every setting that is ticked, to the board."""
+        preset = profiles.find_preset(self.chosen_name())
+        if preset is None:
+            return
+        lines = profiles.preset_lines(preset, [n for n, _v, on in self._rows() if on])
+        if not lines:
+            return
+        answer = QMessageBox.question(
+            self, tr("Laser presets"),
+            tr("Set the board to this?\n\n{lines}").format(lines="\n".join(lines)),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self.controller.send_settings(lines)
+
+    def export_presets(self):
+        path, _ = QFileDialog.getSaveFileName(self, tr("Export presets"), "volura-laser.json",
+                                              "JSON (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(profiles.presets_to_json(profiles.presets()))
+        except OSError as e:
+            QMessageBox.critical(self, tr("Laser presets"), str(e))
+
+    def import_presets(self):
+        path, _ = QFileDialog.getOpenFileName(self, tr("Import presets"), "", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                items = profiles.presets_from_json(fh.read())
+        except OSError as e:
+            QMessageBox.critical(self, tr("Laser presets"), str(e))
+            return
+        for item in items:
+            profiles.add_preset(item)
+        self.controller.refresh_machines()
+        self.reload(profiles.presets())
 
 
 class LaserWindow(QDialog):
@@ -140,9 +370,13 @@ class LaserWindow(QDialog):
         self.b_take = QPushButton(tr("Take from the board"))
         self.b_take.setToolTip(tr("Read the work area and the S maximum out of what the "
                                   "board answered to $$"))
+        self.b_presets = QPushButton(tr("Presets…"))
+        self.b_presets.setToolTip(tr("Save all the settings of the board under a name, and "
+                                     "give them back to it later"))
         buttons = QHBoxLayout()
         buttons.addWidget(self.b_apply)
         buttons.addWidget(self.b_take)
+        buttons.addWidget(self.b_presets)
         self.machine_hint = panels.note("")
         form.addRow(tr("Port"), ports)
         form.addRow(tr("Speed"), self.baud_box)
@@ -157,6 +391,7 @@ class LaserWindow(QDialog):
         self.b_connect.clicked.connect(self.toggle_connection)
         self.b_apply.clicked.connect(self.apply_settings)
         self.b_take.clicked.connect(self.take_from_board)
+        self.b_presets.clicked.connect(self.open_presets)
         self.machine_box.currentIndexChanged.connect(self.choose_machine)
         self.clamp_check.toggled.connect(
             lambda on: (qsettings().setValue(profiles.CLAMP_KEY, bool(on)), qsettings().sync()))
@@ -206,6 +441,7 @@ class LaserWindow(QDialog):
 
     def _restore_machine(self):
         """The machine of the last time, with the work area as it was left."""
+        self._machine_rows()
         key = str(qsettings().value(profiles.MACHINE_KEY, "grbl32"))
         i = self.machine_box.findData(key)
         self.machine_box.blockSignals(True)
@@ -269,10 +505,7 @@ class LaserWindow(QDialog):
             QMessageBox.StandardButton.Yes)
         if answer != QMessageBox.StandardButton.Yes:
             return
-        for line in lines:
-            self.session.send(line)
-            self.say("> " + line)
-        self.session.send(grbl.SETTINGS)
+        self.send_settings(lines)
 
     def take_from_board(self):
         """The work area and the S maximum out of what the board answered to `$$`."""
@@ -299,6 +532,36 @@ class LaserWindow(QDialog):
         self.say(tr("the board: S up to {s}, work area {x} × {y} mm").format(
             s=s_max, x=f"{x:g}" if x else "?", y=f"{y:g}" if y else "?"))
         self._say_machine()
+
+    def _machine_rows(self):
+        """Fill the combo box again, keeping what is chosen."""
+        want = self.machine_box.currentData()
+        self.machine_box.blockSignals(True)
+        self.machine_box.clear()
+        for key, label in profiles.choices():
+            self.machine_box.addItem(label, key)
+        i = self.machine_box.findData(want)
+        self.machine_box.setCurrentIndex(max(0, i))
+        self.machine_box.blockSignals(False)
+
+    def refresh_machines(self):
+        """The presets may have changed: fill the list again and say what stands there."""
+        self._machine_rows()
+        self._say_machine()
+
+    def open_presets(self):
+        """The window that saves and brings back the settings of a board."""
+        dialog = PresetsDialog(self)
+        dialog.exec()
+        self.refresh_machines()
+        self._say_machine()
+
+    def send_settings(self, lines):
+        """Blocks to the board, one by one, written in the log as they go."""
+        for line in lines:
+            self.session.send(line)
+            self.say("> " + line)
+        self.session.send(grbl.SETTINGS)
 
     @property
     def connected(self) -> bool:

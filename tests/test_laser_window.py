@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
-from PySide6.QtCore import QCoreApplication  # noqa: E402
+from PySide6.QtCore import QCoreApplication, Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import grbl, laser  # noqa: E402
@@ -124,7 +124,8 @@ def machine_choices():
     q = qsettings()
     for key in (laser.PORT_KEY, laser.BAUD_KEY, laser.STEP_KEY, laser.FEED_KEY,
                 profiles.MACHINE_KEY, profiles.TRAVEL_X_KEY, profiles.TRAVEL_Y_KEY,
-                profiles.CLAMP_KEY, GCODE_S_MAX_KEY, GCODE_DYNAMIC_KEY):
+                profiles.CLAMP_KEY, profiles.PRESETS_KEY,
+                GCODE_S_MAX_KEY, GCODE_DYNAMIC_KEY):
         q.remove(key)
     q.sync()
     yield q
@@ -592,3 +593,132 @@ def test_a_board_that_is_cutting_takes_no_new_settings(dlg, slow, boxes):
 def test_the_machine_buttons_wait_for_a_cable(dlg):
     assert not dlg.b_apply.isEnabled()
     assert not dlg.b_take.isEnabled()
+
+
+# ------------------------------------------------------------------ the presets of the user
+def open_presets(dlg):
+    """The preset window of `dlg`, on screen."""
+    from volura.laser_window import PresetsDialog
+    d = PresetsDialog(dlg)
+    d.show()
+    QCoreApplication.processEvents()
+    return d
+
+
+def row_of(dialog, number):
+    """The row of the table that holds the setting with this number."""
+    for row in range(dialog.table.rowCount()):
+        if dialog.table.item(row, 1).data(Qt.UserRole) == number:
+            return row
+    return -1
+
+
+def sending(dialog, number, on):
+    """Tick or untick the setting of a row."""
+    dialog.table.item(row_of(dialog, number), 0).setCheckState(
+        Qt.Checked if on else Qt.Unchecked)
+
+
+def is_sending(dialog, number) -> bool:
+    return dialog.table.item(row_of(dialog, number), 0).checkState() == Qt.Checked
+
+
+def test_the_preset_window_shows_what_the_board_answered(dlg, monkeypatch):
+    connect(dlg, monkeypatch, AnsweringPort)
+    assert pump(dlg, lambda: dlg.b_take.isEnabled())
+    d = open_presets(dlg)
+    try:
+        assert row_of(d, 30) >= 0 and row_of(d, 130) >= 0
+        assert d.table.item(row_of(d, 30), 2).text() == "255"
+    finally:
+        d.done(0)
+
+
+def test_a_preset_keeps_everything_the_board_answered(dlg, monkeypatch):
+    connect(dlg, monkeypatch, AnsweringPort)
+    assert pump(dlg, lambda: dlg.b_take.isEnabled())
+    dlg.take_from_board()          # the work area of the board onto the screen
+    d = open_presets(dlg)
+    try:
+        d.name_edit.setText("Atelier")
+        d.b_save.click()
+        preset = profiles.find_preset("Atelier")
+        assert set(preset["settings"]) == {"30", "32", "130", "131"}
+        assert preset["x"] == 300.0 and preset["y"] == 180.0
+        assert profiles.user_key("Atelier") in [k for k, _ in profiles.choices()]
+    finally:
+        d.done(0)
+
+
+def test_a_preset_without_a_name_is_not_saved(dlg, boxes):
+    d = open_presets(dlg)
+    try:
+        d.b_save.click()
+        assert "A name first." in boxes.messages[-1]
+        assert profiles.presets() == []
+    finally:
+        d.done(0)
+
+
+def test_a_saved_preset_is_a_machine_one_can_choose(dlg, monkeypatch, machine_choices):
+    from volura.sheet_dialogs import GCODE_S_MAX_KEY
+    connect(dlg, monkeypatch, AnsweringPort)
+    assert pump(dlg, lambda: dlg.b_take.isEnabled())
+    profiles.add_preset(profiles.new_preset("Atelier", dlg.session.settings, 300, 180))
+    dlg.refresh_machines()
+    dlg.machine_box.setCurrentIndex(pick(dlg.machine_box, profiles.user_key("Atelier")))
+    assert dlg.travel_x.text() == "300" and dlg.travel_y.text() == "180"
+    assert int(machine_choices.value(GCODE_S_MAX_KEY)) == 255
+
+
+def test_the_calibration_of_a_preset_stays_in_the_preset(dlg, monkeypatch, boxes):
+    port = connect(dlg, monkeypatch, AnsweringPort)
+    assert pump(dlg, lambda: dlg.b_take.isEnabled())
+    profiles.add_preset(profiles.new_preset(
+        "Atelier", {"30": 255, "100": 250, "130": 300}, 300, 180))
+    dlg.refresh_machines()
+    d = open_presets(dlg)
+    try:
+        assert not is_sending(d, 100) and is_sending(d, 30)
+        d.b_apply.click()
+        assert pump(dlg, lambda: "$30=255" in port.text())
+        assert "$100=250" not in port.text()
+        sending(d, 100, True)
+        d.b_apply.click()
+        assert pump(dlg, lambda: "$100=250" in port.text())
+    finally:
+        d.done(0)
+
+
+def test_forgetting_a_preset_asks_first(dlg, boxes):
+    profiles.add_preset(profiles.new_preset("Atelier", {"30": 255}, 300, 200))
+    d = open_presets(dlg)
+    try:
+        boxes.answer = Buttons.No
+        d.b_delete.click()
+        assert profiles.find_preset("Atelier") is not None
+        boxes.answer = Buttons.Yes
+        d.b_delete.click()
+        assert profiles.find_preset("Atelier") is None
+        assert not d.b_delete.isEnabled()
+    finally:
+        d.done(0)
+
+
+def test_presets_go_to_a_file_and_come_back(dlg, monkeypatch, tmp_path):
+    from volura import laser_window as lw
+    profiles.add_preset(profiles.new_preset("Atelier", {"30": 255}, 300, 200))
+    path = str(tmp_path / "presets.json")
+    monkeypatch.setattr(lw.QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a, **k: (path, "")))
+    d = open_presets(dlg)
+    d.export_presets()
+    d.done(0)
+    profiles.remove_preset("Atelier")
+    assert profiles.find_preset("Atelier") is None
+    monkeypatch.setattr(lw.QFileDialog, "getOpenFileName",
+                        staticmethod(lambda *a, **k: (path, "")))
+    d = open_presets(dlg)
+    d.import_presets()
+    d.done(0)
+    assert profiles.find_preset("Atelier")["y"] == 200.0
