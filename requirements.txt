@@ -1,5 +1,6 @@
 # Volura: PySide6 (Qt), PyOpenGL (display), numpy and manifold3d (geometry),
-# truststore and certifi (checking GitHub's certificate for updates).
+# truststore and certifi (checking GitHub's certificate for updates) and pyserial
+# (Laser and Mill > Laser Controller… talks to the board over the serial port).
 # pytest and PyInstaller are included, so one `pip install -r requirements.txt`
 # is enough for the tests and a build (see .github/workflows/build.yml).
 PySide6>=6.6
@@ -8,6 +9,7 @@ numpy>=1.26
 manifold3d>=3.0
 truststore>=0.10
 certifi>=2024.2.2
+pyserial>=3.5
 pytest>=8
 pytest-xdist>=3.6
 pyinstaller>=6.10

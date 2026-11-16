@@ -77,6 +77,12 @@ class FakePort:
         """Everything the thread wrote, as one string."""
         return b"".join(self.written).decode("ascii", "replace")
 
+def hide_serial(monkeypatch):
+    """Pretend pyserial is not installed, also when another test imported it already."""
+    for name in ("serial", "serial.tools", "serial.tools.list_ports"):
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    monkeypatch.setitem(sys.modules, "serial", None)
+
 
 def wait_for(what, timeout=3.0):
     """Wait until `what()` is true; the last value of `what()` when it is not."""
@@ -92,14 +98,14 @@ def wait_for(what, timeout=3.0):
 # --------------------------------------------------------------------------  the cable
 
 def test_a_computer_without_pyserial_says_what_to_install(monkeypatch):
-    monkeypatch.setitem(sys.modules, "serial", None)
+    hide_serial(monkeypatch)
     with pytest.raises(laser.CableError) as e:
         laser.open_port("COM3")
     assert "pyserial" in str(e.value)
 
 
 def test_a_computer_without_pyserial_sees_no_ports(monkeypatch):
-    monkeypatch.setitem(sys.modules, "serial", None)
+    hide_serial(monkeypatch)
     assert laser.ports() == []
     assert laser.has_serial() is False
 
