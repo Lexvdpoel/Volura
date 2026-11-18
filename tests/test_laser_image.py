@@ -302,3 +302,82 @@ def test_resample_refuses_a_size_of_nothing():
         li.resample(photo(), 0.0, 0.1)
     with pytest.raises(ValueError):
         li.resample(photo(), 10.0, 0.0)
+
+
+# ------------------------------------------------- a picture that lies on the sheet
+DOT = 0.25                       # a power of two, so the grid of the box is exact
+
+
+def rect(w=8.0, h=8.0, at=(0.0, 0.0)):
+    """The four points of a rectangle: bottom left, bottom right, top right, top left."""
+    x, y = at
+    return [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
+
+
+def turn(pts, steps=1):
+    """The same rectangle turned a quarter of a turn `steps` times around the origin."""
+    out = [(float(x), float(y)) for x, y in pts]
+    for _ in range(steps % 4):
+        out = [(-y, x) for x, y in out]
+    return out
+
+
+def test_the_frame_of_a_picture_is_its_corner_and_its_two_sides():
+    origin, ux, uy = li.image_frame(rect(20.0, 10.0, at=(5.0, 7.0)))
+    assert np.allclose(origin, [5.0, 7.0])
+    assert np.allclose(ux, [20.0, 0.0])
+    assert np.allclose(uy, [0.0, 10.0])
+
+
+def test_a_picture_straight_on_the_sheet_gives_the_picture_back():
+    gray = photo(8, 8)
+    out, x0, y0 = li.sample_on_grid(gray, rect(8 * DOT, 8 * DOT), DOT)
+    assert out.shape == (8, 8)
+    assert np.allclose(out, gray)
+    assert (x0, y0) == (0.0, 0.0)
+
+
+def test_a_picture_on_the_sheet_is_sampled_where_it_lies():
+    gray = photo(6, 6)
+    out, x0, y0 = li.sample_on_grid(gray, rect(6 * DOT, 6 * DOT, at=(30.0, 20.0)), DOT)
+    assert np.allclose(out, gray)
+    assert (x0, y0) == pytest.approx((30.0, 20.0))
+
+
+def test_a_picture_turned_a_quarter_turn_is_turned():
+    gray = photo(6, 8)
+    pts = turn(rect(8 * DOT, 6 * DOT), 1)
+    out, x0, y0 = li.sample_on_grid(gray, pts, DOT)
+    assert out.shape == (8, 6)
+    assert np.allclose(out, np.rot90(gray, 1))
+    assert (x0, y0) == pytest.approx((-6 * DOT, 0.0))
+
+
+def test_a_mirrored_picture_is_mirrored():
+    gray = photo(6, 8)
+    pts = [(-x, y) for x, y in rect(8 * DOT, 6 * DOT)]
+    out, _x0, _y0 = li.sample_on_grid(gray, pts, DOT)
+    assert np.allclose(out, gray[:, ::-1])
+
+
+def test_the_sheet_outside_a_turned_picture_does_not_burn():
+    gray = np.ones((8, 8))
+    angle = np.radians(30.0)
+    rot = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
+    pts = (np.asarray(rect(8 * DOT, 8 * DOT)) @ rot.T).tolist()
+    out, _x0, _y0 = li.sample_on_grid(gray, pts, DOT)
+    assert out[0, 0] == out[0, -1] == out[-1, 0] == out[-1, -1] == 0.0
+    assert 0.0 < out.sum() < out.size
+    assert out.sum() == pytest.approx(64.0, rel=0.2)  # all of the picture is still burned
+
+
+def test_a_coarse_grid_picks_the_pixel_a_cell_falls_in():
+    gray = np.array([[0.0, 1.0]])
+    out, _x0, _y0 = li.sample_on_grid(gray, rect(2.0, 1.0), 1.0)
+    assert out.shape == (1, 2)
+    assert np.allclose(out, gray)
+
+
+def test_a_rectangle_of_nothing_burns_nothing():
+    out, _x0, _y0 = li.sample_on_grid(np.ones((4, 4)), rect(0.0, 0.0), DOT)
+    assert out.sum() == 0.0

@@ -15,11 +15,11 @@ import math
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen, QPolygonF, QTransform
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
                                QFormLayout, QHBoxLayout, QLabel, QMenu, QSpinBox, QWidget)
 
-from . import errors, nesting, theme
+from . import errors, nesting, sheet_image, theme
 from .sheettools import (ALIGN_LABELS, MEASURE_LABEL, PICK_PX, SHEET_TOOLS, align_deltas,
                          boolean_loops, copy_of, distribute_deltas, grid_offsets,
                          joined_paths, mirror_matrix, next_src, path_distance, path_in_rect,
@@ -27,8 +27,8 @@ from .sheettools import (ALIGN_LABELS, MEASURE_LABEL, PICK_PX, SHEET_TOOLS, alig
                          split_into_segments, translation, transformed_points)
 from .i18n import tr, trn
 from .sheetsnap import SnapEngine, grid_step
-from .vector2d import (DEFAULT_LAYERS, SHEET_SPACING, OP_LABELS, Layer, VPath, _transform_meta,
-                       default_layer_names)
+from .vector2d import (DEFAULT_LAYERS, SHEET_SPACING, OP_LABELS, Layer, VPath, _point_in_poly,
+                       _transform_meta, default_layer_names)
 
 _NO_LAYER = Layer("0", "#000000")   # for a path whose layer is gone
 
@@ -40,6 +40,7 @@ AXIS_Y = "#3fa34d"
 OUTSIDE_COLOR = "#e02020"     # paths outside the sheet or in the margin: red outline
 LINK_BADGE = 14.0            # px: the chain that marks an outline linked to a part
 LINK_BADGE_GAP = 4.0         # px: between that badge and the corner of the outline
+PICTURE_CACHE = 20           # how many decoded pictures the worksheet keeps for a repaint
 # The sheet and the grid: colours per theme in theme.py. The sheet stays light in the
 # dark theme too, so black and blue layer colours remain readable on it.
 VCB_CHARS = set("0123456789.,;-+=\"' ")
@@ -94,6 +95,7 @@ class SheetView(QWidget):
         self._space = False
         self._placed_origin = False
         self._outside_ids: set = set()     # ids of paths outside the sheet or in the margin
+        self._pictures: dict = {}          # decoded pictures, by hash of their PNG
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setAccessibleName(tr("2D worksheet"))
@@ -413,13 +415,18 @@ class SheetView(QWidget):
             return None
         return np.array([0.5 * (box[0] + box[2]), 0.5 * (box[1] + box[3])])
 
+    def _covers(self, path, p) -> bool:
+        """Is the cursor on the surface of a picture? A picture is not only its outline."""
+        return (bool(path.meta.get("image")) and path.closed and len(path.pts) >= 3
+                and _point_in_poly(np.asarray(path.pts, dtype=float), p))
+
     def path_at(self, x, y):
         """The path closest to the cursor, within a few pixels."""
         tol = PICK_PX / self.scale
         p = self.to_world_xy(x, y)
         best, dist = None, tol
         for path in self._selectable_paths():
-            d = path_distance(path, p)
+            d = 0.0 if self._covers(path, p) else path_distance(path, p)
             if d <= dist:
                 best, dist = path, d
         return best
@@ -978,6 +985,8 @@ class SheetView(QWidget):
             if not self._visible(path) or len(path.pts) < 1:
                 continue
             color = self._layer(path).color or "#000000"
+            if path.meta.get("image"):
+                self._draw_picture(p, path)      # the picture under its own outline
             if id(path) in self._outside_ids:      # outside the sheet or in the margin
                 warn = QPen(QColor(OUTSIDE_COLOR))
                 warn.setWidthF(self._width(4.2))
@@ -993,6 +1002,45 @@ class SheetView(QWidget):
             p.setPen(pen)
             p.drawPath(self._path_of(path))
         self._draw_link_badges(p)
+
+    def _picture_image(self, text) -> QImage:
+        """The PNG of a picture as a QImage, kept for the next repaint.
+
+        A repaint comes many times a second while you drag, and decoding a photograph
+        every time would be the slowest thing on the worksheet. The key is the hash of the
+        text, so a picture that was replaced decodes again and the old one falls away; when
+        too many pictures are open the lot is thrown out, which is cheap to rebuild.
+        """
+        key = hash(str(text))
+        image = self._pictures.get(key)
+        if image is None:
+            image = sheet_image.picture_image(text)
+            if len(self._pictures) >= PICTURE_CACHE:
+                self._pictures.clear()
+            self._pictures[key] = image
+        return image
+
+    def _draw_picture(self, p, path):
+        """The picture of a path, stretched over the four points of its rectangle.
+
+        The pixels keep their own order - the top left of the picture goes to the top left
+        of the rectangle - so a picture that was turned or mirrored on the worksheet is
+        drawn turned and mirrored, exactly as the laser will burn it.
+        """
+        image = self._picture_image(path.meta["image"])
+        if image.isNull() or len(path.pts) < 4:
+            return
+        w, h = float(image.width()), float(image.height())
+        here = QPolygonF([QPointF(0.0, 0.0), QPointF(w, 0.0), QPointF(w, h), QPointF(0.0, h)])
+        there = QPolygonF([self.to_screen(path.pts[3]), self.to_screen(path.pts[2]),
+                           self.to_screen(path.pts[1]), self.to_screen(path.pts[0])])
+        t = QTransform.quadToQuad(here, there)
+        if not t.isInvertible():
+            return
+        p.save()
+        p.setTransform(t, True)
+        p.drawImage(QRectF(0.0, 0.0, w, h), image)
+        p.restore()
 
     def _link_badges(self) -> list:
         """(QPointF, link) for every link whose outline lies on the worksheet.

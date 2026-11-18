@@ -27,10 +27,11 @@ from dataclasses import replace
 
 import numpy as np
 
-from . import __version__
+from . import __version__, laser_image
 from .cam import nesting_depth
 from .i18n import tr
-from .vector2d import DEFAULT_TRAVEL_SPEED, Drawing, LASER_OPS, VPath, layer_param
+from .vector2d import (DEFAULT_IMAGE_INTERVAL, DEFAULT_TRAVEL_SPEED, Drawing, LASER_OPS,
+                       VPath, layer_param)
 
 #: decimals of a coordinate; GRBL works in thousandths of a millimetre
 DECIMALS = 3
@@ -51,7 +52,9 @@ def _laser_layers(drawing) -> list:
     The visible layers with a laser operation other than "raster": the time of a raster
     fill follows from the line spacing and not from the layer, the mill layers have their
     own export and "none" is for information only. Those layers, and only those, are what
-    `vector2d.job_estimate` times.
+    `vector2d.job_estimate` times. What a raster layer carries - the pictures of the
+    worksheet - comes to `grbl_laser` separately, because a picture is pixels and not a
+    contour.
     """
     out = []
     for name, lay in drawing.layers.items():
@@ -125,10 +128,53 @@ def cut_order(paths) -> list[VPath]:
 
 
 # --------------------------------------------------------------------------
+#  the pictures on the worksheet
+# --------------------------------------------------------------------------
+
+def _image_mode(lay) -> str:
+    """How the pixels of a picture on this layer become dots; dithering by default."""
+    mode = str(dict(lay.params or {}).get("image_mode") or "dither")
+    return mode if any(key == mode for key, _label in laser_image.MODES) else "dither"
+
+
+def picture_blocks(pictures, s_max=1000, dynamic=True) -> list:
+    """The pictures of the worksheet as the blocks that engrave them.
+
+    `pictures` is what the window prepares (`volura/sheet_image.pictures_of`): grey
+    values, the four points of the rectangle and the layer, per picture. This module knows
+    no Qt and so cannot read the PNG of a path itself.
+
+    Every picture is sampled on the sheet exactly where it lies, so a picture that was
+    turned or mirrored on the worksheet engraves turned and mirrored, and only then made
+    into dots: a dot of the picture is then a dot of the beam. The line interval and the
+    mode stand on the layer, next to the power and the speed.
+    """
+    lines = []
+    for gray, pts, lay in pictures:
+        dot = float(layer_param(lay, "interval", DEFAULT_IMAGE_INTERVAL) or 0.1)
+        speed = float(layer_param(lay, "speed") or 0.0)
+        if speed <= 0.0:
+            raise ValueError(tr("The layer {layer} has no speed; set one in the layer "
+                                "settings.").format(layer=lay.name))
+        grid, x0, y0 = laser_image.sample_on_grid(gray, pts, dot)
+        if not grid.any():
+            continue
+        dots = laser_image.bitmap(grid, _image_mode(lay))
+        lines += laser_image.engrave(dots, dot=dot, origin=(x0, y0), feed=speed * 60.0,
+                                     power=float(layer_param(lay, "power") or 0.0),
+                                     s_max=s_max, dynamic=dynamic,
+                                     header=False).splitlines()
+    if lines:
+        # every picture ends with M5, so the cuts that follow ask for the beam again
+        lines += ["M4" if dynamic else "M3", "S0"]
+    return lines
+
+
+# --------------------------------------------------------------------------
 #  the text for the machine
 # --------------------------------------------------------------------------
 
-def grbl_laser(drawing, s_max=1000, dynamic=True, travel_speed=None) -> str:
+def grbl_laser(drawing, s_max=1000, dynamic=True, travel_speed=None, pictures=None) -> str:
     """The drawing as G-code for a GRBL laser: the whole text, ready to send or save.
 
     Per laser layer, in the order of the drawing, and per pass, the paths run in
@@ -144,6 +190,11 @@ def grbl_laser(drawing, s_max=1000, dynamic=True, travel_speed=None) -> str:
     `vector2d.job_estimate` counts. A worksheet without a laser layer with paths gives a
     ValueError, since G-code that does nothing is not a result.
 
+    `pictures` are the pictures that lie on the worksheet, prepared by the caller
+    (`volura/sheet_image.pictures_of`): grey values, the four points of their rectangle and
+    their layer. They are engraved **before** the cut layers, because a part that is already
+    cut loose floats under the head while the rest of the picture is still burned.
+
     A layer that is cut must say how fast: a speed of zero or less would write `F0`, which
     GRBL refuses, and no pass at all would cut nothing, so both give a ValueError that
     names the layer instead of G-code the machine throws away.
@@ -152,9 +203,11 @@ def grbl_laser(drawing, s_max=1000, dynamic=True, travel_speed=None) -> str:
     travel_speed = DEFAULT_TRAVEL_SPEED if travel_speed is None else float(travel_speed)
     layers = [(lay, [p for p in drawing.paths if p.layer == lay.name and len(p.pts) >= 2])
               for lay in _laser_layers(drawing)]
-    if not any(paths for _lay, paths in layers):
+    pictures = list(pictures or ())
+    if not pictures and not any(paths for _lay, paths in layers):
         raise ValueError(tr("There is nothing on the worksheet for the laser."))
     lines = [f"; Volura {__version__}", "G21", "G90", "M4" if dynamic else "M3", "S0"]
+    lines += picture_blocks(pictures, s_max=s_max, dynamic=dynamic)
     for lay, paths in layers:
         if not paths:
             continue

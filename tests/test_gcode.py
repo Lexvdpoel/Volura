@@ -21,7 +21,7 @@ import pytest  # noqa: E402
 
 from volura import __version__  # noqa: E402
 from volura.gcode import cut_order, grbl_laser  # noqa: E402
-from volura.vector2d import DEFAULT_TRAVEL_SPEED, Drawing, job_estimate  # noqa: E402
+from volura.vector2d import DEFAULT_TRAVEL_SPEED, Drawing, Layer, job_estimate  # noqa: E402
 
 
 # ------------------------------------------------------------------ helpers
@@ -282,3 +282,68 @@ def test_a_layer_the_beam_never_follows_may_stay_without_speed():
         d.layers[name].params["speed"] = 0.0
         d.layers[name].params["passes"] = 0
     grbl_laser(d)
+
+
+# ------------------------------------------------------------------ a picture on the worksheet
+
+def picture(gray, x=0.0, y=0.0, w=10.0, **params):
+    """The `(grey values, points, layer)` of a picture that lies on the sheet."""
+    rows, cols = gray.shape
+    lay = Layer("Raster", "#000000", "raster",
+                params={"speed": 20.0, "power": 100.0, **params})
+    return gray, rect(w, w * rows / float(cols), x, y), lay
+
+
+def test_a_picture_engraves_inside_the_box_it_lies_in():
+    text = grbl_laser(Drawing.new_sheet(),
+                      pictures=[picture(np.ones((10, 10)), x=20.0, y=30.0, w=10.0)])
+    assert cut_points(text), "a dark picture burns"
+    assert all(20.0 - 1e-3 <= x <= 30.0 + 1e-3 and 30.0 - 1e-3 <= y <= 40.0 + 1e-3
+               for x, y in cut_points(text))
+
+
+def test_a_picture_alone_is_a_job():
+    assert cut_points(grbl_laser(Drawing.new_sheet(), pictures=[picture(np.ones((4, 4)))]))
+
+
+def test_the_picture_is_engraved_before_the_contours_are_cut():
+    d = sheet("Cut", rect(10, 10, 100))
+    text = grbl_laser(d, pictures=[picture(np.ones((4, 4)))])
+    lines = text.splitlines()
+    assert min(n for n, line in enumerate(lines)
+               if line.startswith("G1")) < lines.index("; layer Cut, pass 1/1")
+
+
+def test_the_beam_is_switched_on_again_for_the_cuts():
+    """An M5 that stays switched off leaves every contour after it unburned."""
+    d = sheet("Cut", rect(10, 10, 100))
+    lines = grbl_laser(d, pictures=[picture(np.ones((4, 4)))]).splitlines()
+    cut = lines.index("; layer Cut, pass 1/1")
+    off = max(n for n, line in enumerate(lines[:cut]) if line == "M5")
+    on = max(n for n, line in enumerate(lines[:cut]) if line in ("M3", "M4"))
+    assert off < on, "the beam is switched on again after the last picture"
+
+
+def test_the_line_interval_of_the_layer_is_the_distance_between_two_rows():
+    text = grbl_laser(Drawing.new_sheet(),
+                      pictures=[picture(np.ones((4, 4)), w=4.0, interval=0.5)])
+    ys = sorted({y for _x, y in cut_points(text)})
+    assert len(ys) == 8
+    assert {round(b - a, 6) for a, b in zip(ys, ys[1:])} == {0.5}
+
+
+def test_the_mode_of_the_layer_says_what_a_pixel_becomes():
+    gray = np.full((4, 4), 0.4)
+    assert not cut_points(grbl_laser(Drawing.new_sheet(),
+                                     pictures=[picture(gray, image_mode="threshold")]))
+    assert cut_points(grbl_laser(Drawing.new_sheet(),
+                                 pictures=[picture(gray, image_mode="gray")]))
+
+
+def test_a_picture_that_is_all_white_burns_nothing():
+    assert not cut_points(grbl_laser(Drawing.new_sheet(), pictures=[picture(np.zeros((4, 4)))]))
+
+
+def test_a_picture_on_a_layer_without_speed_is_an_error_that_names_the_layer():
+    with pytest.raises(ValueError, match=r"layer Raster has no speed"):
+        grbl_laser(Drawing.new_sheet(), pictures=[picture(np.ones((4, 4)), speed=0.0)])

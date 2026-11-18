@@ -18,12 +18,13 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QColorDialog, QComb
                                QMessageBox, QPushButton, QSpinBox, QTableWidget, QTableWidgetItem,
                                QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
-from . import background, ops, theme
+from . import background, laser_image, ops, theme
 from .i18n import tr, trn
 from .icons import icon
 from .model import ROOT
-from .vector2d import (CORNER_LABELS, CORNER_STYLES, LASER_OPS, LASER_PARAMS, MILL_OPS,
-                       MILL_PARAMS, OP_LABELS, OPS, PARAM_LABELS, layer_param)
+from .vector2d import (CORNER_LABELS, CORNER_STYLES, DEFAULT_IMAGE_INTERVAL, LASER_OPS,
+                       LASER_PARAMS, MILL_OPS, MILL_PARAMS, OP_LABELS, OPS, PARAM_LABELS,
+                       layer_param)
 
 
 def note(text):
@@ -658,6 +659,8 @@ class LayerParamsDialog(QDialog):
             w.setToolTip(PARAM_LABELS.get(key, key))
             form.addRow(PARAM_LABELS.get(key, key), w)
             self.fields[key] = w
+        if self.op == "raster":
+            self._raster_rows(form)
         if not keys:
             form.addRow(note(tr("This layer is for information only and is not exported.")))
         elif self.op in MILL_OPS:
@@ -673,6 +676,29 @@ class LayerParamsDialog(QDialog):
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         form.addRow(bb)
+
+    def _raster_rows(self, form):
+        """A raster layer also says what a pixel of a picture becomes and how far the
+        rows of the engraving are apart."""
+        mode = QComboBox()
+        for key, label in laser_image.MODES:
+            mode.addItem(label, key)
+        want = str(dict(self.layer.params or {}).get("image_mode") or "dither")
+        keys = [key for key, _label in laser_image.MODES]
+        mode.setCurrentIndex(keys.index(want) if want in keys else keys.index("dither"))
+        mode.setToolTip(tr("What a pixel of the picture becomes on the sheet"))
+        form.addRow(tr("Mode"), mode)
+        self.fields["image_mode"] = mode
+        interval = QDoubleSpinBox()
+        interval.setDecimals(3)
+        interval.setRange(0.03, 1.0)
+        interval.setSingleStep(0.01)
+        interval.setSuffix(" mm")
+        interval.setValue(float(layer_param(self.layer, "interval", DEFAULT_IMAGE_INTERVAL)))
+        interval.setToolTip(tr("The distance between two rows of the engraving: how big one "
+                               "dot of the picture becomes on the sheet"))
+        form.addRow(tr("Line interval"), interval)
+        self.fields["interval"] = interval
 
     def values(self) -> dict:
         out = {}

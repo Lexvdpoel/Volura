@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QPushButton, QSpinBox, QTableWidget, QTableWidgetItem,
                                QVBoxLayout)
 
-from . import gcode, grbl, laser, laser_image, panels
+from . import gcode, grbl, laser, laser_image, panels, sheet_image
 from . import laser_profiles as profiles
 from .i18n import tr
 from .settings import qsettings
@@ -957,8 +957,9 @@ class LaserWindow(QWidget):
         box = QGroupBox(tr("Picture"))
         form = QFormLayout(box)
         self.b_image = QPushButton(tr("Picture…"))
-        self.b_image.setToolTip(tr("A photograph or a logo to engrave; its bottom left "
-                                   "comes at the origin of the work"))
+        self.b_image.setToolTip(tr("A quick test: engrave a picture at the origin of the "
+                                   "work. To place it, use File > Import > Picture… on the "
+                                   "worksheet"))
         self.mode_box = QComboBox()
         for key, label in laser_image.MODES:
             self.mode_box.addItem(label, key)
@@ -1192,7 +1193,8 @@ class LaserWindow(QWidget):
         try:
             drawing = self.win.sheet_export_drawing(options)
             text = gcode.grbl_laser(drawing, s_max=int(options.get("s_max") or 1000),
-                                    dynamic=bool(options.get("dynamic", True)))
+                                    dynamic=bool(options.get("dynamic", True)),
+                                    pictures=sheet_image.pictures_of(drawing))
         except Exception as e:
             QMessageBox.critical(self, self.windowTitle(), str(e))
             return

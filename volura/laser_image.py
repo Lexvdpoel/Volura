@@ -245,6 +245,56 @@ def _resize_axis(a, n, axis) -> np.ndarray:
     return np.moveaxis(out, 0, axis)
 
 
+def image_frame(pts):
+    """Where a picture on the worksheet lies: its bottom left corner and its two sides.
+
+    `pts` are the four points of the rectangle of the path, in the order of a picture:
+    bottom left, bottom right, top right, top left. The sides are the vectors from the
+    bottom left to its neighbours, so a rotated or a mirrored picture carries its
+    rotation and its mirror in them.
+    """
+    pts = np.asarray(pts, dtype=float).reshape(-1, 2)
+    origin = pts[0].astype(float)
+    return origin, pts[1] - pts[0], pts[3] - pts[0]
+
+
+def sample_on_grid(gray, pts, dot):
+    """The picture as it lies on the sheet, on an axis-aligned grid of `dot` millimetres.
+
+    The laser only knows rows that run along X, so a picture that was rotated on the
+    worksheet is first sampled onto a grid that does: the bounding box of the four
+    points is cut into squares of `dot`, and the centre of every square is asked what
+    pixel of the picture it shows. A square outside the picture gets 0.0 - nothing
+    burns there - which is what makes a rotated picture keep its corners clean.
+
+    Returns the grid, and the bottom left of the box it stands on. Row 0 of the grid is
+    the **top** of the box, the way :func:`engrave` wants it.
+    """
+    gray = np.atleast_2d(np.asarray(gray, dtype=float))
+    rows, cols = gray.shape
+    dot = float(dot)
+    origin, ux, uy = image_frame(pts)
+    pts = np.asarray(pts, dtype=float).reshape(-1, 2)
+    x0, x1 = float(pts[:, 0].min()), float(pts[:, 0].max())
+    y0, y1 = float(pts[:, 1].min()), float(pts[:, 1].max())
+    ncols = max(1, int(np.ceil((x1 - x0) / dot))) if dot > 0 else 1
+    nrows = max(1, int(np.ceil((y1 - y0) / dot))) if dot > 0 else 1
+    grid_x, grid_y = np.meshgrid(x0 + (np.arange(ncols) + 0.5) * dot,
+                                 y1 - (np.arange(nrows) + 0.5) * dot)
+    out = np.zeros((nrows, ncols), dtype=float)
+    det = float(ux[0] * uy[1] - uy[0] * ux[1])
+    if not rows or not cols or abs(det) < 1e-12:
+        return out, x0, y0
+    dx, dy = grid_x - origin[0], grid_y - origin[1]
+    u = (dx * uy[1] - dy * uy[0]) / det
+    v = (dy * ux[0] - dx * ux[1]) / det
+    inside = (u >= 0.0) & (u < 1.0) & (v >= 0.0) & (v < 1.0)
+    col = np.clip((u * cols).astype(int), 0, cols - 1)
+    row = np.clip(((1.0 - v) * rows).astype(int), 0, rows - 1)
+    out[inside] = gray[row[inside], col[inside]]
+    return out, x0, y0
+
+
 def bitmap(gray, mode="dither", dither_kind="floyd", halftone_size="8x8",
            threshold_level=0.5) -> np.ndarray:
     """The grey values as the machine should burn them.
@@ -326,7 +376,7 @@ def row_lines(row, y, x0=0.0, dot=0.1, feed=2000.0, power=100.0, s_max=1000,
 
 
 def engrave(dots, dot=0.1, origin=(0.0, 0.0), feed=2000.0, power=100.0, s_max=1000,
-            one_way=False, dynamic=False, passes=1, title="") -> str:
+            one_way=False, dynamic=False, passes=1, title="", header=True) -> str:
     """The dots as G-code for a GRBL laser: the whole text, ready to send or save.
 
     `dots` is what :func:`bitmap` gives: rows of values, the first row the top of the
@@ -337,6 +387,10 @@ def engrave(dots, dot=0.1, origin=(0.0, 0.0), feed=2000.0, power=100.0, s_max=10
     One row of pixels is one line of the raster, `dot` millimetres wide. `passes` burns
     the whole picture again that many times, which is how a deeper engraving is made
     without slowing the beam down to where it stalls.
+
+    `header` says whether the text stands on its own: without it the first lines (the
+    name, the millimetres, the absolute coordinates and the switching of the beam) are
+    left out, so the picture can go inside a job that already said all of that.
     """
     dots = np.atleast_2d(np.asarray(dots, dtype=float))
     rows, cols = dots.shape
@@ -345,10 +399,12 @@ def engrave(dots, dot=0.1, origin=(0.0, 0.0), feed=2000.0, power=100.0, s_max=10
     dot = float(dot)
     x0, y0 = float(origin[0]), float(origin[1])
     height = rows * dot
-    lines = [f"; Volura {__version__}"]
-    if title:
-        lines.append(f"; {title}")
-    lines += ["G21", "G90", "M4" if dynamic else "M3", "S0"]
+    lines = []
+    if header:
+        lines = [f"; Volura {__version__}"]
+        if title:
+            lines.append(f"; {title}")
+        lines += ["G21", "G90", "M4" if dynamic else "M3", "S0"]
     for _pass in range(max(1, int(passes))):
         for row in range(rows):
             y = y0 + (height - (row + 1) * dot)

@@ -21,7 +21,7 @@ import numpy as np
 from PySide6.QtWidgets import QDialog
 
 from . import (background, boxgen, cam, dxf, errors, gcode, gears, linking, nesting, ops,
-               sheet3d, sheettools, svg, vector_export)
+               sheet3d, sheet_image, sheettools, svg, vector_export)
 from .brep import Entities
 from .i18n import tr, trn
 from .icons import icon
@@ -44,6 +44,9 @@ PLACEMENT_FIT = 0.05
 #: how close the normal and the plane of a face must be to the plane a link of a face
 #: remembers for that face to be the linked one
 FACE_PLANE_TOL = 1e-3
+
+#: mm: the width a picture gets on the worksheet, unless the sheet is narrower than that
+PICTURE_WIDTH = 100.0
 
 
 class SheetMixin:
@@ -1402,6 +1405,37 @@ class SheetMixin:
         self.sheet_view.zoom_rect(sheettools.paths_bbox(paths))
         return True
 
+    # ------------------------------------------------------------ a picture on the worksheet
+    def add_picture_to_sheet(self, gray, width_mm=None, name=None):
+        """A picture on the worksheet as one undo step, on a raster layer, at the margin.
+
+        The picture goes on the first layer that rasters; a worksheet without one gets the
+        default Raster layer. It stands in the bottom left corner of the usable sheet and is
+        selected right away, so it can be moved and turned like any other outline.
+        """
+        sheet = self.doc.sheet
+        margin = float(sheet.sheet_margin or 0.0)
+        if width_mm is None:
+            width_mm = PICTURE_WIDTH
+            if sheet.sheet_w:
+                room = float(sheet.sheet_w) - 2.0 * margin
+                if room > 0.0:
+                    width_mm = min(width_mm, room)
+        layer = sheet.default_layer("raster")
+        if layer is None:
+            layer = default_layer_names("raster")[0]
+            sheet.ensure_layer(layer, "#000000", "raster")
+        path = sheet_image.picture_path(gray, width_mm, layer, at=(margin, margin))
+        self.doc.checkpoint()
+        sheet.paths.append(path)
+        self.doc.notify()
+        self.set_mode("2d")
+        self.sheet_view.set_selection([path])
+        self.hint.setText(tr("{name} on the worksheet: {width} mm wide, engraved by the "
+                             "layer {layer}").format(name=name or tr("Picture"),
+                                                     width=f"{width_mm:g}", layer=layer))
+        return path
+
     # ------------------------------------------------------------ export for laser and mill
     def sheet_layers_for_export(self) -> list:
         """The layers of the worksheet that mean something to the machine."""
@@ -1460,7 +1494,8 @@ class SheetMixin:
         if kind == "dxf":
             dxf.write_dxf(drawing, path, layers=layers)
         elif kind == "gcode":
-            text = gcode.grbl_laser(drawing, s_max=s_max, dynamic=dynamic)
+            text = gcode.grbl_laser(drawing, s_max=s_max, dynamic=dynamic,
+                                    pictures=sheet_image.pictures_of(drawing))
             with open(path, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(text)
         else:

@@ -46,6 +46,7 @@ SHEET_SPACING = 50.0
 # The settings per operation, with their default value.
 DEFAULT_KERF = 0.15        # width of the kerf of a laser, in mm
 DEFAULT_TOOL_D = 3.175     # cutter diameter (1/8 inch), in mm
+DEFAULT_IMAGE_INTERVAL = 0.1   # mm between two rows of a picture the laser engraves
 CORNER_STYLES = ("none", "dogbone", "tbone")
 CORNER_LABELS = {"none": tr("None"), "dogbone": tr("Dogbone"), "tbone": tr("T-bone")}
 LASER_PARAMS = (("power", 100.0), ("speed", 20.0), ("passes", 1), ("kerf", DEFAULT_KERF))
@@ -880,12 +881,41 @@ def path_length(pts, closed=False) -> float:
 DEFAULT_TRAVEL_SPEED = 150.0
 
 
+def picture_time(paths, lay) -> tuple:
+    """What the pictures on a raster layer cost: the millimetres of the raster and the
+    seconds, with how often the head starts.
+
+    The line interval and the speed of the layer decide, through `laser_image.estimate`.
+    The pixels themselves are not here - they travel in the meta of the path as a PNG that
+    only Qt can open - so the picture is taken as one that burns everywhere: a photograph
+    with much white in it is faster than this says.
+    """
+    from .laser_image import estimate      # here, so laser_image does not need this module
+    dot = float(layer_param(lay, "interval", DEFAULT_IMAGE_INTERVAL) or 0.1)
+    speed = float(layer_param(lay, "speed") or 0.0)
+    mm = seconds = 0.0
+    pierces = 0
+    for p in paths:
+        if "image" not in (p.meta or {}):
+            continue
+        box = _arr(p.pts)
+        rows = max(1, int(math.ceil((box[:, 1].max() - box[:, 1].min()) / dot)))
+        cols = max(1, int(math.ceil((box[:, 0].max() - box[:, 0].min()) / dot)))
+        # the millimetres do not depend on the feed, so a layer without one may estimate
+        info = estimate(np.ones((rows, cols)), dot=dot, feed=max(speed, 1.0) * 60.0)
+        mm += info["cut_mm"] + info["travel_mm"]
+        seconds += info["seconds"]
+        pierces += 1
+    return mm, pierces, (seconds if speed > 0.0 else None)
+
+
 def job_estimate(drawing, travel_speed=DEFAULT_TRAVEL_SPEED, pierce_time=0.0) -> dict:
     """What the laser takes for a drawing: per layer the length cut and the time.
 
     Only the layers the beam actually follows are timed: the visible ones with a laser
     operation other than "raster", since the time of a raster fill depends on the line
-    spacing and not on the layer. A raster layer and the mill layers (a mill has its own
+    spacing and not on the layer. A raster layer that carries pictures is timed from that
+    spacing (`picture_time`); one without them and the mill layers (a mill has its own
     export) come back by name under "skipped", without a time; a hidden layer goes to no
     machine at all and is not mentioned either.
 
@@ -907,7 +937,14 @@ def job_estimate(drawing, travel_speed=DEFAULT_TRAVEL_SPEED, pierce_time=0.0) ->
     for name, lay in drawing.layers.items():
         if not getattr(lay, "visible", True) or not any(p.layer == name for p in drawing.paths):
             continue
-        if lay.op == "raster" or lay.op in MILL_OPS:
+        if lay.op == "raster":
+            if not any(p.layer == name and "image" in (p.meta or {}) for p in drawing.paths):
+                skipped.append(name)
+                continue
+            rows[name] = {"layer": name, "length": 0.0, "pierces": 0, "passes": 1,
+                          "speed": float(layer_param(lay, "speed") or 0.0), "time": None}
+            continue
+        if lay.op in MILL_OPS:
             skipped.append(name)
             continue
         if lay.op not in LASER_OPS:
@@ -921,6 +958,10 @@ def job_estimate(drawing, travel_speed=DEFAULT_TRAVEL_SPEED, pierce_time=0.0) ->
         paths = [p for p in drawing.paths if p.layer == name and len(p.pts) >= 2]
         if not paths:
             continue
+        if drawing.layers[name].op == "raster":
+            row["length"], row["pierces"], row["time"] = picture_time(
+                paths, drawing.layers[name])
+            continue
         from .gcode import cut_order      # here, so gcode can build on this module
         for p in cut_order(paths):
             pts = _arr(p.pts)
@@ -929,7 +970,7 @@ def job_estimate(drawing, travel_speed=DEFAULT_TRAVEL_SPEED, pierce_time=0.0) ->
             row["length"] += path_length(pts, p.closed)
             row["pierces"] += 1
     for row in rows.values():
-        if row["speed"] > 0.0:
+        if row["time"] is None and row["speed"] > 0.0:
             row["time"] = (row["length"] * row["passes"] / row["speed"]
                            + row["pierces"] * row["passes"] * float(pierce_time))
     travel_time = travel / float(travel_speed) if float(travel_speed) > 0.0 else None
