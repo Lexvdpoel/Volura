@@ -456,6 +456,13 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **Dogbone corners**: for a milled part, a round relief of the cutter diameter in every
   inside corner of the material, so a square tab fits into a milled square slot; holes and
   outer contours are told apart by their nesting on the layer
+- **A picture on the worksheet**: File > Import > *Picture…* puts a photograph or a logo
+  (PNG, JPEG, BMP, GIF, WebP, TIFF) on the raster layer at the margin, where it is a normal
+  shape: move, rotate, scale, copy and undo it and the picture turns along, and the laser
+  engraves it where it lies. The settings of the raster layer choose the mode - grayscale,
+  threshold, halftone or dithering - and the line interval between two rows of the raster.
+  Pictures are engraved before the contours are cut, so a loose part never floats under
+  the beam
 - **Job estimate**: how many metres of contour each layer cuts, how often the laser pierces
   and how long the whole job takes, with the rapid moves between the paths along
 - **G-code for a GRBL laser**: File > Export > *G-code for a GRBL Laser* writes the laser

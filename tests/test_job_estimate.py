@@ -140,6 +140,47 @@ def test_a_speed_of_zero_gives_no_time_instead_of_an_error():
     assert est["total"] is None, "a total that leaves a whole layer out is no total"
 
 
+# ------------------------------------------------------------------ a picture to engrave
+
+def test_a_picture_is_timed_from_the_line_interval_and_the_speed_of_its_layer():
+    from volura.laser_image import estimate
+    d = sheet()
+    d.layers["Raster"].params["interval"] = 1.0
+    d.add_path(rect(10, 10), closed=True, layer="Raster", meta={"image": "x"})
+    row = rows_of(job_estimate(d))["Raster"]
+    assert row["pierces"] == 1 and row["passes"] == 1
+    assert row["time"] == pytest.approx(estimate(np.ones((10, 10)), dot=1.0,
+                                                 feed=20.0 * 60.0)["seconds"])
+    assert row["length"] > 0.0
+
+
+def test_a_picture_makes_the_total_of_the_job_longer():
+    d = sheet()
+    assert job_estimate(d)["total"] == pytest.approx(0.0)
+    d.layers["Raster"].params["interval"] = 1.0
+    d.add_path(rect(10, 10), closed=True, layer="Raster", meta={"image": "x"})
+    d.add_path(rect(100, 50), closed=True, layer="Cut")
+    est = job_estimate(d)
+    assert est["total"] > 15.0 + est["travel_time"]
+    assert est["skipped"] == []
+
+
+def test_a_picture_on_a_layer_without_speed_gives_no_total():
+    d = sheet()
+    d.layers["Raster"].params["speed"] = 0
+    d.add_path(rect(10, 10), closed=True, layer="Raster", meta={"image": "x"})
+    assert rows_of(job_estimate(d))["Raster"]["time"] is None
+    assert job_estimate(d)["total"] is None
+
+
+def test_a_hidden_picture_is_not_timed():
+    d = sheet()
+    d.add_path(rect(10, 10), closed=True, layer="Raster", meta={"image": "x"})
+    d.layers["Raster"].visible = False
+    est = job_estimate(d)
+    assert est["layers"] == [] and est["skipped"] == []
+
+
 # ------------------------------------------------------------------ the times in the table
 
 @pytest.mark.parametrize("seconds, text", (

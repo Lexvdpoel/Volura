@@ -2139,6 +2139,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_save_as = A(tr("Save &As"), self.file_save_as)
         self.a_save_copy = A(tr("Save a Cop&y As"), self.file_save_copy_as)
         self.a_import = A(tr("&Import…"), self.file_import)
+        self.a_import_picture = A(
+            tr("Picture…"), lambda checked=False: self.import_picture_to_sheet(), None, None,
+            False, tr("Put a photograph or a logo on the worksheet to engrave it"))
         self.a_exp_stl = A(tr("&3D Model (STL)…"), self.export_stl, None, "stl")
         self.a_exp_3mf = A(tr("&Multicolor 3MF…"), self.export_3mf, None, "3mf")
         self.a_exp_colors = A(tr("STL per &Color…"), self.export_stl_colors)
@@ -2843,7 +2846,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.update_recent_menu()
         self.fill(m, (self.a_new, self.a_open, self.recent_menu, None,
                       self.a_save, self.a_save_as, self.a_save_copy, None,
-                      self.a_import, export, None)
+                      self.a_import)
+                  + only("2d", self.a_import_picture)
+                  + (export, None)
                   + only("3d", self.a_print, self.a_slice, self.a_slice_resin) + (None, self.a_quit))
 
         # ---- Edit
@@ -3938,6 +3943,35 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                               .format(n=len(added), name=name,
                                       warnings="; ".join(drawing.warnings)))
         return added
+
+    def import_picture_to_sheet(self, path=None):
+        """File > Import > Picture… in 2D: a photograph or a logo on the worksheet.
+
+        The picture is read in the background and then placed at the margin as one undo
+        step; nothing else is asked, so the width is the one the worksheet allows and the
+        layer is the one that rasters.
+        """
+        if path is None:
+            path, _ = QFileDialog.getOpenFileName(
+                self, tr("Import Picture"), self.last_dir(),
+                tr("Pictures") + " (*.png *.jpg *.jpeg *.bmp *.gif *.webp *.tif *.tiff)")
+            if not path:
+                return None
+        from .laser_window import image_gray       # QImage reads the file: only here
+        name = os.path.basename(path)
+        text = tr("Reading {name}…").format(name=name)
+
+        def read(report):
+            report(None, text)
+            return image_gray(path)
+        job = background.run(self, read, text=text, wait=True)
+        if job.error is not None:
+            QMessageBox.critical(self, tr("Import Failed"), str(job.error))
+            return None
+        if job.was_cancelled:
+            self.hint.setText(tr("Nothing was imported."))
+            return None
+        return self.add_picture_to_sheet(job.result, name=name)
 
     def copy_to_sheet(self, options=None):
         """Edit > Copy to 2D Worksheet: the same choices as the 2D export."""
