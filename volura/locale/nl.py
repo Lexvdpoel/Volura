@@ -2766,4 +2766,7 @@ TRANSLATIONS = {
     'Other color…': 'Andere kleur…',
     'Choose any color to paint with': 'Kies een willekeurige kleur om mee te verven',
     'Color to paint with': 'Kleur om mee te verven',
+    'How far the spindle goes up and down in Z, in millimetres': 'Hoe ver de spindel in Z op en neer gaat, in millimeters',
+    'work area {x} × {y} × {z} mm': 'werkvlak {x} × {y} × {z} mm',
+    'the board: work area {x} × {y} × {z} mm': 'de controller: werkvlak {x} × {y} × {z} mm',
 }

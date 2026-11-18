@@ -107,7 +107,17 @@ def test_a_top_speed_nobody_published_is_not_sent():
 def test_a_preset_never_touches_the_calibration_or_the_limits():
     for machine in profiles.MACHINES + profiles.MILLS:
         numbers = {int(profiles.SETTING.match(line).group(1)) for line in machine.settings()}
-        assert not numbers & set(profiles.NEVER), (machine.key, numbers & set(profiles.NEVER))
+        allowed = {132} if machine.kind == profiles.CNC else set()   # the height of a mill
+        assert not numbers & (set(profiles.NEVER) - allowed), (machine.key, numbers)
+
+
+def test_a_mill_sends_its_height_and_a_laser_does_not():
+    lead = profiles.find("lead1010", profiles.CNC)
+    assert "$132=100" in lead.settings()
+    assert "$132=55" in lead.settings((700, 800, 55))
+    assert not any(line.startswith("$132") for line in lead.settings((700, 800, 0)))
+    assert not any(line.startswith("$132") for line in profiles.find("s9").settings())
+    assert profiles.height_of({132: 45.0}) == 45.0 and profiles.height_of({}) == 0.0
 
 
 def test_the_settings_go_out_in_the_order_of_the_board():

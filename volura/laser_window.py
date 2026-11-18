@@ -466,11 +466,22 @@ class LaserWindow(QWidget):
         self.travel_y = QLineEdit()
         self.travel_y.setPlaceholderText("Y")
         self.travel_y.setToolTip(tr("How far the head goes in Y, in millimetres"))
+        self.travel_z = QLineEdit()
+        self.travel_z.setPlaceholderText("Z")
+        self.travel_z.setToolTip(tr("How far the spindle goes up and down in Z, in "
+                                    "millimetres"))
         travel = QHBoxLayout()
         travel.addWidget(self.travel_x)
         travel.addWidget(QLabel("×"))
         travel.addWidget(self.travel_y)
+        times_z = QLabel("×")
+        travel.addWidget(times_z)
+        travel.addWidget(self.travel_z)
         travel.addWidget(QLabel("mm"))
+        if not self.is_cnc:
+            # a laser moves flat: the height of its head is set by hand, not by the board
+            times_z.hide()
+            self.travel_z.hide()
         self.clamp_check = QCheckBox(tr("Stay on the machine"))
         self.clamp_check.setToolTip(tr("Refuse a jog that would move the head past the "
                                        "end of the machine. Only after homing ($H) does the "
@@ -509,9 +520,11 @@ class LaserWindow(QWidget):
         self.clamp_check.toggled.connect(
             lambda on: (qsettings().setValue(self._k(profiles.CLAMP_KEY), bool(on)), qsettings().sync()))
         for edit, key in ((self.travel_x, self._k(profiles.TRAVEL_X_KEY)),
-                          (self.travel_y, self._k(profiles.TRAVEL_Y_KEY))):
+                          (self.travel_y, self._k(profiles.TRAVEL_Y_KEY)),
+                          (self.travel_z, self._k(profiles.TRAVEL_Z_KEY))):
             edit.editingFinished.connect(
-                lambda e=edit, k=key: qsettings().setValue(k, e.text().strip()))
+                lambda e=edit, k=key: (qsettings().setValue(k, e.text().strip()),
+                                       self._say_machine()))
         self._restore_machine()
         return box
 
@@ -552,6 +565,15 @@ class LaserWindow(QWidget):
                 out.append(0.0)
         return tuple(out)
 
+    def travel_height(self) -> float:
+        """How far Z goes on the screen, in millimetres; zero when nothing stands (a laser)."""
+        if not self.is_cnc:
+            return 0.0
+        try:
+            return max(0.0, float(self.travel_z.text().replace(",", ".")))
+        except ValueError:
+            return 0.0
+
     def _restore_machine(self):
         """The machine of the last time, with the work area as it was left."""
         self._machine_rows()
@@ -565,7 +587,8 @@ class LaserWindow(QWidget):
         self.machine_box.blockSignals(False)
         machine = self.machine
         for edit, key2, value in ((self.travel_x, self._k(profiles.TRAVEL_X_KEY), machine.x),
-                                  (self.travel_y, self._k(profiles.TRAVEL_Y_KEY), machine.y)):
+                                  (self.travel_y, self._k(profiles.TRAVEL_Y_KEY), machine.y),
+                                  (self.travel_z, self._k(profiles.TRAVEL_Z_KEY), machine.z)):
             was = str(qsettings().value(key2, "") or "").strip()
             edit.setText(was or (f"{float(value):g}" if float(value) > 0 else ""))
         self._say_machine()
@@ -579,6 +602,9 @@ class LaserWindow(QWidget):
             self.travel_y.setText(f"{machine.y:g}")
             qsettings().setValue(self._k(profiles.TRAVEL_X_KEY), self.travel_x.text())
             qsettings().setValue(self._k(profiles.TRAVEL_Y_KEY), self.travel_y.text())
+        if float(machine.z) > 0.0:
+            self.travel_z.setText(f"{machine.z:g}")
+            qsettings().setValue(self._k(profiles.TRAVEL_Z_KEY), self.travel_z.text())
         self._set_jog_feed(machine.jog)
         q = qsettings()
         if not self.is_cnc:
@@ -599,11 +625,15 @@ class LaserWindow(QWidget):
         machine = self.machine
         bits = [machine.note] if machine.note else []
         x, y = self.travel_size()
-        bits.append(tr("work area {x} × {y} mm").format(x=f"{x:g}", y=f"{y:g}") if x and y
-                    else tr("the work area is unknown"))
+        z = self.travel_height()
+        if x and y and z:
+            bits.append(tr("work area {x} × {y} × {z} mm").format(
+                x=f"{x:g}", y=f"{y:g}", z=f"{z:g}"))
+        elif x and y:
+            bits.append(tr("work area {x} × {y} mm").format(x=f"{x:g}", y=f"{y:g}"))
+        else:
+            bits.append(tr("the work area is unknown"))
         if self.is_cnc:
-            if float(machine.z) > 0:
-                bits.append(tr("Z {z} mm").format(z=f"{float(machine.z):g}"))
             if int(machine.axes) > 3:
                 bits.append(tr("{n} axes").format(n=int(machine.axes)))
         mode = profiles.laser_mode(self.session.settings)
@@ -626,7 +656,7 @@ class LaserWindow(QWidget):
             QMessageBox.information(self, self.windowTitle(),
                                     tr("A job is running; a board takes new settings between jobs."))
             return
-        lines = self.machine.settings(self.travel_size())
+        lines = self.machine.settings(self.travel_size() + (self.travel_height(),))
         answer = QMessageBox.question(
             self, self.windowTitle(),
             tr("Set the board to this?\n\n{lines}").format(lines="\n".join(lines)),
@@ -651,10 +681,14 @@ class LaserWindow(QWidget):
             qsettings().setValue(self._k(profiles.TRAVEL_X_KEY), self.travel_x.text())
             qsettings().setValue(self._k(profiles.TRAVEL_Y_KEY), self.travel_y.text())
         if self.is_cnc:
-            # a mill has no S maximum for the laser export
+            # a mill has no S maximum for the laser export, but a height
+            z = profiles.height_of(self.session.settings)
             self._choose_matching(x, y)
-            self.say(tr("the board: work area {x} × {y} mm").format(
-                x=f"{x:g}" if x else "?", y=f"{y:g}" if y else "?"))
+            if z:
+                self.travel_z.setText(f"{z:g}")
+                qsettings().setValue(self._k(profiles.TRAVEL_Z_KEY), self.travel_z.text())
+            self.say(tr("the board: work area {x} × {y} × {z} mm").format(
+                x=f"{x:g}" if x else "?", y=f"{y:g}" if y else "?", z=f"{z:g}" if z else "?"))
             self._say_machine()
             return
         q = qsettings()
@@ -856,7 +890,8 @@ class LaserWindow(QWidget):
         if self.clamp_check.isChecked() and self.session.mpos is not None:
             x = float(self.session.mpos[0]) + dx * step
             y = float(self.session.mpos[1]) + dy * step
-            if not self._on_machine(x, y):
+            z = float(self.session.mpos[2]) + dz * step if len(self.session.mpos) > 2 else 0.0
+            if not self._on_machine(x, y) or (dz and not self._in_height(z)):
                 self.say(tr("that would move the head past the end of the machine"))
                 return
         block = grbl.jog(dx * step, dy * step, dz * step, feed)
@@ -876,6 +911,16 @@ class LaserWindow(QWidget):
             lo, hi = (-size, 0.0) if now < -1e-6 else (0.0, size)
             return lo - 1e-6 <= float(v) <= hi + 1e-6
         return inside(x, float(here[0]), w) and inside(y, float(here[1]), h)
+
+    def _in_height(self, z) -> bool:
+        """Whether a machine Z is within the height of a mill. Z homes at the top, so a
+        board counts it from 0 down to -height; a board that counts up is believed too."""
+        size = self.travel_height()
+        if not size or self.session.mpos is None or len(self.session.mpos) < 3:
+            return True
+        now = float(self.session.mpos[2])
+        lo, hi = (-size, 0.0) if now <= 1e-6 else (0.0, size)
+        return lo - 1e-6 <= float(z) <= hi + 1e-6
 
     def go_to_origin(self):
         self.session.send(grbl.move(x=0.0, y=0.0))
