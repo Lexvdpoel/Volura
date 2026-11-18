@@ -168,7 +168,7 @@ def test_panel_marks_and_repairs_problems():
     try:
         assert not win.tray.is_open("Print Check"), "the panel is off by default"
         assert "Print Check" in win.tray.extra_titles
-        assert list(win.tray.panel_titles) == ["Entity Info", "Materials", "Outliner"]
+        assert list(win.tray.panel_titles) == ["Entity Info", "Colors", "Materials", "Outliner"]
         win.tray_actions["Print Check"].trigger()
         assert win.tray.is_open("Print Check"), "Window > Default Tray turns the panel on"
         ents = box()

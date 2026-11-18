@@ -182,7 +182,8 @@ SUBMENUS = {
                                ("Torus", None)],
     ("Tools", "Solid Tools"): [("Intersect", None), ("Union", None), ("Subtract", None),
                                ("Trim", None), ("Split", None)],
-    ("Window", "Default Tray"): [("Entity Info", None), ("Materials", None), ("Outliner", None)],
+    ("Window", "Default Tray"): [("Entity Info", None), ("Colors", None), ("Materials", None),
+                                 ("Outliner", None)],
 }
 
 # The "Getting Started" toolbar, left to right ("|" = separator). Volura replaces the
@@ -205,7 +206,7 @@ CONTEXT_FACE = ["Entity Info", "Delete", "Hide", "---", "Select >", "Area >",
 
 # The Default Tray: one dock on the right with collapsible panels in this order
 TRAY_TITLE = "Default Tray"
-TRAY_PANELS = ["Entity Info", "Materials", "Outliner"]
+TRAY_PANELS = ["Entity Info", "Colors", "Materials", "Outliner"]
 
 # The Measurements box in the status bar (bottom right)
 MEASUREMENTS_LABEL_DEFAULT = "Measurements"

@@ -156,12 +156,12 @@ def test_right_click_on_top_face_takes_over_thickness(win):
 
 def test_right_column_shows_what_belongs_to_the_mode(win):
     shown = lambda: {t for t in win.tray.sections if win.tray.is_shown(t)}  # noqa: E731
-    assert shown() == {"Entity Info", "Materials", "Outliner"}     # the check is in Print
+    assert shown() == {"Entity Info", "Colors", "Outliner"}   # filaments and check: Print
     win.set_mode("2d")
     assert shown() == {"Entity Info", "Layers"}
-    assert not win.tray_actions["Materials"].isVisible()
+    assert not win.tray_actions["Colors"].isVisible()
     win.set_mode("3d")
-    assert "Layers" not in shown() and "Materials" in shown()
+    assert "Layers" not in shown() and "Colors" in shown()
 
 
 def test_entity_info_on_the_worksheet(win):

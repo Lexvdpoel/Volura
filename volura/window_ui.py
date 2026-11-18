@@ -450,6 +450,8 @@ class UiMixin:
     def on_doc_changed(self):
         self.update_title()
         self.materials.refresh()
+        if hasattr(self, "colors_panel"):
+            self.colors_panel.refresh()
         self.outliner.refresh()
         self.info.refresh()
         if hasattr(self, "layers_panel"):
@@ -478,6 +480,8 @@ class UiMixin:
             self.doc.materials.append([tr("Color {n}").format(n=len(self.doc.materials) + 1), color])
             self.doc.notify()
         self.materials.refresh()
+        if hasattr(self, "colors_panel"):
+            self.colors_panel.refresh()
         self.view.set_status(tr("Current color: {color}").format(color=color))
 
     # ------------------------------------------------------------ edit

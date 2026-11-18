@@ -45,7 +45,7 @@ from .icons import icon
 from .model import ROOT, LOCKED_MSG, Document
 from .app_dialogs import (FILAMENT_MATERIALS, ModelInfoDialog, PageDialog,
                           PreferencesDialog, PRINTERS, ShortcutsPanel, SimplifyDialog)
-from .panels import (EntityInfoPanel, LayerParamsDialog, LayersPanel, MaterialsPanel,
+from .panels import (ColorsPanel, EntityInfoPanel, LayerParamsDialog, LayersPanel, MaterialsPanel,
                      OutlinerPanel, PrintCheckPanel, note, swatch)
 from .part_dialogs import (CableClipDialog, HingeDialog, KnobDialog, LabelPlateDialog,
                            ProjectBoxDialog, SpurGearDialog, StandoffDialog, Text3DDialog)
@@ -171,9 +171,11 @@ SHEET_TOOL_KEYS = {"select": "Space", "move": "M", "rotate": "Q", "scale": "S", 
 # The panels of the Default Tray. The Tray knows a panel by its translated title (that is
 # what it shows); these English names are the stable keys in the code, used through tr().
 PANEL_MATERIALS = tr_noop("Materials")
+PANEL_COLORS = tr_noop("Colors")
 PANEL_OUTLINER = tr_noop("Outliner")
 PANEL_LAYERS = tr_noop("Layers")
-PANELS = (PANEL_INFO, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT_CHECK, PANEL_LAYERS)
+PANELS = (PANEL_INFO, PANEL_COLORS, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT_CHECK,
+          PANEL_LAYERS)
 
 
 class Settings:
@@ -1962,12 +1964,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
     #: see PANELS): the tray only shows what belongs to the tab that is open. The print
     #: check is for the Print tab, the filaments for the model, the layers for the sheet.
     WORKSPACE_PANELS = {
-        ("design", "3d"): (PANEL_INFO, PANEL_MATERIALS, PANEL_OUTLINER),
+        ("design", "3d"): (PANEL_INFO, PANEL_COLORS, PANEL_OUTLINER),
         ("design", "2d"): (PANEL_INFO, PANEL_LAYERS),
         ("print", "3d"): (PANEL_INFO, PANEL_MATERIALS, PANEL_PRINT_CHECK),
         ("laser", "2d"): (PANEL_INFO, PANEL_LAYERS),
         ("cnc", "2d"): (PANEL_INFO, PANEL_LAYERS),
-        ("cnc", "3d"): (PANEL_INFO, PANEL_OUTLINER),
+        ("cnc", "3d"): (PANEL_INFO, PANEL_COLORS, PANEL_OUTLINER),
     }
 
     def tray_panels(self, workspace=None, mode=None) -> tuple:
@@ -3513,13 +3515,16 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
     def _build_docks(self):
         """One dock on the right: the Default Tray with the collapsible panels."""
         self.materials = MaterialsPanel(self)
+        self.colors_panel = ColorsPanel(self)
         self.info = EntityInfoPanel(self)
         self.outliner = OutlinerPanel(self)
         self.print_panel = PrintCheckPanel(self)
         self.layers_panel = LayersPanel(self)
-        self.tray = Tray(((tr(PANEL_INFO), self.info), (tr(PANEL_MATERIALS), self.materials),
+        self.tray = Tray(((tr(PANEL_INFO), self.info), (tr(PANEL_COLORS), self.colors_panel),
+                          (tr(PANEL_MATERIALS), self.materials),
                           (tr(PANEL_OUTLINER), self.outliner)),
-                         open_panels=(tr(PANEL_INFO), tr(PANEL_MATERIALS)), parent=self,
+                         open_panels=(tr(PANEL_INFO), tr(PANEL_COLORS), tr(PANEL_MATERIALS)),
+                         parent=self,
                          extra_panels=((tr(PANEL_PRINT_CHECK), self.print_panel),
                                        (tr(PANEL_LAYERS), self.layers_panel)))
         self.addDockWidget(Qt.RightDockWidgetArea, self.tray)

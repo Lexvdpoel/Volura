@@ -979,15 +979,19 @@ def _shown_panels(win):
 
 
 def test_the_tray_only_shows_what_belongs_to_the_tab(win):
-    from volura.app import PANEL_LAYERS, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT_CHECK
+    from volura.app import (PANEL_COLORS, PANEL_LAYERS, PANEL_MATERIALS, PANEL_OUTLINER,
+                            PANEL_PRINT_CHECK)
     from volura.i18n import tr
     try:
         win.set_workspace("design")
         win.set_mode("3d")
         assert tr(PANEL_PRINT_CHECK) not in _shown_panels(win)
-        assert tr(PANEL_MATERIALS) in _shown_panels(win)
+        assert tr(PANEL_MATERIALS) not in _shown_panels(win)     # filaments: only in Print
+        assert tr(PANEL_COLORS) in _shown_panels(win)
         win.set_workspace("print")
         assert tr(PANEL_PRINT_CHECK) in _shown_panels(win)
+        assert tr(PANEL_MATERIALS) in _shown_panels(win)
+        assert tr(PANEL_COLORS) not in _shown_panels(win)
         assert tr(PANEL_OUTLINER) not in _shown_panels(win)
         win.set_workspace("cnc")
         assert tr(PANEL_MATERIALS) not in _shown_panels(win)
@@ -1041,3 +1045,17 @@ def test_the_left_column_and_the_menu_follow_the_tab(win):
     finally:
         win._laser_controller.shutdown()
         win._cnc_controller.shutdown()
+
+
+def test_a_color_of_the_design_tab_paints_and_becomes_a_filament(win):
+    panel = win.colors_panel
+    colors = [panel.list.item(i).data(Qt.UserRole) for i in range(panel.list.count())]
+    assert len(colors) >= 24 and len({c.lower() for c in colors}) == len(colors)
+    new = next(i for i in range(panel.list.count())
+               if not any(c.lower() == panel.list.item(i).data(Qt.UserRole).lower()
+                          for _n, c in win.doc.materials))
+    color = panel.list.item(new).data(Qt.UserRole)
+    panel.pick(panel.list.item(new))
+    assert win.settings.current_color == color
+    assert win.view.tool.name == "paint"
+    assert any(c.lower() == color.lower() for _n, c in win.doc.materials)

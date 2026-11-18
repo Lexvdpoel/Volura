@@ -47,6 +47,94 @@ def swatch(color, size=16):
 
 # ---------------------------------------------------------------- panels
 
+#: the colors to paint with in the Design tab, from light to dark per hue
+PALETTE = (
+    (tr("White"), "#f2f2f2"), (tr("Light gray"), "#c8c8c8"), (tr("Gray"), "#9a9a9a"),
+    (tr("Dark gray"), "#5a5a5a"), (tr("Black"), "#2b2b2b"), (tr("Beige"), "#e8d8b0"),
+    (tr("Brown"), "#8a5a33"), (tr("Pink"), "#f2a0c0"), (tr("Red"), "#d23b3b"),
+    (tr("Dark red"), "#8e1f1f"), (tr("Orange"), "#f08a24"), (tr("Gold"), "#d4a52a"),
+    (tr("Yellow"), "#f2c230"), (tr("Lime"), "#a6d53a"), (tr("Green"), "#3fa34d"),
+    (tr("Dark green"), "#1f6b33"), (tr("Teal"), "#1f9e9a"), (tr("Cyan"), "#3cc4e0"),
+    (tr("Light blue"), "#8fbfee"), (tr("Blue"), "#2f6fd6"), (tr("Navy"), "#1e3370"),
+    (tr("Purple"), "#7a4bc2"), (tr("Magenta"), "#c43cb4"), (tr("Olive"), "#7d7a2e"),
+)
+
+
+class ColorsPanel(QWidget):
+    """Tray panel "Colors" in the Design tab: the colors to paint the model with.
+
+    One click on a color picks it and takes the paint bucket, as in SketchUp. The colors
+    the model already uses come first, then a fixed palette, and *Other color…* opens the
+    color dialog for anything else. Which color becomes which filament is a matter of the
+    Print tab, so this panel does not number them; a color that is used ends up in the
+    filaments there by itself (`select_color`).
+    """
+
+    SIZE = 26
+
+    def __init__(self, win):
+        super().__init__()
+        self.win = win
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(4, 4, 4, 4)
+        head = QLabel(tr("Click a color, then a face or a part to paint it:"))
+        head.setWordWrap(True)
+        lay.addWidget(head)
+        self.list = QListWidget()
+        self.list.setAccessibleName(tr("Colors"))
+        self.list.setViewMode(QListWidget.IconMode)
+        self.list.setMovement(QListWidget.Static)
+        self.list.setResizeMode(QListWidget.Adjust)
+        self.list.setWrapping(True)
+        self.list.setSpacing(2)
+        self.list.setIconSize(QSize(self.SIZE, self.SIZE))
+        self.list.setGridSize(QSize(self.SIZE + 8, self.SIZE + 8))
+        self.list.setMinimumHeight(4 * (self.SIZE + 8) + 8)
+        self.list.itemClicked.connect(self.pick)
+        lay.addWidget(self.list)
+        self.b_other = QPushButton(tr("Other color…"))
+        self.b_other.setToolTip(tr("Choose any color to paint with"))
+        self.b_other.clicked.connect(self.other)
+        lay.addWidget(self.b_other)
+        self.refresh()
+
+    def colors(self) -> list:
+        """(name, color) of the swatches: the colors of the model first, then the palette,
+        every color once."""
+        out, seen = [], set()
+        for name, color in list(self.win.doc.materials) + list(PALETTE):
+            key = str(color).lower()
+            if key not in seen:
+                seen.add(key)
+                out.append((name, color))
+        return out
+
+    def refresh(self):
+        cur = str(self.win.settings.current_color).lower()
+        self.list.clear()
+        for name, color in self.colors():
+            it = QListWidgetItem(swatch(color, self.SIZE), "")
+            it.setData(Qt.UserRole, color)
+            it.setToolTip(f"{name} ({color})")
+            it.setData(Qt.AccessibleTextRole, name)
+            self.list.addItem(it)
+            if str(color).lower() == cur:
+                self.list.setCurrentItem(it)
+
+    def pick(self, it):
+        self.win.select_color(it.data(Qt.UserRole))
+        self.win.set_tool("paint")
+
+    def other(self):
+        c = QColorDialog.getColor(QColor(self.win.settings.current_color), self,
+                                  tr("Color to paint with"))
+        if not c.isValid():
+            return
+        self.win.select_color(c.name())
+        self.win.set_tool("paint")
+        self.refresh()
+
+
 class MaterialsPanel(QWidget):
     def __init__(self, win):
         super().__init__()
