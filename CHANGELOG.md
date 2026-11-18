@@ -6,6 +6,9 @@ What changed in each version of Volura. Downloads are on the
 ## Unreleased
 
 ### New
+- **Rotary axes** in the CNC controller: a board of grblHAL or FluidNC with an A or B axis
+  shows its position in degrees, jogs it with a step of its own and zeroes it; the rows
+  appear when the preset or the board has those axes.
 - **View cube** in the top right corner of every 3D view: click a face, edge or corner to
   look from there, drag it to orbit, the house goes to the home view; right-click to set
   the home view or switch between perspective and orthographic. View > View Cube hides it.
