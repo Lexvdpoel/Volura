@@ -26,7 +26,8 @@ from PySide6.QtCore import QTimer
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
-                               QDialogButtonBox, QFileDialog, QFormLayout, QGridLayout,
+                               QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFormLayout,
+                               QFrame, QGridLayout, QScrollArea, QWidget,
                                QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                                QListWidget, QMessageBox, QPlainTextEdit, QProgressBar,
                                QPushButton, QSpinBox, QTableWidget, QTableWidgetItem,
@@ -41,6 +42,32 @@ from .sheet_dialogs import (GCODE_DYNAMIC_KEY, GCODE_S_MAX_KEY, fmt_time,
 
 #: how many lines of what the board said the window keeps
 LOG_LINES = 400
+
+#: how many ticks of the window the blocks of connecting wait for the board to say who it
+#: is: an Arduino restarts when its port opens and hears nothing for a second or two
+BOOT_TICKS = int(round(3.0 / laser.UPDATE_SECONDS))
+
+#: how wide the last picture was engraved, mm
+IMAGE_WIDTH_KEY = "laser/image_width"
+
+
+def _grid(buttons, columns=3) -> QGridLayout:
+    """Buttons in rows of `columns`: the controller stands in a narrow column next to the
+    view, and one long row of buttons would be cut off at its edge."""
+    grid = QGridLayout()
+    grid.setHorizontalSpacing(4)
+    grid.setVerticalSpacing(4)
+    for i, b in enumerate(buttons):
+        grid.addWidget(b, i // columns, i % columns)
+    return grid
+
+
+def _float(value, default) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
 
 #: what the window can send: the same kinds as the export of the worksheet
 GCODE_FILTER = "G-code (*.gcode *.nc *.gc *.tap);;All files (*)"
@@ -139,7 +166,9 @@ class PresetsDialog(QDialog):
 
         self.b_save.clicked.connect(self.save_preset)
         self.b_delete.clicked.connect(self.delete_preset)
-        self.reload(profiles.presets(), self.controller.machine_box.currentData())
+        key = str(self.controller.machine_box.currentData() or "")
+        self.reload(profiles.presets(), key[len(profiles.USER_PREFIX):]
+                    if profiles.is_user_key(key) else None)
         self.b_apply.setEnabled(self.controller.connected)
 
     # ------------------------------------------------------------------ what is on the screen
@@ -324,38 +353,65 @@ def image_gray(path, max_pixels=4000000):
 
 
 
-class LaserWindow(QDialog):
-    """The window that drives a GRBL laser: cable, board, jog, origin, overrides, job."""
+class LaserWindow(QWidget):
+    """The machine on the cable, next to the view: cable, board, jog, origin, job.
 
-    def __init__(self, win):
+    It stands in the Laser and in the CNC tab under the viewer (`volura/workspaces.py`),
+    one of each. `kind` says which: a laser has the presets of the known lasers and the
+    engraving of a picture; a mill has neither, and its power is the spindle. Both keep
+    their own port and settings, so a laser and a mill can hang on the same computer.
+    """
+
+    def __init__(self, win, kind="laser"):
         super().__init__(win)
         self.win = win
-        self.setWindowTitle(tr("Laser Controller"))
+        self.kind = "cnc" if str(kind) == "cnc" else "laser"
+        self.setWindowTitle(tr("CNC Controller") if self.is_cnc else tr("Laser Controller"))
         self.session = laser.Session()
         self.worker = None
         self.job: list[str] = []
         self.job_name = ""
         self.image = None
         self.image_name = ""
+        self._dots = (None, None)       # (what they were made of, the dots of the picture)
         self._boot_said = False
+        self._boot_wait = 0             # ticks left before the held blocks go anyway
         self._messages = 0
         self._errors = 0
 
-        lay = QVBoxLayout(self)
-        columns = QHBoxLayout()
-        left = QVBoxLayout()
-        left.addWidget(self._connection_box())
-        left.addWidget(self._board_box())
-        left.addWidget(self._jog_box())
-        right = QVBoxLayout()
-        right.addWidget(self._origin_box())
-        right.addWidget(self._override_box())
-        right.addWidget(self._image_box())
-        right.addWidget(self._job_box())
-        columns.addLayout(left)
-        columns.addLayout(right)
-        lay.addLayout(columns)
-        lay.addWidget(self._log_box(), 1)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setAccessibleName(self.windowTitle())
+        inner = QWidget()
+        lay = QVBoxLayout(inner)
+        lay.setContentsMargins(6, 6, 6, 6)
+        title = QLabel(f"<b>{self.windowTitle()}</b>")
+        lay.addWidget(title)
+        lay.addWidget(self._connection_box())
+        lay.addWidget(self._board_box())
+        lay.addWidget(self._jog_box())
+        lay.addWidget(self._origin_box())
+        lay.addWidget(self._job_box())
+        lay.addWidget(self._override_box())
+        image = self._image_box()
+        lay.addWidget(image)
+        lay.addWidget(self._log_box())
+        lay.addStretch(1)
+        scroll.setWidget(inner)
+        outer.addWidget(scroll)
+        if self.is_cnc:
+            # a mill: no lasers in the list, no picture, and the job comes from a file
+            # until Volura makes the toolpaths of a mill itself
+            image.hide()
+            for w in (self.machine_box, self.b_apply, self.b_presets, self.b_load):
+                w.hide()
+            label = self._connection_form.labelForField(self.machine_box)
+            if label is not None:
+                label.hide()
 
         self.timer = QTimer(self)
         self.timer.setInterval(int(laser.UPDATE_SECONDS * 1000))
@@ -364,10 +420,20 @@ class LaserWindow(QDialog):
         self.refresh_ports()
         self.refresh()
 
+    @property
+    def is_cnc(self) -> bool:
+        return self.kind == "cnc"
+
+    def _k(self, key) -> str:
+        """The settings key of this machine: a mill keeps its own beside the laser."""
+        key = str(key)
+        return "cnc/" + key.split("/", 1)[-1] if self.is_cnc else key
+
     # ------------------------------------------------------------------ the cable
     def _connection_box(self):
         box = QGroupBox(tr("Connection"))
         form = QFormLayout(box)
+        self._connection_form = form
         self.port_box = QComboBox()
         self.port_box.setToolTip(tr("The serial port the board hangs on"))
         self.b_refresh = QPushButton(tr("Refresh"))
@@ -379,6 +445,11 @@ class LaserWindow(QDialog):
         for rate in grbl.BAUD_RATES:
             self.baud_box.addItem(str(rate), rate)
         self.baud_box.setToolTip(tr("How fast the board talks; 115200 is the default of GRBL 1.1"))
+        try:
+            saved = int(qsettings().value(self._k(laser.BAUD_KEY), grbl.DEFAULT_BAUD))
+        except (TypeError, ValueError):
+            saved = grbl.DEFAULT_BAUD
+        self.baud_box.setCurrentIndex(max(0, self.baud_box.findData(saved)))
         self.b_connect = QPushButton(tr("Connect"))
         self.b_connect.setToolTip(tr("Open the port and ask the board who it is"))
         self.port_hint = panels.note("")
@@ -400,8 +471,9 @@ class LaserWindow(QDialog):
         travel.addWidget(QLabel("mm"))
         self.clamp_check = QCheckBox(tr("Stay on the machine"))
         self.clamp_check.setToolTip(tr("Refuse a jog that would move the head past the "
-                                       "end of the machine"))
-        self.clamp_check.setChecked(qsettings().value(profiles.CLAMP_KEY, True)
+                                       "end of the machine. Only after homing ($H) does the "
+                                       "board know where its ends are."))
+        self.clamp_check.setChecked(qsettings().value(self._k(profiles.CLAMP_KEY), False)
                                     in (True, "true", "1", 1))
         self.b_apply = QPushButton(tr("Settings to the board…"))
         self.b_apply.setToolTip(tr("Set laser mode, the S maximum and the travel of the "
@@ -412,10 +484,7 @@ class LaserWindow(QDialog):
         self.b_presets = QPushButton(tr("Presets…"))
         self.b_presets.setToolTip(tr("Save all the settings of the board under a name, and "
                                      "give them back to it later"))
-        buttons = QHBoxLayout()
-        buttons.addWidget(self.b_apply)
-        buttons.addWidget(self.b_take)
-        buttons.addWidget(self.b_presets)
+        buttons = _grid((self.b_apply, self.b_take, self.b_presets), 2)
         self.machine_hint = panels.note("")
         form.addRow(tr("Port"), ports)
         form.addRow(tr("Speed"), self.baud_box)
@@ -433,9 +502,9 @@ class LaserWindow(QDialog):
         self.b_presets.clicked.connect(self.open_presets)
         self.machine_box.currentIndexChanged.connect(self.choose_machine)
         self.clamp_check.toggled.connect(
-            lambda on: (qsettings().setValue(profiles.CLAMP_KEY, bool(on)), qsettings().sync()))
-        for edit, key in ((self.travel_x, profiles.TRAVEL_X_KEY),
-                          (self.travel_y, profiles.TRAVEL_Y_KEY)):
+            lambda on: (qsettings().setValue(self._k(profiles.CLAMP_KEY), bool(on)), qsettings().sync()))
+        for edit, key in ((self.travel_x, self._k(profiles.TRAVEL_X_KEY)),
+                          (self.travel_y, self._k(profiles.TRAVEL_Y_KEY))):
             edit.editingFinished.connect(
                 lambda e=edit, k=key: qsettings().setValue(k, e.text().strip()))
         self._restore_machine()
@@ -444,7 +513,7 @@ class LaserWindow(QDialog):
     def refresh_ports(self):
         """Fill the list of ports again, keeping the one that was chosen before."""
         want = str(self.port_box.currentData()
-                   or qsettings().value(laser.PORT_KEY, "") or "")
+                   or qsettings().value(self._k(laser.PORT_KEY), "") or "")
         self.port_box.clear()
         for device, description in laser.ports():
             self.port_box.addItem(f"{device}  {description}", device)
@@ -481,14 +550,14 @@ class LaserWindow(QDialog):
     def _restore_machine(self):
         """The machine of the last time, with the work area as it was left."""
         self._machine_rows()
-        key = str(qsettings().value(profiles.MACHINE_KEY, "grbl32"))
+        key = str(qsettings().value(self._k(profiles.MACHINE_KEY), "grbl32"))
         i = self.machine_box.findData(key)
         self.machine_box.blockSignals(True)
         self.machine_box.setCurrentIndex(max(0, i))
         self.machine_box.blockSignals(False)
         machine = profiles.find(key)
-        for edit, key2, value in ((self.travel_x, profiles.TRAVEL_X_KEY, machine.x),
-                                  (self.travel_y, profiles.TRAVEL_Y_KEY, machine.y)):
+        for edit, key2, value in ((self.travel_x, self._k(profiles.TRAVEL_X_KEY), machine.x),
+                                  (self.travel_y, self._k(profiles.TRAVEL_Y_KEY), machine.y)):
             was = str(qsettings().value(key2, "") or "").strip()
             edit.setText(was or (f"{float(value):g}" if float(value) > 0 else ""))
         self._say_machine()
@@ -496,12 +565,12 @@ class LaserWindow(QDialog):
     def choose_machine(self, *_):
         """A preset is chosen: its work area onto the screen and its S word into the G-code."""
         machine = self.machine
-        qsettings().setValue(profiles.MACHINE_KEY, machine.key)
+        qsettings().setValue(self._k(profiles.MACHINE_KEY), machine.key)
         if machine.known:
             self.travel_x.setText(f"{machine.x:g}")
             self.travel_y.setText(f"{machine.y:g}")
-            qsettings().setValue(profiles.TRAVEL_X_KEY, self.travel_x.text())
-            qsettings().setValue(profiles.TRAVEL_Y_KEY, self.travel_y.text())
+            qsettings().setValue(self._k(profiles.TRAVEL_X_KEY), self.travel_x.text())
+            qsettings().setValue(self._k(profiles.TRAVEL_Y_KEY), self.travel_y.text())
         self._set_jog_feed(machine.jog)
         q = qsettings()
         q.setValue(GCODE_S_MAX_KEY, int(machine.s_max))
@@ -518,27 +587,33 @@ class LaserWindow(QDialog):
     def _say_machine(self):
         """Under the combo box: what the chosen machine is and what the board says about it."""
         machine = self.machine
-        bits = [machine.note] if machine.note else []
+        bits = [machine.note] if machine.note and not self.is_cnc else []
         x, y = self.travel_size()
         bits.append(tr("work area {x} × {y} mm").format(x=f"{x:g}", y=f"{y:g}") if x and y
                     else tr("the work area is unknown"))
-        bits.append(tr("S up to {n}").format(n=machine.s_max))
-        if profiles.laser_mode(self.session.settings) is False:
-            bits.append(tr("the board says laser mode is off"))
+        mode = profiles.laser_mode(self.session.settings)
+        if self.is_cnc:
+            if mode is True:
+                # a spindle in laser mode does not stop for a corner and G0 switches it off
+                bits.append(tr("the board says laser mode is on; a spindle wants $32=0"))
+        else:
+            bits.append(tr("S up to {n}").format(n=machine.s_max))
+            if mode is False:
+                bits.append(tr("the board says laser mode is off"))
         self.machine_hint.setText(" · ".join(bits))
 
     def apply_settings(self):
         """Set the board to what the machine is; every block is shown before it goes out."""
         if not self.connected:
-            QMessageBox.information(self, tr("Laser Controller"), tr("Connect to the board first."))
+            QMessageBox.information(self, self.windowTitle(), tr("Connect to the board first."))
             return
         if self.session.running:
-            QMessageBox.information(self, tr("Laser Controller"),
+            QMessageBox.information(self, self.windowTitle(),
                                     tr("A job is running; a board takes new settings between jobs."))
             return
         lines = self.machine.settings(self.travel_size())
         answer = QMessageBox.question(
-            self, tr("Laser Controller"),
+            self, self.windowTitle(),
             tr("Set the board to this?\n\n{lines}").format(lines="\n".join(lines)),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes)
@@ -549,7 +624,7 @@ class LaserWindow(QDialog):
     def take_from_board(self):
         """The work area and the S maximum out of what the board answered to `$$`."""
         if not self.session.settings:
-            QMessageBox.information(self, tr("Laser Controller"),
+            QMessageBox.information(self, self.windowTitle(),
                                     tr("The board has not answered yet. Disconnect and "
                                        "connect again to ask it."))
             return
@@ -558,8 +633,14 @@ class LaserWindow(QDialog):
         if x and y:
             self.travel_x.setText(f"{x:g}")
             self.travel_y.setText(f"{y:g}")
-            qsettings().setValue(profiles.TRAVEL_X_KEY, self.travel_x.text())
-            qsettings().setValue(profiles.TRAVEL_Y_KEY, self.travel_y.text())
+            qsettings().setValue(self._k(profiles.TRAVEL_X_KEY), self.travel_x.text())
+            qsettings().setValue(self._k(profiles.TRAVEL_Y_KEY), self.travel_y.text())
+        if self.is_cnc:
+            # a mill has no S maximum for the laser export and no laser in the list
+            self.say(tr("the board: work area {x} × {y} mm").format(
+                x=f"{x:g}" if x else "?", y=f"{y:g}" if y else "?"))
+            self._say_machine()
+            return
         q = qsettings()
         q.setValue(GCODE_S_MAX_KEY, int(s_max))
         q.sync()
@@ -597,6 +678,10 @@ class LaserWindow(QDialog):
 
     def send_settings(self, lines):
         """Blocks to the board, one by one, written in the log as they go."""
+        if self.session.running:
+            QMessageBox.information(self, self.windowTitle(),
+                                    tr("A job is running; a board takes new settings between jobs."))
+            return
         for line in lines:
             self.session.send(line)
             self.say("> " + line)
@@ -621,20 +706,21 @@ class LaserWindow(QDialog):
         """
         device = self.port_box.currentData()
         if not device:
-            QMessageBox.information(self, tr("Laser Controller"), tr("Choose a port first."))
+            QMessageBox.information(self, self.windowTitle(), tr("Choose a port first."))
             return
         try:
             port = laser.open_port(device, self.baud_box.currentData())
         except laser.CableError as e:
-            QMessageBox.warning(self, tr("Laser Controller"), str(e))
+            QMessageBox.warning(self, self.windowTitle(), str(e))
             return
-        qsettings().setValue(laser.PORT_KEY, str(device))
-        qsettings().setValue(laser.BAUD_KEY, int(self.baud_box.currentData()))
+        qsettings().setValue(self._k(laser.PORT_KEY), str(device))
+        qsettings().setValue(self._k(laser.BAUD_KEY), int(self.baud_box.currentData()))
         self.worker = laser.Worker(port, self.session, poll=laser.UPDATE_SECONDS)
+        self._boot_wait = BOOT_TICKS
+        self.session.send_after_boot(grbl.SETTINGS)
+        self.session.send_after_boot(grbl.UNLOCK)
         self.worker.start()
         self.session.realtime(grbl.RESET)
-        self.session.send(grbl.SETTINGS)
-        self.session.send(grbl.UNLOCK)
         self.refresh()
 
     def disconnect_board(self):
@@ -675,10 +761,8 @@ class LaserWindow(QDialog):
         self.b_reset.setToolTip(tr("Empty what the board has queued; it lands in the alarm state"))
         self.b_settings = QPushButton(tr("Settings"))
         self.b_settings.setToolTip(tr("$$: ask the board what it is set to"))
-        row = QHBoxLayout()
-        for b in (self.b_unlock, self.b_home, self.b_check, self.b_reset, self.b_settings):
-            row.addWidget(b)
-        form.addRow(row)
+        form.addRow(_grid((self.b_unlock, self.b_home, self.b_check, self.b_reset,
+                           self.b_settings)))
         self.b_unlock.clicked.connect(lambda checked=False: self.session.send(grbl.UNLOCK))
         self.b_home.clicked.connect(lambda checked=False: self.session.send(grbl.HOME))
         self.b_check.clicked.connect(self.toggle_check)
@@ -703,8 +787,8 @@ class LaserWindow(QDialog):
         for f in laser.JOG_FEEDS:
             self.feed_box.addItem(tr("{n} mm/min").format(n=f), f)
         self.feed_box.setToolTip(tr("How fast the head moves while jogging"))
-        self._remember(self.step_box, laser.STEP_KEY, laser.JOG_STEPS[0])
-        self._remember(self.feed_box, laser.FEED_KEY, laser.JOG_FEEDS[0])
+        self._remember(self.step_box, self._k(laser.STEP_KEY), laser.JOG_STEPS[0])
+        self._remember(self.feed_box, self._k(laser.FEED_KEY), laser.JOG_FEEDS[0])
         fields.addRow(tr("Step"), self.step_box)
         fields.addRow(tr("Speed"), self.feed_box)
         lay.addLayout(fields)
@@ -755,7 +839,16 @@ class LaserWindow(QDialog):
     def _on_machine(self, x, y) -> bool:
         """Whether a machine position is on the work area of the machine."""
         w, h = self.travel_size()
-        return not (w and h) or (0.0 <= float(x) <= w and 0.0 <= float(y) <= h)
+        if not (w and h):
+            return True
+        # a board that homes to the far corner counts its machine from 0 down to -travel,
+        # one that homes to the near corner from 0 up; the head now says which it is
+        here = self.session.mpos or (0.0, 0.0, 0.0)
+
+        def inside(v, now, size):
+            lo, hi = (-size, 0.0) if now < -1e-6 else (0.0, size)
+            return lo - 1e-6 <= float(v) <= hi + 1e-6
+        return inside(x, float(here[0]), w) and inside(y, float(here[1]), h)
 
     def go_to_origin(self):
         self.session.send(grbl.move(x=0.0, y=0.0))
@@ -764,7 +857,6 @@ class LaserWindow(QDialog):
     def _origin_box(self):
         box = QGroupBox(tr("Work origin"))
         lay = QVBoxLayout(box)
-        row = QHBoxLayout()
         self.b_zero_xy = QPushButton(tr("Zero here"))
         self.b_zero_xy.setToolTip(tr("Put the origin of the work under the head"))
         self.b_zero_x = QPushButton(tr("Zero X"))
@@ -773,9 +865,7 @@ class LaserWindow(QDialog):
         self.b_zero_y.setToolTip(tr("Only the Y of the work moves to the head"))
         self.b_zero_z = QPushButton(tr("Zero Z"))
         self.b_zero_z.setToolTip(tr("The Z of the work starts at the head"))
-        for b in (self.b_zero_xy, self.b_zero_x, self.b_zero_y, self.b_zero_z):
-            row.addWidget(b)
-        lay.addLayout(row)
+        lay.addLayout(_grid((self.b_zero_xy, self.b_zero_x, self.b_zero_y, self.b_zero_z), 2))
         lay.addWidget(panels.note(tr("The head is where the work starts; the job is cut "
                                      "around that point.")))
         self.b_zero_xy.clicked.connect(lambda checked=False: self.zero(x=True, y=True))
@@ -796,8 +886,12 @@ class LaserWindow(QDialog):
         self.rapid_override_label = QLabel("100%")
         form.addRow(tr("Feed"), self._override_row("feed", self.feed_override_label,
                                                    tr("feed rate")))
-        form.addRow(tr("Power"), self._override_row("power", self.power_override_label,
-                                                    tr("laser power")))
+        if self.is_cnc:
+            form.addRow(tr("Spindle"), self._override_row("power", self.power_override_label,
+                                                          tr("spindle speed")))
+        else:
+            form.addRow(tr("Power"), self._override_row("power", self.power_override_label,
+                                                        tr("laser power")))
         form.addRow(tr("Rapid"), self._rapid_row())
         return box
 
@@ -835,7 +929,8 @@ class LaserWindow(QDialog):
         box = QGroupBox(tr("Picture"))
         form = QFormLayout(box)
         self.b_image = QPushButton(tr("Picture…"))
-        self.b_image.setToolTip(tr("A photograph or a logo to engrave where the head is now"))
+        self.b_image.setToolTip(tr("A photograph or a logo to engrave; its bottom left "
+                                   "comes at the origin of the work"))
         self.mode_box = QComboBox()
         for key, label in laser_image.MODES:
             self.mode_box.addItem(label, key)
@@ -845,7 +940,15 @@ class LaserWindow(QDialog):
         self.dot_box = QComboBox()
         for mm in laser.DOT_SIZES:
             self.dot_box.addItem(tr("{n} mm").format(n=f"{mm:g}"), mm)
-        self.dot_box.setToolTip(tr("How big one pixel of the picture becomes on the sheet"))
+        self.dot_box.setToolTip(tr("The distance between two lines of the engraving: how "
+                                   "big one dot becomes on the sheet"))
+        self.width_spin = QDoubleSpinBox()
+        self.width_spin.setRange(1.0, 2000.0)
+        self.width_spin.setDecimals(1)
+        self.width_spin.setSuffix(" mm")
+        self.width_spin.setValue(_float(qsettings().value(IMAGE_WIDTH_KEY, 100.0), 100.0))
+        self.width_spin.setToolTip(tr("How wide the picture becomes on the sheet; the height "
+                                      "follows the picture"))
         self.raster_feed_box = QComboBox()
         for f in laser.RASTER_FEEDS:
             self.raster_feed_box.addItem(tr("{n} mm/min").format(n=f), f)
@@ -860,7 +963,8 @@ class LaserWindow(QDialog):
         self.passes_spin.setValue(int(qsettings().value(laser.IMAGE_PASSES_KEY, 1)))
         self.passes_spin.setToolTip(tr("How often the whole picture is burned in"))
         self.invert_check = QCheckBox(tr("Invert"))
-        self.invert_check.setToolTip(tr("Burn the dark pixels instead of the light ones"))
+        self.invert_check.setToolTip(tr("Burn the light pixels instead of the dark ones, "
+                                        "for a dark material that the beam makes lighter"))
         self.one_way_check = QCheckBox(tr("One way"))
         self.one_way_check.setToolTip(tr("Come back over the row with the beam off instead of "
                                          "turning around: slower, but no burn-in on the return"))
@@ -870,6 +974,7 @@ class LaserWindow(QDialog):
         form.addRow(self.b_image)
         form.addRow(tr("Mode"), self.mode_box)
         form.addRow(tr("Matrix"), self.style_box)
+        form.addRow(tr("Width"), self.width_spin)
         form.addRow(tr("Dot"), self.dot_box)
         form.addRow(tr("Speed"), self.raster_feed_box)
         form.addRow(tr("Power"), self.power_spin)
@@ -900,6 +1005,9 @@ class LaserWindow(QDialog):
             lambda on: (qsettings().setValue(laser.IMAGE_ONEWAY_KEY, bool(on)),
                         self.refresh_image()))
         self.dot_box.currentIndexChanged.connect(self.refresh_image)
+        self.width_spin.editingFinished.connect(
+            lambda: (qsettings().setValue(IMAGE_WIDTH_KEY, float(self.width_spin.value())),
+                     self.refresh_image()))
         self.raster_feed_box.currentIndexChanged.connect(self.refresh_image)
         self.style_box.currentIndexChanged.connect(self.refresh_image)
         return box
@@ -943,25 +1051,42 @@ class LaserWindow(QDialog):
         try:
             self.image = image_gray(path)
         except ValueError as e:
-            QMessageBox.warning(self, tr("Laser Controller"), str(e))
+            QMessageBox.warning(self, self.windowTitle(), str(e))
             return
         self.image_name = os.path.basename(path)
+        self._dots = (None, None)
         self.refresh_image()
 
     def image_dots(self):
-        """The picture as the machine should burn it; nothing when there is no picture."""
+        """The picture as the machine should burn it; nothing when there is no picture.
+
+        The picture is first brought to one pixel per dot of the engraving, at the width
+        that was asked for, and only then made into dots: a dot of the dithering is then
+        exactly a dot of the beam. Dithering a large picture takes a moment, so the dots
+        are kept until something they were made of changes; the power, the speed and the
+        passes do not touch them.
+        """
         if self.image is None:
             return None
         style = self.style_box.currentData()
-        gray = laser_image.adjust(self.image, invert=self.invert_check.isChecked())
-        return laser_image.bitmap(gray, self.mode_box.currentData(),
+        dot = float(self.dot_box.currentData() or 0.1)
+        width = float(self.width_spin.value())
+        made_of = (id(self.image), self.mode_box.currentData(), style,
+                   self.invert_check.isChecked(), width, dot)
+        if self._dots[0] == made_of:
+            return self._dots[1]
+        gray = laser_image.resample(self.image, width, dot)
+        gray = laser_image.adjust(gray, invert=self.invert_check.isChecked())
+        dots = laser_image.bitmap(gray, self.mode_box.currentData(),
                                   style or "floyd", style or "8x8")
+        self._dots = (made_of, dots)
+        return dots
 
     def image_job(self):
         """The raster of the picture as the job, at the origin of the work."""
         dots = self.image_dots()
         if dots is None:
-            QMessageBox.information(self, tr("Laser Controller"),
+            QMessageBox.information(self, self.windowTitle(),
                                     tr("Choose a picture first."))
             return
         dot = float(self.dot_box.currentData() or 0.1)
@@ -1007,7 +1132,6 @@ class LaserWindow(QDialog):
         lay = QVBoxLayout(box)
         self.job_label = panels.note(tr("There is no job to send yet."))
         lay.addWidget(self.job_label)
-        row = QHBoxLayout()
         self.b_load = QPushButton(tr("From the worksheet…"))
         self.b_load.setToolTip(tr("Make G-code of the layers the laser follows"))
         self.b_open = QPushButton(tr("Open G-code…"))
@@ -1018,9 +1142,8 @@ class LaserWindow(QDialog):
         self.b_pause.setToolTip(tr("Feed hold: the head stops and the beam goes off"))
         self.b_stop = QPushButton(tr("Stop"))
         self.b_stop.setToolTip(tr("End the job and empty what the board has queued"))
-        for b in (self.b_load, self.b_open, self.b_start, self.b_pause, self.b_stop):
-            row.addWidget(b)
-        lay.addLayout(row)
+        lay.addLayout(_grid((self.b_load, self.b_open), 2))
+        lay.addLayout(_grid((self.b_start, self.b_pause, self.b_stop)))
         self.bar = QProgressBar()
         self.bar.setRange(0, 100)
         self.bar.setTextVisible(False)
@@ -1043,7 +1166,7 @@ class LaserWindow(QDialog):
             text = gcode.grbl_laser(drawing, s_max=int(options.get("s_max") or 1000),
                                     dynamic=bool(options.get("dynamic", True)))
         except Exception as e:
-            QMessageBox.critical(self, tr("Laser Controller"), str(e))
+            QMessageBox.critical(self, self.windowTitle(), str(e))
             return
         self.set_job(grbl.job_lines(text), tr("the worksheet"))
 
@@ -1057,7 +1180,7 @@ class LaserWindow(QDialog):
             with open(path, encoding="utf-8", errors="replace") as fh:
                 text = fh.read()
         except OSError as e:
-            QMessageBox.critical(self, tr("Laser Controller"), str(e))
+            QMessageBox.critical(self, self.windowTitle(), str(e))
             return
         self.set_job(grbl.job_lines(text), os.path.basename(path))
 
@@ -1072,7 +1195,7 @@ class LaserWindow(QDialog):
         if not self.job:
             return
         if not self.connected:
-            QMessageBox.information(self, tr("Laser Controller"),
+            QMessageBox.information(self, self.windowTitle(),
                                     tr("Connect to the board first."))
             return
         self.session.start(self.job)
@@ -1080,10 +1203,9 @@ class LaserWindow(QDialog):
     def toggle_pause(self):
         if self.session.paused:
             self.session.resume()
-            self.b_pause.setText(tr("Pause"))
         else:
             self.session.pause()
-            self.b_pause.setText(tr("Resume"))
+        self.refresh()
 
     # ------------------------------------------------------------------ what it says
     def _log_box(self):
@@ -1119,6 +1241,10 @@ class LaserWindow(QDialog):
     def refresh(self):
         """Show the session as it is now; the thread is the only one that changes it."""
         s = self.session
+        if self._boot_wait > 0 and self.worker is not None:
+            self._boot_wait -= 1
+            if self._boot_wait == 0:
+                s.release_held()      # a board that greets nobody still gets its blocks
         self._listen()
         self._say_machine()
         self.state_label.setText(s.state_label or "—")
@@ -1142,15 +1268,12 @@ class LaserWindow(QDialog):
                                                     self.b_zero_z, self.b_home,
                                                     self.b_unlock, self.b_settings]:
             b.setEnabled(free)
-        self.b_check.setEnabled(self.connected)
+        self.b_check.setEnabled(free)
         self.b_reset.setEnabled(self.connected)
         self.b_apply.setEnabled(self.connected)
         self.b_take.setEnabled(bool(s.settings))
         self.b_start.setEnabled(self.connected and not s.running and bool(self.job))
         self.b_pause.setEnabled(self.connected and s.running)
         self.b_stop.setEnabled(self.connected and s.running)
+        self.b_pause.setText(tr("Resume") if s.paused and s.running else tr("Pause"))
 
-    def closeEvent(self, e):
-        """Closing the window hides it: a job that runs must not stop because of that."""
-        e.ignore()
-        self.hide()

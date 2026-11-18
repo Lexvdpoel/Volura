@@ -473,13 +473,18 @@ def test_a_refused_block_is_written_as_an_error(dlg, board):
     assert pump(dlg, lambda: "Error:" in dlg.log.toPlainText())
 
 
-def test_closing_the_window_hides_it_and_lets_the_job_run(dlg, slow):
+def test_another_tab_hides_the_controller_and_lets_the_job_run(dlg, slow):
     dlg.set_job(["G21"] * 40, "test")
     dlg.b_start.click()
     assert pump(dlg, lambda: dlg.session.running)
-    dlg.close()
-    assert not dlg.isVisible()
+    win = dlg.win
+    win._laser_controller = dlg
+    win.set_workspace("laser")
+    assert win.machine_stack.currentWidget() is dlg
+    win.set_workspace("design")
+    assert win.machine_stack.isHidden()
     assert dlg.connected and dlg.session.running
+    win._laser_controller = None
     dlg.shutdown()
     assert not dlg.connected and slow.closed
 
@@ -521,6 +526,7 @@ def test_the_work_area_someone_measured_stays_put(dlg, machine_choices):
 
 
 def test_a_jog_past_the_end_of_the_machine_is_refused(dlg, board):
+    dlg.clamp_check.setChecked(True)
     dlg.travel_x.setText("20")
     dlg.travel_y.setText("20")
     dlg.step_box.setCurrentIndex(pick(dlg.step_box, 50.0))
@@ -764,7 +770,7 @@ def test_a_picture_on_disk_becomes_grey_values(dlg, tmp_path):
     path = picture(tmp_path / "p.png")
     gray = image_gray(path)
     assert gray.shape == (4, 6)
-    assert gray[0, 0] == pytest.approx(0.0) and gray[0, 5] == pytest.approx(1.0)
+    assert gray[0, 0] == pytest.approx(1.0) and gray[0, 5] == pytest.approx(0.0)  # dark burns
 
 
 def test_a_file_that_is_not_a_picture_says_so(dlg, tmp_path):
@@ -780,9 +786,11 @@ def test_a_picture_is_read_through_the_dialog_and_shows_what_it_costs(dlg, monke
     path = picture(tmp_path / "p.png")
     monkeypatch.setattr(lw.QFileDialog, "getOpenFileName",
                         staticmethod(lambda *a, **k: (path, "")))
+    dlg.dot_box.setCurrentIndex(pick(dlg.dot_box, 1.0))
+    dlg.width_spin.setValue(6.0)
     dlg.b_image.click()
     assert dlg.image is not None and dlg.image_name == "p.png"
-    assert "0.6 × 0.4 mm" in dlg.image_hint.text()
+    assert "6 × 4 mm" in dlg.image_hint.text()
 
 
 def test_without_a_picture_the_window_says_so(dlg, boxes):
@@ -796,6 +804,7 @@ def test_engraving_a_picture_makes_a_job_of_the_raster(dlg, tmp_path):
     dlg.image_name = "p.png"
     set_mode(dlg, "threshold")
     dlg.dot_box.setCurrentIndex(pick(dlg.dot_box, 1.0))
+    dlg.width_spin.setValue(6.0)
     dlg.power_spin.setValue(50)
     dlg.b_image_job.click()
     text = "\n".join(dlg.job)
@@ -834,6 +843,59 @@ def test_the_board_of_the_machine_decides_the_highest_S_word(dlg, monkeypatch, t
 def test_the_number_of_passes_is_the_number_of_times_over(dlg, tmp_path):
     dlg.image = np.ones((2, 2))
     dlg.dot_box.setCurrentIndex(pick(dlg.dot_box, 1.0))
+    dlg.width_spin.setValue(2.0)
     dlg.passes_spin.setValue(3)
     dlg.b_image_job.click()
-    assert "\n".join(dlg.job).count("M5") == 2 * 3
+    burns = [line for line in dlg.job if line.startswith("G1")]
+    assert len(burns) == 2 * 3                    # two rows of one stretch, three times
+
+
+# ------------------------------------------------------------------ the tabs under the viewer
+
+def test_the_tabs_under_the_viewer_are_design_laser_and_cnc(win):
+    bar = win.workspace_bar
+    keys = [bar.tabs.tabData(i) for i in range(bar.tabs.count())]
+    assert keys == ["design", "laser", "cnc"]
+    assert win.workspace == "design" and win.machine_stack.isHidden()
+
+
+def test_the_laser_tab_is_only_2d_and_shows_the_laser(win):
+    win.set_mode("3d")
+    win.set_workspace("laser")
+    try:
+        assert win.mode == "2d"
+        assert win.mode_button.isHidden(), "Laser has no 3D | 2D switch"
+        panel = win.machine_stack.currentWidget()
+        assert isinstance(panel, LaserWindow) and panel.kind == "laser"
+        win.set_mode("3d")                     # the model is not in Laser: back to Design
+        assert win.workspace == "design" and win.mode == "3d"
+        assert win.machine_stack.isHidden() and not win.mode_button.isHidden()
+    finally:
+        win._laser_controller.shutdown()
+
+
+def test_the_cnc_tab_keeps_both_views_and_a_mill_of_its_own(win):
+    win.set_workspace("laser")
+    win.set_workspace("cnc")
+    try:
+        assert not win.mode_button.isHidden()
+        win.set_mode("3d")
+        assert win.workspace == "cnc" and win.mode == "3d"
+        panel = win.machine_stack.currentWidget()
+        assert panel.kind == "cnc" and panel is not win._laser_controller
+        assert panel.b_load.isHidden() and panel.machine_box.isHidden()
+        assert panel._k("laser/port") == "cnc/port"
+        assert "CNC" in panel.windowTitle()
+    finally:
+        win._laser_controller.shutdown()
+        win._cnc_controller.shutdown()
+
+
+def test_the_laser_controller_command_goes_to_the_laser_tab(win):
+    panel = win.laser_controller()
+    try:
+        assert win.workspace == "laser"
+        assert win.workspace_bar.key() == "laser"
+        assert win.machine_stack.currentWidget() is panel
+    finally:
+        panel.shutdown()

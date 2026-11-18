@@ -21,8 +21,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                 QLabel, QLineEdit,
                                 QMainWindow, QMenu, QMessageBox, QPlainTextEdit,
                                 QProgressDialog, QPushButton,
-                               QSpinBox, QStackedWidget,
-                               QTextBrowser,
+                               QSpinBox, QSplitter, QStackedWidget,
+                               QTextBrowser, QWidget,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_holder, boxgen, bracket,
@@ -34,7 +34,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
                sheet3d, sheettools, svg,
                spacemouse, spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
-               vector_export, vector_import, wall_hook, workers)
+               vector_export, vector_import, wall_hook, workers, workspaces)
 from .brep import Entities
 from .inference import GeoCache
 from .mesh_formats import MESH_EXTENSIONS, is_mesh
@@ -68,6 +68,9 @@ from .window_sheet import SheetMixin
 from .window_ui import (MOVED_COMMANDS, OTHER_COMMANDS, PANEL_INFO, SHORTCUTS_KEY,
                         SOURCE_TEXT, TIP_BASE, UiMixin, clean_text,
                         source_text_of, translation_tables)
+
+#: how narrow the machine next to the view may get in Laser and CNC (pixels)
+MACHINE_PANEL_MIN = 380
 
 # The tools of the 2D worksheet; their keys only work in 2D, because in 3D M, Q, S and
 # Space belong to the 3D tools. The letters of the drawing tools are the same as in 3D
@@ -1764,6 +1767,8 @@ class WelcomeDialog(QDialog):
 class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
     #: the active environment: "3d" or "2d" (the 2D worksheet); not part of the file
     mode = "3d"
+    #: the tab under the viewer: "design", "laser" or "cnc" (`volura/workspaces.py`)
+    workspace = workspaces.DESIGN
 
     def __init__(self):
         super().__init__()
@@ -1773,10 +1778,25 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.view = Viewport(self.doc, self.settings, self)
         self.view.tools = {cls.name: cls(self.view) for cls in TOOL_CLASSES}
         self.sheet_view = SheetView(self.doc, self.settings, self)
-        self.central = QStackedWidget(self)
+        self.central = QStackedWidget()
         self.central.addWidget(self.view)
         self.central.addWidget(self.sheet_view)
-        self.setCentralWidget(self.central)
+        # the machine on its cable stands next to the view in Laser and CNC
+        self.machine_stack = QStackedWidget()
+        self.machine_stack.setMinimumWidth(MACHINE_PANEL_MIN)
+        self.machine_stack.hide()
+        self.body_split = QSplitter(Qt.Horizontal)
+        self.body_split.setChildrenCollapsible(False)
+        self.body_split.addWidget(self.central)
+        self.body_split.addWidget(self.machine_stack)
+        self.body_split.setStretchFactor(0, 1)
+        self.body_split.setStretchFactor(1, 0)
+        body = QWidget(self)
+        self._body_layout = QVBoxLayout(body)
+        self._body_layout.setContentsMargins(0, 0, 0, 0)
+        self._body_layout.setSpacing(0)
+        self._body_layout.addWidget(self.body_split, 1)
+        self.setCentralWidget(body)
         self.setWindowIcon(icon("app"))
         self.setAcceptDrops(True)
         self.clipboard = []
@@ -1889,9 +1909,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         sb.addPermanentWidget(self.vcb_label)
         sb.addPermanentWidget(self.vcb)
         self.mode_button = ModeSwitch()
-        sb.addPermanentWidget(self.mode_button)
         self.mode_button.clicked.connect(lambda checked=False: self.toggle_sheet_mode())
         self._update_mode_button()
+        # the tabs of the workspaces under the viewer, with the 3D | 2D switch at their end
+        self.workspace_bar = workspaces.WorkspaceBar(self.mode_button)
+        self.workspace_bar.changed.connect(self.set_workspace)
+        self._body_layout.addWidget(self.workspace_bar)
         self.coords.hide()
 
     def _update_mode_button(self):
@@ -1907,6 +1930,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
     def set_mode(self, mode) -> bool:
         """To the 3D model or the 2D worksheet; the mode is not part of the file."""
         want = "2d" if str(mode).lower().startswith("2") else "3d"
+        if want == "3d" and not workspaces.HAS_3D[self.workspace]:
+            self._show_workspace(workspaces.DESIGN)     # the model is not in Laser: to Design
         changed = want != self.mode
         self.mode = want
         self.central.setCurrentWidget(self.sheet_view if want == "2d" else self.view)
@@ -1952,6 +1977,56 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.layers_panel.refresh()
         self.tray.set_panel_open(tr(PANEL_LAYERS), bool(two_d))
         self.info.refresh()
+
+    # ------------------------------------------------------------ workspaces
+    def set_workspace(self, key) -> str:
+        """The tab under the viewer: Design, Laser (only 2D) or CNC.
+
+        Laser goes to the worksheet, because a laser cuts flat; Design and CNC keep the
+        view that was there. Laser and CNC put their machine next to the view.
+        """
+        key = self._show_workspace(key)
+        if not workspaces.HAS_3D[key] and self.mode != "2d":
+            self.set_mode("2d")
+        return key
+
+    def _show_workspace(self, key) -> str:
+        """What a workspace shows, without touching the 3D | 2D mode."""
+        key = workspaces.normal(key)
+        self.workspace = key
+        bar = getattr(self, "workspace_bar", None)
+        if bar is not None:
+            bar.set_key(key)
+        has_3d = workspaces.HAS_3D[key]
+        self.mode_button.setVisible(has_3d)
+        if hasattr(self, "a_sheet"):
+            self.a_sheet.setEnabled(has_3d)
+        panel = self.machine_panel(key) if key in workspaces.MACHINES else None
+        if panel is not None:
+            if self.machine_stack.indexOf(panel) < 0:
+                self.machine_stack.addWidget(panel)
+            self.machine_stack.setCurrentWidget(panel)
+            if not self.machine_stack.isVisible():
+                self.machine_stack.show()
+                total = max(self.body_split.width(), 2 * MACHINE_PANEL_MIN)
+                self.body_split.setSizes([total - MACHINE_PANEL_MIN - 60, MACHINE_PANEL_MIN + 60])
+        else:
+            self.machine_stack.hide()
+        return key
+
+    def machine_panel(self, key):
+        """The machine on its cable of a workspace, made the first time it is asked for.
+
+        One per workspace and per Volura: a job that runs is not lost by looking at
+        another tab, and the laser and the mill each keep their own port and settings.
+        """
+        from .laser_window import LaserWindow
+        attr = "_laser_controller" if key == workspaces.LASER else "_cnc_controller"
+        panel = getattr(self, attr, None)
+        if panel is None:
+            panel = LaserWindow(self, kind="cnc" if key == workspaces.CNC else "laser")
+            setattr(self, attr, panel)
+        return panel
 
     def toggle_sheet_mode(self, checked=None):
         """View > 2D Worksheet and the button at the bottom right of the status bar."""
@@ -2305,6 +2380,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                     False,
                                     tr("Drive the laser on the serial port yourself: jog, "
                                        "origin, overrides and the job"))
+        self.a_cnc_controller = A(tr("CNC Controller…"),
+                                  lambda checked=False: self.set_workspace(workspaces.CNC),
+                                  None, None, False,
+                                  tr("Drive a mill on the serial port yourself: jog, the "
+                                     "origin of the work, overrides and a G-code job"))
         self.a_sheet_to_model = A(tr("Parts to &3D Model"), self.sheet_to_model, None, "to_model",
                                   False, tr("Put what is cut into the 3D model as plates with the "
                                             "sheet thickness"))
@@ -2876,7 +2956,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.fill(m, (self.a_sheet_plaat, self.a_sheet_nest, None,
                       self.a_fit_test, None,
                       self.a_holding_tabs, self.a_dogbone_corners, None,
-                      self.a_job_estimate, None, self.a_laser_controller))
+                      self.a_job_estimate, None, self.a_laser_controller,
+                      self.a_cnc_controller))
 
         # ---- Window and Help
         m = mb.addMenu(tr("&Window"))
@@ -3058,20 +3139,15 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         return self.sheet_view.move_to_layer(name)
 
     def laser_controller(self):
-        """Laser and Mill > Laser Controller…: the window that drives the board.
+        """Laser and Mill > Laser Controller…: the Laser tab, with the board next to the
+        worksheet.
 
-        One window per Volura, kept open between the calls so a job that runs is not
-        lost by looking at something else. The window asks the worksheet for its G-code
-        when the user asks for it; nothing of the drawing is read while the cable works.
+        One controller per Volura, kept between the calls so a job that runs is not lost
+        by looking at something else. It asks the worksheet for its G-code when the user
+        asks for it; nothing of the drawing is read while the cable works.
         """
-        from .laser_window import LaserWindow
-        dlg = getattr(self, "_laser_controller", None)
-        if dlg is None:
-            dlg = self._laser_controller = LaserWindow(self)
-        dlg.show()
-        dlg.raise_()
-        dlg.activateWindow()
-        return dlg
+        self.set_workspace(workspaces.LASER)
+        return self.machine_panel(workspaces.LASER)
 
     def job_estimate_dialog(self):
         """Edit > Job Estimate…: what the worksheet takes on the laser, per layer."""
@@ -4919,9 +4995,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             return
         self.autosave_timer.stop()
         self.spacemouse.stop()
-        controller = getattr(self, "_laser_controller", None)
-        if controller is not None:
-            controller.shutdown()     # let go of the cable; a job that runs is stopped
+        for name in ("_laser_controller", "_cnc_controller"):
+            controller = getattr(self, name, None)
+            if controller is not None:
+                controller.shutdown()     # let go of the cable; a job that runs is stopped
         workers.shutdown()          # stop the worker processes on the way out
         view = getattr(self, "view", None)
         if view is not None and view.isVisible():

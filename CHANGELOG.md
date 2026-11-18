@@ -3,6 +3,33 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## Unreleased
+
+### New
+- **Workspaces** under the viewer: *Design* (the 3D model or the 2D worksheet), *Laser*
+  (only the worksheet, with the laser controller next to it) and *CNC* (the worksheet or
+  the model, with a controller of its own for a router or a mill). The 3D | 2D switch sits
+  at the end of the tabs and goes away in Laser.
+- **CNC Controller**: the controller of the laser for a mill, with its own port and
+  settings, the spindle instead of the beam and a G-code file as the job.
+- **Picture width**: a picture to engrave gets a width in millimetres; it is brought to
+  one pixel per dot before it is dithered.
+
+### Fixed
+- An engraved picture burned only its first row: every row ended with M5 and the beam
+  never came on again. A stretch of one power is now one block instead of one per pixel.
+- Dark pixels burn now (white burned and black did not, and so did what is transparent).
+- The matrices of Jarvis-Judice-Ninke, Stucki and Sierra were wrong, and *Burrows* was
+  a broken Burkes; it is called Burkes now.
+- *Power -10%* sent nothing.
+- A jog or `$$` while a job ran was counted as an answer to the job, so the buffer of the
+  board could overflow; an alarm now ends the job.
+- Connecting waits for the board to say hello before it asks `$$` and unlocks, so an
+  Arduino that restarts when its port opens no longer misses them.
+- *Stay on the machine* is off by default and also works for a board that counts its
+  machine below zero; the speed of the port is remembered; Pause shows Resume only
+  while a job is held; dithering is not redone on every change of power or passes.
+
 ## 0.2.59 — 2026-11-16
 
 ### New
