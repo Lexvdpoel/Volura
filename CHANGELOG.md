@@ -3,7 +3,7 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## Unreleased
+## 0.2.60 — 2026-11-19
 
 ### New
 - **3D milling of the model**: *3D Mill Job…* in the CNC tab (and File > Export > *G-code
