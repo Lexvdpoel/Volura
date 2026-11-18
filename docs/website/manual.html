@@ -1840,14 +1840,15 @@ volura</code></pre>
     <h3><span lang="en">Exporting for the machine</span><span lang="nl">Exporteren voor de machine</span></h3>
     <p lang="en">The worksheet as a drawing for another program, or straight as the code a GRBL laser runs.</p>
     <p lang="nl">Het werkblad als tekening voor een ander programma, of meteen als de code die een GRBL-laser draait.</p>
-    <p class="where" lang="en">Where: <b>File &gt; Export &gt; 2D Vector (SVG)</b>, <b>2D Vector (DXF)</b>, <b>G-code for a GRBL Laser…</b> and <b>G-code for a Mill…</b></p>
-    <p class="where" lang="nl">Waar: <b>Bestand &gt; Exporteren &gt; 2D-vector (SVG)</b>, <b>2D-vector (DXF)</b>, <b>G-code voor een GRBL-laser…</b> en <b>G-code voor een frees…</b></p>
+    <p class="where" lang="en">Where: <b>File &gt; Export &gt; 2D Vector (SVG)</b>, <b>2D Vector (DXF)</b>, <b>G-code for a GRBL Laser…</b>, <b>G-code for a Mill…</b> and <b>G-code for a Mill from the Model (.nc)…</b></p>
+    <p class="where" lang="nl">Waar: <b>Bestand &gt; Exporteren &gt; 2D-vector (SVG)</b>, <b>2D-vector (DXF)</b>, <b>G-code voor een GRBL-laser…</b>, <b>G-code voor een frees…</b> en <b>G-code voor een freesmachine van het model (.nc)…</b></p>
     <ul lang="en">
       <li><b>SVG and DXF</b>: selected faces at true size, the top view or a section at any height, one colour per layer.</li>
       <li><b>G-code</b>: the laser layers go to the machine as plain G-code - millimetres, absolute coordinates, the holes before the outer contour and the nearest path next, with the power of every layer as S word.</li>
       <li>The dialog asks the highest S word of the controller (<kbd>$30</kbd>: 1000 on a modern board, 255 on an old 8-bit one) and whether the beam follows the feed (<b>M4</b>, so it burns less in a corner) or stays at a fixed power (<b>M3</b>); both come back next time, since they belong to the machine.</li>
       <li>The status bar ends with how long the job takes, the same estimate as <b>Laser and Mill &gt; Job Estimate…</b></li>
       <li><b>G-code for a Mill</b> writes the mill and drill layers instead, as 2.5D milling; it is explained under <a href="#milling">Milling from the worksheet</a>.</li>
+      <li><b>G-code for a Mill from the Model (.nc)</b> leaves the worksheet alone and follows the surface of the 3D model itself; it is explained under <a href="#mill3d">Milling the 3D model</a>.</li>
     </ul>
     <ul lang="nl">
       <li><b>SVG en DXF</b>: geselecteerde vlakken op ware grootte, het bovenaanzicht of een doorsnede op elke hoogte, één kleur per laag.</li>
@@ -1855,6 +1856,7 @@ volura</code></pre>
       <li>Het venster vraagt het hoogste S-woord van de controller (<kbd>$30</kbd>: 1000 op een moderne kaart, 255 op een oude 8-bit) en of de straal de snelheid volgt (<b>M4</b>, zodat hij in een hoek minder brandt) of vast blijft op één vermogen (<b>M3</b>); allebei komen volgende keer terug, want ze horen bij de machine.</li>
       <li>De statusbalk eindigt met hoe lang het werk duurt, dezelfde schatting als <b>Laser en frees &gt; Tijdsschatting…</b></li>
       <li><b>G-code voor een frees</b> schrijft in plaats daarvan de frees- en boorlagen, als 2,5D frezen; het staat uitgelegd bij <a href="#milling">Frezen vanaf het werkblad</a>.</li>
+      <li><b>G-code voor een freesmachine van het model (.nc)</b> laat het werkblad met rust en volgt het oppervlak van het 3D-model zelf; het staat uitgelegd bij <a href="#mill3d">Het 3D-model frezen</a>.</li>
     </ul>
     <h3 id="milling"><span lang="en">Milling from the worksheet</span><span lang="nl">Frezen vanaf het werkblad</span></h3>
     <p lang="en">The mill and drill layers of the worksheet as the code a GRBL mill runs: the cutter goes down in levels and cuts the part loose last.</p>
@@ -1876,6 +1878,31 @@ volura</code></pre>
       <li>De laag <b>Boren</b> freest één gat in het midden van elke vorm erop: snel erboven, naar beneden op het neerwaarts voeren en direct weer omhoog.</li>
       <li>Per freeslaag zeggen de laaginstellingen het <b>voeren</b> en het <b>neerwaarts voeren</b> in millimeters per minuut en de <b>spil</b> in toeren; <b>M3</b> start de spil tussen de lagen die iets anders willen, met twee seconden om op toeren te komen.</li>
       <li>De paden zijn die van het <b>midden van de frees</b>: met de compensatie aan schuiven de contouren opzij met de straal van de frees, krijgt een kamer haar concentrische ringen en de binnenhoeken hun uitsparing. De statusbalk eindigt met hoe lang het frezen duurt.</li>
+    </ul>
+    <h3 id="mill3d"><span lang="en">Milling the 3D model</span><span lang="nl">Het 3D-model frezen</span></h3>
+    <p lang="en">The solids of the model milled with a cutter: roughing takes the stock away, finishing follows the surface, and a 4th axis that you turn by hand gives the part its second side.</p>
+    <p lang="nl">De volumes van het model gefreest met een frees: rawbewerking haalt het materiaal weg, afwerkfrees volgt het oppervlak, en een 4e as die je met de hand draait geeft het onderdeel zijn andere kant.</p>
+    <p class="where" lang="en">Where: <b>3D Mill Job…</b> in the <b>CNC</b> tab with the model in 3D, and <b>File &gt; Export &gt; G-code for a Mill from the Model (.nc)…</b></p>
+    <p class="where" lang="nl">Waar: <b>3D freeswerk…</b> in het tabblad <b>CNC</b> met het model in 3D, en <b>Bestand &gt; Exporteren &gt; G-code voor een freesmachine van het model (.nc)…</b></p>
+    <ul lang="en">
+      <li><b>What goes under the cutter</b>: the selected parts when you selected something, otherwise the whole model. The parts are joined into one shape first, so a bolt hole in a wall stays a hole.</li>
+      <li><b>The height map</b> reads the surface of the model on a grid, under <b>Resolution</b>: <b>Fine (0.2 mm)</b>, <b>Normal (0.5 mm)</b> and <b>Coarse (1.0 mm)</b>. A finer grid follows more of the shape but takes longer and makes a bigger file.</li>
+      <li><b>The cutter</b> is a <b>Flat end mill</b> or a <b>Ball nose</b>, each operation with one of its own and its <b>Diameter</b>. The tip cannot stand lower than the highest point inside its own circle, so a flat mill leaves the inside corners of a pocket standing and a ball nose leaves a fine scallop between two lines.</li>
+      <li><b>Roughing</b> clears the stock in levels of the <b>Step down</b> and leaves the <b>Stock to leave</b> as a skin for finishing to cut. <b>Finishing</b> runs lines over the surface at the <b>Finishing stepover</b> between them; roughing stands its lines apart by the <b>Roughing stepover</b>, as a part of the diameter of its cutter.</li>
+      <li><b>Z = 0 is the top of the stock</b>, so you zero the mill on the material as on the worksheet. The stock stands around the model by the <b>Stock margin</b> you give, and the cutter stays inside it; the <b>Safe height</b> is how high it travels between the cuts.</li>
+      <li>While the dialog is open the paths are drawn over the model: <b>gray</b> for roughing, <b>blue</b> for finishing. Closing the dialog takes them away again.</li>
+      <li><b>The 4th axis</b> appears only for a machine whose preset says it has four axes. <b>Top and bottom, turned on A (4th axis)</b> mills the model, lifts the cutter, writes <b>G0 A180</b> and waits, and mills the model turned over about the X axis - so you clamp a flat part, turn it by hand when the mill stops, and the second side lands exactly under the first.</li>
+      <li><b>Send to the CNC Controller</b> gives the job to the controller of the <b>CNC</b> tab, <b>Save</b> writes it as a <b>.nc</b> file. The status line says how many metres the cutter cuts and how long the job takes.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Wat onder de frees gaat</b>: de geselecteerde delen als je iets selecteerde, anders het hele model. De delen worden eerst één vorm, zodat een gat in een wand een gat blijft.</li>
+      <li><b>De hoogtemap</b> leest het oppervlak van het model op een raster, bij <b>Resolutie</b>: <b>Fijn (0,2 mm)</b>, <b>Normaal (0,5 mm)</b> en <b>Grof (1,0 mm)</b>. Een fijner raster volgt meer van de vorm maar duurt langer en geeft een groter bestand.</li>
+      <li><b>De frees</b> is een <b>Platte frees</b> of een <b>Bolle frees</b>, elke bewerking met een eigen frees en zijn <b>Diameter</b>. De punt kan niet lager staan dan het hoogste punt binnen zijn eigen cirkel, dus een platte frees laat de binnenhoeken van een kamer staan en een bolle frees laat een fijne golf tussen twee lijnen.</li>
+      <li><b>Ruw frezen</b> ruimt het materiaal in gangen van <b>Diepte per gang</b> en laat <b>Materiaal dat blijft staan</b> als huid over voor het afwerken. <b>Afwerken</b> loopt lijnen over het oppervlak met de <b>Stapbreedte afwerken</b> ertussen; ruw frezen zet zijn lijnen uit elkaar met de <b>Stapbreedte ruw frezen</b>, als deel van de diameter van zijn frees.</li>
+      <li><b>Z = 0 is de bovenkant van het materiaal</b>, dus je nullen de frees op het materiaal zoals op het werkblad. Het materiaal staat rond het model met de <b>Materiaalrand</b> die je geeft, en de frees blijft erbinnen; de <b>Veilige hoogte</b> is hoe hoog hij tussen de gangen reist.</li>
+      <li>Terwijl het venster open is worden de paden over het model getekend: <b>grijs</b> voor ruw frezen, <b>blauw</b> voor afwerken. Sluit je het venster, dan zijn ze weer weg.</li>
+      <li><b>De 4e as</b> verschijnt alleen bij een machine waarvan het voorinstelling vier asjes zegt te hebben. <b>Boven en onder, gekeerd op A (4e as)</b> freest het model, tilt de frees op, schrijft <b>G0 A180</b> en wacht, en freest het omgekeerde model rond de X-as - dus je klemt een plat onderdeel, draait het met de hand als de frees stilstaat, en de tweede kant komt precies onder de eerste.</li>
+      <li><b>Naar de CNC-controller</b> geeft de taak aan de controller van het tabblad <b>CNC</b>, <b>G-code opslaan…</b> schrijft hem als <b>.nc</b>-bestand. De statusregel zegt hoeveel meter de frees snijdt en hoe lang de taak duurt.</li>
     </ul>
     <h3><span lang="en">Driving the laser yourself</span><span lang="nl">De laser zelf besturen</span></h3>
     <p lang="en">The board between the computer and the laser, in the window: jog it, point it and send the job without a second program.</p>

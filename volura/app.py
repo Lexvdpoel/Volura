@@ -49,6 +49,7 @@ from .panels import (ColorsPanel, EntityInfoPanel, LayerParamsDialog, LayersPane
                      OutlinerPanel, PrintCheckPanel, note, swatch)
 from .part_dialogs import (CableClipDialog, HingeDialog, KnobDialog, LabelPlateDialog,
                            ProjectBoxDialog, SpurGearDialog, StandoffDialog, Text3DDialog)
+from .mill3d_dialog import Mill3DDialog
 from .settings import qsettings
 from .sheet_dialogs import (AutoArrangeDialog, BoxJointDialog, DogboneCornersDialog, EXPORT_EXT,
                             EXPORT_FILTERS,
@@ -1806,6 +1807,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.setAcceptDrops(True)
         self.clipboard = []
         self._busy = False          # a background job is reading the model: keep it still
+        self._mill3d_dialog = None   # the 3D mill dialog, open beside the model
         self.tool_actions = {}
         self.sheet_tool_actions = {}
         self.resize(1400, 900)
@@ -2071,6 +2073,21 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             self.addToolBar(Qt.TopToolBarArea, bar)
         return bar
 
+    def mill3d_toolbar(self):
+        """The toolbar of 3D milling: only in the CNC tab, and only with the model on the
+        screen, because a gantry router with three axes follows the worksheet instead.
+        """
+        bar = getattr(self, "tb_mill3d", None)
+        if bar is None:
+            bar = self.tb_mill3d = QToolBar(tr("3D Milling"))
+            bar.setObjectName("Mill3DToolbar")
+            bar.setIconSize(QSize(20, 20))
+            bar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            bar.addAction(self.a_mill3d)
+            self.addToolBarBreak(Qt.TopToolBarArea)
+            self.addToolBar(Qt.TopToolBarArea, bar)
+        return bar
+
     def machine_panel(self, key):
         """The machine on its cable of a workspace, made the first time it is asked for.
 
@@ -2212,6 +2229,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                              lambda checked=False: self.export_sheet("gcode"))
         self.a_exp_mill = A(tr("G-code for a Mill (.nc)…"),
                             lambda checked=False: self.export_sheet("mill"))
+        self.a_exp_mill3d = A(tr("G-code for a Mill from the Model (.nc)…"),
+                              lambda checked=False: self.mill3d_job(), None, None, False,
+                              tr("Roughing and finishing of the 3D model for a mill, "
+                                 "with the stock around it"))
         self.a_print_setup = A(tr("Printer Set&up…"), lambda checked=False: self.print_setup())
         self.a_check = A(tr("Print &Check"), self.print_check, "F5", "check")
         self.a_print = A(tr("&Print"), self.export_3mf, "Ctrl+P", "3mf")
@@ -2451,6 +2472,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                   None, None, False,
                                   tr("Drive a mill on the serial port yourself: jog, the "
                                      "origin of the work, overrides and a G-code job"))
+        self.a_mill3d = A(tr("3D Mill Job…"), lambda checked=False: self.mill3d_job(),
+                          None, None, False,
+                          tr("Rough and finish the 3D model on a mill, also on both sides "
+                             "of a 4th axis that is turned by hand"))
+        self.a_mill3d.setVisible(False)     # the tab says where it belongs
         self.a_sheet_to_model = A(tr("Parts to &3D Model"), self.sheet_to_model, None, "to_model",
                                   False, tr("Put what is cut into the 3D model as plates with the "
                                             "sheet thickness"))
@@ -2903,7 +2929,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         m = mb.addMenu(tr("&File"))
         export = QMenu(tr("&Export"), m)
         self.fill(export, only("3d", self.a_exp_stl, self.a_exp_3mf, self.a_exp_colors,
-                               self.a_exp_obj, self.a_exp_step) + (None,) +
+                               self.a_exp_obj, self.a_exp_step, self.a_exp_mill3d) + (None,) +
                   only("2d", self.a_exp_svg2d, self.a_exp_dxf2d, self.a_exp_gcode,
                        self.a_exp_mill))
         self.recent_menu = QMenu(tr("&Recent Files"), m)
@@ -3199,8 +3225,16 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
 
     def _show_workspace_toolbars(self):
         """The toolbars of the tab: the modelling tools on the right only in Design, the
-        third column on the left as the laser or the mill wants it."""
+        third column on the left as the laser or the mill wants it, and the 3D milling of
+        the model only in the CNC tab with the model on the screen."""
         self._fill_machine_toolbar()
+        milling = self.workspace == workspaces.CNC and self.mode == "3d"
+        if milling:
+            self.mill3d_toolbar().show()
+        elif getattr(self, "tb_mill3d", None) is not None:
+            self.tb_mill3d.hide()
+        if getattr(self, "a_mill3d", None) is not None:
+            self.a_mill3d.setVisible(milling)
         bar = getattr(self, "tb_print", None)
         if bar is None or self.mode != "3d":
             return
@@ -4446,6 +4480,27 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
 
     def export_step(self):
         self._export_parts_async("step")
+
+    def mill3d_job(self):
+        """CNC > 3D Mill Job… and File > Export: the solids of the model under the cutter.
+
+        The selected parts when something is selected and the whole model otherwise, the
+        same choice the STL export makes. A mill follows a surface, so without a solid
+        there is nothing to follow: that is said in the status bar, and the dialog stays
+        away. It is modeless, because the toolpaths are drawn over the model and one wants
+        to walk around them while the dialog is still open.
+        """
+        if not (self.doc.selected_groups() or self.doc.visible_groups() or self.doc.root.F):
+            self.hint.setText(tr("There is no solid in the model to mill."))
+            self.setFocus()
+            return None
+        dlg = getattr(self, "_mill3d_dialog", None)
+        if dlg is None:
+            dlg = self._mill3d_dialog = Mill3DDialog(self)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+        return dlg
 
     def _export_parts_async(self, kind):
         """Export the printable parts in the background: prepare, ask, write.

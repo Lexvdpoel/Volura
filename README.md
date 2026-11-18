@@ -481,6 +481,20 @@ The interface is available in English and Dutch (*Window > Preferences > General
   outside contours free the part last, so nothing floats under the cutter. Per layer the
   G-code uses the feed, the plunge feed and the revolutions of the spindle you set in the
   layer settings, and the status bar says how long the milling takes
+- **3D milling of the model**: the *CNC* tab in 3D has *3D Mill Job…* (also File > Export >
+  *G-code for a Mill from the Model (.nc)…*), which follows the solids of the model - the
+  selected parts when something is selected - with a cutter instead of a contour. The
+  surface is read into a **height map** and the shape of the tool is slid over it, so every
+  line knows how high the tip has to stay: a flat end mill cannot stand in a corner and goes
+  no lower than the highest point inside its own circle, a ball nose follows the shape and
+  leaves a scallop between the lines. **Roughing** takes the stock away level by level and
+  leaves the skin you ask for, **finishing** runs parallel lines over the surface. Z = 0 is
+  the top of the stock, so you zero the mill on the material like on the worksheet, and the
+  paths are drawn over the model while the dialog is open - roughing gray, finishing blue.
+  A part that is milled on both sides goes to the **indexed 4th axis**: the model is turned
+  about X, the mill stops with `G0 A180` and waits for you to turn the part, and the other
+  side is milled from the top; that choice only appears for a machine whose preset has four
+  axes
 - **Laser controller**: Laser and Mill > *Laser Controller…* puts the board on the screen
   instead of in a file: the serial port, where the head is, a jog pad, the origin of the
   work under the head, feed and power overrides while it cuts, and the job of the worksheet
