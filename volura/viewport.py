@@ -305,6 +305,7 @@ class Viewport(QOpenGLWidget):
         self._vcb_shown = None            # last (label, value) sent to the Measurements box
         self.hover = None               # ("face", obj, rid) | ("object", obj) | ("region", r) | ...
         self.preview_transform = None   # (ids, 4x4, keep_original)
+        self.overlay_lines = []         # (pts, color, width) a dialog draws over the model
         self.problem_items = []         # items the Print Check panel marks in red
         self.labels = []                # (screen QPointF, text)
         self.markers = []               # (screen QPointF, inference kind)
@@ -450,6 +451,7 @@ class Viewport(QOpenGLWidget):
             self._draw_axes()
         self._draw_hover()
         self._draw_problems()
+        self._draw_overlay_lines()
         self.labels = []
         self.markers = []
         if self.tool is not None:
@@ -1055,6 +1057,24 @@ class Viewport(QOpenGLWidget):
         gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
 
     # ------------------------------------------------------------- helpers
+    def set_overlay_lines(self, lines):
+        """Lines a dialog wants to see over the model, until it asks for nothing again.
+
+        `lines` holds (points, colour, width) per polyline; they are drawn above the
+        model, so the 3D toolpaths of the mill stay visible also behind a face.
+        """
+        self.overlay_lines = list(lines or ())
+        self.update()
+
+    def clear_overlay_lines(self):
+        """What `set_overlay_lines` put over the model is gone again."""
+        self.set_overlay_lines(())
+
+    def _draw_overlay_lines(self):
+        """The lines of a dialog: the toolpaths of the 3D mill and the like."""
+        for pts, color, width in self.overlay_lines:
+            self.draw_strip(pts, color, width, on_top=True)
+
     def draw_lines(self, pts, color, width=1.0, stipple=False, on_top=False, buf=0):
         pts = np.asarray(pts, dtype=np.float32).reshape(-1, 3)
         if not len(pts):
