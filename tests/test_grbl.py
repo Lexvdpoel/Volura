@@ -214,6 +214,10 @@ def test_the_real_time_commands_are_single_bytes_without_a_newline():
     ("feed", "set", b"\x90"),
     ("rapid", "half", b"\x96"),
     ("power", "up10", b"\x9a"),
+    ("power", "down10", b"\x9b"),
+    ("power", "up1", b"\x9c"),
+    ("power", "down1", b"\x9d"),
+    ("power", "set", b"\x99"),
 ))
 def test_an_override_is_the_byte_the_board_reads(kind, action, byte):
     assert grbl.override(kind, action) == byte
@@ -233,6 +237,15 @@ def test_the_sender_hands_out_no_more_than_the_buffer_holds():
     assert block.count(b"\n") == 2                          # 2 x 15 = 30 fits, 3 x 15 does not
     assert sender.in_flight == 30
     assert sender.take() == b""                             # the board has to answer first
+
+
+def test_the_sender_leaves_room_for_what_else_the_board_holds():
+    lines = [f"G1 X{i}.000 F600" for i in range(10)]        # 15 bytes each
+    sender = grbl.Sender(lines, buffer=30)
+    assert sender.take(extra=10).count(b"\n") == 1          # 10 + 15 fits, 10 + 30 not
+    assert sender.take(extra=10) == b""
+    full = grbl.Sender(lines, buffer=30)
+    assert full.take(extra=25) == b""                       # no room at all: wait
 
 
 def test_a_block_longer_than_the_whole_buffer_still_goes_on_its_own():

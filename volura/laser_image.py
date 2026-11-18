@@ -54,19 +54,26 @@ DITHERS = {
     "atkinson": (tr("Atkinson"),
                  ((0, 1, 1), (0, 2, 1), (1, -1, 1), (1, 0, 1), (1, 1, 1), (2, 0, 1)), 8),
     "jarvis": (tr("Jarvis-Judice-Ninke"),
-               ((1, -1, 7), (1, 0, 12), (1, 1, 7), (2, -2, 5), (2, -1, 7), (2, 0, 7),
-                (2, 1, 5), (2, 2, 3), (3, -1, 2), (3, 0, 3), (3, 1, 2)), 48),
+               ((0, 1, 7), (0, 2, 5),
+                (1, -2, 3), (1, -1, 5), (1, 0, 7), (1, 1, 5), (1, 2, 3),
+                (2, -2, 1), (2, -1, 3), (2, 0, 5), (2, 1, 3), (2, 2, 1)), 48),
     "stucki": (tr("Stucki"),
-               ((1, -1, 2), (1, 0, 4), (1, 1, 2), (2, -2, 1), (2, -1, 2), (2, 0, 4),
-                (2, 1, 2), (2, 2, 1), (3, -2, 1), (3, -1, 2), (3, 0, 1)), 16),
-    "burrows": (tr("Burrows"),
-                ((0, -1, 2), (0, 0, 1), (0, 1, 2), (0, 2, 1), (1, -2, 1), (1, -1, 1),
-                 (1, 0, 1), (1, 1, 1), (1, 2, 1)), 16),
+               ((0, 1, 8), (0, 2, 4),
+                (1, -2, 2), (1, -1, 4), (1, 0, 8), (1, 1, 4), (1, 2, 2),
+                (2, -2, 1), (2, -1, 2), (2, 0, 4), (2, 1, 2), (2, 2, 1)), 42),
+    "burkes": (tr("Burkes"),
+               ((0, 1, 8), (0, 2, 4),
+                (1, -2, 2), (1, -1, 4), (1, 0, 8), (1, 1, 4), (1, 2, 2)), 32),
     "sierra": (tr("Sierra"),
-               ((0, 1, 5), (1, -1, 3), (1, 0, 2), (1, 1, 1), (2, 0, 2)), 16),
+               ((0, 1, 5), (0, 2, 3),
+                (1, -2, 2), (1, -1, 4), (1, 0, 5), (1, 1, 4), (1, 2, 2),
+                (2, -1, 2), (2, 0, 3), (2, 1, 2)), 32),
     "sierra_lite": (tr("Sierra Lite"),
                     ((0, 1, 2), (1, -1, 1), (1, 0, 1)), 4),
 }
+
+#: names a matrix had before, so a choice that was saved still finds its matrix
+DITHER_ALIASES = {"burrows": "burkes"}
 
 #: the ordered matrices: the grey a pixel must be over to be burned
 HALFTONES = {
@@ -96,11 +103,11 @@ def _num(value) -> str:
 # --------------------------------------------------------------------------
 
 def to_gray(pixels, width=None) -> np.ndarray:
-    """The grey values of an image, 0.0 (the beam stays off) to 1.0 (full power).
+    """The grey values of an image as power: 0.0 (the beam stays off) to 1.0 (full power).
 
-    A white pixel is therefore burned and a black one is not, which is what a CO2 laser
-    engraving a dark sheet wants; the "Invert" of the window is the other way round.
-
+    A black pixel is burned and a white one is not, the way a picture is engraved on wood
+    or card: what is dark on the screen is dark on the sheet. The "Invert" of the window
+    is the other way round, for a light mark on a dark sheet (slate, anodised aluminium).
 
     `pixels` is what a file or a screen holds: bytes or a flat array, with three or four
     values per pixel (RGB, RGBA) or one. The eye does not see the colours the same, so the
@@ -119,7 +126,7 @@ def to_gray(pixels, width=None) -> np.ndarray:
             data = rgb[:, :, 0] * 0.299 + rgb[:, :, 1] * 0.587 + rgb[:, :, 2] * 0.114
         else:
             data = data[:, :, 0]
-    return np.clip(np.asarray(data, dtype=float) / 255.0, 0.0, 1.0)
+    return np.clip(1.0 - np.asarray(data, dtype=float) / 255.0, 0.0, 1.0)
 
 
 def adjust(gray, invert=False, brightness=0.0, contrast=1.0, gamma=1.0) -> np.ndarray:
@@ -149,21 +156,32 @@ def dither(gray, kind="floyd") -> np.ndarray:
     it in the shape of the matrix of `kind`. This is the one loop that cannot be a numpy
     expression: a pixel sees what happened to its neighbours.
     """
-    _label, taps, total = DITHERS.get(str(kind), DITHERS["floyd"])
-    out = np.asarray(gray, dtype=float).copy()
-    rows, cols = out.shape
+    kind = DITHER_ALIASES.get(str(kind), str(kind))
+    _label, taps, total = DITHERS.get(kind, DITHERS["floyd"])
+    gray = np.atleast_2d(np.asarray(gray, dtype=float))
+    rows, cols = gray.shape
+    # plain lists of floats: a numpy scalar per pixel is many times slower than this
+    depth = max(dy for dy, _dx, _w in taps)
+    weights = [(dy, dx, w / float(total)) for dy, dx, w in taps]
+    lines = [gray[y].tolist() for y in range(min(rows, depth + 1))]
+    out = np.empty((rows, cols), dtype=float)
     for y in range(rows):
+        row = lines[0]
         for x in range(cols):
-            old = out[y, x]
+            old = row[x]
             on = 1.0 if old >= 0.5 else 0.0
-            out[y, x] = on
+            row[x] = on
             error = old - on
-            if not error:
-                continue
-            for dy, dx, weight in taps:
-                ny, nx = y + dy, x + dx
-                if 0 <= ny < rows and 0 <= nx < cols:
-                    out[ny, nx] += error * weight / float(total)
+            if error:
+                for dy, dx, w in weights:
+                    nx = x + dx
+                    if 0 <= nx < cols and dy < len(lines):
+                        lines[dy][nx] += error * w
+        out[y] = row
+        lines.pop(0)
+        nxt = y + depth + 1
+        if nxt < rows:
+            lines.append(gray[nxt].tolist())
     return out
 
 
@@ -179,6 +197,52 @@ def halftone(gray, size="8x8") -> np.ndarray:
 def threshold(gray, level=0.5) -> np.ndarray:
     """Full power or nothing: everything at or over `level` is burned."""
     return (np.asarray(gray, dtype=float) >= float(level)).astype(float)
+
+
+def resample(gray, width_mm, dot, height_mm=None) -> np.ndarray:
+    """The picture at the size it gets on the sheet: one value per dot of the laser.
+
+    `width_mm` divided by the `dot` is the number of columns; the rows follow from
+    `height_mm` the same way, or keep the shape of the picture when it is not given.
+    Shrinking averages every pixel that falls into a dot (a photo keeps its grey and does
+    not alias); enlarging interpolates linearly between the pixels.
+    """
+    gray = np.atleast_2d(np.asarray(gray, dtype=float))
+    rows, cols = gray.shape
+    dot = float(dot)
+    if dot <= 0 or float(width_mm) <= 0 or not rows or not cols:
+        raise ValueError(tr("The picture needs a size and a dot bigger than nothing."))
+    new_cols = max(1, int(round(float(width_mm) / dot)))
+    if height_mm:
+        new_rows = max(1, int(round(float(height_mm) / dot)))
+    else:
+        new_rows = max(1, int(round(new_cols * rows / float(cols))))
+    return _resize_axis(_resize_axis(gray, new_rows, 0), new_cols, 1)
+
+
+def _resize_axis(a, n, axis) -> np.ndarray:
+    """`a` with `n` samples along `axis`: averaged areas when fewer, linear when more."""
+    a = np.moveaxis(np.asarray(a, dtype=float), axis, 0)
+    m = a.shape[0]
+    shape = (-1,) + (1,) * (a.ndim - 1)
+    if n == m:
+        out = a.copy()
+    elif n < m:
+        # every new sample is the mean of the stretch of old samples it covers
+        edges = np.linspace(0.0, float(m), n + 1)
+        cum = np.concatenate([np.zeros((1,) + a.shape[1:]), np.cumsum(a, axis=0)])
+
+        def integral(t):
+            i = np.minimum(np.floor(t).astype(int), m - 1)
+            return cum[i] + (t - i).reshape(shape) * a[i]
+        out = (integral(edges[1:]) - integral(edges[:-1])) * (n / float(m))
+    else:
+        centres = np.clip((np.arange(n) + 0.5) * m / float(n) - 0.5, 0.0, m - 1.0)
+        lo = np.floor(centres).astype(int)
+        hi = np.minimum(lo + 1, m - 1)
+        frac = (centres - lo).reshape(shape)
+        out = a[lo] * (1.0 - frac) + a[hi] * frac
+    return np.moveaxis(out, 0, axis)
 
 
 def bitmap(gray, mode="dither", dither_kind="floyd", halftone_size="8x8",
@@ -237,9 +301,12 @@ def row_lines(row, y, x0=0.0, dot=0.1, feed=2000.0, power=100.0, s_max=1000,
               forward=True) -> list:
     """One row of the picture as blocks: travel to a stretch, burn it, travel on.
 
-    The head comes to a stretch with the beam off, so the blank between two stretches
-    draws nothing, and it leaves it with `M5` so a row that ends in the middle of the
-    sheet does not burn while the head moves to the next row.
+    The head comes to a stretch with `G0 ... S0`, so the blank between two stretches
+    draws nothing even on a board that is not in laser mode, and burns every stretch of
+    one power with a single `G1`: one block per pixel would flood the small buffer of the
+    board and make the head stutter. The beam stays switched on (M3/M4) for the whole
+    picture - the S word alone says how hard it burns - so no row ends with M5, which
+    would leave every row after it dark.
     """
     found = runs(row, power, s_max)
     if not found:
@@ -247,17 +314,14 @@ def row_lines(row, y, x0=0.0, dot=0.1, feed=2000.0, power=100.0, s_max=1000,
     if not forward:
         found = list(reversed(found))
     lines = []
+    head = None
     for first, last, s in found:
         begin = float(x0) + (first if forward else last) * float(dot)
-        lines.append(f"G0 X{_num(begin)} Y{_num(y)} F{float(feed):g}")
-        steps = range(first + 1, last + 1) if forward else range(last - 1, first - 1, -1)
-        for i, x in enumerate(steps):
-            px = float(x0) + x * float(dot)
-            if i == 0:
-                lines.append(f"G1 X{_num(px)} Y{_num(y)} F{float(feed):g} S{s}")
-            else:
-                lines.append(f"X{_num(px)}")
-    lines.append("M5")
+        end = float(x0) + (last if forward else first) * float(dot)
+        if head is None or abs(head - begin) > 1e-9:
+            lines.append(f"G0 X{_num(begin)} Y{_num(y)} S0")
+        lines.append(f"G1 X{_num(end)} Y{_num(y)} F{float(feed):g} S{s}")
+        head = end
     return lines
 
 
@@ -290,7 +354,7 @@ def engrave(dots, dot=0.1, origin=(0.0, 0.0), feed=2000.0, power=100.0, s_max=10
             y = y0 + (height - (row + 1) * dot)
             forward = one_way or row % 2 == 0
             lines += row_lines(dots[row], y, x0, dot, feed, power, s_max, forward)
-    lines.append(f"G0 X{_num(x0)} Y{_num(y0)}")
+    lines += ["S0", "M5", f"G0 X{_num(x0)} Y{_num(y0)}"]
     return "\n".join(lines) + "\n"
 
 

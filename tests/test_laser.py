@@ -275,6 +275,112 @@ def test_an_override_that_does_not_exist_writes_nothing():
     assert session.pending() == b""
 
 
+def test_the_ok_of_a_block_of_our_own_is_not_the_ok_of_a_job_block():
+    """A $$ sent while the job runs is answered in its turn; the job may not count it."""
+    session = laser.Session(buffer=64)
+    session.start(["G21", "G90"])
+    assert session.pending() == b"G21\nG90\n"
+    session.send("$$")
+    assert session.pending() == b"$$\n"
+    session.feed("ok")                               # G21
+    session.feed("ok")                               # G90
+    assert session.sender.acked == 2
+    assert session.in_flight == 3                    # the $$ is still waiting
+    session.feed("ok")
+    assert session.in_flight == 0 and session.sender.acked == 2
+
+
+def test_a_block_of_our_own_waits_for_room_in_the_board():
+    session = laser.Session(buffer=10)
+    session.start(["G1 X1.000"])                     # 10 bytes: the buffer is full
+    assert session.pending() == b"G1 X1.000\n"
+    session.send("$X")
+    assert session.pending() == b""                  # no room until the board answers
+    session.feed("ok")
+    assert session.pending() == b"$X\n"
+
+
+def test_the_job_leaves_room_for_a_block_of_our_own():
+    session = laser.Session(buffer=12)
+    session.send("$$")
+    assert session.pending() == b"$$\n"             # 3 bytes in flight
+    session.start(["G1 X1.000"])                     # 10 bytes: 13 does not fit
+    assert session.pending() == b""
+    session.feed("ok")
+    assert session.pending() == b"G1 X1.000\n"
+
+
+def test_an_error_on_a_block_of_our_own_is_not_the_jobs():
+    session = laser.Session(buffer=64)
+    session.send("$J=G91 X1000 F100")
+    session.pending()
+    session.start(["G21"])
+    session.pending()
+    session.feed("error:15")
+    assert session.sender.errors == [] and session.running
+    assert session.errors == [laser.grbl.error_text("15")]
+    session.feed("ok")
+    assert not session.running
+
+
+def test_a_reset_forgets_what_the_board_held():
+    session = laser.Session(buffer=64)
+    session.start(["G21", "G90"])
+    session.pending()
+    session.realtime(laser.grbl.RESET)
+    assert not session.running                       # the reset ended the job
+    assert session.pending() == laser.grbl.RESET.encode()
+    assert session.in_flight == 0
+
+
+def test_an_alarm_during_a_job_ends_it():
+    session = laser.Session()
+    session.start(["G21", "G90", "M5"])
+    session.pending()
+    session.feed("ALARM:1")
+    assert not session.running and session.in_flight == 0
+    assert session.state == "Alarm"
+
+
+def test_blocks_after_boot_wait_for_the_welcome_of_the_board():
+    session = laser.Session()
+    session.realtime(laser.grbl.RESET)
+    session.send_after_boot("$$")
+    session.send_after_boot("$X")
+    assert session.pending() == laser.grbl.RESET.encode()
+    assert session.pending() == b"" and session.holding
+    session.feed("Grbl 1.1h ['$' for help]")
+    assert not session.holding
+    assert session.pending() == b"$$\n"
+    assert session.pending() == b"$X\n"
+
+
+def test_held_blocks_go_anyway_when_the_board_never_says_hello():
+    session = laser.Session()
+    session.send_after_boot("$$")
+    assert session.pending() == b""
+    session.release_held()
+    assert session.pending() == b"$$\n"
+
+
+def test_only_the_welcome_of_grbl_is_the_boot_line():
+    session = laser.Session()
+    session.feed("$0=10")
+    assert session.boot == "" and session.settings.get(0) == 10.0
+    session.feed("GrblHAL 1.1f ['$' or '$HELP' for help]")
+    assert session.boot.startswith("GrblHAL")
+
+
+def test_a_second_welcome_is_a_restart_and_is_kept():
+    session = laser.Session()
+    session.feed("Grbl 1.1h ['$' for help]")
+    session.send("$$")
+    session.pending()
+    session.feed("Grbl 1.1h ['$' for help]")         # the board reset itself
+    assert session.in_flight == 0
+    assert session.messages[-1].startswith("Grbl")
+
+
 # -------------------------------------------------------------------------- the thread
 
 def test_the_thread_answers_the_board_and_asks_where_it_is():

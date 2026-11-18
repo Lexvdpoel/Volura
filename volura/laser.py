@@ -147,7 +147,27 @@ class Session:
         self.settings: dict = {}        #: what $$ answered, as {number: value}
         self.errors: list[str] = []     #: what the board refused, newest last
         self.sender: grbl.Sender | None = None
-        self._urgent: deque = deque()   #: the bytes that may not wait for the job
+        self._realtime: deque = deque() #: single bytes the board reads at once
+        self._lines: deque = deque()    #: blocks of our own (jog, $$, ...) still to write
+        self._held: deque = deque()     #: blocks that wait for the board to have booted
+        #: every block written and not answered yet, oldest first: (is_job, size)
+        self._flight: deque = deque()
+        self._lock = threading.RLock()
+
+    @property
+    def in_flight(self) -> int:
+        """How many bytes the board holds without having answered for them."""
+        return sum(size for _job, size in self._flight)
+
+    def _extra(self) -> int:
+        """The bytes in flight that are not blocks of the job."""
+        return sum(size for job, size in self._flight if not job)
+
+    def _flush(self) -> None:
+        """The board emptied its buffer (reset, alarm): nothing is waiting for an answer."""
+        self._flight.clear()
+        if self.sender is not None:
+            self.sender._sizes.clear()
 
     # -- what the board is
     @property
@@ -176,88 +196,153 @@ class Session:
 
     # -- what goes out
     def send(self, text) -> None:
-        """A block to the board: the text with a newline behind it, as the board reads it."""
+        """A block to the board: the text with a newline behind it, as the board reads it.
+
+        It waits for room in the buffer of the board like a block of the job does, and
+        its `ok` is counted apart from the job's, so a `$$` in between never makes the
+        job think one of its blocks was answered."""
         text = str(text).strip()
         if text:
-            self._urgent.append((text + "\n").encode("ascii", "replace"))
+            with self._lock:
+                self._lines.append((text + "\n").encode("ascii", "replace"))
+
+    def send_after_boot(self, text) -> None:
+        """A block that waits until the board said who it is (its welcome line).
+
+        A board resets when the port is opened (an Arduino) or when it gets the reset
+        byte, and what is written while it starts up is lost; :meth:`release_held` lets
+        the blocks go anyway, for a board that never says hello."""
+        text = str(text).strip()
+        if text:
+            with self._lock:
+                self._held.append((text + "\n").encode("ascii", "replace"))
+
+    def release_held(self) -> None:
+        """The blocks that waited for the welcome of the board go out now."""
+        with self._lock:
+            while self._held:
+                self._lines.append(self._held.popleft())
+
+    @property
+    def holding(self) -> bool:
+        """Whether blocks are still waiting for the board to say hello."""
+        return bool(self._held)
 
     def realtime(self, cmd) -> None:
-        """A real-time command: one byte the board reads between the blocks it has."""
+        """A real-time command: one byte the board reads between the blocks it has.
+
+        The reset byte empties the board, so a job that runs is over with it."""
         if cmd:
-            self._urgent.append(str(cmd).encode("ascii", "replace"))
+            with self._lock:
+                if cmd == grbl.RESET and self.sender is not None:
+                    self.sender.cancel()
+                self._realtime.append(str(cmd).encode("ascii", "replace"))
 
     def override(self, kind, action) -> None:
         """Change the feed, the rapid or the power while the board is moving."""
         byte = grbl.override(kind, action)
         if byte:
-            self._urgent.append(byte)
+            with self._lock:
+                self._realtime.append(byte)
 
     def start(self, lines) -> bool:
         """Begin a job of the blocks in `lines`; False when a job is already running."""
-        if self.running:
-            return False
-        self.sender = grbl.Sender(lines, buffer=self.buffer)
-        return True
+        with self._lock:
+            if self.running:
+                return False
+            self.sender = grbl.Sender(lines, buffer=self.buffer)
+            return True
 
     def pause(self) -> None:
         """Feed hold: the board slows to a stop with the beam off and keeps what it has."""
-        if self.sender is not None:
-            self.sender.pause()
-        self.realtime(grbl.FEED_HOLD)
+        with self._lock:
+            if self.sender is not None:
+                self.sender.pause()
+            self._realtime.append(grbl.FEED_HOLD.encode("ascii"))
 
     def resume(self) -> None:
-        if self.sender is not None:
-            self.sender.resume()
-        self.realtime(grbl.CYCLE_START)
+        with self._lock:
+            if self.sender is not None:
+                self.sender.resume()
+            self._realtime.append(grbl.CYCLE_START.encode("ascii"))
 
     def stop(self) -> None:
         """End the job and empty what the board has queued; it lands in the alarm state.
 
-        The sender is cancelled and not thrown away: the thread may be standing in
-        :meth:`pending` with it in its hand, and the numbers of the job on the screen are
-        better left where they are than forgotten on the way out.
+        The sender is cancelled and not thrown away: the numbers of the job on the screen
+        are better left where they are than forgotten on the way out.
         """
-        if self.sender is not None:
-            self.sender.cancel()
         self.realtime(grbl.RESET)
 
     def pending(self) -> bytes:
-        """What may go out now: what may not wait first, then as much of the job as fits."""
-        if self._urgent:
-            return self._urgent.popleft()
-        if self.sender is not None:
-            data = self.sender.take()
-            if data:
-                return data
-        return b""
+        """What may go out now: real-time bytes first, then our own blocks, then the job.
+
+        Blocks of either kind only go out while the buffer of the board has room for
+        them; one block always may when nothing at all is waiting for an answer."""
+        with self._lock:
+            if self._realtime:
+                byte = self._realtime.popleft()
+                if byte == grbl.RESET.encode("ascii"):
+                    self._flush()                  # the board forgets what it held
+                return byte
+            if self._lines:
+                size = len(self._lines[0])
+                if self._flight and self.in_flight + size > self.buffer:
+                    return b""                     # wait for an ok; the job waits too
+                self._flight.append((False, size))
+                return self._lines.popleft()
+            if self.sender is not None:
+                data = self.sender.take(extra=self._extra())
+                if data:
+                    for block in data.split(b"\n")[:-1]:
+                        self._flight.append((True, len(block) + 1))
+                    return data
+            return b""
 
     # -- what comes back
+    def _answered(self, ok=True, number="") -> None:
+        """The oldest block that was waiting was answered with ok or with an error."""
+        if not self._flight:
+            return                                 # an answer to nothing: costs nothing
+        job, _size = self._flight.popleft()
+        if job and self.sender is not None:
+            self.sender.confirm(ok=ok)
+            if not ok:
+                self.sender.error(number)
+
     def feed(self, line) -> None:
         """One line of the board, as it stands and without its newline."""
         kind, rest = grbl.classify(line)
-        if kind == "ok":
-            if self.sender is not None:
-                self.sender.confirm()
-        elif kind == "error":
-            if self.sender is not None:
-                self.sender.confirm(ok=False)
-                self.sender.error(rest)
-            self.errors.append(grbl.error_text(rest))
-        elif kind == "status":
-            self._report(grbl.parse_report(line))
-        elif kind == "alarm":
-            self.state = "Alarm"
-            self.errors.append(rest)
-        elif kind == "message":
-            self.messages.append(rest)
-            self.settings.update(profiles.parse_settings((rest,)))
-        elif kind == "text":
-            # the first thing a board says is who it is; the rest is the answer of $$
-            if self.boot:
+        with self._lock:
+            if kind == "ok":
+                self._answered()
+            elif kind == "error":
+                self._answered(ok=False, number=rest)
+                self.errors.append(grbl.error_text(rest))
+            elif kind == "status":
+                self._report(grbl.parse_report(line))
+            elif kind == "alarm":
+                self.state = "Alarm"
+                self.errors.append(rest)
+                # an alarm empties the board: a job that ran cannot go on where it was
+                if self.sender is not None:
+                    self.sender.cancel()
+                self._flush()
+            elif kind == "message":
                 self.messages.append(rest)
                 self.settings.update(profiles.parse_settings((rest,)))
-            else:
-                self.boot = rest
+            elif kind == "text":
+                if rest.lower().startswith("grbl"):
+                    # the welcome: the board (re)started with an empty buffer
+                    if self.boot:
+                        self.messages.append(rest)
+                    self.boot = rest
+                    self._flush()
+                    while self._held:
+                        self._lines.append(self._held.popleft())
+                else:
+                    self.messages.append(rest)
+                    self.settings.update(profiles.parse_settings((rest,)))
 
     def _report(self, info: dict) -> None:
         """Take the numbers of a status report into the session; a field that is not

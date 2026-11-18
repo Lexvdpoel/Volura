@@ -52,7 +52,8 @@ OVERRIDES = {
     "feed": {"set": b"\x90", "up10": b"\x91", "down10": b"\x92", "up1": b"\x93",
              "down1": b"\x94"},
     "rapid": {"set": b"\x95", "half": b"\x96", "quarter": b"\x97"},
-    "power": {"set": b"\x99", "up10": b"\x9a", "down1": b"\x9b"},
+    "power": {"set": b"\x99", "up10": b"\x9a", "down10": b"\x9b", "up1": b"\x9c",
+              "down1": b"\x9d"},
 }
 
 #: the state of the board as the user reads it
@@ -349,19 +350,22 @@ class Sender:
         """How many bytes the board has not answered for yet."""
         return sum(self._sizes)
 
-    def take(self) -> bytes:
+    def take(self, extra=0) -> bytes:
         """As much of the job as the board still has room for, as the bytes to write.
 
+        `extra` is what else the board holds without an answer - blocks that are not part
+        of the job, such as a `$$` sent in between - so the whole stays under the buffer.
         Empty when the job is over, when it is paused or when the buffer is full; the
         caller comes back after the next `ok`.
         """
         if self.paused or self.index >= self.total:
             return b""
+        extra = max(0, int(extra))
         out, sizes = [], []
         while self.index < self.total:
             size = len(self.lines[self.index]) + 1        # the newline is part of it
-            room = self.in_flight + sum(sizes) + size
-            if (out or self._sizes) and room > self.buffer:
+            room = extra + self.in_flight + sum(sizes) + size
+            if (out or self._sizes or extra) and room > self.buffer:
                 break
             out.append(self.lines[self.index])
             sizes.append(size)
