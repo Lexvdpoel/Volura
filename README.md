@@ -358,6 +358,18 @@ The interface is available in English and Dutch (*Window > Preferences > General
   round, so there is wall between two rows instead of one hole straight through the wall. Without
   the windows the wall stands whole. It prints standing on its floor - nothing above the bed points
   down by more than 45 degrees - so nothing needs support
+- **Cable Comb** (Draw > Parts): a flat comb that keeps a bundle of cables side by side behind a PC or
+  on a desk, so they lie in a row instead of tangling in one knot. You enter how many cables the comb
+  holds (2 to 16), how thick they are (3 to 12 mm), how high the plate stands (3 to 8 mm) and how
+  narrow an opening is compared to the cable (60 to 90 percent); the dialog says how wide an opening
+  is and how big the comb stands on the bed. Every cable lies in its own round seat, 0.3 mm wider than
+  the cable, and is held by the opening above it, which is only as wide as the part you entered - the
+  cable is snapped through it and the plastic springs back behind it. The seats stand a cable plus
+  3.5 mm apart and sit low in the plate, so the wall a cable is snapped through is the thinner one,
+  and where an opening leaves the top edge it is widened by 0.8 mm on both sides: a lead-in that
+  catches the cable and guides it into its seat. The plate keeps 3.5 mm of plastic all round and
+  rounds its corners with 2 mm, and the number of cables is taken back to what fits 250 mm. It prints
+  lying flat - every face is vertical or horizontal - so nothing overhangs and nothing needs support
 - **Elephant Foot Chamfer** (3D Printing): a small chamfer along the bottom edges of the
   selected groups, or of all visible groups when nothing is selected, so the squashed first layer of
   the print no longer sticks out ("elephant's foot"); the size is 0.4 mm by default and is

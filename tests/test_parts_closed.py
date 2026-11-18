@@ -26,9 +26,9 @@ import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,  # noqa: E402
-                    cable_chain, cable_clip, cable_winder, calibration_cube, card_holder, coaster,
-                    desk_hook, door_wedge, drawer_organizer, enclosure, fan_guard, filament_clip,
-                    first_layer_test,
+                    cable_chain, cable_clip, cable_comb, cable_winder, calibration_cube,
+                    card_holder, coaster, desk_hook, door_wedge, drawer_organizer, enclosure,
+                    fan_guard, filament_clip, first_layer_test,
                     fonts, gears, gridfinity,
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
                     pegboard, pen_cup,
@@ -385,6 +385,12 @@ CASES = [
         diameter=40.0, height=50.0, wall=1.6, floor=1.6, windows=False, columns=6)]),
     ("pen cup large with all the columns", lambda: [pen_cup.pen_cup(
         diameter=120.0, height=160.0, wall=4.0, floor=4.0, columns=24)]),
+
+    ("cable comb default", lambda: [cable_comb.cable_comb()]),
+    ("cable comb two thin cables", lambda: [cable_comb.cable_comb(
+        cables=2, cable=3.0, thickness=3.0, snap=0.6)]),
+    ("cable comb as many thick cables as the bed takes", lambda: [cable_comb.cable_comb(
+        cables=16, cable=12.0, thickness=8.0, snap=0.9)]),
 
     ("3D text default", lambda: letters("Volura")),
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),

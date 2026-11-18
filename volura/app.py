@@ -26,8 +26,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_holder, boxgen, bracket,
-               cable_chain, cable_clip, cable_winder, cam, card_holder, coaster, desk_hook,
-               door_wedge, drawer_organizer,
+               cable_chain, cable_clip, cable_comb, cable_winder, cam, card_holder, coaster,
+               desk_hook, door_wedge, drawer_organizer,
                dxf, enclosure, errors, fan_guard, filament_clip,
                fileio, gcode, gcode_mill, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar,
@@ -1330,6 +1330,20 @@ class Settings:
         self.pen_cup_columns = max(pen_cup.COLUMNS_MIN, min(pen_cup.COLUMNS_MAX, columns))
         self.pen_cup_windows = self._bool("pen_cup_windows", True)
         for key, default, lo, hi in (
+                ("cable_comb_cable", 6.0, cable_comb.CABLE_MIN, cable_comb.CABLE_MAX),
+                ("cable_comb_thickness", 4.0, cable_comb.THICKNESS_MIN, cable_comb.THICKNESS_MAX),
+                ("cable_comb_snap", 0.75, cable_comb.SNAP_MIN, cable_comb.SNAP_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        try:
+            cables = int(self.q.value("cable_comb_cables", 6))
+        except (TypeError, ValueError):
+            cables = 6
+        self.cable_comb_cables = max(cable_comb.CABLES_MIN, min(cable_comb.CABLES_MAX, cables))
+        for key, default, lo, hi in (
                 ("peg_cols", pegboard.COLS_DEFAULT, pegboard.COLS_MIN, pegboard.COLS_MAX),
                 ("peg_rows", pegboard.ROWS_DEFAULT, pegboard.ROWS_MIN, pegboard.ROWS_MAX)):
             try:
@@ -1627,6 +1641,9 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("pen_cup_diameter", "pen_cup_height", "pen_cup_wall", "pen_cup_floor",
                     "pen_cup_columns", "pen_cup_windows"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("cable_comb_cables", "cable_comb_cable", "cable_comb_thickness",
+                    "cable_comb_snap"):
             self.q.setValue(key, getattr(self, key))
         for key in ("grid_kind", "grid_cols", "grid_rows", "grid_units", "grid_divisions",
                     "grid_lip", "grid_magnets", "grid_scoop", "grid_label"):
@@ -2871,6 +2888,15 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                               "carries a band of diamond windows, and because the sides of every "
                               "diamond lean at 45 degrees the band prints open while the cup stands "
                               "on its own floor - nothing needs support"))
+        # ---- cable comb
+        self.a_cable_comb = A(tr("Cable Comb…"),
+                              lambda checked=False: self.cable_comb_dialog(), None, "cable_comb",
+                              False,
+                              tr("Add a flat comb that keeps a bundle of cables side by side: every "
+                                 "cable clicks into its own round seat through an opening that is "
+                                 "narrower than the cable, so the bundle stays in line behind your PC "
+                                 "instead of tangling in one knot; it prints lying flat, so nothing "
+                                 "needs support"))
         # ---- holding tabs
         self.a_holding_tabs = A(tr("Holding &Tabs…"),
                                 lambda checked=False: self.holding_tabs_dialog(), None, "tabs",
@@ -2998,7 +3024,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_lithophane, self.a_hex_key_holder,
                           self.a_screw_jar, self.a_bag_clip, self.a_coaster,
                           self.a_filament_clip, self.a_plant_label, self.a_desk_hook,
-                          self.a_door_wedge, self.a_soap_dish, self.a_pen_cup))
+                          self.a_door_wedge, self.a_soap_dish, self.a_pen_cup, self.a_cable_comb))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],

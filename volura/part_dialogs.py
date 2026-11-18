@@ -16,9 +16,9 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QLineEdit, QPlainTextEdit, QPushButton, QSpinBox)
 
 from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
-               cable_winder, card_holder, coaster, desk_hook, door_wedge, drawer_organizer,
-               enclosure, fan_guard, filament_clip, fonts, gears, gridfinity, grommet,
-               hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
+               cable_comb, cable_winder, card_holder, coaster, desk_hook, door_wedge,
+               drawer_organizer, enclosure, fan_guard, filament_clip, fonts, gears, gridfinity,
+               grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
                pegboard, pen_cup, phone_stand, plant_label, plant_pot, screw_jar, soap_dish,
                spool_adapter, standoff, storage_bin, text3d, threads, tie_mount, wall_hook)
 from .i18n import tr
@@ -2785,6 +2785,75 @@ class PenCupDialog(QDialog):
                 "height": round(self.height.value(), 6), "wall": round(self.wall.value(), 6),
                 "floor": round(self.floor.value(), 6), "windows": self.windows.isChecked(),
                 "columns": int(self.columns.value())}
+
+
+class CableCombDialog(QDialog):
+    """The "Cable Comb…" dialog: a flat comb that keeps a bundle of cables side by side.
+
+    The number of cables and their diameter say how long the comb is and how wide its seats, the
+    thickness how high the plate stands and the snap how much narrower an opening is than the cable -
+    entered as a percent, because that is what a cable is snapped through. Under the fields the comb
+    lies in figures, with the width of an opening. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Cable comb"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(1)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.cables = QSpinBox()
+        self.cables.setRange(cable_comb.CABLES_MIN, cable_comb.CABLES_MAX)
+        self.cables.setValue(int(s.cable_comb_cables))
+        self.cables.setToolTip(tr("How many cables the comb holds: count the ones that run behind "
+                                  "your PC and add one for the next"))
+        self.cable = spin(cable_comb.CABLE_MIN, cable_comb.CABLE_MAX, s.cable_comb_cable, 0.5)
+        self.cable.setToolTip(tr("How thick the cables are that go in; the seats are made for one "
+                                 "thickness, so a thinner cable rattles in its seat"))
+        self.thickness = spin(cable_comb.THICKNESS_MIN, cable_comb.THICKNESS_MAX,
+                              s.cable_comb_thickness, 0.5)
+        self.thickness.setToolTip(tr("How high the plate stands; the comb lies flat on the bed, so "
+                                     "this is also how thick it prints"))
+        self.snap = QSpinBox()
+        self.snap.setRange(int(round(cable_comb.SNAP_MIN * 100.0)),
+                           int(round(cable_comb.SNAP_MAX * 100.0)))
+        self.snap.setSuffix(" %")
+        self.snap.setValue(int(round(100.0 * s.cable_comb_snap)))
+        self.snap.setToolTip(tr("How narrow an opening is compared to the cable; the cable has to be "
+                                "snapped through it, so less does not close and more does not hold"))
+        self.info = QLabel()
+        lay.addRow(tr("Cables"), self.cables)
+        lay.addRow(tr("Cable diameter"), self.cable)
+        lay.addRow(tr("Thickness"), self.thickness)
+        lay.addRow(tr("Snap"), self.snap)
+        lay.addRow("", self.info)
+        for w in (self.cables, self.cable, self.thickness, self.snap):
+            w.valueChanged.connect(self._changed)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        lay.addRow(self.buttonBox)
+        self._changed()
+
+    def _changed(self, *_):
+        """The comb these figures make, lying on the bed, and how wide its openings are."""
+        s = cable_comb.sizes(**self.options())
+        self.info.setText(tr("{w:.2f} mm openings, {l:.1f} by {d:.1f} mm on the bed").format(
+            w=s["opening"], l=s["size_x"], d=s["size_y"]))
+
+    def options(self) -> dict:
+        return {"cables": int(self.cables.value()), "cable": round(self.cable.value(), 6),
+                "thickness": round(self.thickness.value(), 6),
+                "snap": round(self.snap.value() / 100.0, 6)}
 
 
 class HoseAdapterDialog(QDialog):
