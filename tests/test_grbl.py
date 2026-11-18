@@ -132,6 +132,41 @@ def test_a_position_the_board_cannot_be_read_from_is_no_position():
     assert grbl.parse_report("<Idle|MPos:1.000,abc,0.000>")["mpos"] is None
 
 
+def test_a_board_with_a_rotary_axis_keeps_its_four_numbers():
+    """grblHAL and FluidNC drive four axes: the report says so with a fourth number."""
+    report = grbl.parse_report("<Idle|MPos:1.000,2.000,3.000,90.000|FS:0,0|Ov:100,100,100>")
+    assert report["mpos"] == (1.0, 2.0, 3.0, 90.0)
+    assert grbl.axes_of(report) == 4
+
+
+def test_a_board_with_two_rotary_axes_keeps_its_five_numbers():
+    report = grbl.parse_report("<Idle|MPos:1.000,2.000,3.000,90.000,45.000"
+                               "|WPos:0.000,0.000,0.000,0.000,0.000>")
+    assert report["mpos"] == (1.0, 2.0, 3.0, 90.0, 45.0)
+    assert report["wpos"] == (0.0, 0.0, 0.0, 0.0, 0.0)
+    assert grbl.axes_of(report) == 5
+
+
+def test_a_board_of_three_axes_still_gives_three_numbers():
+    report = grbl.parse_report("<Idle|MPos:1.000,2.000,3.000|WCO:10.000,10.000,0.000>")
+    assert report["mpos"] == (1.0, 2.0, 3.0)
+    assert report["wco"] == (10.0, 10.0, 0.0)
+    assert grbl.axes_of(report) == 3
+
+
+def test_numbers_behind_the_axes_volura_knows_are_cut_away():
+    report = grbl.parse_report("<Idle|MPos:1.000,2.000,3.000,4.000,5.000,6.000,7.000>")
+    assert report["mpos"] == (1.0, 2.0, 3.0, 4.0, 5.0)
+    assert grbl.axes_of(report) == 5
+
+
+def test_a_board_that_has_not_said_anything_is_a_board_of_three_axes():
+    assert grbl.axes_of({}) == 3
+    assert grbl.axes_of({"state": "Idle", "mpos": None}) == 3
+    assert grbl.axes_of((1.0, 2.0, 3.0, 90.0)) == 4
+    assert grbl.axes_of(None) == 3
+
+
 def test_the_state_of_the_board_is_said_the_way_the_user_reads_it():
     assert grbl.state_label("Run") == grbl.STATE_LABELS["Run"]
     assert grbl.state_label("Idle") == grbl.STATE_LABELS["Idle"]
@@ -157,6 +192,19 @@ def test_a_jog_of_nothing_is_no_block_at_all():
     assert grbl.jog(dx=0.0, dy=0.0, dz=0.0) == ""
 
 
+def test_a_jog_of_nothing_is_no_block_even_when_rotary_axes_are_given():
+    assert grbl.jog(da=0.0, db=0.0) == ""
+
+
+def test_a_jog_of_a_rotary_axis_turns_it_in_degrees():
+    assert grbl.jog(da=15.0) == "$J=G21 G91 A15.000 F1000"
+    assert grbl.jog(dz=1.0, da=-5.0, db=90.0, feed=500) == "$J=G21 G91 Z1.000 A-5.000 B90.000 F500"
+
+
+def test_a_jog_that_only_turns_is_a_block_too():
+    assert grbl.jog(db=0.1) == "$J=G21 G91 B0.100 F1000"
+
+
 def test_a_rapid_move_is_absolute_and_names_only_the_axes_it_is_given():
     assert grbl.move(x=30.0, y=15.0) == "G90 G0 X30.000 Y15.000"
     assert grbl.move(z=5.0) == "G90 G0 Z5.000"
@@ -172,6 +220,12 @@ def test_zeroing_here_moves_the_offset_and_leaves_the_other_axes_alone():
     assert grbl.zero_here(x=True, y=False) == "G10 L20 P1 X0"
     assert grbl.zero_here(x=False, y=False, z=True) == "G10 L20 P1 Z0"
     assert grbl.zero_here(x=False, y=False) == ""
+
+
+def test_zeroing_a_rotary_axis_zeroes_its_degrees():
+    assert grbl.zero_here(x=False, y=False, a=True) == "G10 L20 P1 A0"
+    assert grbl.zero_here(x=False, y=False, a=True, b=True) == "G10 L20 P1 A0 B0"
+    assert grbl.zero_here(x=False, y=False, z=True, a=True, b=True) == "G10 L20 P1 Z0 A0 B0"
 
 
 def test_zeroing_at_a_point_of_the_machine_names_the_offset_itself():

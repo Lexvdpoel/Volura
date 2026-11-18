@@ -28,7 +28,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 from volura import grbl, laser  # noqa: E402
 from volura import laser_image, laser_profiles as profiles  # noqa: E402
 from volura.i18n import tr  # noqa: E402
-from volura.laser_window import LaserWindow, image_gray  # noqa: E402
+from volura.laser_window import ROTARY_STEP_KEY, LaserWindow, image_gray  # noqa: E402
 from volura.settings import qsettings  # noqa: E402
 from test_laser import FakePort  # noqa: E402
 
@@ -117,6 +117,21 @@ class SlowPort(FakePort):
             self.say(self.report)         # the board always knows where it is
 
 
+class RotaryPort(FakePort):
+    """A board with a rotary axis: its status report carries a fourth number, in degrees."""
+
+    REPORT = "<Idle|MPos:1.000,2.000,3.000,90.000|FS:0,0|Ov:100,100,100>"
+
+    def __init__(self, boot="Grbl 1.1h ['$' for help]", report=None):
+        super().__init__(boot, report or self.REPORT)
+
+
+class FiveAxisPort(RotaryPort):
+    """A board with two rotary axes: its status report carries five numbers."""
+
+    REPORT = "<Idle|MPos:1.000,2.000,3.000,90.000,45.000|FS:0,0|Ov:100,100,100>"
+
+
 @pytest.fixture(autouse=True)
 def machine_choices():
     """Every test starts with a board of its own: nothing remembered from the last one."""
@@ -124,6 +139,7 @@ def machine_choices():
     q = qsettings()
     for key in (laser.PORT_KEY, laser.BAUD_KEY, laser.STEP_KEY, laser.FEED_KEY,
                 profiles.MACHINE_KEY, profiles.TRAVEL_X_KEY, profiles.TRAVEL_Y_KEY,
+                ROTARY_STEP_KEY, "cnc/machine", "cnc/rotary_step",
                 profiles.CLAMP_KEY, profiles.PRESETS_KEY,
                 laser.DOT_KEY, laser.RASTER_FEED_KEY, laser.IMAGE_MODE_KEY,
                 laser.IMAGE_POWER_KEY, laser.IMAGE_PASSES_KEY,
@@ -188,6 +204,21 @@ def board(dlg, monkeypatch):
 def slow(dlg, monkeypatch):
     """The window with a board that thinks about every block, so a job keeps running."""
     return connect(dlg, monkeypatch, SlowPort)
+
+
+@pytest.fixture()
+def cnc(win):
+    """The controller of the CNC tab: the panel a mill stands in."""
+    panel = LaserWindow(win, "cnc")
+    panel.show()
+    QCoreApplication.processEvents()
+    yield panel
+    panel.shutdown()
+
+
+def choose_mill(panel, key):
+    """The preset of the mill the panel is set to."""
+    panel.machine_box.setCurrentIndex(pick(panel.machine_box, key))
 
 
 def worksheet(win):
@@ -360,6 +391,76 @@ def test_the_overrides_are_the_bytes_of_the_board(dlg, board):
     assert more, "there is no override button to press"
     more[0].click()
     assert pump(dlg, lambda: grbl.override("feed", "up10") in board.written)
+
+
+# ------------------------------------------------------------------ the rotary axes of a mill
+
+def test_a_board_that_reports_a_rotary_axis_shows_the_row_of_a(win, monkeypatch, cnc):
+    connect(cnc, monkeypatch, RotaryPort)
+    assert pump(cnc, lambda: not cnc.b_a_plus.isHidden()), "the board reported four numbers"
+    assert cnc.b_b_plus.isHidden(), "the board reported no fifth number"
+
+
+def test_a_board_that_reports_two_rotary_axes_shows_the_row_of_b(win, monkeypatch, cnc):
+    connect(cnc, monkeypatch, FiveAxisPort)
+    assert pump(cnc, lambda: not cnc.b_b_plus.isHidden() and not cnc.b_a_plus.isHidden())
+
+
+def test_the_position_of_the_board_shows_the_rotary_axis_in_degrees(win, monkeypatch, cnc):
+    connect(cnc, monkeypatch, RotaryPort)
+    assert pump(cnc, lambda: "A 90.000°" in cnc.mpos_label.text())
+    assert "X 1.000" in cnc.mpos_label.text()
+
+
+def test_a_preset_that_has_a_rotary_axis_shows_the_row_without_a_board(cnc):
+    choose_mill(cnc, "altmill")
+    assert not cnc.b_a_plus.isHidden() and not cnc.b_zero_a.isHidden()
+    assert cnc.b_b_plus.isHidden()
+
+
+def test_a_mill_of_three_axes_shows_nothing_of_rotary_axes(win, monkeypatch, cnc):
+    choose_mill(cnc, "3018pro")
+    connect(cnc, monkeypatch)                        # a board that reports three numbers
+    assert cnc.b_a_plus.isHidden() and cnc.b_zero_a.isHidden()
+    assert cnc.rotary_step_box.isHidden()
+
+
+def test_the_laser_panel_has_no_rotary_axes(dlg):
+    assert not hasattr(dlg, "b_a_plus") and not hasattr(dlg, "b_zero_a")
+    assert dlg.rotary_widgets == {}
+
+
+def test_a_turn_of_the_a_axis_jogs_one_step_of_the_degrees(win, monkeypatch, cnc):
+    port = connect(cnc, monkeypatch, RotaryPort)
+    assert pump(cnc, lambda: not cnc.b_a_plus.isHidden())
+    cnc.rotary_step_box.setCurrentIndex(pick(cnc.rotary_step_box, 15.0))
+    cnc.b_a_plus.click()
+    assert pump(cnc, lambda: "$J=G21 G91 A15.000 F" in port.text())
+
+
+def test_a_turn_back_of_the_b_axis_turns_the_other_way(win, monkeypatch, cnc):
+    port = connect(cnc, monkeypatch, FiveAxisPort)
+    assert pump(cnc, lambda: not cnc.b_b_minus.isHidden())
+    cnc.rotary_step_box.setCurrentIndex(pick(cnc.rotary_step_box, 5.0))
+    cnc.b_b_minus.click()
+    assert pump(cnc, lambda: "$J=G21 G91 B-5.000 F" in port.text())
+
+
+def test_zero_a_puts_the_origin_of_the_work_at_the_axis(win, monkeypatch, cnc):
+    port = connect(cnc, monkeypatch, RotaryPort)
+    assert pump(cnc, lambda: not cnc.b_zero_a.isHidden())
+    cnc.b_zero_a.click()
+    assert pump(cnc, lambda: "G10 L20 P1 A0" in port.text())
+
+
+def test_the_step_of_the_rotary_axis_comes_back_next_time(cnc):
+    cnc.rotary_step_box.setCurrentIndex(pick(cnc.rotary_step_box, 45.0))
+    qsettings().sync()
+    again = LaserWindow(cnc.win, "cnc")
+    try:
+        assert float(again.rotary_step_box.currentData()) == 45.0
+    finally:
+        again.shutdown()
 
 
 # ------------------------------------------------------------------ the job

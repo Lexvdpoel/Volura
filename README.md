@@ -494,6 +494,9 @@ The interface is available in English and Dutch (*Window > Preferences > General
   The *CNC* tab has a controller of its own with presets of routers and mills that speak
   GRBL, grblHAL or FluidNC: Genmitsu, OpenBuilds LEAD / MiniMill / C-Beam / WorkBee,
   Sienci LongMill and AltMill, Shapeoko, X-Carve, FoxAlien, TwoTrees and V1 Engineering.
+  A mill with rotary axes shows A and B there too - the position in degrees, a step to turn
+  them and a *Zero A* - as soon as the preset says the mill has them or the board reports
+  four or five numbers, which is what grblHAL and FluidNC drive on four and five axes.
   *Picture* engraves a photograph or a logo with the image modes of LightBurn:
   grayscale, threshold, halftone 4x4 and 8x8, and the dithering of Floyd-Steinberg,
   Atkinson, Jarvis-Judice-Ninke, Stucki, Burrows, Sierra and Sierra Lite

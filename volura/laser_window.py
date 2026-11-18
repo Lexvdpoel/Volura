@@ -50,6 +50,12 @@ BOOT_TICKS = int(round(3.0 / laser.UPDATE_SECONDS))
 #: how wide the last picture was engraved, mm
 IMAGE_WIDTH_KEY = "laser/image_width"
 
+#: the turns of the jog pad of a rotary axis, in degrees
+ROTARY_STEPS = (0.1, 1.0, 5.0, 15.0, 45.0, 90.0)
+
+#: where the step of the rotary axes is kept, beside the step of the head
+ROTARY_STEP_KEY = "laser/rotary_step"
+
 
 def _grid(buttons, columns=3) -> QGridLayout:
     """Buttons in rows of `columns`: the controller stands in a narrow column next to the
@@ -87,10 +93,15 @@ PAD_PLACE = {"↑": (0, 1), "↓": (2, 1), "←": (1, 0), "→": (1, 2), "Z ↑"
 
 
 def _pos(where) -> str:
-    """A position of the board as one line of numbers; a dash when the board has not said."""
+    """A position of the board as one line of numbers; a dash when the board has not said.
+
+    A board of grblHAL or FluidNC with rotary axes sends four or five numbers instead of
+    three; A and B are degrees and say so.
+    """
     if where is None:
         return "—"
-    return "  ".join(f"{name} {v:.3f}" for name, v in zip("XYZ", where))
+    return "  ".join(f"{name} {v:.3f}" + ("°" if name in "AB" else "")
+                     for name, v in zip(grbl.AXES, where))
 
 
 class PresetsDialog(QDialog):
@@ -382,6 +393,7 @@ class LaserWindow(QWidget):
         self._boot_wait = 0             # ticks left before the held blocks go anyway
         self._messages = 0
         self._errors = 0
+        self.rotary_widgets: dict = {}  #: what a rotary axis needs on the screen, per axis
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -613,6 +625,7 @@ class LaserWindow(QWidget):
             q.setValue(GCODE_DYNAMIC_KEY, bool(machine.dynamic))
         q.sync()
         self._say_machine()
+        self._show_rotary()
 
     def _set_jog_feed(self, feed):
         """The speed of the pad nearest to what this machine moves at."""
@@ -852,6 +865,15 @@ class LaserWindow(QWidget):
         self._remember(self.feed_box, self._k(laser.FEED_KEY), laser.JOG_FEEDS[0])
         fields.addRow(tr("Step"), self.step_box)
         fields.addRow(tr("Speed"), self.feed_box)
+        if self.is_cnc:
+            # a rotary axis turns in degrees, so it has a step of its own
+            self.turn_label = QLabel(tr("Turn"))
+            self.rotary_step_box = QComboBox()
+            for deg in ROTARY_STEPS:
+                self.rotary_step_box.addItem(f"{deg:g} °", deg)
+            self.rotary_step_box.setToolTip(tr("How far one click turns a rotary axis"))
+            self._remember(self.rotary_step_box, self._k(ROTARY_STEP_KEY), ROTARY_STEPS[3])
+            fields.addRow(self.turn_label, self.rotary_step_box)
         lay.addLayout(fields)
 
         pad = QGridLayout()
@@ -870,7 +892,27 @@ class LaserWindow(QWidget):
         self.b_home_origin.clicked.connect(self.go_to_origin)
         pad.addWidget(self.b_home_origin, 1, 1)
         lay.addLayout(pad)
+        if self.is_cnc:
+            # the rotary axes of a mill turn next to the pad of the head, one row each
+            self.b_a_minus, self.b_a_plus = self._turn_buttons("A")
+            self.b_b_minus, self.b_b_plus = self._turn_buttons("B")
+            self.rotary_widgets.update({"A": [self.b_a_minus, self.b_a_plus],
+                                         "B": [self.b_b_minus, self.b_b_plus]})
+            lay.addLayout(_grid((self.b_a_minus, self.b_a_plus,
+                                 self.b_b_minus, self.b_b_plus), 2))
         return box
+
+    def _turn_buttons(self, axis) -> tuple:
+        """The two buttons of a rotary axis: one step back and one step further."""
+        back = QPushButton(f"{axis}−")
+        back.setAccessibleName(tr("Turn {axis} one step back (-{axis})").format(axis=axis))
+        back.setToolTip(back.accessibleName())
+        back.clicked.connect(lambda checked=False, a=axis: self.turn(a, -1.0))
+        fwd = QPushButton(f"{axis}+")
+        fwd.setAccessibleName(tr("Turn {axis} one step further (+{axis})").format(axis=axis))
+        fwd.setToolTip(fwd.accessibleName())
+        fwd.clicked.connect(lambda checked=False, a=axis: self.turn(a, 1.0))
+        return back, fwd
 
     def _remember(self, box, key, default):
         """Put the saved choice of a combo box back, and keep it for the next time."""
@@ -897,6 +939,31 @@ class LaserWindow(QWidget):
         block = grbl.jog(dx * step, dy * step, dz * step, feed)
         if block:
             self.session.send(block)
+
+    def turn(self, axis, sign):
+        """One step of a rotary axis, in degrees: the pad of an A or a B axis."""
+        step = float(self.rotary_step_box.currentData() or 0.0) * sign
+        feed = float(self.feed_box.currentData() or 0.0)
+        block = grbl.jog(da=step if axis == "A" else 0.0,
+                         db=step if axis == "B" else 0.0, feed=feed)
+        if block:
+            self.session.send(block)
+
+    def rotary_axes(self) -> int:
+        """How many axes the mill has: what the preset says, or what the board reports
+        when it drives more axes than the preset knows about."""
+        return max(int(self.machine.axes), grbl.axes_of(self.session.mpos),
+                   grbl.axes_of(self.session.wpos))
+
+    def _show_rotary(self):
+        """The rows of the rotary axes: there when the mill has them, gone when it has none."""
+        axes = self.rotary_axes()
+        for axis, widgets in self.rotary_widgets.items():
+            for w in widgets:
+                w.setVisible(axes > grbl.AXES.index(axis))
+        if self.is_cnc:
+            for w in (self.turn_label, self.rotary_step_box):
+                w.setVisible(axes > 3)
 
     def _on_machine(self, x, y) -> bool:
         """Whether a machine position is on the work area of the machine."""
@@ -938,6 +1005,21 @@ class LaserWindow(QWidget):
         self.b_zero_z = QPushButton(tr("Zero Z"))
         self.b_zero_z.setToolTip(tr("The Z of the work starts at the head"))
         lay.addLayout(_grid((self.b_zero_xy, self.b_zero_x, self.b_zero_y, self.b_zero_z), 2))
+        if self.is_cnc:
+            # a rotary axis has an origin of its own, in degrees
+            self.b_zero_a = QPushButton(tr("Zero A"))
+            self.b_zero_a.setToolTip(tr("The {axis} of the work starts where the axis stands "
+                                        "now").format(axis="A"))
+            self.b_zero_a.clicked.connect(lambda checked=False: self.zero(x=False, y=False,
+                                                                          a=True))
+            self.b_zero_b = QPushButton(tr("Zero B"))
+            self.b_zero_b.setToolTip(tr("The {axis} of the work starts where the axis stands "
+                                        "now").format(axis="B"))
+            self.b_zero_b.clicked.connect(lambda checked=False: self.zero(x=False, y=False,
+                                                                          b=True))
+            lay.addLayout(_grid((self.b_zero_a, self.b_zero_b), 2))
+            self.rotary_widgets.setdefault("A", []).append(self.b_zero_a)
+            self.rotary_widgets.setdefault("B", []).append(self.b_zero_b)
         lay.addWidget(panels.note(tr("The head is where the work starts; the job is cut "
                                      "around that point.")))
         self.b_zero_xy.clicked.connect(lambda checked=False: self.zero(x=True, y=True))
@@ -946,8 +1028,8 @@ class LaserWindow(QWidget):
         self.b_zero_z.clicked.connect(lambda checked=False: self.zero(x=False, y=False, z=True))
         return box
 
-    def zero(self, x=True, y=True, z=False):
-        self.session.send(grbl.zero_here(x=x, y=y, z=z))
+    def zero(self, x=True, y=True, z=False, a=False, b=False):
+        self.session.send(grbl.zero_here(x=x, y=y, z=z, a=a, b=b))
 
     # ------------------------------------------------------------------ overrides
     def _override_box(self):
@@ -1326,6 +1408,7 @@ class LaserWindow(QWidget):
                 s.release_held()      # a board that greets nobody still gets its blocks
         self._listen()
         self._say_machine()
+        self._show_rotary()
         self.state_label.setText(s.state_label or "—")
         self.mpos_label.setText(_pos(s.mpos))
         self.wpos_label.setText(_pos(s.wpos))
@@ -1342,10 +1425,11 @@ class LaserWindow(QWidget):
         self.b_refresh.setEnabled(not self.connected)
         self.baud_box.setEnabled(not self.connected)
         free = self.connected and not s.running
-        for b in list(self.pad_buttons.values()) + [self.b_home_origin, self.b_zero_xy,
-                                                    self.b_zero_x, self.b_zero_y,
-                                                    self.b_zero_z, self.b_home,
-                                                    self.b_unlock, self.b_settings]:
+        rotary = [b for buttons in self.rotary_widgets.values() for b in buttons]
+        buttons = list(self.pad_buttons.values()) + rotary
+        buttons += [self.b_home_origin, self.b_zero_xy, self.b_zero_x, self.b_zero_y,
+                    self.b_zero_z, self.b_home, self.b_unlock, self.b_settings]
+        for b in buttons:
             b.setEnabled(free)
         self.b_check.setEnabled(free)
         self.b_reset.setEnabled(self.connected)
