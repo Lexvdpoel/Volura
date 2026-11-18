@@ -66,10 +66,14 @@ class Shots:
         self.app_module = app_module
         self.lang = lang
         self.w = app_module.MainWindow()
-        self.w.resize(*SIZE)
+        # a fixed size: Windows otherwise shrinks the window to a screen narrower than SIZE
+        self.w.setFixedSize(*SIZE)
         self.w.move(-6000, -6000)          # out of sight, but really drawn
         self.w.show()
         wait(500)
+        if (self.w.width(), self.w.height()) != SIZE:
+            raise SystemExit(f"the window is {self.w.width()} x {self.w.height()}, "
+                             f"not {SIZE[0]} x {SIZE[1]}: the pictures would be cut")
         os.makedirs(os.path.join(OUT, lang), exist_ok=True)
 
     # ------------------------------------------------------------ helpers
