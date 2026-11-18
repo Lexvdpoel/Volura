@@ -27,9 +27,9 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QSpinBox, QTextBrowser, QVBoxLayout)
 
 from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,
-               cable_chain, cable_clip, cable_winder, calibration_cube, card_holder, coaster,
-               desk_hook, door_wedge, drawer_organizer, enclosure, fan_guard, filament_clip,
-               first_layer_test,
+               cable_chain, cable_clip, cable_comb, cable_winder, calibration_cube, card_holder,
+               coaster, desk_hook, door_wedge, drawer_organizer, enclosure, fan_guard,
+               filament_clip, first_layer_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
                label_plate, lithophane, ops, pegboard, pen_cup, phone_stand, plant_label,
                plant_pot, screw_jar, soap_dish, slicer, spool_adapter, standoff, storage_bin,
@@ -44,8 +44,8 @@ from .inference import GeoCache
 from .model import ROOT
 from .part_dialogs import (BagClipDialog, BatteryHolderDialog, BinRackDialog,
                            BitHolderDialog, BracketDialog,
-                           CableChainDialog, CableClipDialog, CableWinderDialog, CardHolderDialog,
-                           CoasterDialog, DeskHookDialog, DoorWedgeDialog,
+                           CableChainDialog, CableClipDialog, CableCombDialog, CableWinderDialog,
+                           CardHolderDialog, CoasterDialog, DeskHookDialog, DoorWedgeDialog,
                            DrawerOrganizerDialog, FanGuardDialog, FilamentClipDialog,
                            GridfinityDialog, GrommetDialog, HexKeyHolderDialog,
                            HingeDialog, HoseAdapterDialog, KnobDialog, LabelPlateDialog,
@@ -2220,6 +2220,59 @@ class PrintMixin:
             self.view.set_status(tr("Pen cup failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the pen cup…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ cable comb
+    def cable_comb_dialog(self):
+        """Draw > Parts > Cable Comb…: a flat comb that keeps a bundle of cables side by side."""
+        dlg = CableCombDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("cables", "cable", "thickness", "snap"):
+            setattr(self.settings, "cable_comb_" + key, options[key])
+        self.settings.save()
+        made = self.make_cable_comb_model(options)
+        self.setFocus()
+        return made
+
+    def make_cable_comb_model(self, options):
+        """The cable comb lying flat on the bed as it prints: one undo step, next to the model.
+
+        A comb for the most cables it takes is well over two hundred millimetres long and every seat
+        is a cut through the plate with its opening on top of it, so it is built in the background
+        like the pen cup and the window keeps responding. It lies in the middle of the free bed, or on
+        the free place 10 mm to the right of what is already in the model, so a second comb does not
+        land in the first one.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("cables", "cable", "thickness", "snap")}
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the cable comb…"))
+            m = cable_comb.cable_comb(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the comb away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Cable comb"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Cable comb added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Cable comb failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the cable comb…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ hose adapter

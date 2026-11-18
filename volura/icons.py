@@ -472,6 +472,16 @@ SVG = {
                f'Q6.7 21.2 6.6 20 Z" fill="#cfe0f5" {S()}/>'
                f'<path d="M9.4 12.4 L11.3 14.6 L9.4 16.8 L7.5 14.6 Z M14.6 12.4 L16.5 14.6 '
                f'L14.6 16.8 L12.7 14.6 Z" fill="#fff" {S(w=1.1)}/>',
+    # cable comb: a flat plate with a round seat and a narrow opening for every cable
+    "cable_comb": f'<path d="M7.2 13.6 C7.2 9.6 4.4 8.8 4.4 4.4 M16.8 13.6 C16.8 9.6 19.6 8.8 '
+                  f'19.6 4.4" {N} stroke="#2f6fd6" stroke-width="2.2" stroke-linecap="round"/>'
+                  f'<path d="M2.6 12.6 L21.4 12.6 L21.4 18.6 Q21.4 20.4 19.6 20.4 L4.4 20.4 '
+                  f'Q2.6 20.4 2.6 18.6 Z" fill="#cfe0f5" {S()}/>'
+                  f'<path d="M7.2 12.6 L7.2 15.1 M12 12.6 L12 15.1 M16.8 12.6 L16.8 15.1" {N} '
+                  f'stroke="#8fa6c3" stroke-width="1.5" stroke-linecap="round"/>'
+                  f'<circle cx="7.2" cy="16.9" r="2.2" fill="#fff" {S(w=1.1)}/>'
+                  f'<circle cx="12" cy="16.9" r="2.2" fill="#fff" {S(w=1.1)}/>'
+                  f'<circle cx="16.8" cy="16.9" r="2.2" fill="#fff" {S(w=1.1)}/>',
     "lithophane": f'<rect x="4" y="3" width="12" height="18" rx="1.6" fill="#eef2f7" {S()}/>'
                   f'<rect x="6" y="5.5" width="3.4" height="3.4" fill="#3b7dd8"/>'
                   f'<rect x="10.6" y="5.5" width="3.4" height="3.4" fill="#8fa6c3"/>'
