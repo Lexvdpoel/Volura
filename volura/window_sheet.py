@@ -20,8 +20,8 @@ import manifold3d as mf
 import numpy as np
 from PySide6.QtWidgets import QDialog
 
-from . import (background, boxgen, cam, dxf, errors, gcode, gears, linking, nesting, ops,
-               sheet3d, sheet_image, sheettools, svg, vector_export)
+from . import (background, boxgen, cam, dxf, errors, gcode, gcode_mill, gears, linking,
+               nesting, ops, sheet3d, sheet_image, sheettools, svg, vector_export)
 from .brep import Entities
 from .i18n import tr, trn
 from .icons import icon
@@ -1496,6 +1496,11 @@ class SheetMixin:
         elif kind == "gcode":
             text = gcode.grbl_laser(drawing, s_max=s_max, dynamic=dynamic,
                                     pictures=sheet_image.pictures_of(drawing))
+            with open(path, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(text)
+        elif kind == "mill":
+            # the drawing already carries the compensation the export dialog asked for
+            text = gcode_mill.grbl_mill(drawing, compensate=False)
             with open(path, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(text)
         else:

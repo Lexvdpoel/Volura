@@ -1,9 +1,10 @@
-"""File > Export > G-code for a GRBL Laser: the worksheet as the text of the machine.
+"""File > Export > G-code for a laser and for a mill: the worksheet as machine code.
 
-`volura/gcode.py` writes the G-code (tests/test_gcode.py); here the worksheet of the
-window goes through it. The export is the third kind next to SVG and DXF in the
+`volura/gcode.py` writes the laser G-code (tests/test_gcode.py) and `volura/gcode_mill.py`
+the G-code of a 2.5D mill (tests/test_gcode_mill.py); here the worksheet of the window
+goes through them. The export is the third and fourth kind next to SVG and DXF in the
 "Export for Laser/Mill" dialog, with the same layer choice and compensation, and for
-G-code also the highest S word and M4 or M3, which come back next time because they
+laser G-code also the highest S word and M4 or M3, which come back next time because they
 belong to the machine and not to the drawing. A layer without a speed stops the export
 with a message instead of writing G-code that GRBL throws away.
 
@@ -90,6 +91,24 @@ def export(win, path, layers=("Cut",), **options):
     return win.export_sheet("gcode", path=path, options=opt)
 
 
+def export_mill(win, path, layers=("Mill outside",), **options):
+    """The same, for a mill: the drawing is compensated as the dialog asks."""
+    opt = {"layers": list(layers), "compensate": True, "per_layer": False}
+    opt.update(options)
+    return win.export_sheet("mill", path=path, options=opt)
+
+
+def mill_sheet(win, **params):
+    """A part on the mill layers, with these settings of the cutter."""
+    sheet = win.doc.sheet
+    for lay in sheet.layers.values():
+        lay.params.update({"tool_d": 3.0, "depth": 2.0, "step_depth": 1.0})
+    for lay in sheet.layers.values():
+        lay.params.update(params)
+    sheet.add_path(rect(40, 30), closed=True, layer="Mill outside", src=1)
+    return sheet
+
+
 # ------------------------------------------------------------------ the file
 
 def test_the_worksheet_comes_out_as_G_code(win, tmp_path):
@@ -156,6 +175,50 @@ def test_the_save_dialog_offers_gcode(win, monkeypatch, tmp_path):
     assert got == target + ".gcode" and os.path.exists(got)
     assert asked[0][1] == "G-code (*.gcode *.nc *.gc)"
     assert asked[0][0].endswith(".gcode")
+
+
+# ------------------------------------------------------------------ a mill
+
+def test_the_worksheet_comes_out_as_G_code_for_a_mill(win, tmp_path):
+    mill_sheet(win)
+    path = str(tmp_path / "job.nc")
+    assert export_mill(win, path) == path
+    lines = open(path, encoding="utf-8").read().splitlines()
+    assert lines[0] == f"; Volura {__version__}"
+    assert "G17" in lines and "M3 S10000" in lines
+    assert any(line.startswith("G1 Z-") for line in lines), "Z = 0 is the top of the material"
+    assert lines[-2] == "M5"
+
+
+def test_the_mill_export_says_how_long_the_milling_takes(win, tmp_path):
+    mill_sheet(win)
+    export_mill(win, str(tmp_path / "job.nc"))
+    assert "estimated time" in win.hint.text()
+
+
+def test_a_mill_export_of_only_laser_layers_is_a_message_and_no_file(win, boxes, tmp_path):
+    mill_sheet(win)
+    win.doc.sheet.add_path(rect(10, 10, 60), closed=True, layer="Cut", src=2)
+    path = str(tmp_path / "job.nc")
+    assert export_mill(win, path, layers=("Cut",)) is None
+    assert not os.path.exists(path)
+    assert boxes.messages and "nothing on the worksheet for the mill" in boxes.messages[0]
+
+
+def test_the_save_dialog_offers_the_mill_with_the_nc_extension(win, monkeypatch, tmp_path):
+    mill_sheet(win)
+    target = str(tmp_path / "job")
+    asked = []
+
+    def ask(parent, title, name, flt, *a, **k):
+        asked.append((name, flt))
+        return target, flt
+
+    monkeypatch.setattr(app_module.QFileDialog, "getSaveFileName", ask)
+    got = win.export_sheet("mill", options={"layers": ["Mill outside"], "compensate": True,
+                                            "per_layer": False})
+    assert got == target + ".nc" and os.path.exists(got)
+    assert "nc" in asked[0][1] and asked[0][0].endswith(".nc")
 
 
 # ------------------------------------------------------------------ what stops it
@@ -245,6 +308,7 @@ def test_the_G_code_entry_stands_next_to_the_DXF_one(win):
     i = labels.index("2D Vector (&DXF)…")
     assert labels[i - 1] == "2D Vector (&SVG)…"
     assert labels[i + 1] == "G-code for a GRBL Laser (.gcode)…"
+    assert labels[i + 2] == "G-code for a Mill (.nc)…"
 
 
 def test_the_menu_entry_exports_the_worksheet(win, monkeypatch):
@@ -253,3 +317,11 @@ def test_the_menu_entry_exports_the_worksheet(win, monkeypatch):
                         lambda kind="svg", path=None, options=None: asked.append(kind))
     win.a_exp_gcode.trigger()
     assert asked == ["gcode"]
+
+
+def test_the_menu_entry_of_the_mill_exports_the_worksheet(win, monkeypatch):
+    asked = []
+    monkeypatch.setattr(win, "export_sheet",
+                        lambda kind="svg", path=None, options=None: asked.append(kind))
+    win.a_exp_mill.trigger()
+    assert asked == ["mill"]

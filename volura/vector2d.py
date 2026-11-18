@@ -51,12 +51,14 @@ CORNER_STYLES = ("none", "dogbone", "tbone")
 CORNER_LABELS = {"none": tr("None"), "dogbone": tr("Dogbone"), "tbone": tr("T-bone")}
 LASER_PARAMS = (("power", 100.0), ("speed", 20.0), ("passes", 1), ("kerf", DEFAULT_KERF))
 MILL_PARAMS = (("tool_d", DEFAULT_TOOL_D), ("depth", 3.0), ("step_depth", 1.0),
-               ("stepover", 50.0), ("corner", "none"))
+               ("stepover", 50.0), ("corner", "none"),
+               ("feed", 800.0), ("plunge", 300.0), ("rpm", 10000))
 PARAM_LABELS = {"power": tr("Power (%)"), "speed": tr("Speed (mm/s)"),
                 "passes": tr("Number of passes"), "kerf": tr("Kerf (mm)"),
                 "tool_d": tr("Cutter diameter (mm)"), "depth": tr("Depth (mm)"),
                 "step_depth": tr("Step depth (mm)"), "stepover": tr("Stepover (%)"),
-                "corner": tr("Corner relief")}
+                "corner": tr("Corner relief"), "feed": tr("Feed (mm/min)"),
+                "plunge": tr("Plunge feed (mm/min)"), "rpm": tr("Spindle (rpm)")}
 
 
 def default_params(op) -> dict:

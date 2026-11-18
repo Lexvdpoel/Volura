@@ -29,7 +29,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                cable_chain, cable_clip, cable_winder, cam, card_holder, coaster, desk_hook,
                door_wedge, drawer_organizer,
                dxf, enclosure, errors, fan_guard, filament_clip,
-               fileio, gcode, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
+               fileio, gcode, gcode_mill, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar,
                nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
                sheet3d, sheettools, svg,
@@ -50,7 +50,8 @@ from .panels import (EntityInfoPanel, LayerParamsDialog, LayersPanel, MaterialsP
 from .part_dialogs import (CableClipDialog, HingeDialog, KnobDialog, LabelPlateDialog,
                            ProjectBoxDialog, SpurGearDialog, StandoffDialog, Text3DDialog)
 from .settings import qsettings
-from .sheet_dialogs import (AutoArrangeDialog, BoxJointDialog, DogboneCornersDialog, EXPORT_FILTERS,
+from .sheet_dialogs import (AutoArrangeDialog, BoxJointDialog, DogboneCornersDialog, EXPORT_EXT,
+                            EXPORT_FILTERS,
                             FitTestDialog, GCODE_DYNAMIC_KEY, GCODE_S_MAX_DEFAULT, GCODE_S_MAX_KEY,
                             HoldingTabsDialog, JobEstimateDialog, LivingHingeDialog,
                             RoundCornersDialog, SHEET_EXPORT_KINDS, SheetExportDialog,
@@ -2205,6 +2206,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_exp_dxf2d = A(tr("2D Vector (&DXF)…"), lambda checked=False: self.export_vector("dxf"))
         self.a_exp_gcode = A(tr("G-code for a GRBL Laser (.gcode)…"),
                              lambda checked=False: self.export_sheet("gcode"))
+        self.a_exp_mill = A(tr("G-code for a Mill (.nc)…"),
+                            lambda checked=False: self.export_sheet("mill"))
         self.a_print_setup = A(tr("Printer Set&up…"), lambda checked=False: self.print_setup())
         self.a_check = A(tr("Print &Check"), self.print_check, "F5", "check")
         self.a_print = A(tr("&Print"), self.export_3mf, "Ctrl+P", "3mf")
@@ -2893,7 +2896,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         export = QMenu(tr("&Export"), m)
         self.fill(export, only("3d", self.a_exp_stl, self.a_exp_3mf, self.a_exp_colors,
                                self.a_exp_obj, self.a_exp_step) + (None,) +
-                  only("2d", self.a_exp_svg2d, self.a_exp_dxf2d, self.a_exp_gcode))
+                  only("2d", self.a_exp_svg2d, self.a_exp_dxf2d, self.a_exp_gcode,
+                       self.a_exp_mill))
         self.recent_menu = QMenu(tr("&Recent Files"), m)
         self.update_recent_menu()
         self.fill(m, (self.a_new, self.a_open, self.recent_menu, None,
@@ -4228,9 +4232,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
 
         `kind` "gcode" writes the same drawing as G-code for a GRBL laser
         (`volura/gcode.py`), with the S maximum and M4 of the dialog, and says in the
-        status bar how long that job takes according to the job estimate.
+        status bar how long that job takes according to the job estimate. `kind` "mill"
+        writes it as G-code for a 2.5D mill (`volura/gcode_mill.py`), with the depth, the
+        feed and the spindle of every mill layer, and the time of the milling instead.
         """
         kind = sheet_export_kind(kind)
+        ext = EXPORT_EXT[kind]
         if options is None:
             options = (self.sheet_export_options(kind) if path is None
                        else self.default_sheet_export_options())
@@ -4256,12 +4263,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             return None
         if path is None:
             path, _ = QFileDialog.getSaveFileName(
-                self, tr("Export for Laser/Mill"), self.export_name("." + kind),
+                self, tr("Export for Laser/Mill"), self.export_name("." + ext),
                 EXPORT_FILTERS[kind])
             if not path:
                 return None
             if not os.path.splitext(path)[1]:
-                path += "." + kind
+                path += "." + ext
         filled = [n for n in names
                   if drawing.layers.get(n) is not None and drawing.layers[n].op == "raster"]
         s_max = int(options.get("s_max") or GCODE_S_MAX_DEFAULT)
@@ -4274,10 +4281,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                 n = max(1, int(self.doc.sheet.sheet_count or 1))
                 for si in range(n):
                     sub = nesting.sheet_subdrawing(drawing, si)
-                    target = self.sheet_file_name(path, si + 1, kind)
+                    target = self.sheet_file_name(path, si + 1, ext)
                     if options.get("per_layer"):
                         for nm in names:
-                            one = self.layer_file_name(target, nm, kind)
+                            one = self.layer_file_name(target, nm, ext)
                             self._write_vector(sub, one, kind, [nm],
                                                [nm] if nm in filled else [],
                                                s_max=s_max, dynamic=dynamic)
@@ -4288,7 +4295,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                         files.append(target)
             elif options.get("per_layer"):
                 for n in names:
-                    one = self.layer_file_name(path, n, kind)
+                    one = self.layer_file_name(path, n, ext)
                     self._write_vector(drawing, one, kind, [n], [n] if n in filled else [],
                                        s_max=s_max, dynamic=dynamic)
                     files.append(one)
@@ -4302,7 +4309,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         where = (files[0] if len(files) == 1
                  else tr("{n} files ({first})").format(n=len(files), first=files[0]))
         n_paths = len(drawing.paths)
-        if kind == "gcode":
+        seconds = (gcode_mill.mill_estimate(drawing, compensate=False)["seconds"]
+                   if kind == "mill"
+                   else job_estimate(drawing)["total"])
+        if kind in ("gcode", "mill"):
             message = (trn("{n} outline exported to {where} with kerf/cutter compensation, "
                            "estimated time {time}",
                            "{n} outlines exported to {where} with kerf/cutter compensation, "
@@ -4317,8 +4327,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                        else trn("{n} outline exported to {where}",
                                 "{n} outlines exported to {where}", n_paths))
         self.hint.setText(message.format(n=n_paths, where=where,
-                                         time=(fmt_time(job_estimate(drawing)["total"])
-                                               if kind == "gcode" else None)))
+                                         time=(fmt_time(seconds)
+                                               if kind in ("gcode", "mill") else None)))
         return files[0]
 
     def import_dropped_file(self, path):

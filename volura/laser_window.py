@@ -3,9 +3,9 @@
 Laser and Mill > Laser Controller… opens the window. What a laser program has next to its
 drawing, Volura has here: the port the board hangs on, where the head is, a pad to jog
 with, the origin of the work, the overrides of feed and power while a job runs, and the
-job of the worksheet with its progress. Volura makes the G-code (`volura/gcode.py`) and
-knows the protocol (`volura/grbl.py`); this window is what turns that into a machine you
-can point at a piece of plywood.
+job of the worksheet with its progress. Volura makes the G-code (`volura/gcode.py` for a
+laser and `volura/gcode_mill.py` for a mill) and knows the protocol (`volura/grbl.py`);
+this window is what turns that into a machine you can point at a piece of plywood.
 
 The conversation itself lives in `volura/laser.py`: a session and a thread that reads the
 cable. This file only shows it, on a timer of `laser.UPDATE_SECONDS` - the thread may not
@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QPushButton, QSpinBox, QTableWidget, QTableWidgetItem,
                                QVBoxLayout)
 
-from . import gcode, grbl, laser, laser_image, panels, sheet_image
+from . import gcode, gcode_mill, grbl, laser, laser_image, panels, sheet_image
 from . import laser_profiles as profiles
 from .i18n import tr
 from .settings import qsettings
@@ -408,10 +408,9 @@ class LaserWindow(QWidget):
         scroll.setWidget(inner)
         outer.addWidget(scroll)
         if self.is_cnc:
-            # a mill: its own list of machines, no picture, and the job comes from a file
-            # until Volura makes the toolpaths of a mill itself
+            # a mill: its own list of machines and no picture, but the job comes from
+            # the worksheet just as well
             image.hide()
-            self.b_load.hide()
 
         self.timer = QTimer(self)
         self.timer.setInterval(int(laser.UPDATE_SECONDS * 1000))
@@ -1162,7 +1161,8 @@ class LaserWindow(QWidget):
         self.job_label = panels.note(tr("There is no job to send yet."))
         lay.addWidget(self.job_label)
         self.b_load = QPushButton(tr("From the worksheet…"))
-        self.b_load.setToolTip(tr("Make G-code of the layers the laser follows"))
+        self.b_load.setToolTip(tr("Make G-code of the layers the mill follows") if self.is_cnc
+                               else tr("Make G-code of the layers the laser follows"))
         self.b_open = QPushButton(tr("Open G-code…"))
         self.b_open.setToolTip(tr("Send a G-code file that is already there"))
         self.b_start = QPushButton(tr("Start"))
@@ -1187,14 +1187,18 @@ class LaserWindow(QWidget):
 
     def load_job(self):
         """The worksheet as a job, with the layers and the power of the export dialog."""
-        options = self.win.sheet_export_options("gcode")
+        options = self.win.sheet_export_options("mill" if self.is_cnc else "gcode")
         if not options:
             return
         try:
             drawing = self.win.sheet_export_drawing(options)
-            text = gcode.grbl_laser(drawing, s_max=int(options.get("s_max") or 1000),
-                                    dynamic=bool(options.get("dynamic", True)),
-                                    pictures=sheet_image.pictures_of(drawing))
+            if self.is_cnc:
+                # the drawing carries the compensation the dialog asked for already
+                text = gcode_mill.grbl_mill(drawing, compensate=False)
+            else:
+                text = gcode.grbl_laser(drawing, s_max=int(options.get("s_max") or 1000),
+                                        dynamic=bool(options.get("dynamic", True)),
+                                        pictures=sheet_image.pictures_of(drawing))
         except Exception as e:
             QMessageBox.critical(self, self.windowTitle(), str(e))
             return

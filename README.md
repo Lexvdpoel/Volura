@@ -468,6 +468,14 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - **G-code for a GRBL laser**: File > Export > *G-code for a GRBL Laser* writes the laser
   layers as plain G-code for the machine, with the S maximum and M3 or M4 of the controller
   and the time of the job in the status bar
+- **G-code for a mill**: File > Export > *G-code for a Mill* writes the mill and drill
+  layers of the worksheet as 2.5D G-code, and the *CNC* tab runs it from *From the
+  worksheet*. Z = 0 is the top of the material, so every layer goes down to its depth in
+  steps of its step depth and the last level lands exactly on that depth. The holes are
+  drilled first, then the pockets are cleared, then the inside contours are milled and the
+  outside contours free the part last, so nothing floats under the cutter. Per layer the
+  G-code uses the feed, the plunge feed and the revolutions of the spindle you set in the
+  layer settings, and the status bar says how long the milling takes
 - **Laser controller**: Laser and Mill > *Laser Controller…* puts the board on the screen
   instead of in a file: the serial port, where the head is, a jog pad, the origin of the
   work under the head, feed and power overrides while it cuts, and the job of the worksheet

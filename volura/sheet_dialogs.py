@@ -161,9 +161,12 @@ class VectorExportDialog(QDialog):
 
 
 #: what the worksheet can be written as, and the file filter of each of those kinds
-SHEET_EXPORT_KINDS = ("svg", "dxf", "gcode")
+SHEET_EXPORT_KINDS = ("svg", "dxf", "gcode", "mill")
 EXPORT_FILTERS = {"svg": "SVG (*.svg)", "dxf": "DXF (*.dxf)",
-                  "gcode": "G-code (*.gcode *.nc *.gc)"}
+                  "gcode": "G-code (*.gcode *.nc *.gc)",
+                  "mill": "G-code for a mill (*.nc *.gcode *.gc)"}
+#: the extension every kind is written with: a mill usually wants .nc
+EXPORT_EXT = {"svg": "svg", "dxf": "dxf", "gcode": "gcode", "mill": "nc"}
 #: the S word maximum and M4 of the G-code export: keys of the machine, not of the drawing
 GCODE_S_MAX_KEY = "gcode_s_max"
 GCODE_DYNAMIC_KEY = "gcode_dynamic"
@@ -171,7 +174,7 @@ GCODE_S_MAX_DEFAULT = 1000         # $30 of a modern 32-bit board, 255 on an old
 
 
 def sheet_export_kind(kind) -> str:
-    """The kind of a worksheet export: "svg", "dxf" or "gcode"; anything else is SVG."""
+    """The kind of a worksheet export: "svg", "dxf", "gcode" or "mill"; anything else is SVG."""
     kind = str(kind).lower()
     return kind if kind in SHEET_EXPORT_KINDS else "svg"
 
@@ -220,7 +223,7 @@ class SheetExportDialog(QDialog):
                                       "radius, so the workpiece gets the drawn size"))
         self.per_layer = QCheckBox(tr("A separate file per layer"))
         self.per_layer.setToolTip(tr("Every layer gets its own file: name_layername.{ext}")
-                                  .format(ext=self.kind))
+                                  .format(ext=EXPORT_EXT[self.kind]))
         self.per_sheet = QCheckBox(tr("A separate file per sheet"))
         self.per_sheet.setToolTip(tr("Every sheet becomes its own file with that sheet as the page "
                                      "and its origin as the zero point: name_sheet1.svg ..."))

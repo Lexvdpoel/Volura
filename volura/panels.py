@@ -619,12 +619,14 @@ class LayerParamsDialog(QDialog):
     """The "Layer settings" dialog: what the machine should do with that layer.
 
     A laser layer gets power, speed, number of passes and the kerf; a mill layer the
-    tool diameter, the depth, the step depth, the stepover and the corner relief for
-    the inside corners. The values are stored in `Layer.params` and so travel along in
+    tool diameter, the depth, the step depth, the stepover and the corner relief for the
+    inside corners, and the feed, the plunge feed and the revolutions of the spindle the
+    G-code runs on. The values are stored in `Layer.params` and so travel along in
     the file and in the SVG export.
     """
 
-    SUFFIX = {"power": " %", "stepover": " %", "speed": " mm/s"}
+    SUFFIX = {"power": " %", "stepover": " %", "speed": " mm/s",
+              "feed": " mm/min", "plunge": " mm/min", "rpm": " rpm"}
 
     def __init__(self, layer, parent=None):
         super().__init__(parent)
@@ -649,6 +651,19 @@ class LayerParamsDialog(QDialog):
                     w.addItem(CORNER_LABELS[style], style)
                 w.setCurrentIndex(max(0, list(CORNER_STYLES).index(
                     value if value in CORNER_STYLES else "none")))
+            elif key in ("feed", "plunge"):
+                w = QDoubleSpinBox()
+                w.setDecimals(0)
+                w.setRange(1.0, 20000.0)
+                w.setSingleStep(50.0)
+                w.setSuffix(self.SUFFIX[key])
+                w.setValue(float(value))
+            elif key == "rpm":
+                w = QSpinBox()
+                w.setRange(0, 60000)
+                w.setSingleStep(500)
+                w.setSuffix(self.SUFFIX[key])
+                w.setValue(int(round(float(value))))
             else:
                 w = QDoubleSpinBox()
                 w.setDecimals(3)

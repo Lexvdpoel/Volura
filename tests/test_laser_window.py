@@ -391,6 +391,56 @@ def test_a_cancelled_export_dialog_leaves_the_job_alone(dlg, win, monkeypatch):
     assert dlg.job == ["G21"]
 
 
+def mill_sheet(win):
+    """A part with a hole on the mill layers of the worksheet."""
+    sheet = win.doc.sheet
+    for lay in sheet.layers.values():
+        lay.params.update({"tool_d": 3.0, "depth": 2.0, "step_depth": 1.0})
+    sheet.add_path(rect(40.0, 30.0), closed=True, layer="Mill outside", src=1)
+    sheet.add_path(rect(6.0, 6.0, 10.0, 10.0), closed=True, layer="Mill inside", src=2)
+    return sheet
+
+
+def test_the_cnc_panel_makes_a_milling_job_of_the_worksheet(win, monkeypatch, boxes):
+    mill_sheet(win)
+    monkeypatch.setattr(win, "sheet_export_options",
+                        lambda kind: {"layers": ["Mill outside", "Mill inside"],
+                                      "compensate": True})
+    panel = LaserWindow(win, "cnc")
+    try:
+        assert not panel.b_load.isHidden(), "a mill takes its job from the worksheet too"
+        panel.load_job()
+        assert panel.job[0] == "G21"
+        assert "M3 S10000" in panel.job, "the spindle of the layer"
+        assert any(line.startswith("G1 Z-") for line in panel.job), "Z = 0 is the top"
+        assert panel.job[-1] == "G0 X0 Y0"
+        assert "blocks" in panel.job_label.text()
+    finally:
+        panel.shutdown()
+
+
+def test_a_worksheet_that_is_not_for_the_mill_is_a_message_and_no_job(win, monkeypatch, boxes):
+    worksheet(win)
+    monkeypatch.setattr(win, "sheet_export_options",
+                        lambda kind: {"layers": ["Cut"], "compensate": False})
+    panel = LaserWindow(win, "cnc")
+    try:
+        panel.load_job()
+        assert not panel.job and boxes.messages
+    finally:
+        panel.shutdown()
+
+
+def test_the_laser_panel_still_burns_instead_of_milling(dlg, win, monkeypatch):
+    worksheet(win)
+    monkeypatch.setattr(win, "sheet_export_options",
+                        lambda kind: {"layers": ["Cut"], "compensate": False,
+                                      "s_max": 1000, "dynamic": True})
+    dlg.load_job()
+    assert "M4" in dlg.job and "M3 S10000" not in dlg.job
+    assert not any(line.startswith("G1 Z-") for line in dlg.job)
+
+
 def test_a_gcode_file_on_disk_can_be_sent(dlg, monkeypatch, tmp_path):
     import volura.laser_window as lw
     path = tmp_path / "job.gcode"
@@ -885,7 +935,7 @@ def test_the_cnc_tab_keeps_both_views_and_a_mill_of_its_own(win):
         assert win.workspace == "cnc" and win.mode == "3d"
         panel = win.machine_stack.currentWidget()
         assert panel.kind == "cnc" and panel is not win._laser_controller
-        assert panel.b_load.isHidden() and not panel.machine_box.isHidden()
+        assert not panel.b_load.isHidden() and not panel.machine_box.isHidden()
         keys = [panel.machine_box.itemData(i) for i in range(panel.machine_box.count())]
         assert "lead1010" in keys and "s9" not in keys and "custom" not in keys
         assert "3018pro" in keys and panel.machine.kind == "cnc"
