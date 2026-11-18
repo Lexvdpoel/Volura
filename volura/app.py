@@ -1941,6 +1941,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self._update_mode_button()
         self.coords.setVisible(want == "2d")
         self._show_mode_toolbars(changed)
+        self._show_workspace_toolbars()
         self._show_mode_menus(want)
         self._enable_3d_tools(want == "3d")
         if want == "2d":
@@ -1956,24 +1957,40 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             self.sync_links("to_sheet" if want == "2d" else "to_model")
         return changed
 
-    #: The panels of the Default Tray that belong to each mode (English keys, see PANELS).
-    MODE_PANELS = {"3d": (PANEL_INFO, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT_CHECK),
-                   "2d": (PANEL_INFO, PANEL_LAYERS)}
+    #: The panels of the Default Tray per tab under the viewer and per view (English keys,
+    #: see PANELS): the tray only shows what belongs to the tab that is open. The print
+    #: check is for the Print tab, the filaments for the model, the layers for the sheet.
+    WORKSPACE_PANELS = {
+        ("design", "3d"): (PANEL_INFO, PANEL_MATERIALS, PANEL_OUTLINER),
+        ("design", "2d"): (PANEL_INFO, PANEL_LAYERS),
+        ("print", "3d"): (PANEL_INFO, PANEL_MATERIALS, PANEL_PRINT_CHECK),
+        ("laser", "2d"): (PANEL_INFO, PANEL_LAYERS),
+        ("cnc", "2d"): (PANEL_INFO, PANEL_LAYERS),
+        ("cnc", "3d"): (PANEL_INFO, PANEL_OUTLINER),
+    }
+
+    def tray_panels(self, workspace=None, mode=None) -> tuple:
+        """The English keys of the tray panels of a tab and a view."""
+        workspace = workspaces.normal(workspace or self.workspace)
+        mode = mode or self.mode
+        return self.WORKSPACE_PANELS.get((workspace, mode),
+                                         self.WORKSPACE_PANELS[("design", mode)])
 
     def _show_layers_panel(self, two_d: bool):
-        """Only the panels that belong to the mode: filaments, outliner and print check with
-        the model, the layers with the worksheet. Entity Info shows what belongs to the mode."""
+        """Only the panels that belong to the tab and the view: filaments and outliner with
+        the model, the print check in the Print tab, the layers with the worksheet (and of
+        those only the layers of the laser or the mill). Entity Info shows what belongs."""
         if not hasattr(self, "layers_panel"):
             return
         mode = "2d" if two_d else "3d"
-        mode_titles = {tr(p) for p in self.MODE_PANELS[mode]}
+        mode_titles = {tr(p) for p in self.tray_panels(mode=mode)}
         for title in list(self.tray.panel_titles) + list(self.tray.extra_titles):
             shown = title in mode_titles
             self.tray.set_panel_shown(title, shown)
             a = self.tray_actions.get(title)
             if a is not None:
                 a.setVisible(shown)
-        if two_d and self.tray.is_open(tr(PANEL_PRINT_CHECK)):
+        if tr(PANEL_PRINT_CHECK) not in mode_titles and self.tray.is_open(tr(PANEL_PRINT_CHECK)):
             self.print_panel.clear_marks()
         self.layers_panel.refresh()
         self.tray.set_panel_open(tr(PANEL_LAYERS), bool(two_d))
@@ -2007,10 +2024,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         printing = key == workspaces.PRINT
         if printing:
             self.printing_toolbar().show()
-            if hasattr(self, "tray"):
-                self.tray.set_panel_open(tr(PANEL_PRINT_CHECK), True)
         elif getattr(self, "tb_printing", None) is not None:
             self.tb_printing.hide()
+        self._show_layers_panel(self.mode == "2d")
+        self._show_workspace_toolbars()
+        if hasattr(self, "_menu_modes"):
+            self._show_mode_menus(self.mode)
+        if printing and hasattr(self, "tray"):
+            self.tray.set_panel_open(tr(PANEL_PRINT_CHECK), True)
         panel = self.machine_panel(key) if key in workspaces.MACHINES else None
         if panel is not None:
             if self.machine_stack.indexOf(panel) < 0:
@@ -3006,6 +3027,18 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         the worksheet or the other way round. Qt folds the separators that are left over."""
         for act, want in getattr(self, "_menu_modes", {}).values():
             act.setVisible(want == mode)
+        # and of the tab: no printer in CNC, no dogbones for the laser, no kerf test and
+        # laser time for the mill
+        workspace = workspaces.normal(getattr(self, "workspace", workspaces.DESIGN))
+        menu = getattr(self, "print_tools_menu", None)
+        if menu is not None and mode == "3d" and workspace == workspaces.CNC:
+            menu.menuAction().setVisible(False)
+        away = {workspaces.LASER: ("a_dogbone_corners",),
+                workspaces.CNC: ("a_fit_test", "a_job_estimate")}.get(workspace, ())
+        for name in ("a_dogbone_corners", "a_fit_test", "a_job_estimate"):
+            a = getattr(self, name, None)
+            if a is not None and getattr(self, "_menu_modes", None) is not None:
+                a.setVisible(name not in away)
 
     @staticmethod
     def flat_actions(menu):
@@ -3104,6 +3137,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                     bar.addSeparator() if a is None else bar.addAction(a)
             made.append(bar)
         self.tb_sheet, self.tb_sheet_edit, self.tb_laser = made
+        self._fill_machine_toolbar()
         edit = self.tb_sheet_edit
         if self.a_sheet_align not in self._dropdown_buttons:
             self._add_dropdown(edit, self.a_sheet_align,
@@ -3113,6 +3147,52 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             self._add_layer_dropdown(edit, self.a_sheet_to_layer)
         for bar in made:
             bar.hide()      # SketchUp shows no toolbar on the left by default
+
+    def machine_toolbar_actions(self, workspace=None) -> tuple:
+        """The third column on the left in 2D, per tab: what the laser needs in Laser
+        (the kerf test and the time of the job), what the mill needs in CNC (the
+        dogbones), and in Design what makes parts for either."""
+        workspace = workspaces.normal(workspace or self.workspace)
+        if workspace == workspaces.LASER:
+            return (self.a_sheet_plaat, self.a_sheet_nest, None,
+                    self.a_box_joint, self.a_spur_gear, self.a_fit_test, None,
+                    self.a_holding_tabs, None, self.a_job_estimate)
+        if workspace == workspaces.CNC:
+            return (self.a_sheet_plaat, self.a_sheet_nest, None,
+                    self.a_box_joint, self.a_spur_gear, None,
+                    self.a_holding_tabs, self.a_dogbone_corners)
+        return (self.a_sheet_plaat, self.a_sheet_nest, None,
+                self.a_box_joint, self.a_spur_gear, None, self.a_sheet_to_model)
+
+    def _fill_machine_toolbar(self):
+        """Fill the third column on the left with the commands of the tab."""
+        bar = getattr(self, "tb_laser", None)
+        if bar is None:
+            return
+        workspace = workspaces.normal(self.workspace)
+        if getattr(self, "_machine_toolbar_for", None) == workspace:
+            return
+        self._machine_toolbar_for = workspace
+        bar.clear()
+        bar.setWindowTitle(tr("Laser") if workspace == workspaces.LASER else
+                           tr("Mill") if workspace == workspaces.CNC else tr("Sheet and Parts"))
+        for a in self.machine_toolbar_actions(workspace):
+            bar.addSeparator() if a is None else bar.addAction(a)
+
+    def _show_workspace_toolbars(self):
+        """The toolbars of the tab: the modelling tools on the right only in Design, the
+        third column on the left as the laser or the mill wants it."""
+        self._fill_machine_toolbar()
+        bar = getattr(self, "tb_print", None)
+        if bar is None or self.mode != "3d":
+            return
+        design = self.workspace == workspaces.DESIGN
+        if not design and not bar.isHidden():
+            bar.hide()
+            self._model_tools_away = True
+        elif design and getattr(self, "_model_tools_away", False):
+            bar.show()
+            self._model_tools_away = False
 
     def _sheet_toolbars(self):
         return [bar for bar in (getattr(self, "tb_sheet", None),

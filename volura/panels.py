@@ -706,7 +706,9 @@ class LayersPanel(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
         lay.setSpacing(4)
-        lay.addWidget(QLabel(tr("Layers of the 2D worksheet (click a row for the active layer):")))
+        self.title = QLabel(tr("Layers of the 2D worksheet (click a row for the active layer):"))
+        self.title.setWordWrap(True)
+        lay.addWidget(self.title)
         self.table = QTableWidget(0, self.COLS)
         self.table.setAccessibleName(tr("Layers of the worksheet"))
         self.table.setHorizontalHeaderLabels(["", "", "", tr("Layer"), tr("Operation"), ""])
@@ -753,9 +755,27 @@ class LayersPanel(QWidget):
         finally:
             self._busy = saved
 
+    def ops(self) -> tuple:
+        """The operations of the tab under the viewer: the Laser tab only shows the layers
+        of the laser, the CNC tab only those of the mill, Design shows everything."""
+        workspace = getattr(self.win, "workspace", "design")
+        if workspace == "laser":
+            return LASER_OPS + ("none",)
+        if workspace == "cnc":
+            return MILL_OPS + ("drill", "none")
+        return OPS
+
     def refresh(self, checked=False):
         sheet = self.win.doc.sheet
         active = self.win.sheet_view.current_layer
+        ops = self.ops()
+        workspace = getattr(self.win, "workspace", "design")
+        self.title.setText(
+            tr("Laser layers of the worksheet (click a row for the active layer):")
+            if workspace == "laser" else
+            tr("Mill layers of the worksheet (click a row for the active layer):")
+            if workspace == "cnc" else
+            tr("Layers of the 2D worksheet (click a row for the active layer):"))
         with self._quiet():
             self.names = list(sheet.layers)
             self.table.clearContents()
@@ -782,8 +802,23 @@ class LayersPanel(QWidget):
                 self.table.setCellWidget(row, 4, self._op_box(row, lay))
                 self.table.setCellWidget(row, 5, self._button(
                     row, "check", tr("Settings of this layer"), self.edit_params))
-            self.table.selectRow(max(0, self.names.index(active)) if active in self.names else 0)
-        self.info.setText(self._summary(sheet, active))
+                self.table.setRowHidden(row, lay.op not in ops)
+            shown = [row for row in range(len(self.names)) if not self.table.isRowHidden(row)]
+            if shown and (active not in self.names or self.names.index(active) not in shown):
+                # the active layer belongs to another tab: new outlines go to one of this tab
+                active = self.names[shown[0]]
+                self.win.sheet_view.current_layer = active
+                font = QFont()
+                font.setBold(True)
+                self.table.item(shown[0], 3).setFont(font)
+            if active in self.names:
+                self.table.selectRow(self.names.index(active))
+        hidden = len(self.names) - len(shown)
+        text = self._summary(sheet, active)
+        if hidden:
+            text += " " + trn("{n} layer of another tab is not shown here.",
+                              "{n} layers of another tab are not shown here.", hidden).format(n=hidden)
+        self.info.setText(text.strip())
 
     def _summary(self, sheet, active) -> str:
         lay = sheet.layers.get(active)
@@ -813,9 +848,12 @@ class LayersPanel(QWidget):
 
     def _op_box(self, row, lay):
         box = QComboBox()
-        for op in OPS:
+        ops = self.ops()
+        if lay.op not in ops and lay.op in OPS:
+            ops = ops + (lay.op,)
+        for op in ops:
             box.addItem(OP_LABELS[op], op)
-        box.setCurrentIndex(max(0, OPS.index(lay.op) if lay.op in OPS else 0))
+        box.setCurrentIndex(max(0, box.findData(lay.op)))
         box.setToolTip(tr("What the machine does with this layer"))
         box.currentIndexChanged.connect(lambda _=0, r=row, b=box: self.set_op(r, b))
         return box
@@ -884,8 +922,10 @@ class LayersPanel(QWidget):
         name = sheet.free_layer_name()
         color = ["#00a0a0", "#a000a0", "#0000a0", "#a0a000", "#00a000"][len(sheet.layers) % 5]
 
+        op = self.ops()[0]
+
         def change():
-            sheet.ensure_layer(name, color, "cut")
+            sheet.ensure_layer(name, color, op)
         self._edit(change, tr("Layer {name} added; draw or move outlines onto it.").format(name=name))
         if name in self.names:
             self.table.selectRow(self.names.index(name))

@@ -156,7 +156,7 @@ def test_right_click_on_top_face_takes_over_thickness(win):
 
 def test_right_column_shows_what_belongs_to_the_mode(win):
     shown = lambda: {t for t in win.tray.sections if win.tray.is_shown(t)}  # noqa: E731
-    assert shown() == {"Entity Info", "Materials", "Outliner", "Print Check"}
+    assert shown() == {"Entity Info", "Materials", "Outliner"}     # the check is in Print
     win.set_mode("2d")
     assert shown() == {"Entity Info", "Layers"}
     assert not win.tray_actions["Materials"].isVisible()

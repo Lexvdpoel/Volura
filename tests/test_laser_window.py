@@ -492,33 +492,34 @@ def test_another_tab_hides_the_controller_and_lets_the_job_run(dlg, slow):
 # ------------------------------------------------------------------ the machine it is
 def test_a_preset_puts_its_work_area_on_the_screen(dlg):
     dlg.machine_box.setCurrentIndex(pick(dlg.machine_box, "s9"))
-    assert dlg.travel_x.text() == "400" and dlg.travel_y.text() == "415"
-    assert "400 × 415 mm" in dlg.machine_hint.text()
+    assert dlg.travel_x.text() == "410" and dlg.travel_y.text() == "420"
+    assert "410 × 420 mm" in dlg.machine_hint.text()
     assert "S up to 1000" in dlg.machine_hint.text()
 
 
 def test_a_preset_moves_the_s_word_of_the_g_code(dlg, machine_choices):
     from volura.sheet_dialogs import GCODE_DYNAMIC_KEY, GCODE_S_MAX_KEY
+    machine_choices.setValue(GCODE_S_MAX_KEY, 255)
+    machine_choices.setValue(GCODE_DYNAMIC_KEY, False)
     dlg.machine_box.setCurrentIndex(pick(dlg.machine_box, "grbl8"))
-    assert int(machine_choices.value(GCODE_S_MAX_KEY)) == 255
-    dlg.machine_box.setCurrentIndex(pick(dlg.machine_box, "z2"))
     assert int(machine_choices.value(GCODE_S_MAX_KEY)) == 1000
-    assert str(machine_choices.value(GCODE_DYNAMIC_KEY)).lower() in ("false", "0")
+    assert str(machine_choices.value(GCODE_DYNAMIC_KEY)).lower() in ("true", "1")
 
 
 def test_the_machine_of_the_last_time_comes_back(dlg):
-    dlg.machine_box.setCurrentIndex(pick(dlg.machine_box, "lm2"))
+    dlg.machine_box.setCurrentIndex(pick(dlg.machine_box, "lm3"))
     other = LaserWindow(dlg.win)
     other.show()
     QCoreApplication.processEvents()
     try:
-        assert other.machine_box.currentData() == "lm2"
-        assert other.travel_x.text() == "400" and other.travel_y.text() == "350"
+        assert other.machine_box.currentData() == "lm3"
+        assert other.travel_x.text() == "400" and other.travel_y.text() == "380"
     finally:
         other.shutdown()
 
 
 def test_the_work_area_someone_measured_stays_put(dlg, machine_choices):
+    dlg.machine_box.setCurrentIndex(pick(dlg.machine_box, "lm2pro"))
     dlg.travel_x.setText("395")
     dlg.travel_x.editingFinished.emit()
     assert machine_choices.value(profiles.TRAVEL_X_KEY) == "395"
@@ -561,8 +562,9 @@ def test_the_board_says_what_it_is_and_the_window_believes_it(dlg, monkeypatch):
     assert pump(dlg, lambda: dlg.b_take.isEnabled())
     dlg.b_take.click()
     assert dlg.travel_x.text() == "300" and dlg.travel_y.text() == "180"
-    assert dlg.machine_box.currentData() == "grbl8"
+    assert dlg.machine_box.currentData() == "grbl32"      # S 255: not a machine of the list
     assert "S up to 255" in dlg.log.toPlainText()
+    assert "not in the list" in dlg.log.toPlainText()
     assert "laser mode" in dlg.machine_hint.text()
 
 
@@ -579,8 +581,8 @@ def test_the_settings_go_to_the_board_after_asking(dlg, monkeypatch, boxes):
     assert "Set the board to this?" in boxes.messages[-1]
     assert pump(dlg, lambda: "$32=1" in port.text())
     text = port.text()
-    assert "$30=1000" in text and "$110=6000" in text
-    assert "$130=400" in text and "$131=415" in text
+    assert "$30=1000" in text and "$110=" not in text     # no top speed published
+    assert "$130=410" in text and "$131=420" in text
 
 
 def test_the_user_can_say_no(dlg, monkeypatch, boxes):
@@ -883,7 +885,10 @@ def test_the_cnc_tab_keeps_both_views_and_a_mill_of_its_own(win):
         assert win.workspace == "cnc" and win.mode == "3d"
         panel = win.machine_stack.currentWidget()
         assert panel.kind == "cnc" and panel is not win._laser_controller
-        assert panel.b_load.isHidden() and panel.machine_box.isHidden()
+        assert panel.b_load.isHidden() and not panel.machine_box.isHidden()
+        keys = [panel.machine_box.itemData(i) for i in range(panel.machine_box.count())]
+        assert "lead1010" in keys and "s9" not in keys and "custom" not in keys
+        assert "3018pro" in keys and panel.machine.kind == "cnc"
         assert panel._k("laser/port") == "cnc/port"
         assert "CNC" in panel.windowTitle()
     finally:
@@ -916,3 +921,73 @@ def test_the_print_tab_is_only_3d_with_the_printer_above_it(win):
 
 def test_the_laser_controller_is_no_button_on_the_side_any_more(win):
     assert win.a_laser_controller not in win.tb_laser.actions()
+
+
+def _shown_panels(win):
+    return {t for t in list(win.tray.panel_titles) + list(win.tray.extra_titles)
+            if win.tray.is_shown(t)}
+
+
+def test_the_tray_only_shows_what_belongs_to_the_tab(win):
+    from volura.app import PANEL_LAYERS, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT_CHECK
+    from volura.i18n import tr
+    try:
+        win.set_workspace("design")
+        win.set_mode("3d")
+        assert tr(PANEL_PRINT_CHECK) not in _shown_panels(win)
+        assert tr(PANEL_MATERIALS) in _shown_panels(win)
+        win.set_workspace("print")
+        assert tr(PANEL_PRINT_CHECK) in _shown_panels(win)
+        assert tr(PANEL_OUTLINER) not in _shown_panels(win)
+        win.set_workspace("cnc")
+        assert tr(PANEL_MATERIALS) not in _shown_panels(win)
+        assert tr(PANEL_PRINT_CHECK) not in _shown_panels(win)
+        win.set_workspace("laser")
+        assert tr(PANEL_LAYERS) in _shown_panels(win)
+        assert tr(PANEL_MATERIALS) not in _shown_panels(win)
+    finally:
+        for n in ("_laser_controller", "_cnc_controller"):
+            if getattr(win, n, None) is not None:
+                getattr(win, n).shutdown()
+
+
+def test_the_layers_of_the_laser_are_not_in_the_cnc_tab(win):
+    panel = win.layers_panel
+    try:
+        win.set_workspace("cnc")
+        win.set_mode("2d")
+        ops = [win.doc.sheet.layers[n].op for row, n in enumerate(panel.names)
+               if not panel.table.isRowHidden(row)]
+        assert ops and all(op not in ("cut", "engrave", "raster") for op in ops)
+        assert win.doc.sheet.layers[win.sheet_view.current_layer].op not in ("cut", "raster")
+        win.set_workspace("laser")
+        ops = [win.doc.sheet.layers[n].op for row, n in enumerate(panel.names)
+               if not panel.table.isRowHidden(row)]
+        assert ops and all(op not in ("mill_outside", "mill_inside", "pocket") for op in ops)
+        win.set_workspace("design")
+        assert not any(panel.table.isRowHidden(r) for r in range(len(panel.names)))
+    finally:
+        win._laser_controller.shutdown()
+        win._cnc_controller.shutdown()
+
+
+def test_the_left_column_and_the_menu_follow_the_tab(win):
+    try:
+        win.set_workspace("laser")
+        assert win.a_fit_test in win.tb_laser.actions()
+        assert win.a_dogbone_corners not in win.tb_laser.actions()
+        assert not win.a_dogbone_corners.isVisible()
+        win.set_workspace("cnc")
+        win.set_mode("2d")
+        assert win.a_dogbone_corners in win.tb_laser.actions()
+        assert win.a_fit_test not in win.tb_laser.actions()
+        assert win.a_job_estimate not in win.tb_laser.actions()
+        assert not win.a_fit_test.isVisible()
+        win.set_mode("3d")
+        assert not win.print_tools_menu.menuAction().isVisible()
+        win.set_workspace("design")
+        assert win.print_tools_menu.menuAction().isVisible()
+        assert win.a_fit_test.isVisible() and win.a_dogbone_corners.isVisible()
+    finally:
+        win._laser_controller.shutdown()
+        win._cnc_controller.shutdown()

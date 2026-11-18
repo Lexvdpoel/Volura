@@ -257,7 +257,11 @@ def test_the_fit_test_follows_the_sheet_commands_in_the_laser_menu(win):
 
 
 def test_the_fit_test_follows_the_spur_gear_on_the_laser_toolbar(win):
-    labels = [clean(a.text()) for a in win.tb_laser.actions() if not a.isSeparator()]
+    win.set_workspace("laser")            # the third column holds what the laser tab needs
+    try:
+        labels = [clean(a.text()) for a in win.tb_laser.actions() if not a.isSeparator()]
+    finally:
+        win._laser_controller.shutdown()
     assert labels.index("Fit Test") == labels.index("Spur Gear") + 1
     edit = [clean(a.text()) for a in win.tb_sheet_edit.actions() if not a.isSeparator()]
     assert edit.index("Vent Pattern") == edit.index("Living Hinge") + 1

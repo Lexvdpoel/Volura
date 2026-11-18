@@ -108,7 +108,9 @@ class PresetsDialog(QDialog):
     def __init__(self, win):
         super().__init__(win)
         self.controller = win
-        self.setWindowTitle(tr("Laser presets"))
+        self.kind = profiles.CNC if getattr(win, "is_cnc", False) else profiles.LASER
+        self.setWindowTitle(tr("CNC presets") if self.kind == profiles.CNC
+                            else tr("Laser presets"))
         self.resize(560, 420)
         lay = QHBoxLayout(self)
 
@@ -167,7 +169,7 @@ class PresetsDialog(QDialog):
         self.b_save.clicked.connect(self.save_preset)
         self.b_delete.clicked.connect(self.delete_preset)
         key = str(self.controller.machine_box.currentData() or "")
-        self.reload(profiles.presets(), key[len(profiles.USER_PREFIX):]
+        self.reload(profiles.presets(self.kind), key[len(profiles.USER_PREFIX):]
                     if profiles.is_user_key(key) else None)
         self.b_apply.setEnabled(self.controller.connected)
 
@@ -193,7 +195,7 @@ class PresetsDialog(QDialog):
         return item.text() if item is not None else ""
 
     def _chosen(self, *_):
-        preset = profiles.find_preset(self.chosen_name())
+        preset = profiles.find_preset(self.chosen_name(), self.kind)
         self.name_edit.setText(self.chosen_name())
         self.show_settings(preset or {})
         self._refresh_buttons()
@@ -243,14 +245,14 @@ class PresetsDialog(QDialog):
         """Keep what is on the screen under the name that stands above it."""
         name = self.name_edit.text().strip()
         if not name:
-            QMessageBox.information(self, tr("Laser presets"), tr("A name first."))
+            QMessageBox.information(self, self.windowTitle(), tr("A name first."))
             return
         settings, send = {}, []
         for number, value, on in self._rows():
             try:
                 settings[str(number)] = float(str(value).replace(",", "."))
             except ValueError:
-                QMessageBox.warning(self, tr("Laser presets"),
+                QMessageBox.warning(self, self.windowTitle(),
                                     tr("{what} is not a number.").format(
                                         what=profiles.setting_name(number)))
                 return
@@ -262,33 +264,35 @@ class PresetsDialog(QDialog):
             name, settings, x, y, s_max=profiles.s_max_of(
                 {int(n): v for n, v in settings.items()}, machine.s_max),
             dynamic=machine.dynamic, jog=machine.jog, rapid=machine.rapid,
-            baud=int(self.controller.baud_box.currentData() or 115200), send=send))
+            baud=int(self.controller.baud_box.currentData() or 115200), send=send),
+            self.kind)
         self.controller.refresh_machines()
-        self.reload(profiles.presets(), name)
+        self.reload(profiles.presets(self.kind), name)
 
     def delete_preset(self):
         name = self.chosen_name()
         if not name:
             return
         answer = QMessageBox.question(
-            self, tr("Laser presets"), tr("Forget {name}?").format(name=name),
+            self, self.windowTitle(), tr("Forget {name}?").format(name=name),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No)
         if answer == QMessageBox.StandardButton.Yes:
-            profiles.remove_preset(name)
+            profiles.remove_preset(name, self.kind)
             self.controller.refresh_machines()
-            self.reload(profiles.presets())
+            self.reload(profiles.presets(self.kind))
 
     def apply_preset(self):
         """Every setting that is ticked, to the board."""
-        preset = profiles.find_preset(self.chosen_name())
+        preset = profiles.find_preset(self.chosen_name(), self.kind)
         if preset is None:
             return
-        lines = profiles.preset_lines(preset, [n for n, _v, on in self._rows() if on])
+        lines = profiles.preset_lines(preset, [n for n, _v, on in self._rows() if on],
+                                      kind=self.kind)
         if not lines:
             return
         answer = QMessageBox.question(
-            self, tr("Laser presets"),
+            self, self.windowTitle(),
             tr("Set the board to this?\n\n{lines}").format(lines="\n".join(lines)),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes)
@@ -297,15 +301,15 @@ class PresetsDialog(QDialog):
         self.controller.send_settings(lines)
 
     def export_presets(self):
-        path, _ = QFileDialog.getSaveFileName(self, tr("Export presets"), "volura-laser.json",
+        path, _ = QFileDialog.getSaveFileName(self, tr("Export presets"), f"volura-{self.kind}.json",
                                               "JSON (*.json)")
         if not path:
             return
         try:
             with open(path, "w", encoding="utf-8") as fh:
-                fh.write(profiles.presets_to_json(profiles.presets()))
+                fh.write(profiles.presets_to_json(profiles.presets(self.kind)))
         except OSError as e:
-            QMessageBox.critical(self, tr("Laser presets"), str(e))
+            QMessageBox.critical(self, self.windowTitle(), str(e))
 
     def import_presets(self):
         path, _ = QFileDialog.getOpenFileName(self, tr("Import presets"), "", "JSON (*.json)")
@@ -315,12 +319,12 @@ class PresetsDialog(QDialog):
             with open(path, encoding="utf-8", errors="replace") as fh:
                 items = profiles.presets_from_json(fh.read())
         except OSError as e:
-            QMessageBox.critical(self, tr("Laser presets"), str(e))
+            QMessageBox.critical(self, self.windowTitle(), str(e))
             return
         for item in items:
-            profiles.add_preset(item)
+            profiles.add_preset(item, self.kind)
         self.controller.refresh_machines()
-        self.reload(profiles.presets())
+        self.reload(profiles.presets(self.kind))
 
 
 def image_gray(path, max_pixels=4000000):
@@ -404,14 +408,10 @@ class LaserWindow(QWidget):
         scroll.setWidget(inner)
         outer.addWidget(scroll)
         if self.is_cnc:
-            # a mill: no lasers in the list, no picture, and the job comes from a file
+            # a mill: its own list of machines, no picture, and the job comes from a file
             # until Volura makes the toolpaths of a mill itself
             image.hide()
-            for w in (self.machine_box, self.b_apply, self.b_presets, self.b_load):
-                w.hide()
-            label = self._connection_form.labelForField(self.machine_box)
-            if label is not None:
-                label.hide()
+            self.b_load.hide()
 
         self.timer = QTimer(self)
         self.timer.setInterval(int(laser.UPDATE_SECONDS * 1000))
@@ -454,10 +454,13 @@ class LaserWindow(QWidget):
         self.b_connect.setToolTip(tr("Open the port and ask the board who it is"))
         self.port_hint = panels.note("")
         self.machine_box = QComboBox()
-        for key, label in profiles.choices():
+        for key, label in profiles.choices(self.kind):
             self.machine_box.addItem(label, key)
-        self.machine_box.setToolTip(tr("A laser of the list: its work area and what its "
-                                       "board is set to"))
+        self.machine_box.setToolTip(
+            tr("A mill of the list, or one you saved: its work area and what its board is "
+               "set to") if self.is_cnc else
+            tr("A laser of the list, or one you saved: its work area and what its board is "
+               "set to"))
         self.travel_x = QLineEdit()
         self.travel_x.setPlaceholderText("X")
         self.travel_x.setToolTip(tr("How far the head goes in X, in millimetres"))
@@ -476,8 +479,11 @@ class LaserWindow(QWidget):
         self.clamp_check.setChecked(qsettings().value(self._k(profiles.CLAMP_KEY), False)
                                     in (True, "true", "1", 1))
         self.b_apply = QPushButton(tr("Settings to the board…"))
-        self.b_apply.setToolTip(tr("Set laser mode, the S maximum and the travel of the "
-                                   "board to what this machine is"))
+        self.b_apply.setToolTip(
+            tr("Switch laser mode off and set the travel of the board to what this mill is")
+            if self.is_cnc else
+            tr("Set laser mode, the S maximum and the travel of the board to what this "
+               "machine is"))
         self.b_take = QPushButton(tr("Take from the board"))
         self.b_take.setToolTip(tr("Read the work area and the S maximum out of what the "
                                   "board answered to $$"))
@@ -523,7 +529,7 @@ class LaserWindow(QWidget):
         if self.worker is not None:
             return
         if not laser.has_serial():
-            self.port_hint.setText(tr("Volura needs the pyserial package to talk to a laser: "
+            self.port_hint.setText(tr("Volura needs the pyserial package to talk to a board: "
                                       "pip install pyserial"))
         elif self.port_box.count() == 0:
             self.port_hint.setText(tr("No serial port. Is the board on, and is its cable in "
@@ -535,7 +541,7 @@ class LaserWindow(QWidget):
     @property
     def machine(self) -> profiles.Machine:
         """The preset that is chosen in the combo box."""
-        return profiles.find(self.machine_box.currentData())
+        return profiles.find(self.machine_box.currentData(), self.kind)
 
     def travel_size(self) -> tuple:
         """The work area on the screen, in millimetres; zero where nothing stands."""
@@ -550,12 +556,15 @@ class LaserWindow(QWidget):
     def _restore_machine(self):
         """The machine of the last time, with the work area as it was left."""
         self._machine_rows()
-        key = str(qsettings().value(self._k(profiles.MACHINE_KEY), "grbl32"))
+        default = "grbl_mill" if self.is_cnc else "grbl32"
+        key = str(qsettings().value(self._k(profiles.MACHINE_KEY), default))
         i = self.machine_box.findData(key)
+        if i < 0:
+            i = max(0, self.machine_box.findData(default))
         self.machine_box.blockSignals(True)
-        self.machine_box.setCurrentIndex(max(0, i))
+        self.machine_box.setCurrentIndex(i)
         self.machine_box.blockSignals(False)
-        machine = profiles.find(key)
+        machine = self.machine
         for edit, key2, value in ((self.travel_x, self._k(profiles.TRAVEL_X_KEY), machine.x),
                                   (self.travel_y, self._k(profiles.TRAVEL_Y_KEY), machine.y)):
             was = str(qsettings().value(key2, "") or "").strip()
@@ -573,8 +582,10 @@ class LaserWindow(QWidget):
             qsettings().setValue(self._k(profiles.TRAVEL_Y_KEY), self.travel_y.text())
         self._set_jog_feed(machine.jog)
         q = qsettings()
-        q.setValue(GCODE_S_MAX_KEY, int(machine.s_max))
-        q.setValue(GCODE_DYNAMIC_KEY, bool(machine.dynamic))
+        if not self.is_cnc:
+            # the S word and M4 of the laser export; a mill leaves them alone
+            q.setValue(GCODE_S_MAX_KEY, int(machine.s_max))
+            q.setValue(GCODE_DYNAMIC_KEY, bool(machine.dynamic))
         q.sync()
         self._say_machine()
 
@@ -587,10 +598,15 @@ class LaserWindow(QWidget):
     def _say_machine(self):
         """Under the combo box: what the chosen machine is and what the board says about it."""
         machine = self.machine
-        bits = [machine.note] if machine.note and not self.is_cnc else []
+        bits = [machine.note] if machine.note else []
         x, y = self.travel_size()
         bits.append(tr("work area {x} × {y} mm").format(x=f"{x:g}", y=f"{y:g}") if x and y
                     else tr("the work area is unknown"))
+        if self.is_cnc:
+            if float(machine.z) > 0:
+                bits.append(tr("Z {z} mm").format(z=f"{float(machine.z):g}"))
+            if int(machine.axes) > 3:
+                bits.append(tr("{n} axes").format(n=int(machine.axes)))
         mode = profiles.laser_mode(self.session.settings)
         if self.is_cnc:
             if mode is True:
@@ -636,7 +652,8 @@ class LaserWindow(QWidget):
             qsettings().setValue(self._k(profiles.TRAVEL_X_KEY), self.travel_x.text())
             qsettings().setValue(self._k(profiles.TRAVEL_Y_KEY), self.travel_y.text())
         if self.is_cnc:
-            # a mill has no S maximum for the laser export and no laser in the list
+            # a mill has no S maximum for the laser export
+            self._choose_matching(x, y)
             self.say(tr("the board: work area {x} × {y} mm").format(
                 x=f"{x:g}" if x else "?", y=f"{y:g}" if y else "?"))
             self._say_machine()
@@ -644,21 +661,32 @@ class LaserWindow(QWidget):
         q = qsettings()
         q.setValue(GCODE_S_MAX_KEY, int(s_max))
         q.sync()
-        same = profiles.match(x, y, s_max) if x and y else None
-        i = self.machine_box.findData(same.key if same else profiles.CUSTOM.key)
-        self.machine_box.blockSignals(True)
-        self.machine_box.setCurrentIndex(max(0, i))
-        self.machine_box.blockSignals(False)
+        self._choose_matching(x, y, s_max)
         self.say(tr("the board: S up to {s}, work area {x} × {y} mm").format(
             s=s_max, x=f"{x:g}" if x else "?", y=f"{y:g}" if y else "?"))
         self._say_machine()
+
+    def _choose_matching(self, x, y, s_max=None):
+        """The machine of the list the board's numbers belong to; when none, the list
+        stays as it is and the log says how to keep this board as a preset."""
+        same = profiles.match(x, y, s_max, self.kind) if x and y else None
+        if same is None:
+            self.say(tr("This board is not in the list; keep it with Presets… under a name "
+                        "of its own."))
+            return
+        i = self.machine_box.findData(same.key)
+        if i >= 0:
+            self.machine_box.blockSignals(True)
+            self.machine_box.setCurrentIndex(i)
+            self.machine_box.blockSignals(False)
+            qsettings().setValue(self._k(profiles.MACHINE_KEY), same.key)
 
     def _machine_rows(self):
         """Fill the combo box again, keeping what is chosen."""
         want = self.machine_box.currentData()
         self.machine_box.blockSignals(True)
         self.machine_box.clear()
-        for key, label in profiles.choices():
+        for key, label in profiles.choices(self.kind):
             self.machine_box.addItem(label, key)
         i = self.machine_box.findData(want)
         self.machine_box.setCurrentIndex(max(0, i))

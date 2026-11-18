@@ -24,14 +24,17 @@ def no_saved_presets():
     """A run of these tests sees no preset another test left behind."""
     from volura.settings import qsettings
     q = qsettings()
-    was = q.value(profiles.PRESETS_KEY)
-    q.remove(profiles.PRESETS_KEY)
+    keys = (profiles.PRESETS_KEY, profiles.CNC_PRESETS_KEY)
+    was = {key: q.value(key) for key in keys}
+    for key in keys:
+        q.remove(key)
     q.sync()
     yield
-    if was is None:
-        q.remove(profiles.PRESETS_KEY)
-    else:
-        q.setValue(profiles.PRESETS_KEY, was)
+    for key in keys:
+        if was[key] is None:
+            q.remove(key)
+        else:
+            q.setValue(key, was[key])
     q.sync()
 
 
@@ -47,26 +50,37 @@ ANSWER = [
 ]
 
 
+#: the machines of a list whose size is chosen by whoever builds or wires them
+GENERIC = {"grbl32", "grbl_mill", "lowrider4", "mpcnc"}
+BOTH = (profiles.LASER, profiles.CNC)
+
+
 def test_there_are_presets_and_the_open_ones_are_marked():
-    assert len(profiles.MACHINES) >= 10
-    assert sum(1 for m in profiles.MACHINES if m.open_source) >= 4
+    assert len(profiles.MACHINES) >= 20
+    assert sum(1 for m in profiles.MACHINES if m.open_source) >= 6
+    assert len(profiles.MILLS) >= 20
+    assert sum(1 for m in profiles.MILLS if m.open_source) >= 8
 
 
 def test_every_preset_has_a_key_and_a_name_of_its_own():
-    keys = [m.key for m in profiles.MACHINES]
-    labels = [m.label for m in profiles.MACHINES]
-    assert len(set(keys)) == len(keys) and "" not in keys
-    assert len(set(labels)) == len(labels)
-    assert all(m.label.strip() for m in profiles.MACHINES)
+    for kind in BOTH:
+        machines = profiles.machines(kind)
+        keys = [m.key for m in machines]
+        labels = [m.label for m in machines]
+        assert len(set(keys)) == len(keys) and "" not in keys
+        assert len(set(labels)) == len(labels)
+        assert all(m.label.strip() for m in machines)
+        assert all(m.kind == kind for m in machines), kind
 
 
 def test_every_preset_is_a_machine_with_a_work_area():
-    for machine in profiles.MACHINES:
-        assert machine.known, machine.key
-        assert machine.x > 0 and machine.y > 0
-        assert machine.s_max in (255, 1000), machine.key
-        assert machine.jog > 0 and machine.rapid >= machine.jog
-        assert machine.baud in (115200, 57600, 74880), machine.key
+    for kind in BOTH:
+        for machine in profiles.machines(kind):
+            assert machine.known or machine.key in GENERIC, machine.key
+            assert machine.s_max in (255, 1000), machine.key
+            assert machine.jog > 0 and machine.rapid >= 0
+            assert machine.rapid == 0 or machine.rapid >= machine.jog, machine.key
+            assert machine.baud in (115200, 57600, 74880), machine.key
 
 
 def test_a_preset_makes_a_laser_of_the_board():
@@ -76,8 +90,22 @@ def test_a_preset_makes_a_laser_of_the_board():
         assert f"$30={machine.s_max}" in lines, machine.key
 
 
+def test_a_mill_preset_switches_laser_mode_off_and_leaves_the_spindle_alone():
+    for machine in profiles.MILLS:
+        lines = machine.settings()
+        assert "$32=0" in lines, machine.key
+        assert not any(line.startswith("$30=") for line in lines), machine.key
+        assert not machine.dynamic
+
+
+def test_a_top_speed_nobody_published_is_not_sent():
+    lines = profiles.find("a5pro").settings()
+    assert not any(line.startswith(("$110=", "$111=")) for line in lines)
+    assert "$110=15000" in profiles.find("lm2pro").settings()
+
+
 def test_a_preset_never_touches_the_calibration_or_the_limits():
-    for machine in profiles.MACHINES:
+    for machine in profiles.MACHINES + profiles.MILLS:
         numbers = {int(profiles.SETTING.match(line).group(1)) for line in machine.settings()}
         assert not numbers & set(profiles.NEVER), (machine.key, numbers & set(profiles.NEVER))
 
@@ -102,8 +130,8 @@ def test_a_work_area_of_nothing_says_nothing_about_the_travel():
 
 def test_a_point_outside_the_machine_is_outside():
     s9 = profiles.find("s9")
-    assert s9.inside(0, 0) and s9.inside(400, 415)
-    assert not s9.inside(-0.5, 0) and not s9.inside(401, 100)
+    assert s9.inside(0, 0) and s9.inside(410, 420)
+    assert not s9.inside(-0.5, 0) and not s9.inside(411, 100)
     assert s9.inside(-0.5, 0, margin=1.0)
 
 
@@ -112,16 +140,33 @@ def test_an_unknown_machine_has_room_for_everything():
     assert profiles.CUSTOM.inside(1e9, -1e9)
 
 
-def test_the_own_machine_is_the_first_thing_you_can_choose():
-    assert profiles.choices()[0][0] == profiles.CUSTOM.key
-    assert [key for key, _ in profiles.choices()] == \
-        [profiles.CUSTOM.key] + [key for key, _ in profiles.names()]
+def test_there_is_no_own_machine_to_choose_only_the_list():
+    for kind in BOTH:
+        keys = [key for key, _ in profiles.choices(kind)]
+        assert profiles.CUSTOM.key not in keys
+        assert keys == [key for key, _ in profiles.names(kind)]
 
 
-def test_an_unknown_key_is_the_own_machine():
+def test_an_unknown_key_is_an_unknown_board_of_its_kind():
     assert profiles.find("nonsense") is profiles.CUSTOM
     assert profiles.find(None) is profiles.CUSTOM
     assert profiles.find("s9").key == "s9"
+    assert profiles.find("s9", profiles.CNC) is profiles.CUSTOM_CNC
+    assert profiles.find("3018pro", profiles.CNC).kind == profiles.CNC
+
+
+def test_a_board_is_matched_in_its_own_list():
+    assert profiles.match(730, 810, kind=profiles.CNC).key == "lead1010"
+    assert profiles.match(730, 810) is None
+    assert profiles.match(0, 0, kind=profiles.CNC) is None
+
+
+def test_the_saved_presets_of_a_laser_and_a_mill_are_kept_apart():
+    profiles.add_preset(profiles.new_preset("Mine", {30: 24000}), profiles.CNC)
+    assert profiles.presets() == []
+    assert [p["name"] for p in profiles.presets(profiles.CNC)] == ["Mine"]
+    assert ("user:Mine", "Mine") in profiles.choices(profiles.CNC)
+    assert profiles.find("user:Mine", profiles.CNC).kind == profiles.CNC
 
 
 def test_what_the_board_answered_becomes_numbers():
@@ -159,18 +204,18 @@ def test_a_board_that_says_the_beam_stays_on_is_believed():
 
 
 def test_a_machine_that_matches_the_board_is_named():
-    assert profiles.match(400, 415, 1000).key == "s9"
-    assert profiles.match(400, 415).key == "s9"
-    assert profiles.match(400, 415, 255) is None
+    assert profiles.match(410, 420, 1000).key == "s9"
+    assert profiles.match(410, 420).key == "s9"
+    assert profiles.match(410, 420, 255) is None
     assert profiles.match(123, 45) is None
     assert profiles.match(0, 0) is None
 
-def test_the_k40_is_of_the_shop_and_small():
+def test_the_k40_is_only_there_with_a_grbl_board():
     k40 = profiles.find("k40")
     assert k40.key == "k40"
     assert (k40.x, k40.y) == (300.0, 200.0)
-    assert k40.s_max == 255
-    assert "M2" in k40.note
+    assert k40.s_max == 1000
+    assert "M2" in k40.note and "GRBL" in k40.label
 
 
 # ------------------------------------------------------------------ presets of the user
@@ -265,11 +310,10 @@ def test_a_preset_that_was_forgotten_is_the_own_machine(stored):
     assert profiles.find(profiles.user_key("Nooit")) is profiles.CUSTOM
 
 
-def test_the_own_machine_is_still_the_first_choice(stored):
+def test_the_list_comes_first_and_the_saved_ones_behind_it(stored):
     profiles.add_preset(profiles.new_preset("Atelier", {"30": 255}, 300, 200))
     keys = [key for key, _ in profiles.choices()]
-    assert keys[0] == profiles.CUSTOM.key
-    assert keys[1] == profiles.MACHINES[0].key
+    assert keys[0] == profiles.MACHINES[0].key
     assert keys[-1] == profiles.user_key("Atelier")
 
 

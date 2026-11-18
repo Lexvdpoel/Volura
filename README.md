@@ -465,11 +465,15 @@ The interface is available in English and Dutch (*Window > Preferences > General
   instead of in a file: the serial port, where the head is, a jog pad, the origin of the
   work under the head, feed and power overrides while it cuts, and the job of the worksheet
   with its progress - block by block with character counting, so nothing is lost.
-  Presets of the known lasers - the open boards (BlackBird, Workhorse 3500) and the
-  GRBL machines of the shop - fill in the work area and the highest S word, and what
+  Presets of the known lasers - the generic GRBL boards, the open OpenBuilds ACRO frames
+  and the GRBL machines of the shop (Ortur, Sculpfun, Atomstack, Creality, TwoTrees,
+  Longer, Comgrow) - fill in the work area and the highest S word, and what
   the board answers to $$ can be taken from it, so the machine stays the truth. A
   K40 on a GRBL board is among them, and *Presets…* keeps every setting a board
   answered under a name and gives them back to it, setting by setting.
+  The *CNC* tab has a controller of its own with presets of routers and mills that speak
+  GRBL, grblHAL or FluidNC: Genmitsu, OpenBuilds LEAD / MiniMill / C-Beam / WorkBee,
+  Sienci LongMill and AltMill, Shapeoko, X-Carve, FoxAlien, TwoTrees and V1 Engineering.
   *Picture* engraves a photograph or a logo with the image modes of LightBurn:
   grayscale, threshold, halftone 4x4 and 8x8, and the dithering of Floyd-Steinberg,
   Atkinson, Jarvis-Judice-Ninke, Stucki, Burrows, Sierra and Sierra Lite

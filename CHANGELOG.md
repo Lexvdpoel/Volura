@@ -16,6 +16,25 @@ What changed in each version of Volura. Downloads are on the
   settings, the spindle instead of the beam and a G-code file as the job.
 - **Picture width**: a picture to engrave gets a width in millimetres; it is brought to
   one pixel per dot before it is dithered.
+- **Every tab shows only its own things**: the tray on the right (the print check only in
+  Print, the filaments with the model, the layers with the worksheet), the layers of the
+  laser in Laser and those of the mill in CNC, the third column on the left (the fit test
+  and the job time for the laser, the dogbones for the mill) and the menus (no 3D Printing
+  in CNC).
+- **CNC machines**: the CNC Controller has a list of its own with 23 routers and mills
+  that speak GRBL, grblHAL or FluidNC: Genmitsu 3018 and 4040, OpenBuilds LEAD, MiniMill,
+  C-Beam and WorkBee, Sienci LongMill (also with the Vortex A axis) and AltMill, Shapeoko,
+  X-Carve, FoxAlien, TwoTrees TTC450 and the LowRider and MPCNC of V1 Engineering. Its
+  *Settings to the board* switches laser mode off, and it keeps presets of its own.
+- **Laser machines**: the list is checked against the makers' pages. The OpenBuilds ACRO
+  frames, Ortur LM3, Sculpfun S30 / S30 Pro / SF-A9, Atomstack A70 Max, TwoTrees TS2,
+  Creality Falcon2 Pro, Longer Ray5 and Comgrow Z1 are new; machines that do not exist
+  under their name are gone, and the sizes of the others are right now. A top speed that
+  the maker does not publish is no longer sent as `$110`.
+
+### Changed
+- *Own machine* is gone from the list of machines: a board that is not in it is read with
+  *Take from the board* and kept under its own name with *Presets…*.
 
 ### Fixed
 - An engraved picture burned only its first row: every row ended with M5 and the beam
