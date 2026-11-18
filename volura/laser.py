@@ -133,7 +133,7 @@ class Session:
     def __init__(self, buffer=grbl.BUFFER_BYTES):
         self.buffer = int(buffer)
         self.state = ""                 #: what the board says it is: "Idle", "Run", ...
-        self.mpos = None                #: the machine position, three numbers
+        self.mpos = None                #: the machine position: three numbers, more with rotary axes
         self.wpos = None                #: the position in the work
         self.wco = None                 #: the work offset
         self.feed_rate = 0.0            #: the feed the board is moving at, mm/min

@@ -37,6 +37,9 @@ BUFFER_BYTES = 127
 #: decimals of a coordinate; GRBL works in thousandths of a millimetre
 DECIMALS = 3
 
+#: the axes a board can drive: X Y Z, and A and B on a mill with rotary axes, in degrees
+AXES = "XYZAB"
+
 # Real-time commands: read between the blocks that are already waiting, so they act now.
 #: ask for a status report
 STATUS = "?"
@@ -173,6 +176,25 @@ def _triplet(value: str):
     return tuple(nums)
 
 
+def _numbers(value: str, at_most=5):
+    """`12.000,3.000,0.000,90.000` as the numbers it holds, at most `at_most` of them.
+
+    A board with rotary axes sends four or five of them and a board of GRBL 1.1 three;
+    what a board sends behind the fifth axis is not ours to keep. None when the board
+    sends something else, and a board that names fewer than three leaves the rest at zero.
+    """
+    parts = str(value).split(",")
+    if len(parts) < 2:
+        return None
+    try:
+        nums = [float(p) for p in parts[:at_most]]
+    except ValueError:
+        return None
+    while len(nums) < 3:
+        nums.append(0.0)
+    return tuple(nums)
+
+
 #: the fields of a status report that carry a value of their own; the state is the one
 #: field without a name, so it is the first field that is not one of these
 REPORT_FIELDS = ("mpos", "wpos", "wco", "fs", "ov", "coor", "pnx", "bf", "wd", "al", "sys")
@@ -182,11 +204,12 @@ def parse_report(line: str) -> dict:
     """The numbers of a status report `<Idle|MPos:12.000,3.000,0.000|FS:0,0|Ov:100,100,100>`.
 
     The dict holds ``state`` (the word without its ":line" and without the "Check:"
-    prefix of check mode), ``mpos``, ``wpos`` and ``wco`` (three numbers or None),
-    ``feed`` and ``speed``, ``line`` (how far the job is), ``coord`` (the work system,
-    G54 to G59), and the three overrides as ``feed_override``, ``rapid_override`` and
-    ``power_override``. Fields the board does not send are simply not in the dict, so a
-    board of an older version still gives a usable position.
+    prefix of check mode), ``mpos``, ``wpos`` and ``wco`` (three numbers on a plain board
+    and four or five on one with rotary axes, or None), ``feed`` and ``speed``, ``line``
+    (how far the job is), ``coord`` (the work system, G54 to G59), and the three overrides
+    as ``feed_override``, ``rapid_override`` and ``power_override``. Fields the board does
+    not send are simply not in the dict, so a board of an older version still gives a
+    usable position.
 
     The state is the only field the board does not name, which is why the first field
     that is not one of :data:`REPORT_FIELDS` is read as the state; a number behind it is
@@ -215,7 +238,7 @@ def parse_report(line: str) -> dict:
                 except ValueError:
                     pass
         elif key in ("mpos", "wpos", "wco"):
-            out[key] = _triplet(value)
+            out[key] = _numbers(value)
         elif key == "fs":
             nums = _triplet(value)
             if nums is not None:
@@ -233,6 +256,21 @@ def parse_report(line: str) -> dict:
     return out
 
 
+def axes_of(report_or_position) -> int:
+    """How many axes the board drives, out of a status report or a position of one.
+
+    A board of GRBL 1.1 names three numbers and grblHAL or FluidNC four or five when it
+    drives a rotary A or B axis; a board that has not said anything yet is a plain three.
+    """
+    where = report_or_position
+    if isinstance(where, dict):
+        where = next((where[key] for key in ("mpos", "wpos", "wco") if where.get(key)),
+                     None)
+    if not where:
+        return 3
+    return max(3, min(len(where), len(AXES)))
+
+
 def state_label(state: str) -> str:
     """The state of the board in the words of the interface; an unknown state as it says."""
     return STATE_LABELS.get(str(state), str(state))
@@ -242,13 +280,15 @@ def state_label(state: str) -> str:
 #  the blocks a controller window sends
 # --------------------------------------------------------------------------
 
-def jog(dx=0.0, dy=0.0, dz=0.0, feed=1000.0) -> str:
+def jog(dx=0.0, dy=0.0, dz=0.0, feed=1000.0, da=0.0, db=0.0) -> str:
     """A relative move in jog mode: GRBL 1.1 only allows jogging through `$J=`.
 
     The axes that do not move are left out, and a move of nothing at all is no block, so a
-    click on the pad never sends an empty `$J=` the board refuses.
+    click on the pad never sends an empty `$J=` the board refuses. A and B are the rotary
+    axes of a mill with a 4th or 5th axis and stand in degrees.
     """
-    words = [f"{axis}{_num(v)}" for axis, v in (("X", dx), ("Y", dy), ("Z", dz))
+    words = [f"{axis}{_num(v)}" for axis, v in (("X", dx), ("Y", dy), ("Z", dz),
+                                                ("A", da), ("B", db))
              if abs(float(v)) > 1e-9]
     if not words:
         return ""
@@ -267,14 +307,16 @@ def move(x=None, y=None, z=None, feed=None) -> str:
     return f"G90 G0 {' '.join(words)}" + (f" F{float(feed):g}" if feed else "")
 
 
-def zero_here(x=True, y=True, z=False) -> str:
+def zero_here(x=True, y=True, z=False, a=False, b=False) -> str:
     """The block that says "the head is at zero here", for the axes that are asked for.
 
     `G10 L20` moves the work offset **relative** to the position the board reports now, so
     naming only X leaves the Y and Z offsets exactly as they were; `L2` would need the
-    machine position of every axis and is easy to get wrong.
+    machine position of every axis and is easy to get wrong. The rotary axes A and B are
+    zeroed the same way, in degrees.
     """
-    words = [f"{axis}0" for axis, on in (("X", x), ("Y", y), ("Z", z)) if on]
+    words = [f"{axis}0" for axis, on in (("X", x), ("Y", y), ("Z", z), ("A", a), ("B", b))
+             if on]
     if not words:
         return ""
     return f"G10 L20 P1 {' '.join(words)}"
