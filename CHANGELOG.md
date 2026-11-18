@@ -16,6 +16,14 @@ What changed in each version of Volura. Downloads are on the
   settings, the spindle instead of the beam and a G-code file as the job.
 - **Picture width**: a picture to engrave gets a width in millimetres; it is brought to
   one pixel per dot before it is dithered.
+- **G-code for a mill**: the mill layers of the worksheet become 2.5D G-code for a GRBL
+  router or mill (File > Export > *G-code for a Mill*, or *From the worksheet…* in the CNC
+  Controller): every contour level by level down to its depth, holes first and the
+  outline that frees the part last, Z = 0 at the top of the material. A mill layer has a
+  feed, a plunge feed and spindle revolutions of its own.
+- **Picture on the worksheet**: File > Import > *Picture…* puts a photograph or a logo on
+  the worksheet, where it moves and turns like any outline; the laser engraves it where it
+  lies, before it cuts. A raster layer has a mode and a line interval.
 - **Every tab shows only its own things**: the tray on the right (the print check only in
   Print, the filaments with the model, the layers with the worksheet), the layers of the
   laser in Laser and those of the mill in CNC, the third column on the left (the fit test
