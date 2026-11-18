@@ -6,6 +6,11 @@ What changed in each version of Volura. Downloads are on the
 ## Unreleased
 
 ### New
+- **3D milling of the model**: *3D Mill Job…* in the CNC tab (and File > Export > *G-code
+  for a Mill from the Model*) roughs the model level by level and finishes it with parallel
+  lines, for a flat end mill or a ball nose, with Z = 0 on the top of the stock. The paths
+  are drawn over the model before you save them or send them to the CNC controller, and a
+  machine with a 4th axis can mill the second side after `G0 A180`.
 - **Rotary axes** in the CNC controller: a board of grblHAL or FluidNC with an A or B axis
   shows its position in degrees, jogs it with a step of its own and zeroes it; the rows
   appear when the preset or the board has those axes.
