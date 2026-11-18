@@ -184,6 +184,7 @@ class Settings:
         self.bed_size = tuple(float(v) for v in self.q.value("bed_size", [256, 256, 256]))
         self.show_grid = self._bool("show_grid", True)
         self.show_axes = self._bool("show_axes", True)
+        self.show_view_cube = self._bool("show_view_cube", True)
         self.show_edges = self._bool("show_edges", True)
         self.xray = self._bool("xray", False)
         self.show_overhangs = self._bool("show_overhangs", False)
@@ -1375,6 +1376,7 @@ class Settings:
         self.q.setValue("bed_size", list(self.bed_size))
         self.q.setValue("show_grid", self.show_grid)
         self.q.setValue("show_axes", self.show_axes)
+        self.q.setValue("show_view_cube", self.show_view_cube)
         self.q.setValue("show_edges", self.show_edges)
         self.q.setValue("xray", self.xray)
         self.q.setValue("show_overhangs", self.show_overhangs)
@@ -2306,6 +2308,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_grid.setChecked(self.settings.show_grid)
         self.a_axes = A(tr("&Axes"), self.toggle_axes, None, None, checkable=True)
         self.a_axes.setChecked(self.settings.show_axes)
+        self.a_view_cube = A(tr("View Cube"), self.toggle_view_cube, None, None, checkable=True,
+                             tip=tr("The cube in the corner of every 3D view: click a face, "
+                                    "edge or corner to look from there"))
+        self.a_view_cube.setChecked(self.settings.show_view_cube)
         self.a_edges = A(tr("&Edges"), self.toggle_edges, None, None, checkable=True)
         self.a_edges.setChecked(self.settings.show_edges)
         self.a_back_edges = A(tr("&Back Edges"), self.toggle_back_edges, "K", None,
@@ -2932,6 +2938,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         comp_edit = sub(tr("Co&mponent Edit"), m, (self.a_hide_rest,))
         self.fill(m, (self.a_toolbars, self.a_sheet, None)
                   + only("3d", self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid,
+                         self.a_view_cube,
                          None, edge_style, face_style, comp_edit)
                   + only("2d", self.a_sheet_grid, self.a_sheet_layers))
 

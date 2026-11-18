@@ -20,7 +20,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QMenu
 
-from . import background, i18n, keyschemes, ops, theme
+from . import background, i18n, keyschemes, ops, theme, viewcube
 from .i18n import tr, tr_noop, trn
 from .model import LOCKED_MSG, ROOT
 from .panels import swatch
@@ -789,6 +789,12 @@ class UiMixin:
         self.settings.show_axes = bool(on)
         self.settings.save()
         self.view.update()
+
+    def toggle_view_cube(self, on):
+        """View > View Cube: the cube in the top right corner of every 3D view."""
+        self.settings.show_view_cube = bool(on)
+        self.settings.save()
+        viewcube.set_shown(on)
 
     def toggle_edges(self, on):
         self.settings.show_edges = bool(on)

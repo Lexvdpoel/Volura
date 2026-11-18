@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QHBoxLayout, QLabel, Q
 from . import errors
 from .camera import Camera
 from .i18n import tr
+from .viewcube import ViewCube
 
 #: the colours of what the preview shows
 MODEL, SUPPORT, PAD, PLATE, BACKGROUND = "#c9ced6", "#4dabf7", "#74c0fc", "#2b3038", "#20242a"
@@ -62,6 +63,7 @@ class MeshView(QOpenGLWidget):
         self._fitted = False
         self.setMinimumSize(420, 380)
         self.setFocusPolicy(Qt.StrongFocus)
+        self.view_cube = ViewCube(self, "sla")        # the cube in the top right corner
 
     def set_items(self, items):
         self.items = [(*mesh_arrays(m), _rgb(c)) for m, c in items
@@ -137,6 +139,7 @@ class MeshView(QOpenGLWidget):
         gl.glDisableClientState(gl.GL_NORMAL_ARRAY)
         gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
         gl.glDisable(gl.GL_LIGHTING)
+        self.view_cube.sync()              # the cube in the corner follows the camera
 
     # ---- turn, move and zoom
     def mousePressEvent(self, event):

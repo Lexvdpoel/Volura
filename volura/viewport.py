@@ -13,6 +13,7 @@ from .camera import Camera, horizon_line
 from .i18n import tr, trn
 from .inference import InferenceEngine
 from .tools import MEASURE_LABEL
+from .viewcube import ViewCube
 
 errors.configure_pyopengl()          # before OpenGL loads, so it stops checking every call
 
@@ -321,6 +322,7 @@ class Viewport(QOpenGLWidget):
         self.setFocusPolicy(Qt.StrongFocus)
         self.setAccessibleName(tr("3D view"))
         self.setMinimumSize(320, 240)
+        self.view_cube = ViewCube(self, "main")   # the cube in the top right corner
         doc.changed.connect(self.update)
         doc.selection_changed.connect(self.update)
         doc.changed.connect(self.update_overhang_status)
@@ -453,6 +455,7 @@ class Viewport(QOpenGLWidget):
         if self.tool is not None:
             self.tool.draw(self)
         self._draw_overlay()
+        self.view_cube.sync()              # the cube in the corner follows the camera
 
     def _reset_state(self):
         try:
