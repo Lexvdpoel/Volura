@@ -2745,4 +2745,7 @@ TRANSLATIONS = {
     'Line interval': 'Regelafstand',
     'The distance between two rows of the engraving: how big one dot of the picture becomes on the sheet': 'De afstand tussen twee rijen van de gravure: hoe groot één stip van de afbeelding op het blad wordt',
     '{name} on the worksheet: {width} mm wide, engraved by the layer {layer}': '{name} op het werkblad: {width} mm breed, gegraveerd door de laag {layer}',
+    'How far the spindle goes up and down in Z, in millimetres': 'Hoe ver de spindel in Z op en neer gaat, in millimeters',
+    'work area {x} × {y} × {z} mm': 'werkvlak {x} × {y} × {z} mm',
+    'the board: work area {x} × {y} × {z} mm': 'de controller: werkvlak {x} × {y} × {z} mm',
 }

@@ -139,7 +139,8 @@ class Machine:
         """The blocks that set the board to what this machine is, in the order of `$`.
 
         `travel` overrides the work area of the preset with what is on the screen, because
-        the user may have measured something else than the brochure says.
+        the user may have measured something else than the brochure says. A mill may
+        give a third number, its height: that goes to `$132`, which a laser leaves alone.
 
         Laser mode is what makes a GRBL laser a laser: without `$32=1` the beam stays on
         during a rapid move and burns a line across the whole sheet on its way to the
@@ -165,6 +166,9 @@ class Machine:
             if x > 0.0 and y > 0.0:
                 values[130], values[131] = x, y
             values = {n: v for n, v in values.items() if n not in NEVER}
+            z = float(self.z) if travel is None or len(travel) < 3 else float(travel[2])
+            if self.kind == CNC and z > 0.0:
+                values[132] = z         # the height of a mill, next to its X and Y
         return [f"${n}={v:g}" for n, v in sorted(values.items())]
 
 
@@ -265,6 +269,7 @@ def machines(kind=LASER) -> tuple:
 MACHINE_KEY = "laser/machine"
 TRAVEL_X_KEY = "laser/travel_x"
 TRAVEL_Y_KEY = "laser/travel_y"
+TRAVEL_Z_KEY = "laser/travel_z"
 CLAMP_KEY = "laser/clamp_jog"
 
 
@@ -454,6 +459,12 @@ def s_max_of(settings: dict, default=1000) -> int:
     """The highest S word the board itself reported; `default` when it did not say."""
     value = settings.get(S_MAX_SETTING)
     return int(value) if value and value > 0 else int(default)
+
+
+def height_of(settings: dict) -> float:
+    """How far Z goes, as the board reported it in `$132`; 0 when it did not say."""
+    z = float(settings.get(132, 0.0) or 0.0)
+    return z if z > 0.0 else 0.0
 
 
 def travel_of(settings: dict) -> tuple:

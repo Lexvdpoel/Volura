@@ -1041,3 +1041,19 @@ def test_the_left_column_and_the_menu_follow_the_tab(win):
     finally:
         win._laser_controller.shutdown()
         win._cnc_controller.shutdown()
+
+
+def test_a_mill_has_a_height_and_a_laser_has_none(win):
+    win.set_workspace("cnc")
+    try:
+        panel = win._cnc_controller
+        panel.machine_box.setCurrentIndex(pick(panel.machine_box, "lead1010"))
+        assert not panel.travel_z.isHidden() and panel.travel_z.text() == "100"
+        assert panel.travel_height() == 100.0
+        assert "730 × 810 × 100 mm" in panel.machine_hint.text()
+        win.set_workspace("laser")
+        assert win._laser_controller.travel_z.isHidden()
+        assert win._laser_controller.travel_height() == 0.0
+    finally:
+        win._laser_controller.shutdown()
+        win._cnc_controller.shutdown()
