@@ -2691,4 +2691,7 @@ TRANSLATIONS = {
     'A gantry router or a multi-axis mill: the worksheet or the model, and the machine on its cable': 'Een portaalfrees of een meerassige frees: het werkblad of het model, en de machine aan zijn kabel',
     'CNC': 'CNC',
     'Workspace': 'Werkruimte',
+    'Print': 'Printen',
+    'Printing': 'Printen',
+    'The model on the bed of a 3D printer, filament or resin: check, orient and slice; only 3D': 'Het model op het bed van een 3D-printer, filament of hars: controleren, oriënteren en slicen; alleen 3D',
 }

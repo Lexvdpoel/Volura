@@ -1930,8 +1930,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
     def set_mode(self, mode) -> bool:
         """To the 3D model or the 2D worksheet; the mode is not part of the file."""
         want = "2d" if str(mode).lower().startswith("2") else "3d"
-        if want == "3d" and not workspaces.HAS_3D[self.workspace]:
-            self._show_workspace(workspaces.DESIGN)     # the model is not in Laser: to Design
+        if want not in workspaces.VIEWS[self.workspace]:
+            # the model is not in Laser, the worksheet not in Print: to Design
+            self._show_workspace(workspaces.DESIGN)
         changed = want != self.mode
         self.mode = want
         self.central.setCurrentWidget(self.sheet_view if want == "2d" else self.view)
@@ -1980,14 +1981,16 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
 
     # ------------------------------------------------------------ workspaces
     def set_workspace(self, key) -> str:
-        """The tab under the viewer: Design, Laser (only 2D) or CNC.
+        """The tab under the viewer: Design, Print (only 3D), Laser (only 2D) or CNC.
 
-        Laser goes to the worksheet, because a laser cuts flat; Design and CNC keep the
-        view that was there. Laser and CNC put their machine next to the view.
+        Laser goes to the worksheet, because a laser cuts flat, and Print to the model;
+        Design and CNC keep the view that was there. Laser and CNC put their machine next
+        to the view, Print its toolbar above it.
         """
         key = self._show_workspace(key)
-        if not workspaces.HAS_3D[key] and self.mode != "2d":
-            self.set_mode("2d")
+        views = workspaces.VIEWS[key]
+        if self.mode not in views:
+            self.set_mode(views[0])
         return key
 
     def _show_workspace(self, key) -> str:
@@ -1997,10 +2000,17 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         bar = getattr(self, "workspace_bar", None)
         if bar is not None:
             bar.set_key(key)
-        has_3d = workspaces.HAS_3D[key]
-        self.mode_button.setVisible(has_3d)
+        switch = workspaces.has_switch(key)
+        self.mode_button.setVisible(switch)
         if hasattr(self, "a_sheet"):
-            self.a_sheet.setEnabled(has_3d)
+            self.a_sheet.setEnabled(switch)
+        printing = key == workspaces.PRINT
+        if printing:
+            self.printing_toolbar().show()
+            if hasattr(self, "tray"):
+                self.tray.set_panel_open(tr(PANEL_PRINT_CHECK), True)
+        elif getattr(self, "tb_printing", None) is not None:
+            self.tb_printing.hide()
         panel = self.machine_panel(key) if key in workspaces.MACHINES else None
         if panel is not None:
             if self.machine_stack.indexOf(panel) < 0:
@@ -2013,6 +2023,27 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         else:
             self.machine_stack.hide()
         return key
+
+    def printing_toolbar(self):
+        """The toolbar of the Print tab: the printer, the check, the bed and the slicers.
+
+        The commands are the ones of the 3D Printing menu; the buttons carry their names,
+        because a slicer has no picture that says which one it is.
+        """
+        bar = getattr(self, "tb_printing", None)
+        if bar is None:
+            bar = self.tb_printing = QToolBar(tr("Printing"))
+            bar.setObjectName("PrintingToolbar")
+            bar.setIconSize(QSize(20, 20))
+            bar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            for a in (self.a_print_setup, self.a_check, None,
+                      self.a_orient_print, self.a_drop, self.a_center, self.a_arrange, None,
+                      self.a_elephant, self.a_mouse_ears, None,
+                      self.a_slice, self.a_slice_resin, self.a_print):
+                bar.addSeparator() if a is None else bar.addAction(a)
+            self.addToolBarBreak(Qt.TopToolBarArea)
+            self.addToolBar(Qt.TopToolBarArea, bar)
+        return bar
 
     def machine_panel(self, key):
         """The machine on its cable of a workspace, made the first time it is asked for.
@@ -3063,7 +3094,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
              (self.a_sheet_plaat, self.a_sheet_nest, None,
               self.a_box_joint, self.a_spur_gear, self.a_fit_test, None,
               self.a_holding_tabs, self.a_dogbone_corners, None,
-              self.a_sheet_to_model, self.a_job_estimate, self.a_laser_controller)),
+              self.a_sheet_to_model, self.a_job_estimate)),
         )
         made = []
         for name, title, items in bars:

@@ -855,7 +855,7 @@ def test_the_number_of_passes_is_the_number_of_times_over(dlg, tmp_path):
 def test_the_tabs_under_the_viewer_are_design_laser_and_cnc(win):
     bar = win.workspace_bar
     keys = [bar.tabs.tabData(i) for i in range(bar.tabs.count())]
-    assert keys == ["design", "laser", "cnc"]
+    assert keys == ["design", "print", "laser", "cnc"]
     assert win.workspace == "design" and win.machine_stack.isHidden()
 
 
@@ -899,3 +899,20 @@ def test_the_laser_controller_command_goes_to_the_laser_tab(win):
         assert win.machine_stack.currentWidget() is panel
     finally:
         panel.shutdown()
+
+
+def test_the_print_tab_is_only_3d_with_the_printer_above_it(win):
+    win.set_mode("2d")
+    win.set_workspace("print")
+    assert win.mode == "3d" and win.mode_button.isHidden()
+    assert win.machine_stack.isHidden()
+    bar = win.tb_printing
+    assert not bar.isHidden()
+    for a in (win.a_slice, win.a_slice_resin, win.a_check, win.a_print_setup):
+        assert a in bar.actions()
+    win.set_mode("2d")                         # the worksheet is not in Print: to Design
+    assert win.workspace == "design" and win.mode == "2d" and bar.isHidden()
+
+
+def test_the_laser_controller_is_no_button_on_the_side_any_more(win):
+    assert win.a_laser_controller not in win.tb_laser.actions()

@@ -6,7 +6,9 @@ What changed in each version of Volura. Downloads are on the
 ## Unreleased
 
 ### New
-- **Workspaces** under the viewer: *Design* (the 3D model or the 2D worksheet), *Laser*
+- **Workspaces** under the viewer: *Design* (the 3D model or the 2D worksheet), *Print*
+  (only the model, with a toolbar of the printer: set-up, check, the bed, and slicing for
+  filament and for resin), *Laser*
   (only the worksheet, with the laser controller next to it) and *CNC* (the worksheet or
   the model, with a controller of its own for a router or a mill). The 3D | 2D switch sits
   at the end of the tabs and goes away in Laser.
