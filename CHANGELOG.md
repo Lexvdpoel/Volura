@@ -6,6 +6,9 @@ What changed in each version of Volura. Downloads are on the
 ## Unreleased
 
 ### New
+- **View cube** in the top right corner of every 3D view: click a face, edge or corner to
+  look from there, drag it to orbit, the house goes to the home view; right-click to set
+  the home view or switch between perspective and orthographic. View > View Cube hides it.
 - **Workspaces** under the viewer: *Design* (the 3D model or the 2D worksheet), *Print*
   (only the model, with a toolbar of the printer: set-up, check, the bed, and slicing for
   filament and for resin), *Laser*
