@@ -30,3 +30,8 @@ def qsettings():
     if path:
         return QSettings(path, QSettings.IniFormat)
     return QSettings("Volura", "Volura")
+
+
+def flag(key: str, default: bool = True) -> bool:
+    """A boolean setting, for a widget that needs one single switch of its own."""
+    return qsettings().value(key, default) in (True, "true", "1", 1)

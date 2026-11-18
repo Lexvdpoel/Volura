@@ -27,6 +27,7 @@ from . import errors
 from . import gcode_preview as gp
 from .camera import Camera
 from .i18n import tr, tr_noop
+from .viewcube import ViewCube
 
 #: the colour and the name of every kind of line, in the order of gcode_preview.KIND_NAMES
 KIND_STYLE = [("#9aa4b1", tr_noop("Travel")), ("#d9480f", tr_noop("Outer wall")),
@@ -162,6 +163,7 @@ class LayerView(QOpenGLWidget):
         self._fitted = False                    # fitted once the view has its real size
         self.setMinimumSize(420, 420)
         self.setFocusPolicy(Qt.StrongFocus)
+        self.view_cube = ViewCube(self, "print")      # the cube in the top right corner
         self.fit("iso")
 
     # ---- the camera
@@ -215,6 +217,7 @@ class LayerView(QOpenGLWidget):
         self._draw_bed()
         if self.preview.layers:
             self._draw_print()
+        self.view_cube.sync()              # the cube in the corner follows the camera
 
     def _draw_bed(self):
         x0, y0, x1, y1 = self.bed

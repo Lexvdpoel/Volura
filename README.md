@@ -41,6 +41,11 @@ The interface is available in English and Dutch (*Window > Preferences > General
 - Display styles under **View**: Wireframe, Hidden Line, Shaded and Monochrome (View > Face Style),
   X-ray (Alt+X), Back Edges (K), Hidden Geometry (softened edges) and hiding the rest of the model
   while editing a group
+- **View cube** in the top right corner of every 3D view (View > View Cube): click a face, an edge
+  or a corner of the cube to look at the model from there, drag the cube to orbit, and click the
+  house to go back to the iso view with the whole model in view. The four arrows beside the cube
+  turn to the face next to the one you look at, and right-clicking the cube makes the view you are
+  in your own home view or switches between perspective and parallel projection
 - **Themes**: *Window > Preferences > Display > Theme*: System, Light, Dark or High contrast
 - **Accessible**: every command has a menu entry and a shortcut you can change, and every button,
   field and list has a name a screen reader can read, also the ones that only show an icon. The
