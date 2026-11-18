@@ -24,6 +24,12 @@ What changed in each version of Volura. Downloads are on the
 - **Picture on the worksheet**: File > Import > *Picture…* puts a photograph or a logo on
   the worksheet, where it moves and turns like any outline; the laser engraves it where it
   lies, before it cuts. A raster layer has a mode and a line interval.
+- **Colors** in the Design tab: the colors of the model and a palette to paint with, one
+  click for the color and the paint bucket. The numbered filaments (*Materials*) are in
+  the Print tab.
+- **Height of a mill**: the CNC Controller shows the work area as X × Y × Z, from the
+  preset or from `$132` of the board, sends it with the settings and keeps a Z jog within
+  it.
 - **Every tab shows only its own things**: the tray on the right (the print check only in
   Print, the filaments with the model, the layers with the worksheet), the layers of the
   laser in Laser and those of the mill in CNC, the third column on the left (the fit test
