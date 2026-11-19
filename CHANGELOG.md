@@ -3,7 +3,7 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## Unreleased
+## 0.2.61 — 2026-11-19
 
 ### New
 - **Cable Comb** under Draw > Parts > Cables: a flat bar that keeps a bundle of cables side by side,
