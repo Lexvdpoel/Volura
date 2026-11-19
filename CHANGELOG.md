@@ -12,6 +12,17 @@ What changed in each version of Volura. Downloads are on the
 - **Sponsor Volura**: *Help > Sponsor Volura…* and the About box lead to the GitHub Sponsors
   page. Sponsor our mission to build more open source software and to keep releasing
   improvements; the GitHub page of Volura now has a Sponsor button too.
+- **Multicolour printing in File > Slice**: every colour of the model prints with its own
+  extruder, starting on the filament the multicolour 3MF gives it, and a table in the dialog
+  points any colour at another one. Faces painted with the Paint Bucket print as a skin of
+  their own filament (**Colour depth of painted faces**, 1 mm by default). A prime tower or
+  ooze shield keeps the switches clean.
+  - **Filament changer on one nozzle** (Prusa MMU, ERCF and others) slices for 2 to 16
+    filaments with T0, T1, ... and is remembered per printer.
+  - A printer with one extruder can **change filament at** the heights you list (M600 or your
+    own code).
+  - The print preview colours every line with its filament and says how much of each one the
+    print uses.
 
 ### Changed
 - **Draw > Parts in categories**: the 38 ready-made parts are grouped into Mechanical,
