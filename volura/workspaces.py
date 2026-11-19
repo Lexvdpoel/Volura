@@ -14,7 +14,7 @@ window (`MainWindow.set_workspace`).
 """
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QEvent, QPoint, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QTabBar, QWidget
 
 from .i18n import tr
@@ -66,7 +66,7 @@ class WorkspaceBar(QWidget):
         super().__init__(parent)
         self.setObjectName("workspaceBar")
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(4, 0, 6, 2)
+        lay.setContentsMargins(4, 0, 0, 2)
         lay.setSpacing(8)
         self.tabs = QTabBar()
         self.tabs.setObjectName("workspaceTabs")
@@ -90,6 +90,33 @@ class WorkspaceBar(QWidget):
         for w in extras:
             lay.addWidget(w)
         self.tabs.currentChanged.connect(lambda _i: self.changed.emit(self.key()))
+        self._viewer = None
+
+    def follow(self, viewer) -> None:
+        """End where `viewer` ends, so the 3D | 2D switch lines up with its right edge
+        also when a side bar or the machine panel next to it is made wider."""
+        self._viewer = viewer
+        viewer.installEventFilter(self)
+        QTimer.singleShot(0, self._align)
+
+    def eventFilter(self, obj, event):
+        if obj is self._viewer and event.type() in (QEvent.Resize, QEvent.Move, QEvent.Show):
+            QTimer.singleShot(0, self._align)
+        return False
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self._align)
+
+    def _align(self) -> None:
+        viewer = self._viewer
+        if viewer is None or not viewer.isVisible():
+            return
+        top = self.window()
+        right = viewer.mapTo(top, QPoint(viewer.width(), 0)).x()
+        left = self.mapTo(top, QPoint(0, 0)).x()
+        if right - left > self.minimumSizeHint().width() and right - left != self.width():
+            self.setFixedWidth(right - left)
 
     def key(self) -> str:
         return normal(self.tabs.tabData(self.tabs.currentIndex()))

@@ -1939,7 +1939,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self._update_mode_button()
         self.workspace_bar = workspaces.WorkspaceBar(self.mode_button, hint=self.hint)
         self.workspace_bar.changed.connect(self.set_workspace)
-        sb.addWidget(self.workspace_bar, 1)
+        sb.addWidget(self.workspace_bar)
+        self.workspace_bar.follow(self.central)   # the switch ends where the viewer ends
         sb.addPermanentWidget(self.coords)
         sb.addPermanentWidget(self.vcb_label)
         sb.addPermanentWidget(self.vcb)
