@@ -1,0 +1,17 @@
+// volura.dev: the Worker "volura", static files only (deployed by .github/workflows/site.yml)
+{
+  "name": "volura",
+  "compatibility_date": "2026-11-18",
+  "assets": {
+    "directory": "./public",
+    // /manual.html answers with a redirect to /manual: link and canonicalise /manual
+    "html_handling": "auto-trailing-slash"
+  },
+  // the domains as they were set up in the dashboard (www redirects to the apex by a rule)
+  "routes": [
+    { "pattern": "volura.dev", "custom_domain": true },
+    { "pattern": "www.volura.dev", "custom_domain": true }
+  ],
+  "workers_dev": true,
+  "preview_urls": true
+}

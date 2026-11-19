@@ -1,0 +1,59 @@
+name: site
+
+# volura.dev: the Cloudflare Worker "volura" serves site/public as static files.
+#
+# It deploys by itself:
+#  - after the build of a release tag (v*) succeeded: the features and the manual of that
+#    release are baked into the pages first, so a search engine reads the newest text;
+#  - when the site itself changes on main;
+#  - by hand (Actions > site > Run workflow).
+# A release made by the build does not start other workflows (GITHUB_TOKEN), which is why
+# this one waits for the build instead of for the release.
+#
+# Needs the repository secret CLOUDFLARE_API_TOKEN (a token with "Workers Scripts: Edit" on
+# the account) and the repository variable CLOUDFLARE_ACCOUNT_ID.
+
+on:
+  workflow_run:
+    workflows: [build]
+    types: [completed]
+  push:
+    branches: [main]
+    paths: ["site/**", "tools/bake_site.py", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # after a build: only a successful build of a release tag
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Bake the newest release into the pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          echo "latest release: $tag"
+          python3 tools/bake_site.py site/public "$tag"
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: site
+          command: deploy
