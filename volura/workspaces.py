@@ -60,7 +60,9 @@ class WorkspaceBar(QWidget):
     #: the user chose another tab; the key of the workspace
     changed = Signal(str)
 
-    def __init__(self, mode_switch=None, parent=None):
+    def __init__(self, mode_switch=None, parent=None, hint=None, extras=()):
+        """`hint` is the text of the window, beside the tabs and taking the free room;
+        `extras` stand at the right end, after the 3D | 2D switch, all on the one row."""
         super().__init__(parent)
         self.setObjectName("workspaceBar")
         lay = QHBoxLayout(self)
@@ -78,10 +80,15 @@ class WorkspaceBar(QWidget):
             self.tabs.setTabData(i, key)
             self.tabs.setTabToolTip(i, tip)
         lay.addWidget(self.tabs)
-        lay.addStretch(1)
+        if hint is not None:
+            lay.addWidget(hint, 1)
+        else:
+            lay.addStretch(1)
         self.mode_switch = mode_switch
         if mode_switch is not None:
             lay.addWidget(mode_switch)
+        for w in extras:
+            lay.addWidget(w)
         self.tabs.currentChanged.connect(lambda _i: self.changed.emit(self.key()))
 
     def key(self) -> str:

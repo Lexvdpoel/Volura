@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                 QLabel, QLineEdit,
                                 QMainWindow, QMenu, QMessageBox, QPlainTextEdit,
                                 QProgressDialog, QPushButton,
-                               QSpinBox, QSplitter, QStackedWidget,
+                               QSizePolicy, QSpinBox, QSplitter, QStackedWidget,
                                QTextBrowser, QWidget,
                                QToolBar, QToolButton, QVBoxLayout)
 
@@ -1918,9 +1918,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
 
     # ------------------------------------------------------------ building
     def _build_statusbar(self):
-        sb = self.statusBar()
+        # no status bar of its own: the texts stand on the row of the workspace tabs
         self.hint = QLabel()
-        sb.addWidget(self.hint, 1)
+        self.hint.setObjectName("hint")
+        # a long text is cut off on the right instead of pushing the window wider
+        self.hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.coords = QLabel()
         self.coords.setObjectName("sheetCoords")
         self.coords.setToolTip(tr("Position of the cursor on the 2D worksheet"))
@@ -1929,14 +1931,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.vcb.setAccessibleName(tr("Measurements"))
         self.vcb.setFixedWidth(180)
         self.vcb.returnPressed.connect(self.on_vcb_return)
-        sb.addPermanentWidget(self.coords)
-        sb.addPermanentWidget(self.vcb_label)
-        sb.addPermanentWidget(self.vcb)
         self.mode_button = ModeSwitch()
         self.mode_button.clicked.connect(lambda checked=False: self.toggle_sheet_mode())
         self._update_mode_button()
-        # the tabs of the workspaces under the viewer, with the 3D | 2D switch at their end
-        self.workspace_bar = workspaces.WorkspaceBar(self.mode_button)
+        # the tabs of the workspaces under the viewer, the texts beside them on the same
+        # row, then the 3D | 2D switch and the measurements at the right end
+        self.workspace_bar = workspaces.WorkspaceBar(
+            self.mode_button, hint=self.hint,
+            extras=(self.coords, self.vcb_label, self.vcb))
         self.workspace_bar.changed.connect(self.set_workspace)
         self._body_layout.addWidget(self.workspace_bar)
         self.coords.hide()
