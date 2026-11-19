@@ -175,6 +175,9 @@ PANEL_MATERIALS = tr_noop("Materials")
 PANEL_COLORS = tr_noop("Colors")
 PANEL_OUTLINER = tr_noop("Outliner")
 PANEL_LAYERS = tr_noop("Layers")
+# Help > Sponsor Volura… and the About box: the GitHub Sponsors page of the maker of Volura
+SPONSOR_URL = "https://github.com/sponsors/Lexvdpoel"
+
 PANELS = (PANEL_INFO, PANEL_COLORS, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT_CHECK,
           PANEL_LAYERS)
 
@@ -2488,6 +2491,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_welcome = A(tr("&Welcome to Volura"), self.show_welcome)
         self.a_updates = A(tr("Check for &Updates…"), lambda checked=False: self.check_for_updates())
         self.a_help = A(tr("&Keyboard Shortcuts"), self.show_help, "F1")
+        self.a_sponsor = A(tr("&Sponsor Volura…"), lambda checked=False: self.open_sponsor_page(),
+                           None, None, False,
+                           tr("Support the mission to build more open source software and keep "
+                              "releasing improvements"))
         self.a_about = A(tr("&About Volura"), self.about)
 
         # ---- the 2D worksheet
@@ -3104,7 +3111,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.fill(m, (self.standard_menu, None, self.a_model_info, self.a_prefs))
 
         m = mb.addMenu(tr("&Help"))
-        self.fill(m, (self.a_welcome, self.a_help, None, self.a_updates, self.a_about))
+        self.fill(m, (self.a_welcome, self.a_help, None, self.a_updates, None, self.a_sponsor,
+                      self.a_about))
         self._show_mode_menus(getattr(self, "mode", "3d"))
 
     def _show_mode_menus(self, mode):
@@ -5240,7 +5248,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                "<li>UVtools (command line), AGPL v3: a separate program for "
                                "File &gt; Slice for Resin, with its resin printer profiles</li></ul>"
                                "<p>The full license texts are in THIRD_PARTY_LICENSES.txt next to "
-                               "the program.</p>"))
+                               "the program.</p>")
+                          + tr("<p><b>Sponsor Volura:</b> help us build more open source "
+                               "software and keep releasing improvements. "
+                               "<a href='{url}'>Become a sponsor</a></p>").format(url=SPONSOR_URL))
+
+    def open_sponsor_page(self):
+        """Help > Sponsor Volura…: open the GitHub Sponsors page in the browser."""
+        QDesktopServices.openUrl(QUrl(SPONSOR_URL))
 
     # ------------------------------------------------------------ context menu
     def show_area_selection(self):

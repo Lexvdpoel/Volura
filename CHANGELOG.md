@@ -9,6 +9,9 @@ What changed in each version of Volura. Downloads are on the
 - **Cable Comb** under Draw > Parts > Cables: a flat bar that keeps a bundle of cables side by side,
   every cable clicked into its own round seat through an opening narrower than the cable;
   it prints lying flat, so nothing needs support.
+- **Sponsor Volura**: *Help > Sponsor Volura…* and the About box lead to the GitHub Sponsors
+  page. Sponsor our mission to build more open source software and to keep releasing
+  improvements; the GitHub page of Volura now has a Sponsor button too.
 
 ### Changed
 - **Draw > Parts in categories**: the 38 ready-made parts are grouped into Mechanical,

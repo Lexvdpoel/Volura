@@ -15,6 +15,7 @@
   <a href="https://github.com/Lexvdpoel/Volura/actions/workflows/build.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/Lexvdpoel/Volura/build.yml?branch=main"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Lexvdpoel/Volura"></a>
   <img alt="Windows and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey">
+  <a href="https://github.com/sponsors/Lexvdpoel"><img alt="Sponsor Volura" src="https://img.shields.io/github/sponsors/Lexvdpoel?label=sponsor&logo=githubsponsors&color=ea4aaa"></a>
 </p>
 
 <p align="center">
@@ -22,7 +23,8 @@
   <a href="https://volura.dev/manual">Manual</a> ·
   <a href="https://github.com/Lexvdpoel/Volura/releases/latest">Download</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
-  <a href="https://github.com/Lexvdpoel/Volura/discussions">Discussions</a>
+  <a href="https://github.com/Lexvdpoel/Volura/discussions">Discussions</a> ·
+  <a href="https://github.com/sponsors/Lexvdpoel">Sponsor</a>
 </p>
 
 <p align="center">
@@ -93,6 +95,16 @@ We want Volura to be the one program a maker needs. If something is missing, doe
 sense or does not work, please [open an issue](https://github.com/Lexvdpoel/Volura/issues/new/choose)
 or start a [discussion](https://github.com/Lexvdpoel/Volura/discussions). Every report counts,
 and we aim to fix it **within a day**.
+
+## Sponsor Volura
+
+Volura is free and open source, and it stays that way. If it saves you time or money,
+please consider [**becoming a sponsor**](https://github.com/sponsors/Lexvdpoel): sponsor our
+mission to build more open source software and to keep releasing improvements. Every
+sponsorship, large or small, buys time for new parts, fixes and features that every maker
+gets for free.
+
+[![Sponsor Volura](https://img.shields.io/badge/Sponsor-Volura-ea4aaa?logo=githubsponsors&logoColor=white&style=for-the-badge)](https://github.com/sponsors/Lexvdpoel)
 
 ## All features
 

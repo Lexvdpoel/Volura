@@ -2867,4 +2867,12 @@ TRANSLATIONS = {
     '&Cables': '&Kabels',
     '&Storage': '&Opbergen',
     '&Home and Desk': '&Huis en bureau',
+    '&Sponsor Volura…': 'Volura &sponsoren…',
+    'Support the mission to build more open source software and keep releasing improvements':
+        'Steun de missie om meer opensourcesoftware te maken en verbeteringen uit te blijven '
+        'brengen',
+    "<p><b>Sponsor Volura:</b> help us build more open source software and keep releasing "
+    "improvements. <a href='{url}'>Become a sponsor</a></p>":
+        "<p><b>Sponsor Volura:</b> help ons meer opensourcesoftware te ontwikkelen en "
+        "verbeteringen uit te blijven brengen. <a href='{url}'>Word sponsor</a></p>",
 }
