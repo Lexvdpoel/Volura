@@ -1918,7 +1918,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
 
     # ------------------------------------------------------------ building
     def _build_statusbar(self):
-        # no status bar of its own: the texts stand on the row of the workspace tabs
+        # one row over the whole width of the window: the workspace tabs, the text and the
+        # 3D | 2D switch on the left, the measurements at the right end under the side bar
+        sb = self.statusBar()
+        sb.setSizeGripEnabled(False)
         self.hint = QLabel()
         self.hint.setObjectName("hint")
         # a long text is cut off on the right instead of pushing the window wider
@@ -1934,13 +1937,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.mode_button = ModeSwitch()
         self.mode_button.clicked.connect(lambda checked=False: self.toggle_sheet_mode())
         self._update_mode_button()
-        # the tabs of the workspaces under the viewer, the texts beside them on the same
-        # row, then the 3D | 2D switch and the measurements at the right end
-        self.workspace_bar = workspaces.WorkspaceBar(
-            self.mode_button, hint=self.hint,
-            extras=(self.coords, self.vcb_label, self.vcb))
+        self.workspace_bar = workspaces.WorkspaceBar(self.mode_button, hint=self.hint)
         self.workspace_bar.changed.connect(self.set_workspace)
-        self._body_layout.addWidget(self.workspace_bar)
+        sb.addWidget(self.workspace_bar, 1)
+        sb.addPermanentWidget(self.coords)
+        sb.addPermanentWidget(self.vcb_label)
+        sb.addPermanentWidget(self.vcb)
         self.coords.hide()
 
     def _update_mode_button(self):
