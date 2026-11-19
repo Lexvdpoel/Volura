@@ -60,7 +60,7 @@ The interface is in English and Dutch (*Window > Preferences > General > Languag
       <b>Print</b><br>
       Print Check shows what hangs over and needs support before you print, multicolour 3MF for
       AMS and MMU printers, and built-in slicing for filament (CuraEngine) and resin
-      (UVtools) printers.
+      (UVtools) printers - with every colour of the model on the filament you chose for it.
     </td>
   </tr>
   <tr>
@@ -519,6 +519,12 @@ gets for free.
   with the download. The print preview then shows the G-code in 3D, layer by layer, every line as
   wide as it prints (turn, move and zoom it with the mouse), with a virtual printer that plays each layer as the printer will
   print it, the print time and the filament; save the G-code from there
+  - A model in more colours prints in more colours: every colour goes to the extruder you point it
+    at, starting on the filament the multicolour 3MF would have given it, faces painted with the
+    Paint Bucket print as a skin of the depth you choose, and a prime tower or ooze shield keeps
+    the colour changes clean. A printer with one nozzle and a filament changer (Prusa MMU, ERCF)
+    is offered T0, T1, ... for its filaments, and one without either changes filament by height
+    where you tell it to
 - **Slice for Resin** (File > Slice for Resin): layer images for more than 150 resin (MSLA)
   printers of Anycubic, Elegoo, Phrozen, Creality, EPAX and others, in the printer's own file
   (.ctb, .goo, .pwmx, ...). Volura puts the parts on automatic supports - heads, pillars that
@@ -766,15 +772,31 @@ Zoom, Rotate and Scale, and the middle mouse button pans (Shift + middle = orbit
 1. Make the base object, for example a rectangle of `60;40` and Push/Pull `8`.
 2. Draw a shape on the top or put 3D text on it (Shift+T).
 3. Pick a color in the filament panel and push the shape 1 mm inwards while holding **Alt**.
-4. *File > Export as 3MF (multicolor)* and open the file in your slicer.
+4. *File > Slice* prints those colours with Volura's own slicer, or *File > Export > Multicolor
+   3MF* gives one file that opens in PrusaSlicer, OrcaSlicer or Bambu Studio with every colour
+   already on its filament.
 
 Loose geometry that forms a closed volume also counts as a part; make it a group (triple-click, G)
 to give it a color of its own.
 
 Only the surface needs a color? Paint faces with the Paint Bucket (B): in the slicer those faces get
-the filament of their color, the rest of the part keeps the part's filament. The slicer shows its own
-filament colors. Only the colors you use get a filament: 1, 2, 3, ... in the order of the
-filament panel, so the file fits a slicer with as many filaments as your model has colors.
+the filament of their color, the rest of the part keeps the part's filament. Sliced in Volura, a
+painted face prints as a skin of that filament under the painted surface - **Colour depth of painted
+faces** says how deep, 1 mm by default. Only the colors you use get a filament: 1, 2, 3, ... in the
+order of the filament panel, so the file fits a slicer with as many filaments as your model has
+colors, and File > Slice starts every color on that same filament.
+
+**File > Slice** offers the rest of the multicolour print in the same dialog:
+
+- **Colour -> extruder** points any colour at another extruder, and **Prime tower** (on by default)
+  or **Ooze shield** keep the nozzle clean while it switches.
+- **Filament changer on one nozzle** is for a Prusa MMU, an ERCF or another changer in front of the
+  one nozzle of a printer such as an i3 or a Mini: the print asks for every filament with T0, T1, ...
+  as the changer's firmware wants, and remembers how many filaments hang above that printer.
+- A printer with one extruder and no changer asks for the filament halfway: **Change filament at**
+  lists the heights where it stops (M600, or the code you fill in). The preview colours every line
+  with the filament that prints it and names how much of each one the print uses.
+- A Bambu printer wants Bambu Studio's own G-code: use the multicolour 3MF for that.
 
 ## Project structure
 

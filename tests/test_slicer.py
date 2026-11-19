@@ -79,6 +79,138 @@ def test_without_an_engine_slicing_says_so(tmp_path, monkeypatch):
         slicer.slice_meshes(None, [_cube() + (0,)], str(tmp_path / "x.gcode"))
 
 
+# ---------------------------------------------------------------- the colors of the print
+
+MATERIALS = [["Red PLA", "#d23b3b"], ["Blue PLA", "#2f6fd6"], ["Green PLA", "#3aa655"]]
+
+
+def _tagged(color, painted=None, size=10.0):
+    """A cube in `color`, the faces at the far end of the z axis painted `painted`, with the
+    face tags a printed part carries (see `volura.ops`)."""
+    from volura import brep, ops
+    man = mf.Manifold.cube((size, size, size))
+    mesh = man.to_mesh()
+    corner = np.asarray(mesh.vert_properties)[:, :3][np.asarray(mesh.tri_verts).reshape(-1, 3)]
+    top = np.all(corner[:, :, 2] > size - 1e-6, axis=1) if painted else np.zeros(len(corner), bool)
+    colors = [painted if hit else color for hit in top]
+    tags = np.array([ops.color_id(c) for c in colors], dtype=np.uint64)
+    return brep.manifold_from_tris(np.asarray(mesh.vert_properties, dtype=np.float64),
+                                   np.asarray(mesh.tri_verts, dtype=np.uint64), tags)
+
+
+def _colored_parts():
+    """One part per color of MATERIALS."""
+    from volura import ops
+    return [ops.Part(name, color, _tagged(color)) for name, color in MATERIALS]
+
+
+def _model_colors():
+    from volura import fileio
+    return fileio.model_colors(_colored_parts(), MATERIALS)
+
+
+def test_the_slice_takes_the_filaments_of_the_multicolor_3mf():
+    """What the 3MF numbers the colors with is what the print extrudes with."""
+    from volura.slice_dialog import Multicolor
+    colors = _model_colors()
+    assert [color for _n, color, _e in colors] == [c for _n, c in MATERIALS]
+    assert [e for _n, _c, e in colors] == [1, 2, 3], "the filament order of the Materials panel"
+    plan = Multicolor(3, colors=colors)
+    assert [plan.extruder(color) for _n, color, _e in colors] == [0, 1, 2]
+    assert plan.filaments() == [(color, name) for name, color in MATERIALS]
+
+
+def test_a_painted_face_joins_the_filaments_of_the_model():
+    """A face painted in another color takes its own filament, and a color the model does not
+    use does not burn one."""
+    from volura import fileio, ops
+    from volura.slice_dialog import Multicolor
+    red = ops.Part("Red", "#d23b3b", _tagged("#d23b3b", painted="#3aa655"))
+    colors = fileio.model_colors([red], MATERIALS)
+    assert [(name, color, e) for name, color, e in colors] == \
+        [("Red PLA", "#d23b3b", 1), ("Green PLA", "#3aa655", 2)], "blue is not in the model"
+    plan = Multicolor(2, colors=colors)
+    assert plan.extruder("#d23b3b") == 0 and plan.extruder("#3aa655") == 1
+    assert plan.filaments() == [("#d23b3b", "Red PLA"), ("#3aa655", "Green PLA")]
+
+
+def test_the_color_table_of_the_dialog_reroutes_a_color():
+    """Two colors on one extruder: that extruder shows the first of them."""
+    from volura.slice_dialog import Multicolor
+    plan = Multicolor(2, mapping={"#d23b3b": 0, "#2f6fd6": 0, "#3aa655": 1}, colors=_model_colors())
+    assert [plan.extruder(c) for c in ("#d23b3b", "#2f6fd6", "#3aa655")] == [0, 0, 1]
+    assert plan.filaments() == [("#d23b3b", "Red PLA"), ("#3aa655", "Green PLA")]
+
+
+def test_colors_that_do_not_fit_the_extruders_wrap_around():
+    from volura.slice_dialog import Multicolor
+    plan = Multicolor(2, colors=_model_colors())        # three colors, two extruders
+    assert [plan.extruder(c) for c in ("#d23b3b", "#2f6fd6", "#3aa655")] == [0, 1, 0]
+
+
+def test_a_print_of_one_extruder_needs_no_tower_and_two_do():
+    from volura.slice_dialog import Multicolor
+    assert Multicolor(1).values(235.0, 235.0) == {}
+    assert Multicolor(2, tower=False).values(235.0, 235.0) == \
+        {"prime_tower_enable": False, "ooze_shield_enabled": False}
+    both = Multicolor(2, tower=True, ooze=True).values(235.0, 235.0)
+    assert both["ooze_shield_enabled"] is True
+    assert both["prime_tower_size"] == pytest.approx(35.2), "15% of the shortest side of the bed"
+    assert Multicolor(2).values(200.0, 100.0)["prime_tower_size"] == pytest.approx(15.0)
+    assert Multicolor(2).values()["prime_tower_size"] == pytest.approx(15.0), "no bed given"
+
+
+def test_the_heights_of_the_changes_come_and_go_as_one_settings_line():
+    from volura.slice_dialog import heights_text, parse_heights
+    assert parse_heights("5,12.5, 5 ; 3") == [3.0, 5.0, 12.5]
+    assert parse_heights("") == [] and parse_heights(None) == []
+    assert heights_text([12.5, 5.0, 5.0]) == "5,12.5"
+    assert parse_heights(heights_text([0.2, 7.35])) == [0.2, 7.35]
+
+
+LAYERS = (";LAYER:0\nG1 Z0.2 F900\nG1 X10 E1\n"
+          ";LAYER:1\nG1 Z0.4\nG1 X10 E2\n"
+          ";LAYER:2\nG1 Z0.6\nG1 X10 E3\n")
+
+
+def test_the_layers_of_the_g_code_and_their_heights():
+    assert [round(z, 2) for _line, z in slicer.layer_heights(LAYERS)] == [0.2, 0.4, 0.6]
+
+
+def test_a_filament_change_lands_on_the_first_layer_at_or_above_its_height():
+    lines = slicer.with_filament_changes(LAYERS, [0.21, 0.6]).splitlines()
+    assert lines == [";LAYER:0", "G1 Z0.2 F900", "G1 X10 E1",
+                     ";LAYER:1", "M600", "G1 Z0.4", "G1 X10 E2",
+                     ";LAYER:2", "M600", "G1 Z0.6", "G1 X10 E3"], \
+        "the change comes where the print is past the height"
+
+
+def test_two_changes_in_one_layer_ask_for_the_filament_once():
+    assert slicer.with_filament_changes(LAYERS, [0.5, 0.55]).count("M600") == 1
+
+
+def test_a_change_above_the_print_or_below_the_first_layer_asks_for_nothing():
+    assert slicer.with_filament_changes(LAYERS, [7.0]) == LAYERS
+    assert slicer.with_filament_changes(LAYERS, []) == LAYERS
+
+
+def test_the_command_of_the_change_is_yours_and_keeps_the_line_endings():
+    got = slicer.with_filament_changes(LAYERS, [0.5], "M600 P3")
+    assert "\nM600 P3\n" in got
+    crlf = slicer.with_filament_changes(LAYERS.replace("\n", "\r\n"), [0.5])
+    assert "M600\r\n" in crlf and crlf.count("M600") == 1
+
+
+def test_the_changes_are_written_into_the_g_code(tmp_path):
+    path = tmp_path / "x.gcode"
+    path.write_text(LAYERS, encoding="utf-8")
+    slicer.insert_filament_changes(str(path), [0.21])
+    assert path.read_text(encoding="utf-8").splitlines()[4] == "M600"
+    before = path.read_bytes()
+    slicer.insert_filament_changes(str(path), [99.0])
+    assert path.read_bytes() == before, "a file that needs nothing is left alone"
+
+
 @needs_engine
 def test_a_cube_slices_for_the_ender_3(tmp_path):
     lib = cura_profiles.Library(RESOURCES)
@@ -98,6 +230,134 @@ def test_a_cube_slices_for_the_ender_3(tmp_path):
     lo = float(re.search(r"^;MINX:([\d.]+)", text, re.M).group(1))
     hi = float(re.search(r"^;MAXX:([\d.]+)", text, re.M).group(1))
     assert 0.5 * (lo + hi) == pytest.approx(117.5, abs=1.0), "in the middle of the 235 mm bed"
+
+
+@needs_engine
+def test_two_colours_on_the_one_nozzle_of_a_changer(tmp_path):
+    """A filament changer in front of the one nozzle of an Ender 3 asks for both filaments."""
+    from volura.slice_dialog import Multicolor
+    lib = cura_profiles.Library(RESOURCES)
+    p = lib.printer("creality_ender3")
+    v, m = p.default_variant(), p.default_material()
+    st = p.stacks(v, m, "standard", {"infill_sparse_density": 0.0})
+    cura_profiles.filament_changer(st, 2)
+    colors = [("Red PLA", "#d23b3b", 1), ("Blue PLA", "#2f6fd6", 2)]
+    st.glob.layers[0].update(Multicolor(2, colors=colors).values(235.0, 235.0))
+    out = tmp_path / "two-colour.gcode"
+    r = slicer.slice_meshes(st, [_cube(10.0, (30.0, 30.0, 0.0)) + (0,),
+                                 _cube(10.0, (50.0, 30.0, 0.0)) + (1,)], str(out))
+    text = out.read_text(encoding="utf-8")
+    assert re.search(r"^T0\b", text, re.M) and re.search(r"^T1\b", text, re.M), \
+        "the print asks the changer for both filaments"
+    assert len(r.volume_mm3) == 2 and all(v > 0 for v in r.volume_mm3), \
+        "both filaments are in the header of the G-code"
+
+
+@needs_engine
+def test_a_colour_change_by_height_lands_in_the_g_code(tmp_path):
+    """A printer with one filament and no changer is asked to change halfway."""
+    lib = cura_profiles.Library(RESOURCES)
+    p = lib.printer("creality_ender3")
+    v, m = p.default_variant(), p.default_material()
+    st = p.stacks(v, m, "standard", {"infill_sparse_density": 0.0})
+    out = tmp_path / "change.gcode"
+    slicer.slice_meshes(st, [_cube(10.0, (30.0, 30.0, 0.0)) + (0,)], str(out))
+    text = out.read_text(encoding="utf-8")
+    assert slicer.FILAMENT_CHANGE not in text, "a plain print does not change filament"
+    slicer.insert_filament_changes(str(out), [5.0])
+    changed = out.read_text(encoding="utf-8").splitlines()
+    at = [k for k, line in enumerate(changed) if line == slicer.FILAMENT_CHANGE]
+    assert len(at) == 1, "one change, at a layer boundary"
+    z = [zz for _line, zz in slicer.layer_heights("\n".join(changed[at[0] - 1:]))]
+    assert z and z[0] == pytest.approx(5.0, abs=0.21), "the first layer at or above 5 mm"
+    assert changed[at[0] - 1].startswith(";LAYER:"), "the change comes where a layer starts"
+    heights = _tools_by_layer("\n".join(changed[:at[0]]))
+    before = [line for line in changed[:at[0]] if not line.startswith(";LAYER:")]
+    after = _tools_by_layer("\n".join(before + [";LAYER:x"] + changed[at[0]:]))
+    assert max(heights) < 5.0 <= min(after), \
+        f"printed up to {max(heights)} before the change and from {min(after)} after it"
+
+
+def _two_extruders(plan):
+    """The stacks of a printer with two extruders of its own (Creality CR-X), set up for `plan`."""
+    lib = cura_profiles.Library(RESOURCES)
+    p = lib.printer("creality_cr-x")
+    assert p.extruder_count == 2
+    st = p.stacks(p.default_variant(), p.default_material(), "standard",
+                  {"infill_sparse_density": 0.0})
+    st.glob.layers[0].update(plan.values(200.0, 200.0))
+    return st
+
+
+def _tools_by_layer(text):
+    """{height: the extruders that lay lines at that height} of the layers of a G-code (the
+    start G-code, before the first layer, primes the nozzles and is left out)."""
+    out, z, tool, started = {}, None, 0, False
+    for line in text.splitlines():
+        code = line.split(";", 1)[0].strip()
+        if line.startswith(";LAYER:"):
+            started = True
+        elif re.match(r"^T\d+$", code):
+            tool = int(code[1:])
+        elif code.startswith(("G0", "G1")):
+            m = re.search(r"\bZ(-?[\d.]+)", code)
+            if m:
+                z = float(m.group(1))
+            if started and re.search(r"\bE[\d.]", code) and re.search(r"\b[XY]", code):
+                out.setdefault(round(z, 3), set()).add(tool)
+    return out
+
+
+@needs_engine
+def test_two_colours_on_two_extruders_print_with_both_and_a_prime_tower(tmp_path):
+    from volura.slice_dialog import Multicolor
+    colors = [("Red PLA", "#d23b3b", 1), ("Blue PLA", "#2f6fd6", 2)]
+    plan = Multicolor(2, colors=colors)
+    out = tmp_path / "two.gcode"
+    slicer.slice_meshes(_two_extruders(plan),
+                        [_cube(10.0, (60.0, 60.0, 0.0)) + (plan.extruder("#d23b3b"),),
+                         _cube(10.0, (90.0, 60.0, 0.0)) + (plan.extruder("#2f6fd6"),)], str(out))
+    text = out.read_text(encoding="utf-8")
+    assert re.search(r"^T0\b", text, re.M) and re.search(r"^T1\b", text, re.M)
+    assert ";TYPE:PRIME-TOWER" in text, "a prime tower to wipe the nozzle on"
+
+
+@needs_engine
+def test_a_colour_routed_to_the_first_extruder_never_calls_the_second(tmp_path):
+    from volura.slice_dialog import Multicolor
+    colors = [("Red PLA", "#d23b3b", 1), ("Blue PLA", "#2f6fd6", 2)]
+    plan = Multicolor(2, mapping={"#d23b3b": 0, "#2f6fd6": 0}, tower=False, colors=colors)
+    out = tmp_path / "one.gcode"
+    slicer.slice_meshes(_two_extruders(plan),
+                        [_cube(10.0, (60.0, 60.0, 0.0)) + (plan.extruder("#d23b3b"),),
+                         _cube(10.0, (90.0, 60.0, 0.0)) + (plan.extruder("#2f6fd6"),)], str(out))
+    tools = set().union(*_tools_by_layer(out.read_text(encoding="utf-8")).values())
+    assert tools == {0}, "both colours print with the first extruder"
+
+
+@needs_engine
+def test_a_painted_top_prints_with_the_second_extruder_only_at_the_top(tmp_path):
+    """A 10 mm cube with its top painted green: the green skin of 1 mm is the only thing the
+    second extruder prints, so it only works in the top millimetre of layers."""
+    from volura import fileio, ops, paint_split
+    from volura.slice_dialog import Multicolor
+    man = _tagged("#d23b3b", painted="#3aa655").translate((60.0, 60.0, 0.0))
+    part = ops.Part("Red", "#d23b3b", man)
+    plan = Multicolor(2, tower=False, colors=fileio.model_colors([part], MATERIALS))
+    pieces = paint_split.split_painted(man, fileio.triangle_colors(man), part.color, 1.0)
+    meshes = []
+    for piece, color in pieces:
+        m = piece.to_mesh()
+        meshes.append((np.asarray(m.vert_properties)[:, :3], np.asarray(m.tri_verts),
+                       plan.extruder(color)))
+    out = tmp_path / "painted.gcode"
+    slicer.slice_meshes(_two_extruders(plan), meshes, str(out))
+    by_layer = _tools_by_layer(out.read_text(encoding="utf-8"))
+    first = min(by_layer)                    # every extruder primes with a skirt there
+    second = [z for z, tools in by_layer.items() if 1 in tools and z > first]
+    assert second, "the painted top prints with the second extruder"
+    assert min(second) > 10.0 - 1.0 - 0.3, f"the second extruder starts too low: {min(second)}"
+    assert any(0 in tools for z, tools in by_layer.items() if z < 5.0), "the rest is red"
 
 
 def _fill(text):
@@ -144,7 +404,7 @@ def test_slice_from_the_file_menu(monkeypatch, tmp_path):
     QCoreApplication.processEvents()
     v, t = _cube(15.0)
     from volura import ops
-    ops.group_from_manifold(w.doc, mf.Manifold.cube((15.0, 15.0, 15.0)), (0.8, 0.8, 0.8), "cube")
+    ops.group_from_manifold(w.doc, mf.Manifold.cube((15.0, 15.0, 15.0)), "#cccccc", "cube")
     out = tmp_path / "menu.gcode"
     seen = {}
 

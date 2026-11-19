@@ -491,9 +491,43 @@ def triangle_colors(man):
     mesh = man.to_mesh64()
     ids = np.asarray(mesh.face_id, dtype=np.int64) if len(mesh.face_id) else None
     n = len(np.asarray(mesh.tri_verts).reshape(-1, 3))
-    if ids is None or len(ids) != n:
-        return [None] * n
+    if ids is None or len(ids) != n or not ids.any():
+        return [None] * n           # a mesh that was never tagged has no colors at all
     return [id_color(i) for i in ids]
+
+
+def color_numbers(colors, materials):
+    """The filament number of every color that is used: ``{"#d23b3b": 1, "#2f6fd6": 2}``.
+
+    Only the colors in `colors` get a number: 1, 2, 3, ... in the order of `materials`
+    (``[(name, "#rrggbb")]``); a color that is not in that list comes last, sorted. The
+    multicolor 3MF writes these numbers as the extruder of every part and File > Slice passes
+    them to CuraEngine as the extruders, so a model prints with the filament it exports with.
+    """
+    present = {str(c).lower() for c in colors}
+    order = [str(c).lower() for _n, c in materials]
+    order += sorted(present - set(order))
+    return {c: k + 1 for k, c in enumerate(c for c in order if c in present)}
+
+
+def model_colors(part_list, materials):
+    """What a part list prints with, in filament order: ``[(name, color, extruder)]``.
+
+    The colors of the parts along the colors painted on their individual faces (Paint Bucket),
+    numbered as `export_3mf` numbers them; parts that are not a volume print with nothing.
+    `materials` gives the names: a color that is not in it shows as its own hex text.
+    """
+    parts = [p for p in part_list if p.manifold is not None]
+    spell = {}                                   # lower case color -> the model's own spelling
+    for p in parts:
+        spell.setdefault(str(p.color).lower(), p.color)
+        for c in triangle_colors(p.manifold):
+            if c is not None:
+                spell.setdefault(c.lower(), c)
+    names = {str(c).lower(): n for n, c in materials}
+    numbers = color_numbers(spell, materials)
+    return sorted(((names.get(c, c), spell[c], n) for c, n in numbers.items()),
+                  key=lambda item: item[2])
 
 
 def export_3mf(path, part_list, materials, name="Volura"):
@@ -517,9 +551,7 @@ def export_3mf(path, part_list, materials, name="Volura"):
     present = {color.lower() for color, _ in parts}
     for colors in tri_colors:
         present.update(c.lower() for c in colors if c is not None)
-    order = [c.lower() for _, c in materials]
-    order += sorted(present - set(order))
-    numbers = {c: k + 1 for k, c in enumerate(c for c in order if c in present)}
+    numbers = color_numbers(present, materials)
 
     def extruder(color):
         return numbers[color.lower()]

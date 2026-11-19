@@ -4,7 +4,9 @@ After File > Slice the G-code goes here first instead of straight to a file. The
 print in 3D on the bed: every layer up to the chosen one, its lines as wide and high as they print
 and in the colour of what they print (outer wall, inner wall, top and bottom, infill, support,
 skirt), the layers below it dimmed, the travel moves of the chosen layer as thin lines when you
-want them, and the nozzle where it is. Drag with
+want them, and the nozzle where it is. A print that goes over more than one filament colours its
+lines with those filaments instead, and the legend under the view names every filament with how
+much of it the print used. Drag with
 the left mouse button to turn the view, with the right or middle button (or Shift and the left) to
 move it; the wheel zooms towards the mouse and a double-click shows the whole print again. Top and
 3D switch the view; Only this layer hides the layers below. Play moves the nozzle through the layer
@@ -42,6 +44,10 @@ KIND_STYLE_CB = [("#999999", tr_noop("Travel")), ("#E69F00", tr_noop("Outer wall
                  ("#F0E442", tr_noop("Infill")), ("#0072B2", tr_noop("Support")),
                  ("#8FD3FF", tr_noop("Support interface")), ("#CC79A7", tr_noop("Skirt and brim")),
                  ("#D55E00", tr_noop("Prime tower")), ("#BBBBBB", tr_noop("Other"))]
+#: the colours a print that changes filament by height shows its filaments in, in the order
+#: the printer loads them; a slice that knows its filaments brings its own colours
+FILAMENT_STYLE = ("#d23b3b", "#2f6fd6", "#3aa655", "#e8a33d", "#8e5bd0", "#2abfbf",
+                  "#e05fa0", "#7a7a7a")
 #: how much faster than the real print the virtual printer plays
 SPEEDS = (1, 5, 20, 100)
 #: frames a second of the playback
@@ -63,6 +69,15 @@ BACKGROUND, BED, GRID = "#20242a", "#2b3038", "#3a404a"
 def kind_style(colour_blind: bool):
     """The colours and names of every kind of line: the standard or the colour-blind palette."""
     return KIND_STYLE_CB if colour_blind else KIND_STYLE
+
+
+def filament_color(filaments, i: int) -> str:
+    """The colour of filament `i` of a print: what the slice says, or one of the palette.
+
+    `filaments` is what `PrintPreviewDialog` gets: `(name, colour, mm, grams)` per filament.
+    """
+    color = filaments[i][1] if i < len(filaments) else ""
+    return color or FILAMENT_STYLE[i % len(FILAMENT_STYLE)]
 
 
 def _hms(seconds: float) -> str:
@@ -106,10 +121,20 @@ class _Lines:
     against each other as they do on the bed and still stand apart. `start[i]` is the first line
     of layer `i` (and `start[-1]` the end); `done[i]` counts, for every move of layer `i`, the
     printed lines up to and including it, so a layer that is half printed draws only those.
+
+    `filaments` is what the print prints with (see `filament_color`): with more than one the
+    lines are drawn in the colour of the filament they print with, instead of the kind of line.
     """
 
-    def __init__(self, preview: gp.Preview, colour_blind=False):
-        colours = np.array([_rgb(c) for c, _name in kind_style(colour_blind)], dtype=np.float32)
+    def __init__(self, preview: gp.Preview, colour_blind=False, filaments=()):
+        style = kind_style(colour_blind)
+        colours = np.array([_rgb(c) for c, _name in style], dtype=np.float32)
+        by_filament = len(filaments) > 1 and preview.materials > 1
+        base = 0
+        if by_filament:                     # after the kinds come the filaments
+            extra = [_rgb(filament_color(filaments, i)) for i in range(preview.materials)]
+            colours = np.vstack([colours, np.array(extra, dtype=np.float32)])
+            base = len(style)
         shade = np.repeat(np.array([p[2] for p in PROFILE], dtype=np.float32), 2)[:, None]
         pos, col, travel, start, tstart, done = [], [], [], [0], [0], []
         for layer in preview.layers:
@@ -118,7 +143,10 @@ class _Lines:
             width = (layer.width[printed] if layer.width is not None
                      else np.full(len(seg), 0.4, dtype=np.float32))
             pos.append(_beads(seg, width, layer.z, layer.height))
-            col.append((colours[layer.kind[printed]][:, None, :] * shade).reshape(-1, 3))
+            style_of = np.asarray(layer.kind[printed], dtype=np.int64)
+            if by_filament and layer.material is not None:
+                style_of = np.asarray(layer.material[printed], dtype=np.int64)
+            col.append((colours[base + style_of][:, None, :] * shade).reshape(-1, 3))
             trav = layer.seg[~printed]
             zt = np.full((len(trav), 1), layer.z + 0.02, dtype=np.float32)   # above the tops
             travel.append(np.hstack([trav[:, :2], zt, trav[:, 2:], zt]).reshape(-1, 3))
@@ -146,14 +174,17 @@ class LayerView(QOpenGLWidget):
     """The print in 3D on the bed, up to one layer, with the nozzle on it.
 
     `bed` is (x0, y0, x1, y1): the bed in the coordinates of the G-code. `layer` is the chosen
-    layer, `at` the seconds into it the virtual printer is (None: the whole layer).
+    layer, `at` the seconds into it the virtual printer is (None: the whole layer). `filaments`
+    is what the print prints with: with more than one, the lines show their filament.
     """
 
-    def __init__(self, preview: gp.Preview, bed, colour_blind=False, parent=None):
+    def __init__(self, preview: gp.Preview, bed, colour_blind=False, filaments=(), parent=None):
         super().__init__(parent)
         self.preview, self.bed = preview, bed
         self.colour_blind = bool(colour_blind)
-        self.lines = _Lines(preview, self.colour_blind)
+        self.filaments = list(filaments)
+        self.by_filament = len(self.filaments) > 1 and preview.materials > 1
+        self.lines = _Lines(preview, self.colour_blind, self.filaments if self.by_filament else ())
         self.layer = 0
         self.at = None
         self.show_travel = False
@@ -325,14 +356,21 @@ class LayerView(QOpenGLWidget):
 
 
 class PrintPreviewDialog(QDialog):
-    """The G-code of a slice, layer by layer; `Save G-code…` hands it on (see `save_to`)."""
+    """The G-code of a slice, layer by layer; `Save G-code…` hands it on (see `save_to`).
+
+    `filaments` is what the print prints with, `(name, colour, mm, grams)` per filament
+    (see `filament_color`): with more than one the view colours every line with its filament
+    and the legend names them, instead of the kinds of line.
+    """
 
     def __init__(self, win, gcode_path: str, preview: gp.Preview, bed, summary: str,
-                 ask_path=None):
+                 ask_path=None, filaments=()):
         super().__init__(win)
         self.gcode_path, self.preview = gcode_path, preview
         self.ask_path = ask_path
         self.saved_to = None
+        self.filaments = list(filaments)
+        self.by_filament = len(self.filaments) > 1 and preview.materials > 1
         settings = getattr(win, "settings", None)
         self.colour_blind = bool(getattr(settings, "colour_blind", False))
         self.setWindowTitle(tr("Print Preview"))
@@ -342,7 +380,7 @@ class PrintPreviewDialog(QDialog):
         self.summary.setWordWrap(True)
         lay.addWidget(self.summary)
         row = QHBoxLayout()
-        self.view = LayerView(preview, bed, self.colour_blind)
+        self.view = LayerView(preview, bed, self.colour_blind, self.filaments)
         row.addWidget(self.view, 1)
         self.slider = QSlider(Qt.Vertical)
         self.slider.setRange(0, max(0, len(preview.layers) - 1))
@@ -371,12 +409,17 @@ class PrintPreviewDialog(QDialog):
         lay.addLayout(controls)
 
         legend = QHBoxLayout()
-        used = set()
-        for layer in preview.layers:
-            used.update(int(k) for k in np.unique(layer.kind))
-        for k, (color, name) in enumerate(kind_style(self.colour_blind)):
-            if k in used and k != gp.TRAVEL:
-                legend.addWidget(QLabel(f"<span style='color:{color}'>■</span> {tr(name)}"))
+        if self.by_filament:
+            for i in range(max(preview.materials, len(self.filaments))):
+                legend.addWidget(QLabel("<span style='color:{c}'>■</span> {t}".format(
+                    c=filament_color(self.filaments, i), t=self._filament_legend(i))))
+        else:
+            used = set()
+            for layer in preview.layers:
+                used.update(int(k) for k in np.unique(layer.kind))
+            for k, (color, name) in enumerate(kind_style(self.colour_blind)):
+                if k in used and k != gp.TRAVEL:
+                    legend.addWidget(QLabel(f"<span style='color:{color}'>■</span> {tr(name)}"))
         legend.addStretch(1)
         hint = QLabel(tr("Drag to turn, right-drag to move, wheel to zoom"))
         hint.setEnabled(False)
@@ -402,6 +445,17 @@ class PrintPreviewDialog(QDialog):
         self._layer_changed(self.slider.value())
 
     # ---- layers and playback
+    def _filament_legend(self, i: int) -> str:
+        """One line of the legend: which filament this is and how much of it the print used."""
+        if i >= len(self.filaments):
+            name, mm, grams = tr("Filament {n}").format(n=i + 1), 0.0, 0.0
+        else:
+            name = self.filaments[i][0]
+            mm, grams = float(self.filaments[i][2]), float(self.filaments[i][3])
+        if grams:
+            return tr("{name}: {g:.1f} g, {m:.2f} m").format(name=name, g=grams, m=mm / 1000.0)
+        return tr("{name}: {m:.2f} m").format(name=name, m=mm / 1000.0)
+
     def _layer_changed(self, value):
         self.view.layer = int(value)
         if not self.play.isChecked():

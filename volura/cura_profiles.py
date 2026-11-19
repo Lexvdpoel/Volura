@@ -492,6 +492,11 @@ class Printer:
     def name(self) -> str:
         return self.definition.name
 
+    @property
+    def extruder_count(self) -> int:
+        """How many filaments this printer prints with: its `machine_extruder_count`."""
+        return max(1, len(self.extruders))
+
     # ---- nozzles
     @cached_property
     def variants(self) -> list[Profile]:
@@ -905,3 +910,36 @@ class Stacks:
 def engine_text(value) -> str:
     """A value the way Cura hands it to CuraEngine: `str()` of the Python value."""
     return str(value)
+
+
+#: what a filament changer behind one nozzle needs on top of what the printer has: Cura must
+#: know that these extruders share their nozzle, and that the nozzle is retracted, wiped and
+#: purged again on every change - the changes show up in the G-code as T0, T1, ...
+SHARED_NOZZLE = {"machine_extruders_share_nozzle": True, "machine_extruders_share_heater": True,
+                 "switch_extruder_retraction_amount": 1.0,
+                 "switch_extruder_retraction_speeds": 25.0, "switch_extruder_prime_speed": 15.0,
+                 "switch_extruder_extra_prime_amount": 0.8}
+
+
+def filament_changer(stacks: "Stacks", filaments: int) -> "Stacks":
+    """The stacks of a printer with one nozzle, printing with `filaments` filaments behind it.
+
+    CuraEngine then slices it as a printer with as many extruders as it has filaments, all of
+    them sharing one nozzle, and the G-code changes filament with `T0`, `T1`, ... - what the
+    firmware of a Prusa MMU, an ERCF or any other single-nozzle changer understands. Every
+    filament after the first is the first extruder again, with its own number. `stacks` is
+    handed back, so it can be built in one go.
+    """
+    own = len(stacks.extruders)
+    if filaments <= own:
+        return stacks
+    for i in range(own, filaments):
+        source = stacks.extruders[i % own]
+        e = Stack(stacks, [dict(layer) for layer in source.layers], dict(source.definition), i)
+        e.layers[0]["extruder_nr"] = i
+        stacks.extruders.append(e)
+    for e in stacks.extruders:
+        e.layers[0].update(SHARED_NOZZLE)
+    stacks.glob.layers[0].update(SHARED_NOZZLE)
+    stacks.glob.layers[0]["machine_extruder_count"] = filaments
+    return stacks
