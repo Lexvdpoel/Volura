@@ -13,6 +13,10 @@ writes after every layer (`;TIME_ELAPSED:`), which include acceleration.
 Every printed move also gets the width of the line it lays down: the filament it pushes out,
 spread over its length and the height of the layer, so the preview can draw the lines as wide as
 they print and neighbouring lines touch the way they do on the bed.
+
+Every move also keeps the filament that lays it: the extruder of the last `T<n>`, plus how often
+the filament of that nozzle was changed (`M600`, inserted by a colour change by height). That is
+what lets the preview draw a multi-material print in the colors it prints with.
 """
 from __future__ import annotations
 
@@ -29,6 +33,9 @@ TRAVEL = KIND["travel"]
 #: the narrowest and widest line the preview believes (a short move that primes or wipes can
 #: push out much more or less than a real line)
 WIDTH_MIN, WIDTH_MAX = 0.1, 3.0
+#: the code that asks for a filament change of a printer whose filaments share a nozzle; what
+#: comes after it prints with the next filament behind that nozzle
+FILAMENT_CHANGE = "M600"
 
 _WORD = re.compile(r"([A-Z])\s*(-?\d*\.?\d+)")
 
@@ -40,7 +47,9 @@ class Layer:
     `seg` holds one row per move: x0, y0, x1, y1; `kind` the kind of each (TRAVEL for a move that
     does not extrude) and `t` the moment, in seconds from the start of the layer, the move ends.
     `height` is how thick the layer is and `width` the width of the line of every move (0 for a
-    travel move).
+    travel move). `pushed` is the length of filament every move pushes out (mm) and `material`
+    which filament that is: the extruder of the move or, after a filament change of a shared
+    nozzle (`M600`), the filament loaded then. Both are None when nothing was extruded.
     """
 
     number: int
@@ -50,6 +59,8 @@ class Layer:
     t: np.ndarray
     height: float = 0.2
     width: np.ndarray | None = None
+    pushed: np.ndarray | None = None
+    material: np.ndarray | None = None
 
     @property
     def seconds(self) -> float:
@@ -71,15 +82,24 @@ class Layer:
 
 @dataclass
 class Preview:
-    """A sliced print: its layers and the box its extruded lines fill."""
+    """A sliced print: its layers, the box its extruded lines fill and its filaments."""
 
     layers: list = field(default_factory=list)
     lo: tuple = (0.0, 0.0)
     hi: tuple = (0.0, 0.0)
+    materials: int = 1
 
     @property
     def seconds(self) -> float:
         return sum(layer.seconds for layer in self.layers)
+
+    def filament_mm(self) -> np.ndarray:
+        """How much filament every material pushes out (mm), summed over every layer."""
+        out = np.zeros(max(1, self.materials), dtype=np.float64)
+        for layer in self.layers:
+            if layer.pushed is not None and layer.material is not None:
+                np.add.at(out, layer.material, layer.pushed)
+        return out
 
 
 def read_gcode(path: str, filament: float = 1.75) -> Preview:
@@ -96,9 +116,13 @@ def parse(lines, filament: float = 1.75) -> Preview:
     feed = 1500.0                               # mm/min until the G-code says otherwise
     abs_pos = abs_e = True
     kind = KIND["OTHER"]
+    tool = loaded = 0                           # the extruder at work and how often its
+                                                # filament was changed since
     layers = []
+    seen = set()                                # every filament this print laid a line with
     area = np.pi * (filament / 2.0) ** 2 if filament > 0 else np.pi * 0.875 ** 2
-    cur = None                                  # [number, z, rows, kinds, seconds, filament]
+    cur = None                                  # [number, z, rows, kinds, seconds, filament,
+                                                # material]
 
     def close(elapsed=None):
         if cur is None:
@@ -119,7 +143,10 @@ def parse(lines, filament: float = 1.75) -> Preview:
             width = pushed * area / (length * height)
         width = np.where(kinds == TRAVEL, 0.0,
                          np.clip(np.nan_to_num(width), WIDTH_MIN, WIDTH_MAX)).astype(np.float32)
-        layers.append(Layer(cur[0], cur[1], rows, kinds, np.cumsum(secs), height, width))
+        material = np.asarray(cur[6], dtype=np.uint8)
+        seen.update(int(m) for m in np.unique(material))
+        layers.append(Layer(cur[0], cur[1], rows, kinds, np.cumsum(secs), height, width,
+                            pushed, material))
 
     last_elapsed = 0.0
     pending_elapsed = None
@@ -135,7 +162,7 @@ def parse(lines, filament: float = 1.75) -> Preview:
                     number = int(line[7:])
                 except ValueError:
                     number = len(layers)
-                cur = [number, z, [], [], [], []]
+                cur = [number, z, [], [], [], [], []]
             elif line.startswith(";TYPE:"):
                 kind = KIND.get(line[6:].strip(), KIND["OTHER"])
             elif line.startswith(";TIME_ELAPSED:"):
@@ -173,6 +200,7 @@ def parse(lines, filament: float = 1.75) -> Preview:
                     cur[3].append(kind if extrudes else TRAVEL)
                     cur[4].append(length / feed * 60.0)
                     cur[5].append(ne - e if extrudes else 0.0)
+                    cur[6].append(tool + loaded)
             x, y, z, e = nx, ny, nz, ne
         elif head == "G90":
             abs_pos = True
@@ -186,8 +214,12 @@ def parse(lines, filament: float = 1.75) -> Preview:
             words = dict((k, float(v)) for k, v in _WORD.findall(code[3:].upper()))
             x, y, z, e = (words.get("X", x), words.get("Y", y), words.get("Z", z),
                           words.get("E", e))
+        elif head == FILAMENT_CHANGE:
+            loaded += 1                         # the next filament behind this nozzle
+        elif head.startswith("T") and head[1:].isdigit():
+            tool = int(head[1:])                # the extruder this part prints with
     close(pending_elapsed)
-    preview = Preview(layers)
+    preview = Preview(layers, materials=1 + max(seen, default=0))
     printed = [layer.seg[layer.kind != TRAVEL] for layer in layers]
     printed = [p for p in printed if len(p)]
     if printed:

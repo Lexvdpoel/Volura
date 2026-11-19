@@ -120,6 +120,7 @@ class SliceResult:
     grams: float = 0.0
     layers: int = 0
     log: str = ""
+    volume_mm3: list = field(default_factory=list)     # per extruder
 
 
 def _json_value(v):
@@ -173,7 +174,8 @@ def resolved_settings(stacks) -> dict:
 
 
 def parse_header(text: str) -> dict:
-    """The print time, filament and layer count CuraEngine writes at the top of its G-code."""
+    """What CuraEngine writes at the top of its G-code: the print time, the filament of every
+    extruder and the layer count."""
     out = {"seconds": 0.0, "filament_m": [], "layers": 0}
     m = re.search(r"^;TIME:(\d+(?:\.\d+)?)", text, re.M)
     if m:
@@ -184,13 +186,76 @@ def parse_header(text: str) -> dict:
     m = re.search(r"^;PRINT\.TIME:(\d+(?:\.\d+)?)", text, re.M)        # UltiMaker's Griffin header
     if m:
         out["seconds"] = float(m.group(1))
-    used = re.findall(r"^;EXTRUDER_TRAIN\.(\d+)\.MATERIAL\.VOLUME_USED:([\d.]+)", text, re.M)
-    if used and not out["filament_m"]:
-        out["volume_mm3"] = [float(v) for _i, v in used]
+    used = {int(i): float(v) for i, v in
+            re.findall(r"^;EXTRUDER_TRAIN\.(\d+)\.MATERIAL\.VOLUME_USED:([\d.]+)", text, re.M)}
+    if used:            # what every extruder uses, also when the header gives the lengths too
+        out["volume_mm3"] = [used.get(i, 0.0) for i in range(1 + max(used))]
     m = re.search(r"^;LAYER_COUNT:(\d+)", text, re.M)
     if m:
         out["layers"] = int(m.group(1))
     return out
+
+
+#: the code that asks the printer to change its filament by hand; firmware may know another
+#: one, which is why the slice dialog lets you fill in your own
+FILAMENT_CHANGE = "M600"
+
+
+def layer_heights(text: str) -> list:
+    """Every layer of the G-code CuraEngine writes, as ``[(line, height in mm)]``.
+
+    CuraEngine writes `;LAYER:n` before every layer, but the move up to that layer often comes
+    before it, at the end of the layer below, and a Z hop lifts the nozzle in between. So the
+    height of a layer is the height the nozzle is at when the layer first extrudes.
+    """
+    out, want, z = [], False, None
+    for k, line in enumerate(text.splitlines()):
+        code = line.split(";", 1)[0].strip().upper()
+        if line.startswith(";LAYER:"):
+            out.append([k, None])
+            want = True
+        elif code and code.split(None, 1)[0] in ("G0", "G1", "G00", "G01"):
+            m = re.search(r"\bZ(-?\d*\.?\d+)", code)
+            if m:
+                z = float(m.group(1))
+            if (want and z is not None and re.search(r"\bE-?\d*\.?\d", code)
+                    and re.search(r"\b[XY]-?\d", code)):
+                out[-1][1] = z               # the first line this layer lays
+                want = False
+    return [row for row in out if row[1] is not None]
+
+
+def with_filament_changes(text: str, heights, command=FILAMENT_CHANGE) -> str:
+    """The G-code with `command` at the start of the first layer at or above every height in mm.
+
+    A colour change by height is something the printer does halfway, so it is asked for at a
+    layer boundary, where the nozzle has just moved up. Two heights that land in one layer ask
+    for it once; a height above the print asks for nothing.
+    """
+    lines = text.splitlines(keepends=True)
+    layers = layer_heights(text)
+    where = set()
+    for h in heights:
+        hit = next((k for k, z in layers if z >= float(h) - 1e-6), None)
+        if hit is not None:
+            where.add(hit)
+    if not where:
+        return text
+    break_line = "\r\n" if "\r\n" in text else "\n"
+    for k in sorted(where, reverse=True):
+        lines.insert(k + 1, command + break_line)
+    return "".join(lines)
+
+
+def insert_filament_changes(path, heights, command=FILAMENT_CHANGE) -> None:
+    """Put `command` at those heights in the G-code file at `path`, overwriting it."""
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    changed = with_filament_changes(text, heights, command)
+    if changed == text:
+        return
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(changed)
 
 
 def orca_gcode_for(stacks, meshes, glob: dict):
@@ -301,5 +366,9 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
     area = math.pi * (0.5 * diameter) ** 2                      # mm2
     if info.get("volume_mm3"):
         info["filament_m"] = [v / area / 1000.0 for v in info["volume_mm3"]]
+    else:
+        # a Marlin header only says how long every filament ran: the volume comes from its section
+        info["volume_mm3"] = [m * 1000.0 * area for m in info["filament_m"]]
     grams = sum(info["filament_m"]) * 1000.0 * area * density / 1000.0
-    return SliceResult(out_path, info["seconds"], info["filament_m"], grams, info["layers"], text)
+    return SliceResult(out_path, info["seconds"], info["filament_m"], grams, info["layers"], text,
+                       info["volume_mm3"])

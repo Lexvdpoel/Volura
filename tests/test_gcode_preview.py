@@ -222,6 +222,108 @@ def test_the_preview_colours_the_lines_with_the_chosen_palette(preview, tmp_path
         win.close()
 
 
+# ------------------------------------------------------------------- filaments
+
+MULTI = """\
+;FLAVOR:Marlin
+;LAYER:0
+G0 F6000 X10 Y10 Z0.2
+T0
+;TYPE:WALL-OUTER
+G1 F1200 X20 Y10 E1.0
+G1 X20 Y20 E2.0
+;LAYER:1
+G0 F6000 X10 Y10 Z0.4
+T1
+;TYPE:WALL-OUTER
+G1 F1200 X20 Y10 E3.0
+;LAYER:2
+G0 F6000 X10 Y10 Z0.6
+M600
+;TYPE:FILL
+G1 F1200 X20 Y10 E4.0
+G1 X20 Y20 E5.0
+;TIME_ELAPSED:30.0
+"""
+
+
+def test_the_filament_of_every_move_follows_T_and_M600():
+    """The preview knows which filament prints every line: `T<n>` for an extruder or a
+    changer, `M600` for a printer that changes by hand."""
+    p = gp.parse(MULTI.splitlines())
+    assert p.materials == 3, "T1 and the M600 after it make a third filament"
+    printed = [[int(m) for m, k in zip(layer.material, layer.kind) if k != gp.TRAVEL]
+               for layer in p.layers]
+    assert printed == [[0, 0], [1], [2, 2]]
+    assert p.filament_mm().tolist() == pytest.approx([2.0, 1.0, 2.0])
+
+
+def test_a_print_of_one_filament_has_one_material(preview):
+    assert preview.materials == 1
+    assert preview.filament_mm().tolist() == pytest.approx([4.0])
+
+
+def test_a_filament_the_slice_did_not_name_finds_a_colour_in_the_palette():
+    from volura import print_preview as pp
+    named = [("Red", "#ff0000", 0.0, 0.0), ("Blue", "#0000ff", 0.0, 0.0)]
+    assert pp.filament_color(named, 1) == "#0000ff"
+    assert pp.filament_color(named, 5) == pp.FILAMENT_STYLE[5 % len(pp.FILAMENT_STYLE)]
+
+
+def test_a_multicolour_print_draws_its_lines_in_its_filaments_and_names_them(tmp_path):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication, QLabel
+    QApplication.instance() or QApplication(sys.argv[:1])
+    from volura import print_preview as pp
+    p = gp.parse(MULTI.splitlines())
+    win = FakeWindow(False)
+    dlg = pp.PrintPreviewDialog(win, str(tmp_path / "m.gcode"), p, (0.0, 0.0, 100.0, 100.0), "",
+                                None, [("Red PLA", "#ff0000", 2000.0, 3.0),
+                                       ("Blue PLA", "#0000ff", 1000.0, 1.5)])
+    try:
+        assert dlg.view.by_filament and dlg.by_filament
+        col = dlg.view.lines.col
+
+        def crown(line):                        # the two vertices of the top of a printed line
+            return slice(line * pp.VERTS + 4, line * pp.VERTS + 6)
+
+        def want(color):
+            return np.tile(np.round(np.array(pp._rgb(color)) * 255), (2, 1))
+
+        start = dlg.view.lines.start
+        assert col[crown(start[0])] == pytest.approx(want("#ff0000"), abs=2), "the first filament"
+        assert col[crown(start[1])] == pytest.approx(want("#0000ff"), abs=2), "T1"
+        assert col[crown(start[2])] == pytest.approx(
+            want(pp.FILAMENT_STYLE[2 % len(pp.FILAMENT_STYLE)]), abs=2), \
+            "the filament the printer loads after the M600 has no colour of its own"
+        text = " ".join(label.text() for label in dlg.findChildren(QLabel))
+        assert "Red PLA: 3.0 g, 2.00 m" in text and "Blue PLA: 1.5 g, 1.00 m" in text
+        assert "Filament 3:" in text, "the third filament has no name from the slice"
+        assert "Outer wall" not in text, "a print of several filaments shows its filaments"
+    finally:
+        dlg.close()
+        win.close()
+
+
+def test_a_print_of_one_filament_keeps_the_colours_of_the_kinds_of_line(preview, tmp_path):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication, QLabel
+    QApplication.instance() or QApplication(sys.argv[:1])
+    from volura import print_preview as pp
+    win = FakeWindow(False)
+    dlg = pp.PrintPreviewDialog(win, str(tmp_path / "x.gcode"), preview,
+                                (0.0, 0.0, 100.0, 100.0), "", None,
+                                [("Red PLA", "#ff0000", 2000.0, 3.0),
+                                 ("Blue PLA", "#0000ff", 1000.0, 1.5)])
+    try:
+        assert not dlg.view.by_filament and not dlg.by_filament
+        text = " ".join(label.text() for label in dlg.findChildren(QLabel))
+        assert "Outer wall" in text and "Red PLA" not in text
+    finally:
+        dlg.close()
+        win.close()
+
+
 def test_the_colour_blind_preference_is_stored():
     q = qsettings()
     saved = q.value("colour_blind")

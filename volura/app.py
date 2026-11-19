@@ -989,7 +989,8 @@ class Settings:
         self.bracket_gussets = self._bool("bracket_gussets", True)
         # File > Slice: the printer, nozzle, material and quality last sliced with
         for key in ("slice_printer", "slice_variant", "slice_material", "slice_quality",
-                    "slice_adhesion", "slice_infill_pattern"):
+                    "slice_adhesion", "slice_infill_pattern", "slice_changes",
+                    "slice_change_command"):
             setattr(self, key, str(self.q.value(key, "") or ""))
         if not self.slice_printer:
             self.slice_printer = "creality_ender3"
@@ -1001,6 +1002,10 @@ class Settings:
             self.slice_support = max(0, min(2, int(float(self.q.value("slice_support", 0)))))
         except (TypeError, ValueError):
             self.slice_support = 0
+        try:            # how deep the skins of painted faces go (slice_dialog.PAINT_MIN/MAX)
+            self.slice_paint = max(0.4, min(5.0, float(self.q.value("slice_paint", 1.0))))
+        except (TypeError, ValueError):
+            self.slice_paint = 1.0
         # File > Slice for Resin: the printer and what was chosen for the last resin print
         self.resin_printer = str(self.q.value("resin_printer", "") or "")
         self.resin_level = str(self.q.value("resin_level", "Medium") or "Medium")
@@ -1590,7 +1595,8 @@ class Settings:
                     "bracket_gussets"):
             self.q.setValue(key, getattr(self, key))
         for key in ("slice_printer", "slice_variant", "slice_material", "slice_quality",
-                    "slice_adhesion", "slice_infill", "slice_support", "slice_infill_pattern"):
+                    "slice_adhesion", "slice_infill", "slice_support", "slice_infill_pattern",
+                    "slice_paint", "slice_changes", "slice_change_command"):
             self.q.setValue(key, getattr(self, key))
         for key in ("resin_printer", "resin_level", "resin_layer", "resin_exposure",
                     "resin_bottom_exposure", "resin_bottom_layers", "resin_density",

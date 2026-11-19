@@ -29,14 +29,14 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,
                cable_chain, cable_clip, cable_comb, cable_winder, calibration_cube, card_holder,
                coaster, desk_hook, door_wedge, drawer_organizer, enclosure, fan_guard,
-               filament_clip, first_layer_test,
+               fileio, filament_clip, first_layer_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
-               label_plate, lithophane, ops, pegboard, pen_cup, phone_stand, plant_label,
+               label_plate, lithophane, ops, paint_split, pegboard, pen_cup, phone_stand, plant_label,
                plant_pot, screw_jar, soap_dish, slicer, spool_adapter, standoff, storage_bin,
                stringing_test, text3d,
                theme, threads, tie_mount, wall_hook)
 from . import gcode_preview
-from .print_preview import PrintPreviewDialog
+from .print_preview import FILAMENT_STYLE, PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
 from .i18n import tr, tr_noop, trn
@@ -985,47 +985,87 @@ class PrintMixin:
         def prepare(report):
             report(0.0, reading)
             lib = sd.library(resources)
-            report(0.6, tr("Preparing…"))
-            return lib, ops.parts(self.doc, only_selected=only)
+            report(0.6, tr("Reading the colours of the model…"))
+            part_list = ops.parts(self.doc, only_selected=only)
+            return lib, part_list, fileio.model_colors(part_list, self.doc.materials)
 
         def prepared(result):
-            lib, part_list = result
+            lib, part_list, colors = result
             part_list = self._validated_parts(part_list)
             if part_list is None:
                 return
-            dlg = sd.SliceDialog(self, lib)
-            if dlg.exec() != QDialog.Accepted or dlg.printer is None:
+            dlg = sd.SliceDialog(self, lib, colors)
+            if dlg.exec() != QDialog.Accepted:
+                self.setFocus()
+                if dlg.went_3mf:
+                    self.export_3mf()
+                return
+            if dlg.printer is None:
                 self.setFocus()
                 return
             choice = dlg.choice()
             for key, value in choice.items():
                 setattr(self.settings, "slice_" + key, value)
             self.settings.save()
-            self._slice_async(dlg.stacks(), part_list, engine, dlg.printer.name)
+            self._slice_async(dlg.stacks(), part_list, engine, dlg.printer.name, dlg.multicolor())
 
         background.run(self, prepare, text=reading, on_done=prepared,
                        on_error=self._export_failed)
 
-    def _slice_async(self, stacks, part_list, engine, printer_name=""):
+    def _slice_async(self, stacks, part_list, engine, printer_name="", plan=None):
         """Slice `part_list` with `stacks` in the background, then show the print preview.
 
         The G-code goes to a temporary file first; the preview reads it back layer by layer
         and Save G-code… there copies it to where you want it.
+
+        `plan` is the `slice_dialog.Multicolor` of the dialog: which extruder prints which
+        colour, how deep the painted faces go and where the printer changes its filament.
         """
+        from . import slice_dialog as sd
+        plan = plan or sd.Multicolor()
         import tempfile
         fd, path = tempfile.mkstemp(prefix="volura-", suffix=".gcode")
         os.close(fd)
-        meshes = []
-        for p in part_list:
-            if p.manifold is None:
-                continue
-            mesh = p.manifold.to_mesh()
-            meshes.append((np.asarray(mesh.vert_properties)[:, :3], np.asarray(mesh.tri_verts), 0))
         g = stacks.glob
         bed = [float(g.get(k) or 0) for k in ("machine_width", "machine_depth", "machine_height")]
 
+        def made_meshes(report):
+            """One mesh per extruder: a part in one colour, or its painted skins and the rest."""
+            meshes = []
+            parts = [p for p in part_list if p.manifold is not None]
+            for i, p in enumerate(parts):
+                report(0.05 + 0.1 * i / max(1, len(parts)), tr("Colouring the parts…"))
+                pieces = [(p.manifold, p.color)]
+                colors = fileio.triangle_colors(p.manifold)
+                own = plan.extruder(p.color)
+                # only a painted color on another extruder splits the part: pieces on the same
+                # extruder would only print walls inside it
+                if any(plan.extruder(c) != own
+                       for c in paint_split.painted_colors(colors, p.color)):
+                    try:
+                        pieces = paint_split.split_painted(p.manifold, colors, p.color,
+                                                           plan.depth)
+                    except ValueError as exc:
+                        raise ValueError(tr("The painted faces of {part} do not become a volume: "
+                                            "make the colour depth bigger or paint a closed "
+                                            "area. ({error})").format(part=p.name,
+                                                                      error=exc)) from exc
+                per = {}                   # the pieces of one extruder print as one volume
+                for man, color in pieces:
+                    per.setdefault(plan.extruder(color), []).append(man)
+                for extruder, mans in per.items():
+                    man = (mans[0] if len(mans) == 1
+                           else mf.Manifold.batch_boolean(mans, mf.OpType.Add))
+                    mesh = man.to_mesh()
+                    meshes.append((np.asarray(mesh.vert_properties)[:, :3],
+                                   np.asarray(mesh.tri_verts), extruder))
+            if not meshes:
+                raise ValueError(tr("There is nothing to slice. Draw a face and use Push/Pull (P)."))
+            return meshes
+
         def work(report):
-            report(0.0, tr("Slicing…"))
+            meshes = made_meshes(report)
+            report(0.15, tr("Slicing…"))
             lo = np.min([v.min(axis=0) for v, _t, _e in meshes], axis=0)
             hi = np.max([v.max(axis=0) for v, _t, _e in meshes], axis=0)
             size = hi - lo
@@ -1035,8 +1075,11 @@ class PrintMixin:
                                  .format(x=size[0], y=size[1], z=size[2], w=bed[0], d=bed[1],
                                          h=bed[2]))
             result = slicer.slice_meshes(stacks, meshes, path, engine,
-                                         on_progress=lambda f: report(0.9 * f, tr("Slicing…")))
-            report(0.95, tr("Reading the G-code…"))
+                                         on_progress=lambda f: report(0.15 + 0.7 * f,
+                                                                       tr("Slicing…")))
+            if plan.changes:
+                slicer.insert_filament_changes(path, plan.changes, plan.command)
+            report(0.9, tr("Reading the G-code…"))
             filament = (float(stacks.extruders[0].get("material_diameter") or 1.75)
                         if stacks.extruders else 1.75)
             return result, gcode_preview.read_gcode(path, filament)
@@ -1061,7 +1104,7 @@ class PrintMixin:
             x0 = -0.5 * bed[0] if g.get("machine_center_is_zero") else 0.0
             y0 = -0.5 * bed[1] if g.get("machine_center_is_zero") else 0.0
             dlg = PrintPreviewDialog(self, path, preview, (x0, y0, x0 + bed[0], y0 + bed[1]),
-                                     summary, ask)
+                                     summary, ask, self._filaments(plan, result, preview, stacks))
             dlg.exec()
             if dlg.saved_to:
                 self.hint.setText(tr("Sliced: {summary}: {path}")
@@ -1083,6 +1126,37 @@ class PrintMixin:
             os.remove(path)
         except OSError:
             pass
+
+    def _filaments(self, plan, result, preview, stacks) -> list:
+        """What the print prints with: ``(name, color, mm, grams)`` per filament.
+
+        CuraEngine measured how much filament and plastic every extruder used; a printer that
+        changes its filament by height has only the one extruder for all of them, so there the
+        lengths the G-code measured itself say how much every filament change used.
+        """
+        volumes = list(result.volume_mm3 or [])
+        lengths = list(result.filament_m or [])
+        first = stacks.extruders[0] if stacks.extruders else None
+        diameter = float(first.get("material_diameter") or 1.75) if first else 1.75
+        density = float(first.get("material_density") or 0.0) if first else 0.0
+        area = 0.25 * np.pi * diameter * diameter      # mm² of filament behind every mm³
+        made = plan.filaments()
+        if len([color for color, _name in made if color]) < 2:
+            return []                                 # one filament: the kinds say enough
+        if plan.extruders > 1 or not plan.changes:
+            out = []
+            for i, (color, name) in enumerate(made):
+                mm = 1000.0 * (lengths[i] if i < len(lengths) else 0.0)
+                volume = volumes[i] if i < len(volumes) else 0.0
+                out.append((tr("T{n} {name}").format(n=i, name=name
+                                                     or tr("Filament {n}").format(n=i + 1)),
+                            color, mm or volume / area, volume * density / 1000.0))
+            return out
+        shares = preview.filament_mm()
+        total = float(np.sum(shares)) or 1.0
+        return [(tr("Filament {n}").format(n=i + 1), FILAMENT_STYLE[i % len(FILAMENT_STYLE)],
+                 float(shares[i]), result.grams * float(shares[i]) / total)
+                for i in range(preview.materials)]
 
     # ------------------------------------------------------------ resin
     def resin_slice_dialog(self):

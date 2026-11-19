@@ -297,6 +297,84 @@ def test_what_curaengine_gets(library):
     json.dumps(doc)                                         # all of it is plain JSON
 
 
+# ------------------------------------------------------------------ more than one filament
+
+def test_a_printer_says_how_many_extruders_it_has(library):
+    assert library.printer("testprinter").extruder_count == 1
+    assert library.printer("dual").extruder_count == 2
+
+
+def test_a_filament_changer_feeds_the_one_nozzle_from_more_filaments(library):
+    """A Prusa MMU or an ERCF in front of the one nozzle of a printer: CuraEngine has to be
+    told there are more filaments, and that all of them share that one nozzle."""
+    st = _choose(library)
+    cura_profiles.filament_changer(st, 3)
+    assert len(st.extruders) == 3
+    doc = slicer.resolved_settings(st)
+    assert set(doc) == {"global", "extruder.0", "extruder.1", "extruder.2"}
+    assert doc["global"]["machine_extruder_count"] == 3
+    assert doc["global"]["machine_extruders_share_nozzle"] is True
+    for i in range(3):
+        e = doc[f"extruder.{i}"]
+        assert e["machine_extruders_share_nozzle"] is True
+        assert e["machine_extruders_share_heater"] is True
+        assert e["machine_nozzle_size"] == doc["extruder.0"]["machine_nozzle_size"]
+        assert e["material_print_temperature"] == doc["extruder.0"]["material_print_temperature"]
+    json.dumps(doc)
+
+
+def test_the_slice_dialog_of_this_library_follows_the_colors(library):
+    """File > Slice… on these profiles: what the printer can do with the colours is also what
+    CuraEngine gets, and every control has a name for a screen reader."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication, QWidget
+    app = QApplication.instance() or QApplication(sys.argv[:1])
+    import test_accessibility
+    from volura.settings import qsettings
+    from volura.slice_dialog import SliceDialog
+
+    class Prefs:
+        q = qsettings()
+        slice_printer, slice_variant = "testprinter", ""
+        slice_material, slice_quality = "", ""
+        slice_infill, slice_infill_pattern = 20, "grid"
+        slice_support, slice_adhesion = 0, ""
+        slice_paint, slice_changes, slice_change_command = 1.0, "5", ""
+
+    class Window(QWidget):
+        settings = Prefs()
+
+    colors = [("PLA red", "#d23b3b", 1), ("PLA blue", "#2f6fd6", 2)]
+    win = Window()
+    dlg = SliceDialog(win, library, colors)
+    try:
+        dlg.show()
+        app.processEvents()
+        assert not test_accessibility.report(dlg), test_accessibility.report(dlg)
+        assert dlg.extruder_count() == 1 and dlg.table.rowCount() == 2
+        assert [box.currentText() for box in dlg._boxes] == ["1", "1"], "one extruder"
+        assert [dlg.changes.item(i).text() for i in range(dlg.changes.count())] == ["5 mm"]
+        assert dlg.multicolor().changes == [5.0], "the printer changes by hand at 5 mm"
+        # the one nozzle with a changer in front of it: three filaments, all sharing it
+        dlg.changer.setChecked(True)
+        dlg.filaments.setValue(3)
+        app.processEvents()
+        assert dlg.extruder_count() == 3
+        assert [box.currentText() for box in dlg._boxes] == ["1", "2"], "the 3MF order back"
+        st = dlg.stacks()
+        assert len(st.extruders) == 3
+        assert st.glob.get("machine_extruder_count") == 3
+        assert st.glob.get("machine_extruders_share_nozzle") is True
+        assert st.glob.get("prime_tower_enable") is True
+        assert dlg.multicolor().changes == [], "the changer changes the filament itself"
+        assert dlg.choice()["changes"] == "5", "the heights stay for a printer without one"
+        assert int(dlg.settings.q.value("slice_changer_testprinter")) == 3
+        assert not test_accessibility.report(dlg), test_accessibility.report(dlg)
+    finally:
+        dlg.close()
+        win.close()
+
+
 # ------------------------------------------------------------------ reading it all at once
 
 def _everything(lib):
