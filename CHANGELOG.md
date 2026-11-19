@@ -22,8 +22,8 @@ What changed in each version of Volura. Downloads are on the
 
 ### Fixed
 - A command that waits for its background work (such as reading a drawing, rounding corners
-  or cutting dogbones) could seem to hang on Windows until the mouse moved: the finished
-  result was not picked up. It now arrives right away.
+  or cutting dogbones) could sometimes keep waiting on Windows after the work was already
+  done, because the finished result was not picked up. It now arrives right away.
 - The worker processes for exports are now really stopped when the pool is stopped, instead
   of lingering until the program has ended.
 
