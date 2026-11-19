@@ -362,8 +362,9 @@ def test_the_dialog_builds_a_holder_and_remembers_it(monkeypatch, tmp_path):
         assert (settings.card_holder_sd, settings.card_holder_micro, settings.card_holder_usb,
                 settings.card_holder_rows, settings.card_holder_depth) == (
             3, 2, 1, 2, pytest.approx(14.0))
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Memory Card Holder") == labels.index("Bit Holder") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Storage"))]
+        assert labels.index("Memory Card Holder") == labels.index("Hex Key Holder") + 1
     finally:
         w.settings.card_holder_sd, w.settings.card_holder_micro = 4, 6
         w.settings.card_holder_usb, w.settings.card_holder_rows = 0, 1

@@ -398,8 +398,9 @@ def test_the_dialog_builds_a_holder_and_remembers_it(monkeypatch, tmp_path):
                 settings.hex_key_holder_depth, settings.hex_key_holder_gap,
                 settings.hex_key_holder_margin, settings.hex_key_holder_steps,
                 settings.hex_key_holder_labels) == ("2 3 4 5", 0.4, 15.0, 4.0, 5.0, True, False)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Hex Key Holder") == labels.index("Lithophane") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Storage"))]
+        assert labels.index("Hex Key Holder") == labels.index("Gridfinity") + 1
     finally:
         for key, value in (("hex_key_holder_sizes", hex_key_holder.SIZES_TEXT),
                            ("hex_key_holder_clearance", 0.3), ("hex_key_holder_depth", 12.0),

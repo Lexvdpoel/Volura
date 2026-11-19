@@ -321,8 +321,9 @@ def test_the_dialog_reads_a_picture_builds_it_and_remembers_it(monkeypatch, tmp_
                 settings.lithophane_border, settings.lithophane_pixel,
                 settings.lithophane_invert) == (80.0, 1.0, 4.0, 2.0, 0.4, True)
         assert settings.lithophane_image == str(photo)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Lithophane") == labels.index("Cable Winder") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Home and Desk"))]
+        assert labels.index("Lithophane") == labels.index("Label Plate") + 1
     finally:
         for key, value in (("lithophane_width", 100.0), ("lithophane_thin", 0.8),
                            ("lithophane_thick", 3.0), ("lithophane_border", 3.0),

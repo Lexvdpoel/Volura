@@ -10,7 +10,7 @@ These tests weigh a bin against what it promises: it is one volume that stands o
 round it is the size asked for, a compartment is empty above the floor, a divider stands where two
 compartments meet, the open front is open, and the label sits in its slot. A size that cannot be
 printed becomes the nearest one that can. The place in the interface is checked too (Parts right
-after the battery holder, one part in one undo step, and the dialog that remembers its values).
+after the screw-top jar, one part in one undo step, and the dialog that remembers its values).
 
 Run with:  python -m pytest tests/test_storage_bin.py
 """
@@ -209,9 +209,9 @@ def test_the_bin_stands_on_the_bed_next_to_the_model(win):
     assert second[0][0] - first[1][0] == pytest.approx(10.0), "the bins are not 10 mm apart"
 
 
-def test_the_bin_follows_the_holder_in_parts(win):
-    labels = [clean(a.text()) for a in win.flat_actions(win.menuBar())]
-    assert labels.index("Storage Bin") == labels.index("Battery Holder") + 1
+def test_the_bin_follows_the_jar_in_parts(win):
+    labels = [clean(a.text()) for a in win.flat_actions(win.parts_category("Storage"))]
+    assert labels.index("Storage Bin") == labels.index("Screw-Top Jar") + 1
 
 
 def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, monkeypatch):

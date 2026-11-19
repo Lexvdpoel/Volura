@@ -208,8 +208,9 @@ def test_the_dialog_builds_a_baseplate_and_remembers_it(monkeypatch, tmp_path):
         assert span(w.doc.groups[0].ents.to_manifold())[:2] == pytest.approx([3 * GRID, 2 * GRID])
         s = app_module.Settings()
         assert (s.grid_kind, s.grid_cols, s.grid_rows) == ("baseplate", 3, 2)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Gridfinity") == labels.index("Cable Chain") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Storage"))]
+        assert labels.index("Gridfinity") == labels.index("Drawer Organizer") + 1
     finally:
         w.settings.grid_kind = "bin"
         w.settings.save()

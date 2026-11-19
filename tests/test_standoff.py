@@ -10,7 +10,7 @@ it. `count` puts a row of them along X, `outer + 4` mm apart, as one part.
 These tests weigh every shape against every mount: the plastic a hole takes out is the plastic
 the hole promises, the insert hole really is wider at the top than below it, a row really is
 that many bodies at the right distance, and the input that cannot be printed is refused. The
-place in the interface is checked too (Print Tools right after the knob, one group in one undo
+place in the interface is checked too (Parts right after the spur gear, one group in one undo
 step to the right of the model, and the dialog that remembers its values).
 
 Run with:  python -m pytest tests/test_standoff.py
@@ -299,9 +299,9 @@ def test_a_row_that_cannot_be_built_is_a_clear_text(win):
     assert win.doc.groups == []
 
 
-def test_the_standoff_follows_the_knob_in_print_tools(win):
-    labels = [clean(a.text()) for a in win.flat_actions(win.menuBar())]
-    assert labels.index("Standoff") == labels.index("Knob") + 1
+def test_the_standoff_follows_the_gear_in_parts(win):
+    labels = [clean(a.text()) for a in win.flat_actions(win.parts_category("Mechanical"))]
+    assert labels.index("Standoff") == labels.index("Spur Gear") + 1
 
 
 def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, monkeypatch):

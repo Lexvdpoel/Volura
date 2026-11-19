@@ -17,7 +17,7 @@ cell, and a cell of the type asked for fits in every cradle without touching it.
 are under the axes of the cradles, not in the wall between two of them, the head sinks under the
 cell and the cone does not cut through the bottom. A size that cannot be printed becomes the nearest
 one that can, and a cell or a screw that is not known is refused. The place in the interface is
-checked too (Parts right after the hinge, one group in one undo step, and the dialog that remembers
+checked too (Parts at the head of Storage, one group in one undo step, and the dialog that remembers
 its values).
 
 Run with:  python -m pytest tests/test_battery_holder.py
@@ -357,9 +357,9 @@ def test_the_holder_stands_on_the_bed_next_to_the_model(win):
     assert second[0][0] - first[1][0] == pytest.approx(10.0), "the holders are not 10 mm apart"
 
 
-def test_the_holder_follows_the_hinge_in_parts(win):
-    labels = [clean(a.text()) for a in win.flat_actions(win.menuBar())]
-    assert labels.index("Battery Holder") == labels.index("Print-in-Place Hinge") + 1
+def test_the_holder_stands_first_in_storage_parts(win):
+    labels = [clean(a.text()) for a in win.flat_actions(win.parts_category("Storage"))]
+    assert labels.index("Battery Holder") + 1 == labels.index("Bin Wall Rack")
 
 
 def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, monkeypatch):

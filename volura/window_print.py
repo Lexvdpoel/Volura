@@ -566,7 +566,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ print-in-place hinge
     def hinge_dialog(self):
-        """Draw > Parts > Print-in-Place Hinge…: a hinge that prints as one piece and turns."""
+        """Draw > Parts > Mechanical > Print-in-Place Hinge…: a hinge that prints as one piece and
+           turns."""
         dlg = HingeDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -626,7 +627,7 @@ class PrintMixin:
 
     # ------------------------------------------------------------ battery holder
     def battery_holder_dialog(self):
-        """Draw > Parts > Battery Holder…: a block that keeps round cells side by side."""
+        """Draw > Parts > Storage > Battery Holder…: a block that keeps round cells side by side."""
         dlg = BatteryHolderDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -685,7 +686,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ storage bin
     def storage_bin_dialog(self):
-        """Draw > Parts > Storage Bin…: an open-top box with compartments and a label ledge."""
+        """Draw > Parts > Storage > Storage Bin…: an open-top box with compartments and a label
+           ledge."""
         dlg = StorageBinDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -769,7 +771,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ pegboard
     def pegboard_dialog(self):
-        """Draw > Parts > Pegboard…: the board, or a hook, a shelf or a tool holder for it."""
+        """Draw > Parts > Storage > Pegboard…: the board, or a hook, a shelf or a tool holder for
+           it."""
         dlg = PegboardDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -818,7 +821,7 @@ class PrintMixin:
 
     # ------------------------------------------------------------ fan guard
     def fan_guard_dialog(self):
-        """Draw > Parts > Fan Guard…: a grille for a square fan."""
+        """Draw > Parts > Mechanical > Fan Guard…: a grille for a square fan."""
         dlg = FanGuardDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -865,7 +868,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ desk grommet
     def grommet_dialog(self):
-        """Draw > Parts > Desk Grommet…: a cable pass-through for a hole in a desk top."""
+        """Draw > Parts > Mechanical > Desk Grommet…: a cable pass-through for a hole in a desk
+           top."""
         dlg = GrommetDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -911,7 +915,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ corner bracket
     def bracket_dialog(self):
-        """Draw > Parts > Corner Bracket…: an L-shaped angle bracket with screw holes."""
+        """Draw > Parts > Mechanical > Corner Bracket…: an L-shaped angle bracket with screw
+           holes."""
         dlg = BracketDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1239,7 +1244,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ zip-tie mount
     def tie_mount_dialog(self):
-        """Draw > Parts > Zip-Tie Mount…: a cable-tie anchor that is screwed onto a surface."""
+        """Draw > Parts > Cables > Zip-Tie Mount…: a cable-tie anchor that is screwed onto a
+           surface."""
         dlg = TieMountDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1286,7 +1292,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ bit holder
     def bit_holder_dialog(self):
-        """Draw > Parts > Bit Holder…: a block that stands screwdriver bits upright in rows."""
+        """Draw > Parts > Storage > Bit Holder…: a block that stands screwdriver bits upright in
+           rows."""
         dlg = BitHolderDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1333,7 +1340,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ memory card holder
     def card_holder_dialog(self):
-        """Draw > Parts > Memory Card Holder…: a block that stands cards and sticks upright."""
+        """Draw > Parts > Storage > Memory Card Holder…: a block that stands cards and sticks
+           upright."""
         dlg = CardHolderDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1380,7 +1388,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ wall hook
     def wall_hook_dialog(self):
-        """Draw > Parts > Wall Hook…: a J that is screwed to a wall, for a coat or a bag."""
+        """Draw > Parts > Home and Desk > Wall Hook…: a J that is screwed to a wall, for a coat or
+           a bag."""
         dlg = WallHookDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1428,7 +1437,7 @@ class PrintMixin:
 
     # ------------------------------------------------------------ phone stand
     def phone_stand_dialog(self):
-        """Draw > Parts > Phone Stand…: a stand a phone or a tablet leans in."""
+        """Draw > Parts > Home and Desk > Phone Stand…: a stand a phone or a tablet leans in."""
         dlg = PhoneStandDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1474,7 +1483,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ spool adapter
     def spool_adapter_dialog(self):
-        """Draw > Parts > Spool Adapter…: a hub that fills the hole of a filament spool."""
+        """Draw > Parts > Mechanical > Spool Adapter…: a hub that fills the hole of a filament
+           spool."""
         dlg = SpoolAdapterDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1520,7 +1530,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ drawer organizer
     def drawer_organizer_dialog(self):
-        """Draw > Parts > Drawer Organizer…: a tray that drops into a drawer and divides it."""
+        """Draw > Parts > Storage > Drawer Organizer…: a tray that drops into a drawer and divides
+           it."""
         dlg = DrawerOrganizerDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1568,7 +1579,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ plant pot
     def plant_pot_dialog(self):
-        """Draw > Parts > Plant Pot…: a flower pot that drains and the saucer under it."""
+        """Draw > Parts > Home and Desk > Plant Pot…: a flower pot that drains and the saucer under
+           it."""
         dlg = PlantPotDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1621,7 +1633,7 @@ class PrintMixin:
 
     # ------------------------------------------------------------ cable winder
     def cable_winder_dialog(self):
-        """Draw > Parts > Cable Winder…: an H-shaped plate to wind a cable round."""
+        """Draw > Parts > Cables > Cable Winder…: an H-shaped plate to wind a cable round."""
         dlg = CableWinderDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1668,7 +1680,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ lithophane
     def lithophane_dialog(self):
-        """Draw > Parts > Lithophane…: a plate whose thickness is the brightness of a photo."""
+        """Draw > Parts > Home and Desk > Lithophane…: a plate whose thickness is the brightness of
+           a photo."""
         dlg = LithophaneDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1721,7 +1734,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ hex key holder
     def hex_key_holder_dialog(self):
-        """Draw > Parts > Hex Key Holder…: a block that stands a set of Allen keys upright."""
+        """Draw > Parts > Storage > Hex Key Holder…: a block that stands a set of Allen keys
+           upright."""
         dlg = HexKeyHolderDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1769,7 +1783,7 @@ class PrintMixin:
 
     # ------------------------------------------------------------ screw-top jar
     def screw_jar_dialog(self):
-        """Draw > Parts > Screw-Top Jar…: a round jar and the lid that screws onto it."""
+        """Draw > Parts > Storage > Screw-Top Jar…: a round jar and the lid that screws onto it."""
         dlg = ScrewJarDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1821,7 +1835,7 @@ class PrintMixin:
 
     # ------------------------------------------------------------ bag clip
     def bag_clip_dialog(self):
-        """Draw > Parts > Bag Clip…: a flat spring clip that closes a bag."""
+        """Draw > Parts > Home and Desk > Bag Clip…: a flat spring clip that closes a bag."""
         dlg = BagClipDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1867,7 +1881,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ coaster
     def coaster_dialog(self):
-        """Draw > Parts > Coaster…: a flat plate with a rim that catches what runs down a glass."""
+        """Draw > Parts > Home and Desk > Coaster…: a flat plate with a rim that catches what runs
+           down a glass."""
         dlg = CoasterDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1913,7 +1928,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ filament clip
     def filament_clip_dialog(self):
-        """Draw > Parts > Filament Clip…: a clip on the rim of a spool that holds the thread."""
+        """Draw > Parts > Mechanical > Filament Clip…: a clip on the rim of a spool that holds the
+           thread."""
         dlg = FilamentClipDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -1959,7 +1975,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ plant label
     def plant_label_dialog(self):
-        """Draw > Parts > Plant Label…: a stake for a pot whose head carries a name."""
+        """Draw > Parts > Home and Desk > Plant Label…: a stake for a pot whose head carries a
+           name."""
         dlg = PlantLabelDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -2013,7 +2030,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ desk hook
     def desk_hook_dialog(self):
-        """Draw > Parts > Desk Hook…: a hook that slides over the edge of a desk top."""
+        """Draw > Parts > Home and Desk > Desk Hook…: a hook that slides over the edge of a desk
+           top."""
         dlg = DeskHookDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -2066,7 +2084,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ door wedge
     def door_wedge_dialog(self):
-        """Draw > Parts > Door Wedge…: a wedge you push under a door to hold it open."""
+        """Draw > Parts > Home and Desk > Door Wedge…: a wedge you push under a door to hold it
+           open."""
         dlg = DoorWedgeDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -2118,7 +2137,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ soap dish
     def soap_dish_dialog(self):
-        """Draw > Parts > Soap Dish…: a dish a bar of soap lies on while the water runs off it."""
+        """Draw > Parts > Home and Desk > Soap Dish…: a dish a bar of soap lies on while the water
+           runs off it."""
         dlg = SoapDishDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -2171,7 +2191,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ pen cup
     def pen_cup_dialog(self):
-        """Draw > Parts > Pen Cup…: a round cup for pens with a band of windows in its wall."""
+        """Draw > Parts > Home and Desk > Pen Cup…: a round cup for pens with a band of windows in
+           its wall."""
         dlg = PenCupDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -2224,7 +2245,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ cable comb
     def cable_comb_dialog(self):
-        """Draw > Parts > Cable Comb…: a flat comb that keeps a bundle of cables side by side."""
+        """Draw > Parts > Cables > Cable Comb…: a flat comb that keeps a bundle of cables side by
+           side."""
         dlg = CableCombDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -2277,7 +2299,7 @@ class PrintMixin:
 
     # ------------------------------------------------------------ hose adapter
     def hose_adapter_dialog(self):
-        """Draw > Parts > Hose Adapter…: a reducer between two hoses."""
+        """Draw > Parts > Mechanical > Hose Adapter…: a reducer between two hoses."""
         dlg = HoseAdapterDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -2323,7 +2345,7 @@ class PrintMixin:
 
     # ------------------------------------------------------------ gridfinity
     def gridfinity_dialog(self):
-        """Draw > Parts > Gridfinity…: a bin or a baseplate of the open storage grid."""
+        """Draw > Parts > Storage > Gridfinity…: a bin or a baseplate of the open storage grid."""
         dlg = GridfinityDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -2377,7 +2399,7 @@ class PrintMixin:
 
     # ------------------------------------------------------------ cable chain
     def cable_chain_dialog(self):
-        """Draw > Parts > Cable Chain…: a drag chain printed in one piece."""
+        """Draw > Parts > Cables > Cable Chain…: a drag chain printed in one piece."""
         dlg = CableChainDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()
@@ -2427,7 +2449,8 @@ class PrintMixin:
 
     # ------------------------------------------------------------ bin wall rack
     def bin_rack_dialog(self):
-        """Draw > Parts > Bin Wall Rack…: a plate on the wall with rails the bins hang on."""
+        """Draw > Parts > Storage > Bin Wall Rack…: a plate on the wall with rails the bins hang
+           on."""
         dlg = BinRackDialog(self)
         if dlg.exec() != QDialog.Accepted:
             self.setFocus()

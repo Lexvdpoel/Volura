@@ -325,8 +325,9 @@ def test_the_dialog_builds_a_hook_and_remembers_it(monkeypatch, tmp_path):
         assert (settings.desk_hook_desk, settings.desk_hook_grip, settings.desk_hook_drop,
                 settings.desk_hook_hook, settings.desk_hook_wall, settings.desk_hook_width) == (
             30.0, 55.0, 70.0, 45.0, 8.0, 35.0)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Desk Hook") == labels.index("Plant Label") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Home and Desk"))]
+        assert labels.index("Desk Hook") == labels.index("Coaster") + 1
     finally:
         for key, value in (("desk_hook_desk", 25.0), ("desk_hook_grip", 40.0),
                            ("desk_hook_drop", 50.0), ("desk_hook_hook", 30.0),

@@ -235,9 +235,9 @@ def test_only_the_outer_ends_of_a_rack_in_panels_have_stops():
 
 # ------------------------------------------------------------------ the interface
 
-def test_the_rack_follows_the_bin_in_parts(win):
-    labels = [clean(a.text()) for a in win.flat_actions(win.menuBar())]
-    assert labels.index("Bin Wall Rack") == labels.index("Storage Bin") + 1
+def test_the_rack_follows_the_holder_in_parts(win):
+    labels = [clean(a.text()) for a in win.flat_actions(win.parts_category("Storage"))]
+    assert labels.index("Bin Wall Rack") == labels.index("Battery Holder") + 1
 
 
 def test_the_dialog_remembers_and_builds_one_part(win, monkeypatch):

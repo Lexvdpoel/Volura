@@ -367,8 +367,9 @@ def test_the_dialog_builds_a_hook_and_remembers_it(monkeypatch, tmp_path):
         settings = app_module.Settings()
         assert (settings.wall_hook_reach, settings.wall_hook_rise, settings.wall_hook_plate,
                 settings.wall_hook_holes) == (45.0, 25.0, 20.0, 1)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Wall Hook") == labels.index("Memory Card Holder") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Home and Desk"))]
+        assert labels.index("Wall Hook") == labels.index("Soap Dish") + 1
     finally:
         w.settings.wall_hook_reach, w.settings.wall_hook_rise = 30.0, 15.0
         w.settings.wall_hook_plate, w.settings.wall_hook_holes = 50.0, 2

@@ -310,8 +310,9 @@ def test_the_dialog_builds_a_cup_and_remembers_it(monkeypatch, tmp_path):
         assert (settings.pen_cup_diameter, settings.pen_cup_height, settings.pen_cup_wall,
                 settings.pen_cup_floor, settings.pen_cup_windows, settings.pen_cup_columns) == \
             (90.0, 120.0, 3.0, 3.0, True, 16)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Pen Cup") == labels.index("Soap Dish") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Home and Desk"))]
+        assert labels.index("Pen Cup") == labels.index("Lithophane") + 1
     finally:
         for key, value in (("pen_cup_diameter", 75.0), ("pen_cup_height", 100.0),
                            ("pen_cup_wall", 2.4), ("pen_cup_floor", 2.4),

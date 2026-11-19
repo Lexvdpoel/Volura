@@ -2863,4 +2863,8 @@ TRANSLATIONS = {
     'Set Current View as Home': 'Maak deze weergave de startweergave',
     'Reset Home View': 'Startweergave terugzetten',
     'Orthographic': 'Orthografisch',
+    '&Mechanical': '&Mechanisch',
+    '&Cables': '&Kabels',
+    '&Storage': '&Opbergen',
+    '&Home and Desk': '&Huis en bureau',
 }

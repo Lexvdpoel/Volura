@@ -308,8 +308,9 @@ def test_the_dialog_builds_a_winder_and_remembers_it(monkeypatch, tmp_path):
                 settings.cable_winder_thickness, settings.cable_winder_slot,
                 settings.cable_winder_depth, settings.cable_winder_keyhole) == (
             120.0, 60.0, 4.0, 20.0, 30.0, False)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Cable Winder") == labels.index("Plant Pot") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Cables"))]
+        assert labels.index("Cable Winder") == labels.index("Cable Comb") + 1
     finally:
         for key, value in (("cable_winder_length", 80.0), ("cable_winder_width", 40.0),
                            ("cable_winder_thickness", 3.0), ("cable_winder_slot", 10.0),

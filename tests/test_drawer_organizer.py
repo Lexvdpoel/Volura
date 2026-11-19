@@ -295,8 +295,9 @@ def test_the_dialog_builds_an_organizer_and_remembers_it(monkeypatch, tmp_path):
                 settings.drawer_organizer_cols, settings.drawer_organizer_rows,
                 settings.drawer_organizer_wall, settings.drawer_organizer_finger) == (
             210.0, 160.0, 45.0, 1.0, 2, 2, 2.0, False)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Drawer Organizer") == labels.index("Spool Adapter") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Storage"))]
+        assert labels.index("Drawer Organizer") == labels.index("Bit Holder") + 1
     finally:
         for key, value in (("drawer_organizer_length", 200.0), ("drawer_organizer_width", 150.0),
                            ("drawer_organizer_height", 50.0), ("drawer_organizer_clearance", 1.0),

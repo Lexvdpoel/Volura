@@ -268,8 +268,9 @@ def test_the_dialog_builds_an_adapter_and_remembers_it(monkeypatch, tmp_path):
         settings = app_module.Settings()
         assert (settings.hose_d1, settings.hose_d2, settings.hose_wall) == (
             pytest.approx(16.0), pytest.approx(10.0), pytest.approx(2.0))
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Hose Adapter") == labels.index("Pegboard") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Mechanical"))]
+        assert labels.index("Hose Adapter") == labels.index("Filament Clip") + 1
     finally:
         w.settings.hose_d1, w.settings.hose_d2, w.settings.hose_wall = 12.0, 8.0, 1.6
         w.settings.save()

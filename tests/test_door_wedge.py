@@ -337,7 +337,8 @@ def test_the_dialog_builds_a_wedge_and_remembers_it(monkeypatch, tmp_path):
         assert (settings.door_wedge_length, settings.door_wedge_height, settings.door_wedge_tip,
                 settings.door_wedge_width, settings.door_wedge_ridges,
                 settings.door_wedge_hole) == (140.0, 30.0, 3.0, 40.0, False, False)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Home and Desk"))]
         assert labels.index("Door Wedge") == labels.index("Desk Hook") + 1
     finally:
         for key, value in (("door_wedge_length", 120.0), ("door_wedge_height", 25.0),

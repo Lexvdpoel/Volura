@@ -294,7 +294,8 @@ def test_the_dialog_builds_a_coaster_and_remembers_it(monkeypatch, tmp_path):
         assert (settings.coaster_shape, settings.coaster_size, settings.coaster_thickness,
                 settings.coaster_rim, settings.coaster_pattern) == (
             "hexagon", 120.0, 5.0, 2.0, "grid")
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Home and Desk"))]
         assert labels.index("Coaster") == labels.index("Bag Clip") + 1
     finally:
         for key, value in (("coaster_shape", "round"), ("coaster_size", 95.0),

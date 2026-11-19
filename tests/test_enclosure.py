@@ -14,7 +14,7 @@ clearance at all the lip must fill the opening exactly.
 
 These tests (Qt offscreen) measure the box against the analytic volume of a rounded
 rectangle (`L × W − (4 − π) × r²`), let the lid slide into the base, check the refused input
-and the place in the interface (Print Tools next to the spur gear, both parts in one undo
+and the place in the interface (Parts right after the pegboard, both parts in one undo
 step, 10 mm apart on the bed, and the dialog that remembers its values).
 
 With a screw size the base also gets a post in every inside corner with a blind pilot hole
@@ -369,9 +369,9 @@ def test_a_box_that_cannot_be_built_is_a_clear_text(win):
     assert win.doc.groups == []
 
 
-def test_the_project_box_follows_the_spur_gear_in_print_tools(win):
-    labels = [clean(a.text()) for a in win.flat_actions(win.menuBar())]
-    assert labels.index("Project Box") == labels.index("Spur Gear") + 1
+def test_the_project_box_follows_the_pegboard_in_parts(win):
+    labels = [clean(a.text()) for a in win.flat_actions(win.parts_category("Storage"))]
+    assert labels.index("Project Box") == labels.index("Pegboard") + 1
 
 
 def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, monkeypatch):

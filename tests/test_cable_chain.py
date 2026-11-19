@@ -113,9 +113,9 @@ def test_a_size_that_cannot_be_printed_becomes_the_nearest_one_that_can():
     assert len(cable_chain.cable_chain(links=999).decompose()) == cable_chain.LINKS_MAX
 
 
-def test_the_chain_follows_the_rack_in_parts(win):
-    labels = [clean(a.text()) for a in win.flat_actions(win.menuBar())]
-    assert labels.index("Cable Chain") == labels.index("Bin Wall Rack") + 1
+def test_the_chain_stands_first_in_cable_parts(win):
+    labels = [clean(a.text()) for a in win.flat_actions(win.parts_category("Cables"))]
+    assert labels.index("Cable Chain") + 1 == labels.index("Cable Clip")
 
 
 def test_the_dialog_remembers_and_builds_one_part(win, monkeypatch):

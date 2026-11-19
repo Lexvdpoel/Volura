@@ -10,7 +10,7 @@ assembled afterwards.
 These tests weigh a hinge against what it promises: it is one volume of two leaves that are not
 fused, the pin stands in its hole with the play asked for, and the box round it is the size asked
 for. A size that cannot be printed becomes the nearest one that can. The place in the interface is
-checked too (Parts right after the cable clip, one group in one undo step, and the dialog that
+checked too (Parts right after the knob, one group in one undo step, and the dialog that
 remembers its values).
 
 Run with:  python -m pytest tests/test_hinge.py
@@ -152,9 +152,9 @@ def test_the_hinge_lies_on_the_bed_next_to_the_model(win):
     assert second[0][0] - first[1][0] == pytest.approx(10.0), "the hinges are not 10 mm apart"
 
 
-def test_the_hinge_follows_the_cable_clip_in_parts(win):
-    labels = [clean(a.text()) for a in win.flat_actions(win.menuBar())]
-    assert labels.index("Print-in-Place Hinge") == labels.index("Cable Clip") + 1
+def test_the_hinge_follows_the_knob_in_parts(win):
+    labels = [clean(a.text()) for a in win.flat_actions(win.parts_category("Mechanical"))]
+    assert labels.index("Print-in-Place Hinge") == labels.index("Knob") + 1
 
 
 def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, monkeypatch):

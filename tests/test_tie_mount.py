@@ -367,8 +367,9 @@ def test_the_dialog_builds_a_mount_and_remembers_it(monkeypatch, tmp_path):
         settings = app_module.Settings()
         assert (settings.tie_mount_base, settings.tie_mount_tie_width, settings.tie_mount_ways) == (
             pytest.approx(30.0), pytest.approx(4.0), 1)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Zip-Tie Mount") == labels.index("Corner Bracket") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Cables"))]
+        assert labels.index("Zip-Tie Mount") == labels.index("Cable Winder") + 1
     finally:
         w.settings.tie_mount_base, w.settings.tie_mount_tie_width, w.settings.tie_mount_ways = (
             20.0, 5.0, 2)

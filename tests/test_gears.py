@@ -329,8 +329,8 @@ def test_the_printed_gear_opens_the_parts_of_the_draw_menu(win):
     parts = next(a.menu() for a in draw.actions()
                  if a.menu() is not None and clean(a.text()) == "Parts")
     labels = [clean(a.text()) for a in parts.actions() if not a.isSeparator()]
-    assert labels[0] == "Spur Gear"
-    assert parts.actions()[0] is win.a_spur_gear_3d
+    assert labels[0] == "Mechanical"
+    assert win.a_spur_gear_3d in win.parts_category("Mechanical").actions()
 
 
 def test_the_print_dialog_starts_at_the_last_thickness_and_remembers_it(win, monkeypatch):

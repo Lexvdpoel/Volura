@@ -178,6 +178,25 @@ PANEL_LAYERS = tr_noop("Layers")
 PANELS = (PANEL_INFO, PANEL_COLORS, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT_CHECK,
           PANEL_LAYERS)
 
+# Draw > Parts: every part of the model in the category whose submenu it stands in, by the
+# name of its action. A category is sorted by the English name of its parts and the four
+# categories keep this order; a new part is added here, in its category, and the menu, the
+# shortcut paths and the tests of tests/test_parts_menu.py follow from the table.
+PART_CATEGORIES = (
+    (tr_noop("&Mechanical"), ("a_bracket", "a_grommet", "a_fan_guard", "a_filament_clip",
+                              "a_hose_adapter", "a_knob", "a_print_hinge", "a_spool_adapter",
+                              "a_spur_gear_3d", "a_standoff")),
+    (tr_noop("&Cables"), ("a_cable_chain", "a_cable_clip", "a_cable_comb", "a_cable_winder",
+                          "a_tie_mount")),
+    (tr_noop("&Storage"), ("a_battery_holder", "a_bin_rack", "a_bit_holder",
+                           "a_drawer_organizer", "a_gridfinity", "a_hex_key_holder",
+                           "a_card_holder", "a_pegboard", "a_project_box", "a_screw_jar",
+                           "a_storage_bin")),
+    (tr_noop("&Home and Desk"), ("a_bag_clip", "a_coaster", "a_desk_hook", "a_door_wedge",
+                                 "a_label_plate", "a_lithophane", "a_pen_cup", "a_phone_stand",
+                                 "a_plant_label", "a_plant_pot", "a_soap_dish", "a_wall_hook")),
+)
+
 
 class Settings:
     def __init__(self):
@@ -3012,19 +3031,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                         T["polygon"]))
         primitives = sub(tr("&Basic Shapes"), m, (self.a_box, self.a_cylinder, self.a_cone,
                                                    self.a_sphere, self.a_torus))
-        parts_menu = sub(tr("&Parts"), m,
-                         (self.a_spur_gear_3d, self.a_project_box, self.a_knob, self.a_standoff,
-                          self.a_label_plate, self.a_cable_clip, self.a_print_hinge,
-                          self.a_battery_holder, self.a_storage_bin, self.a_bin_rack,
-                          self.a_cable_chain, self.a_gridfinity, self.a_pegboard,
-                          self.a_hose_adapter, self.a_fan_guard, self.a_grommet, self.a_bracket,
-                          self.a_tie_mount, self.a_bit_holder, self.a_card_holder,
-                          self.a_wall_hook, self.a_phone_stand, self.a_spool_adapter,
-                          self.a_drawer_organizer, self.a_plant_pot, self.a_cable_winder,
-                          self.a_lithophane, self.a_hex_key_holder,
-                          self.a_screw_jar, self.a_bag_clip, self.a_coaster,
-                          self.a_filament_clip, self.a_plant_label, self.a_desk_hook,
-                          self.a_door_wedge, self.a_soap_dish, self.a_pen_cup, self.a_cable_comb))
+        categories = tuple(sub(tr(title), m, tuple(getattr(self, name) for name in names))
+                           for title, names in PART_CATEGORIES)
+        parts_menu = sub(tr("&Parts"), m, categories)
+        self.parts_menu = parts_menu
+        self._parts_categories = {clean_text(title): menu
+                                  for (title, _), menu in zip(PART_CATEGORIES, categories)}
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
@@ -3122,6 +3134,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             else:
                 out.append(a)
         return out
+
+    def parts_category(self, title):
+        """The submenu of one category of Draw > Parts, by its English name without the
+        mnemonic (`PART_CATEGORIES`); None when this window has no such category."""
+        return getattr(self, "_parts_categories", {}).get(title)
 
     def _build_toolbars(self):
         self._dropdown_buttons = {}

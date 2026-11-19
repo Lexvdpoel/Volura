@@ -274,8 +274,9 @@ def test_the_dialog_builds_a_clip_and_remembers_it(monkeypatch, tmp_path):
         assert (settings.bag_clip_length, settings.bag_clip_arm, settings.bag_clip_thickness,
                 settings.bag_clip_gap, settings.bag_clip_loop,
                 settings.bag_clip_teeth) == (80.0, 4.0, 5.0, 1.2, 6.0, False)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Bag Clip") == labels.index("Screw-Top Jar") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Home and Desk"))]
+        assert labels.index("Bag Clip") + 1 == labels.index("Coaster")
     finally:
         for key, value in (("bag_clip_length", 100.0), ("bag_clip_arm", 5.0),
                            ("bag_clip_thickness", 6.0), ("bag_clip_gap", 1.0),

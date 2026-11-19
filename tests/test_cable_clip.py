@@ -10,7 +10,7 @@ bed apart, as one part.
 These tests weigh a clip against what it promises: it stands on the bed and is as high as it is
 wide, the screw hole is the only handle, the mouth really is open and narrower than the cable it
 holds, and a row is that many clips at the right distance. The input that cannot be printed is
-refused. The place in the interface is checked too (Print Tools right after the label plate, one
+refused. The place in the interface is checked too (Parts right after the cable chain, one
 group in one undo step, and the dialog that remembers its values).
 
 Run with:  python -m pytest tests/test_cable_clip.py
@@ -232,9 +232,9 @@ def test_a_clip_that_cannot_be_built_is_a_clear_text(win):
     assert win.doc.groups == []
 
 
-def test_the_cable_clip_follows_the_label_plate_in_print_tools(win):
-    labels = [clean(a.text()) for a in win.flat_actions(win.menuBar())]
-    assert labels.index("Cable Clip") == labels.index("Label Plate") + 1
+def test_the_cable_clip_follows_the_chain_in_parts(win):
+    labels = [clean(a.text()) for a in win.flat_actions(win.parts_category("Cables"))]
+    assert labels.index("Cable Clip") == labels.index("Cable Chain") + 1
 
 
 def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, monkeypatch):
