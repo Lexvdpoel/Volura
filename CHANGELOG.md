@@ -6,9 +6,16 @@ What changed in each version of Volura. Downloads are on the
 ## Unreleased
 
 ### New
-- **Cable Comb** under Draw > Parts: a flat bar that keeps a bundle of cables side by side,
+- **Cable Comb** under Draw > Parts > Cables: a flat bar that keeps a bundle of cables side by side,
   every cable clicked into its own round seat through an opening narrower than the cable;
   it prints lying flat, so nothing needs support.
+
+### Changed
+- **Draw > Parts in categories**: the 38 ready-made parts are grouped into Mechanical,
+  Cables, Storage and Home and Desk, each sorted by name, instead of one long list. A
+  shortcut you gave a part keeps working.
+- **One row along the bottom of the window**: the workspace tabs and the texts of the window
+  on the left, the measurements under the side bar on the right.
 
 ## 0.2.60 — 2026-11-19
 
