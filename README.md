@@ -1,22 +1,100 @@
-# Volura
+<p align="center">
+  <img src="assets/volura.png" alt="Volura logo" width="96">
+</p>
 
-**Volura** is an open source 3D modelling program for 3D printing, laser cutting and milling, for
-Windows and Linux. It works like SketchUp 2017: you draw a flat face and turn it into a volume with
-**Push/Pull**.
+<h1 align="center">Volura</h1>
 
-Website and manual: [volura.dev](https://volura.dev) · Downloads: [Releases](https://github.com/Lexvdpoel/Volura/releases/latest) · What changed: [Changelog](CHANGELOG.md)
+<p align="center">
+  <b>One program for makers: design it in 3D, then print it, laser it or mill it.</b><br>
+  Open source, free, for Windows and Linux.
+</p>
 
-Just like in SketchUp, a model consists of **edges and faces**: edges split each other where they
-cross, a closed shape becomes a face, a line across a face splits it, and the Eraser removes (parts
-of) edges, after which faces merge again. Push/Pull works on any face or part of a face and extends
-or cuts adjacent faces exactly like SketchUp.
+<p align="center">
+  <a href="https://github.com/Lexvdpoel/Volura/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Lexvdpoel/Volura?label=download&color=2f6fd6"></a>
+  <a href="https://github.com/Lexvdpoel/Volura/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/Lexvdpoel/Volura/total?color=2f6fd6"></a>
+  <a href="https://github.com/Lexvdpoel/Volura/actions/workflows/build.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/Lexvdpoel/Volura/build.yml?branch=main"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Lexvdpoel/Volura"></a>
+  <img alt="Windows and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey">
+</p>
 
-For 3D printing, Volura checks on export that every part is a closed volume (no holes, open or
-doubled edges) and writes it flawlessly as STL or 3MF through the Manifold kernel.
+<p align="center">
+  <a href="https://volura.dev">Website</a> ·
+  <a href="https://volura.dev/manual">Manual</a> ·
+  <a href="https://github.com/Lexvdpoel/Volura/releases/latest">Download</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/Lexvdpoel/Volura/discussions">Discussions</a>
+</p>
 
-The interface is available in English and Dutch (*Window > Preferences > General > Language*).
+<p align="center">
+  <img src="docs/website/img/en/window_3d.png" alt="The Volura window: a model in 3D with the workspace tabs Design, Print, Laser and CNC" width="900">
+</p>
 
-## Features
+## Why Volura
+
+Most makers juggle a modeller, a slicer, a laser program and a CAM tool, each with its own file
+format and its own habits. **Volura brings them together in one program**: you draw a part once,
+and the same model goes to the 3D printer, the laser cutter or the CNC mill.
+
+You model the way SketchUp 2017 works: draw a flat face and pull it into a volume with
+**Push/Pull**. Edges split each other where they cross, a closed shape becomes a face and the
+Eraser merges faces again. Every part is checked to be a closed, printable volume, thanks to
+the [Manifold](https://github.com/elalish/manifold) kernel.
+
+The interface is in English and Dutch (*Window > Preferences > General > Language*).
+
+## Highlights
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/website/img/en/parts.png" alt="Ready-made parts: a project box, a gear, standoffs, a label and a cable clip">
+      <b>Design</b><br>
+      Push/Pull modelling with inference and typed measurements, groups and solid tools,
+      screw threads, 3D text and dozens of ready-made parts: project boxes, gears, hinges,
+      Gridfinity bins, cable clips and more.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/website/img/en/overhangs.png" alt="Print Check marking the overhangs of a model in red">
+      <b>Print</b><br>
+      Print Check shows what hangs over and needs support before you print, multicolour 3MF for
+      AMS and MMU printers, and built-in slicing for filament (CuraEngine) and resin
+      (UVtools) printers.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/website/img/en/worksheet.png" alt="The 2D worksheet with a finger joint box and a gear">
+      <b>Laser and CNC</b><br>
+      A 2D worksheet with finger-joint boxes, living hinges, nesting and engraving, G-code
+      for GRBL lasers and 2.5D mills, 3D milling of the model, and a controller that drives
+      your machine over USB.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/website/img/en/project_box.png" alt="A project box with a lid, made in a few clicks">
+      <b>Made for makers</b><br>
+      Imports STL, OBJ, 3MF, PLY, glTF, SVG and DXF; repairs broken meshes; exports STL, 3MF,
+      OBJ, STEP, SVG, DXF and G-code. Free and open source under the MIT license.
+    </td>
+  </tr>
+</table>
+
+## Download
+
+| Windows | Linux |
+| --- | --- |
+| [**Volura-windows-setup.exe**](https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-setup.exe) (installer, no admin rights needed) | [**Volura-linux-x86_64.tar.gz**](https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-linux-x86_64.tar.gz) |
+| or the [portable zip](https://github.com/Lexvdpoel/Volura/releases/latest/download/Volura-windows-x86_64.zip) | see [Linux](#linux) for the install script |
+
+Volura updates itself; see [Installation](#installation) for the details.
+
+## Missing something? Tell us
+
+We want Volura to be the one program a maker needs. If something is missing, does not make
+sense or does not work, please [open an issue](https://github.com/Lexvdpoel/Volura/issues/new/choose)
+or start a [discussion](https://github.com/Lexvdpoel/Volura/discussions). Every report counts,
+and we aim to fix it **within a day**.
+
+## All features
 
 - SketchUp workflow: Line, Rectangle, Circle, Polygon, Arcs (2 Point Arc, Arc, 3 Point Arc and
   Pie), 3D Text, Push/Pull, Offset, Move, Rotate, Scale, Tape Measure, Paint Bucket, Eraser,
