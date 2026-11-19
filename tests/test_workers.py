@@ -42,8 +42,7 @@ def pool():
     workers._reset()
     workers.prewarm()
     yield
-    workers.shutdown()
-    workers._reset()
+    workers._reset()           # waits for the pool, so no worker outlives this module
     if saved is None:
         os.environ.pop("VOLURA_WORKERS", None)
     else:
@@ -122,6 +121,20 @@ def test_pool_shuts_down_cleanly(pool):
     try:
         assert workers.pool() is None
         assert workers.parallel_map(square, [1, 2, 3], min_items=2) == [1, 4, 9]   # serial now
+    finally:
+        workers._reset()
+        workers.prewarm()
+
+
+def test_reset_waits_for_a_pool_that_was_stopped_without_waiting(pool):
+    import multiprocessing
+    workers.prewarm()                                   # jobs on their way to booting workers
+    workers.shutdown()                                  # what the window does when it closes
+    assert workers._unjoined                            # remembered, not forgotten
+    try:
+        workers._reset()
+        assert workers._unjoined == []
+        assert multiprocessing.active_children() == []  # every worker process is gone
     finally:
         workers._reset()
         workers.prewarm()

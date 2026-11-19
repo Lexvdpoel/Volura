@@ -31,10 +31,16 @@ import sys
 # benchmark model (24 groups) 8 workers export as fast as 47, while every worker
 # holds about 27 MB (numpy and manifold3d), so 47 of them would cost 1.3 GB.
 MAX_DEFAULT_WORKERS = 8
+# how long _reset() waits for a stopped pool's thread or a worker before it moves on
+JOIN_TIMEOUT_S = 30.0
 
 _pool = None
 _broken = False
 _stopped = False
+# Pools that shutdown() stopped without waiting for them. An executor is only torn down
+# for good once somebody waits for it; left alone, concurrent.futures does that waiting
+# in its exit handler, after the rest of the program has gone. _reset() waits for them.
+_unjoined = []
 
 
 def max_workers():
@@ -139,19 +145,38 @@ def shutdown():
     _stopped = True
     p, _pool = _pool, None
     if p is not None:
+        # shutdown(wait=False) drops the executor's own references to its manager thread
+        # and its processes, so a later shutdown(wait=True) can no longer wait for them:
+        # keep them here for _reset()
+        thread = getattr(p, "_executor_manager_thread", None)
+        procs = list((getattr(p, "_processes", None) or {}).values())
         try:
             p.shutdown(wait=False, cancel_futures=True)
         except Exception:
             pass
+        _unjoined.append((thread, procs))
 
 
 def _reset():
-    """Bring the module back to a fresh state (used by the tests)."""
+    """Bring the module back to a fresh state (used by the tests).
+
+    Waits for the current pool and for every pool :func:`shutdown` stopped without
+    waiting, so no worker process or pool thread outlives the call."""
     global _pool, _broken, _stopped
     p, _pool = _pool, None
+    stopped = list(_unjoined)
+    _unjoined.clear()
     _broken = _stopped = False
     if p is not None:
         try:
             p.shutdown(wait=True, cancel_futures=True)
         except Exception:
             pass
+    for thread, procs in stopped:
+        if thread is not None:
+            thread.join(JOIN_TIMEOUT_S)
+        for proc in procs:
+            proc.join(JOIN_TIMEOUT_S)
+            if proc.is_alive():                 # a worker that does not stop by itself
+                proc.terminate()
+                proc.join(JOIN_TIMEOUT_S)

@@ -20,6 +20,13 @@ What changed in each version of Volura. Downloads are on the
 - **One row along the bottom of the window**: the workspace tabs and the texts of the window
   on the left, the measurements under the side bar on the right.
 
+### Fixed
+- A command that waits for its background work (such as reading a drawing, rounding corners
+  or cutting dogbones) could seem to hang on Windows until the mouse moved: the finished
+  result was not picked up. It now arrives right away.
+- The worker processes for exports are now really stopped when the pool is stopped, instead
+  of lingering until the program has ended.
+
 ## 0.2.60 — 2026-11-19
 
 ### New

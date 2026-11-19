@@ -147,14 +147,15 @@ def test_progress_dialog_appears_after_the_delay(win):
             time.sleep(0.02)
 
     job = background.run(win, slow, text="Exporting STL…", delay_ms=20, show_dialog=True)
-    seen = []
+    seen = []                 # the texts, not the dialogs: a dialog goes once the job ends
     timer = QTimer()
-    timer.timeout.connect(lambda: seen.extend(win.findChildren(QProgressDialog)))
+    timer.timeout.connect(lambda: seen.extend(d.labelText()
+                                              for d in win.findChildren(QProgressDialog)))
     timer.start(15)
     assert job.wait(10000)
     timer.stop()
     assert seen, "no progress dialog appeared for a slow task"
-    assert any("Exporting STL" in d.labelText() for d in seen)
+    assert any("Exporting STL" in text for text in seen)
 
 
 def test_no_dialog_for_a_quick_task(win):
@@ -368,6 +369,35 @@ def test_two_hundred_short_jobs_all_deliver_their_outcome(win):
                            show_dialog=False, wait=True)
     assert again.result == "still works", "the pool stopped taking jobs"
     assert not win._busy
+
+
+def test_wait_does_not_depend_on_a_sleeping_event_loop(win, monkeypatch):
+    """On Windows a nested QEventLoop sometimes misses the wake-up of a message posted
+    from the pool thread and then delivers nothing for minutes (the flaky STL import test
+    of the serial suite). wait() hands the outcome over itself, without such a loop."""
+    def no_nested_loop(self, *a, **k):
+        raise AssertionError("wait() must not sleep in a nested QEventLoop")
+    monkeypatch.setattr(background.QEventLoop, "exec", no_nested_loop)
+    release, started = threading.Event(), threading.Event()
+    job = background.run(win, held_task(started, release), text="Working…", show_dialog=False)
+    assert started.wait(10)
+    release.set()
+    t = time.monotonic()
+    assert job.wait(10000)
+    assert time.monotonic() - t < 2.0
+    assert job.result == 42 and job.error is None and not job.was_cancelled
+
+
+def test_wait_gives_up_after_its_timeout(win):
+    release, started = threading.Event(), threading.Event()
+    job = background.run(win, held_task(started, release), text="Working…", show_dialog=False)
+    try:
+        t = time.monotonic()
+        assert job.wait(200) is False
+        assert 0.15 < time.monotonic() - t < 2.0
+    finally:
+        release.set()
+        assert job.wait(10000)
 
 
 def test_the_gil_switches_quickly_only_while_a_job_runs(win):

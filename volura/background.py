@@ -27,9 +27,10 @@ from __future__ import annotations
 
 import sys
 import threading
+import time
 
-from PySide6.QtCore import (QEvent, QEventLoop, QObject, QRunnable, Qt, QTimer,
-                            QThreadPool, Signal, Slot)
+from PySide6.QtCore import (QCoreApplication, QEvent, QEventLoop, QObject, QRunnable, Qt,
+                            QTimer, QThreadPool, Signal, Slot)
 from PySide6.QtWidgets import QApplication, QProgressDialog, QWidget
 
 from .i18n import tr
@@ -45,6 +46,9 @@ _RETIRED: list["_Worker"] = []
 
 #: how many finished runnables to keep before the oldest one goes
 RETIRED_MAX = 16
+
+#: how long ``BackgroundJob.wait`` sleeps between two rounds of delivering events (seconds)
+WAIT_SLICE_S = 0.01
 
 #: the user input that could change the model while a job reads it
 _INPUT = {QEvent.MouseButtonPress, QEvent.MouseButtonRelease, QEvent.MouseButtonDblClick,
@@ -125,6 +129,7 @@ class _Worker(QRunnable):
         self.fn = fn
         self.signals = _TaskSignals()
         self.cancel_event = threading.Event()
+        self.ended = threading.Event()     # set once the outcome signal has been emitted
         # not the pool: it would delete the runnable on its own thread, while Python still
         # holds it and its signals object, whose last signal may still be on its way
         self.setAutoDelete(False)
@@ -150,6 +155,8 @@ class _Worker(QRunnable):
                 self.signals.cancelled.emit()
             else:
                 self.signals.finished.emit(result)
+        finally:
+            self.ended.set()
 
 
 def _retire(worker):
@@ -226,17 +233,30 @@ class BackgroundJob(QObject):
         self._worker.cancel_event.set()
 
     def wait(self, timeout_ms=120000):
-        """Spin the event loop until the job is over; True when it finished in time."""
-        if self._done:
-            return True
-        loop = QEventLoop(self)
-        for sig in (self.finished, self.failed, self.cancelled):
-            sig.connect(loop.quit)
-        timer = QTimer(loop)
-        timer.setSingleShot(True)
-        timer.timeout.connect(loop.quit)
-        timer.start(timeout_ms)
-        loop.exec()
+        """Keep delivering events until the job is over; True when it finished in time.
+
+        This does not sleep in a nested ``QEventLoop``: on Windows such a loop sometimes
+        misses the wake-up of a message posted from another thread, and then delivers
+        nothing at all - not the outcome of the job, not even its own timer - until some
+        unrelated window message happens to arrive (seen in the serial test run: a job
+        done after 50 ms, its result handed over after 112 s). Instead the runnable sets
+        ``ended`` once it has emitted its outcome, and we hand the posted events over
+        ourselves with ``processEvents``, which never sleeps, in short rounds."""
+        app = QCoreApplication.instance()
+        deadline = time.monotonic() + timeout_ms / 1000.0
+        while not self._done:
+            if app is not None:
+                # the queued signals (the outcome, progress) by hand, then the rest; not
+                # every posted event: that would also run the deleteLater()s of the
+                # caller's objects, which a nested loop leaves alone
+                app.sendPostedEvents(None, QEvent.MetaCall)
+                app.processEvents(QEventLoop.AllEvents)
+            if self._done:
+                break
+            left = deadline - time.monotonic()
+            if left <= 0:
+                break
+            self._worker.ended.wait(min(WAIT_SLICE_S, left))
         return self._done
 
     # ------------------------------------------------------------- GUI slots
