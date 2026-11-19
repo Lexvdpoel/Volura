@@ -97,16 +97,16 @@ class WorkspaceBar(QWidget):
         also when a side bar or the machine panel next to it is made wider."""
         self._viewer = viewer
         viewer.installEventFilter(self)
-        QTimer.singleShot(0, self._align)
+        QTimer.singleShot(0, self, self._align)   # not after self is gone
 
     def eventFilter(self, obj, event):
         if obj is self._viewer and event.type() in (QEvent.Resize, QEvent.Move, QEvent.Show):
-            QTimer.singleShot(0, self._align)
+            QTimer.singleShot(0, self, self._align)   # not after self is gone
         return False
 
     def showEvent(self, event):
         super().showEvent(event)
-        QTimer.singleShot(0, self._align)
+        QTimer.singleShot(0, self, self._align)   # not after self is gone
 
     def _align(self) -> None:
         viewer = self._viewer
