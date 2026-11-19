@@ -12,7 +12,7 @@ counterbore for the head of a socket head bolt, and `shaft` a blind D hole of th
 diameter with one side flat. These tests weigh every grip against every mount: the plastic
 that a pocket takes out is the plastic the pocket promises, the nut pocket is really
 hexagonal, the shaft hole really stops short of the top, and the input that cannot be printed
-is refused. The place in the interface is checked too (Print Tools after the project box, one
+is refused. The place in the interface is checked too (Parts after the hose adapter, one
 group in one undo step to the right of the model, and the dialog that remembers its values).
 
 Run with:  python -m pytest tests/test_knob.py
@@ -285,9 +285,9 @@ def test_a_knob_that_cannot_be_built_is_a_clear_text(win):
     assert win.doc.groups == []
 
 
-def test_the_knob_follows_the_project_box_in_print_tools(win):
-    labels = [clean(a.text()) for a in win.flat_actions(win.menuBar())]
-    assert labels.index("Knob") == labels.index("Project Box") + 1
+def test_the_knob_follows_the_hose_adapter_in_parts(win):
+    labels = [clean(a.text()) for a in win.flat_actions(win.parts_category("Mechanical"))]
+    assert labels.index("Knob") == labels.index("Hose Adapter") + 1
 
 
 def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, monkeypatch):

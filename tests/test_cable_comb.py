@@ -276,8 +276,9 @@ def test_the_dialog_builds_a_comb_and_remembers_it(monkeypatch, tmp_path):
         assert (settings.cable_comb_cables, settings.cable_comb_cable,
                 settings.cable_comb_thickness, settings.cable_comb_snap) == \
             (8, 7.0, 5.0, pytest.approx(0.7))
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Cable Comb") == labels.index("Pen Cup") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Cables"))]
+        assert labels.index("Cable Comb") == labels.index("Cable Clip") + 1
     finally:
         for key, value in (("cable_comb_cables", 6), ("cable_comb_cable", 6.0),
                            ("cable_comb_thickness", 4.0), ("cable_comb_snap", 0.75)):

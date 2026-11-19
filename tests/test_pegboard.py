@@ -324,8 +324,9 @@ def test_the_dialog_builds_a_holder_and_a_board_and_remembers_them(monkeypatch, 
         assert hi[:2] - lo[:2] == pytest.approx([4 * pegboard.PEG_PITCH, 3 * pegboard.PEG_PITCH])
         s = app_module.Settings()
         assert (s.peg_kind, s.peg_cols, s.peg_rows) == ("board", 4, 3)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Pegboard") == labels.index("Gridfinity") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Storage"))]
+        assert labels.index("Pegboard") == labels.index("Memory Card Holder") + 1
     finally:
         w.settings.peg_kind = "hook"
         w.settings.save()

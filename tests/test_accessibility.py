@@ -175,8 +175,8 @@ def test_the_window_and_its_docks_have_named_controls(win, mode):
 def test_the_dialogs_of_draw_parts_have_named_controls(win, monkeypatch):
     """Every dialog of Draw > Parts, opened the way the window opens it."""
     parts = menu_named(menu_named(win.menuBar(), "Draw"), "Parts")
-    assert parts is not None and len(parts.actions()) > 10, "Draw > Parts is not there"
-    actions = [a for a in parts.actions() if not a.isSeparator()]
+    actions = win.flat_actions(parts) if parts is not None else []   # the parts of every category
+    assert len(actions) > 10, "Draw > Parts is not there"
     opened, problems = [], []
 
     def inspect(dlg):

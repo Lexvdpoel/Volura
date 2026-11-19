@@ -316,8 +316,9 @@ def test_the_dialog_builds_a_holder_and_remembers_it(monkeypatch, tmp_path):
         assert (settings.bit_holder_cols, settings.bit_holder_rows,
                 settings.bit_holder_depth, settings.bit_holder_label) == (
             4, 1, pytest.approx(14.0), False)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Bit Holder") == labels.index("Zip-Tie Mount") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Storage"))]
+        assert labels.index("Bit Holder") == labels.index("Bin Wall Rack") + 1
     finally:
         w.settings.bit_holder_cols, w.settings.bit_holder_rows = 6, 2
         w.settings.bit_holder_depth, w.settings.bit_holder_label = 10.0, True

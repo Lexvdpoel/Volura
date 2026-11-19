@@ -326,8 +326,9 @@ def test_the_dialog_builds_a_grommet_and_remembers_it(monkeypatch, tmp_path):
         settings = app_module.Settings()
         assert (settings.grommet_hole, settings.grommet_desk, settings.grommet_slot) == (
             pytest.approx(80.0), pytest.approx(18.0), pytest.approx(25.0))
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Desk Grommet") == labels.index("Fan Guard") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Mechanical"))]
+        assert labels.index("Desk Grommet") == labels.index("Corner Bracket") + 1
     finally:
         w.settings.grommet_hole, w.settings.grommet_desk, w.settings.grommet_slot = 60.0, 25.0, 20.0
         w.settings.save()

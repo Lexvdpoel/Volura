@@ -171,6 +171,9 @@ and we aim to fix it **within a day**.
   four corners and the middle of the bed: print them and see whether your bed is level and the
   first layer is squashed right everywhere, because a square that peels off or drags says which
   place on the bed is off
+- **Ready-made parts** (Draw > Parts): the parts below stand in four submenus - **Mechanical**,
+  **Cables**, **Storage** and **Home and Desk** - and each submenu is in alphabetical order, so
+  the part you are after is a short click away
 - **Project Box** (Draw > Parts): an enclosure with a lid that fits into it: enter the
   inside length, width and height that your electronics need, with the wall, the floor, the
   rounding of the corners and the clearance between the lip of the lid and the wall. With a

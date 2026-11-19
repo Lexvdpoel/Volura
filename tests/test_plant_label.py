@@ -323,8 +323,9 @@ def test_the_dialog_builds_a_label_and_remembers_it(monkeypatch, tmp_path):
                 settings.plant_label_head, settings.plant_label_stake,
                 settings.plant_label_thickness, settings.plant_label_raised) == (
             "Mint", 80.0, 30.0, 150.0, 3.0, 1.2)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Plant Label") == labels.index("Filament Clip") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Home and Desk"))]
+        assert labels.index("Plant Label") == labels.index("Phone Stand") + 1
     finally:
         for key, value in (("plant_label_text", "Basil"), ("plant_label_width", 60.0),
                            ("plant_label_head", 20.0), ("plant_label_stake", 80.0),

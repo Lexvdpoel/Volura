@@ -320,8 +320,9 @@ def test_the_dialog_builds_a_clip_and_remembers_it(monkeypatch, tmp_path):
         assert (settings.filament_clip_flange, settings.filament_clip_filament,
                 settings.filament_clip_count, settings.filament_clip_thickness) == (
             3.0, "2.85", 2, 6.0)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Filament Clip") == labels.index("Coaster") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Mechanical"))]
+        assert labels.index("Filament Clip") == labels.index("Fan Guard") + 1
     finally:
         for key, value in (("filament_clip_flange", 2.5), ("filament_clip_filament", "1.75"),
                            ("filament_clip_count", 1), ("filament_clip_thickness", 5.0)):

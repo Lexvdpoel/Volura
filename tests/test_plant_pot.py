@@ -435,8 +435,9 @@ def test_the_dialog_builds_a_pot_and_a_saucer_as_two_groups_and_remembers_it(mon
         assert (settings.plant_pot_diameter, settings.plant_pot_height, settings.plant_pot_taper,
                 settings.plant_pot_wall, settings.plant_pot_holes, settings.plant_pot_shape,
                 settings.plant_pot_saucer) == (120.0, 100.0, 70.0, 2.4, 4, "hexagon", True)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Plant Pot") == labels.index("Drawer Organizer") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Home and Desk"))]
+        assert labels.index("Plant Pot") == labels.index("Plant Label") + 1
     finally:
         for key, value in (("plant_pot_diameter", 100.0), ("plant_pot_height", 90.0),
                            ("plant_pot_taper", 75.0), ("plant_pot_wall", 2.0),

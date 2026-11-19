@@ -243,8 +243,9 @@ def test_the_dialog_builds_a_guard_and_remembers_it(monkeypatch, tmp_path):
         assert hi - lo == pytest.approx([120.0, 120.0, 3.0], abs=1e-4)
         s = app_module.Settings()
         assert (s.fan_size, s.fan_pattern, s.fan_thickness) == (120, "grid", pytest.approx(3.0))
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Fan Guard") == labels.index("Hose Adapter") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Mechanical"))]
+        assert labels.index("Fan Guard") == labels.index("Desk Grommet") + 1
     finally:
         w.settings.fan_size, w.settings.fan_pattern, w.settings.fan_thickness = 80, "rings", 2.0
         w.settings.save()

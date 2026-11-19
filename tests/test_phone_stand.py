@@ -438,8 +438,9 @@ def test_the_dialog_builds_a_stand_and_remembers_it(monkeypatch, tmp_path):
                 settings.phone_stand_back, settings.phone_stand_device,
                 settings.phone_stand_lip, settings.phone_stand_cable) == (
             100.0, 70.0, 120.0, 11.0, 15.0, True)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Phone Stand") == labels.index("Wall Hook") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Home and Desk"))]
+        assert labels.index("Phone Stand") == labels.index("Pen Cup") + 1
     finally:
         w.settings.phone_stand_width, w.settings.phone_stand_angle = 70.0, 65.0
         w.settings.phone_stand_back, w.settings.phone_stand_device = 90.0, 11.0

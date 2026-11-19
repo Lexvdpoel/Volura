@@ -318,8 +318,9 @@ def test_the_dialog_builds_a_dish_and_remembers_it(monkeypatch, tmp_path):
         settings = app_module.Settings()
         assert (settings.soap_dish_length, settings.soap_dish_width, settings.soap_dish_rim,
                 settings.soap_dish_wall, settings.soap_dish_ribs) == (130.0, 90.0, 20.0, 3.0, 5)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Soap Dish") == labels.index("Door Wedge") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Home and Desk"))]
+        assert labels.index("Soap Dish") == labels.index("Plant Pot") + 1
     finally:
         for key, value in (("soap_dish_length", 110.0), ("soap_dish_width", 75.0),
                            ("soap_dish_rim", 15.0), ("soap_dish_wall", 2.4),

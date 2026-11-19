@@ -358,8 +358,9 @@ def test_the_dialog_builds_a_bracket_and_remembers_it(monkeypatch, tmp_path):
         settings = app_module.Settings()
         assert (settings.bracket_leg_a, settings.bracket_leg_b, settings.bracket_holes) == (
             pytest.approx(80.0), pytest.approx(60.0), 3)
-        labels = [a.text().replace("&", "").replace("…", "") for a in w.flat_actions(w.menuBar())]
-        assert labels.index("Corner Bracket") == labels.index("Desk Grommet") + 1
+        labels = [a.text().replace("&", "").replace("…", "")
+                  for a in w.flat_actions(w.parts_category("Mechanical"))]
+        assert labels.index("Corner Bracket") + 1 == labels.index("Desk Grommet")
     finally:
         w.settings.bracket_leg_a, w.settings.bracket_leg_b, w.settings.bracket_holes = (
             40.0, 40.0, 2)
