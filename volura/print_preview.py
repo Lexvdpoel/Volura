@@ -11,10 +11,12 @@ the left mouse button to turn the view, with the right or middle button (or Shif
 move it; the wheel zooms towards the mouse and a double-click shows the whole print again. Top and
 3D switch the view; Only this layer hides the layers below. Play moves the nozzle through the layer
 at the speed of the real print times a factor and goes on to the next layer; the slider and the
-arrow keys pick a layer. Save G-code… writes the file.
+arrow keys pick a layer. Save G-code… writes the file, and Send to printer… hands it to
+OctoPrint, Klipper (Moonraker) or PrusaLink over the network (see volura/printer_link.py).
 """
 from __future__ import annotations
 
+import os
 import shutil
 
 import numpy as np
@@ -22,13 +24,15 @@ from OpenGL import GL as gl
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QHBoxLayout,
-                               QLabel, QPushButton, QSlider, QVBoxLayout)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
+                               QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
+                               QSlider, QVBoxLayout)
 
-from . import errors
+from . import background, errors, printer_link
 from . import gcode_preview as gp
 from .camera import Camera
 from .i18n import tr, tr_noop
+from .settings import flag, qsettings
 from .viewcube import ViewCube
 
 #: the colour and the name of every kind of line, in the order of gcode_preview.KIND_NAMES
@@ -64,6 +68,8 @@ PROFILE = ((-1.0, 1.0, 0.45), (-1.0, 0.35, 0.72), (0.0, 0.0, 1.0), (1.0, 0.35, 0
 VERTS = 2 * len(PROFILE)
 #: the colours of the background, the bed and its grid
 BACKGROUND, BED, GRID = "#20242a", "#2b3038", "#3a404a"
+#: the settings keys of the printer the last slice went to and whether it started there
+LAST_PRINTER, LAST_START = "send_printer", "send_start"
 
 
 def kind_style(colour_blind: bool):
@@ -355,8 +361,64 @@ class LayerView(QOpenGLWidget):
         self.update()
 
 
+class SendDialog(QDialog):
+    """Send to printer…: which printer the G-code goes to, under what name, and whether it
+    starts printing right away. The printer and that last yes or no are remembered.
+    """
+
+    def __init__(self, parent, printers, name: str):
+        super().__init__(parent)
+        self.setWindowTitle(tr("Send to printer"))
+        lay = QVBoxLayout(self)
+        form = QFormLayout()
+        self.printer = QComboBox()
+        self.printer.setToolTip(tr("The printers under Window > Preferences > Printers"))
+        for conn in printers:
+            self.printer.addItem(conn.name, conn)
+            self.printer.setItemData(self.printer.count() - 1,
+                                     printer_link.normalise_url(conn.url), Qt.ToolTipRole)
+        self.name = QLineEdit(name)
+        self.name.setToolTip(tr("The name the file gets on the printer"))
+        self.start = QCheckBox(tr("Start printing right away"))
+        self.start.setChecked(flag(LAST_START, False))
+        form.addRow(tr("Printer"), self.printer)
+        form.addRow(tr("File name"), self.name)
+        form.addRow(self.start)
+        lay.addLayout(form)
+        bb = QDialogButtonBox(QDialogButtonBox.Cancel)
+        send = bb.addButton(tr("Send"), QDialogButtonBox.AcceptRole)
+        send.setDefault(True)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addWidget(bb)
+        self._last_used(str(qsettings().value(LAST_PRINTER, "") or ""))
+
+    def _last_used(self, name):
+        """Show the printer the last slice went to, when it is still there."""
+        for i in range(self.printer.count()):
+            if self.printer.itemData(i).name == name:
+                self.printer.setCurrentIndex(i)
+                return
+
+    def connection(self):
+        """The printer this G-code goes to."""
+        return self.printer.currentData()
+
+    def file_name(self) -> str:
+        """The name the G-code gets on the printer, made safe."""
+        return printer_link.file_name(self.name.text())
+
+    def accept(self):
+        """Send: keep what was chosen for the next slice."""
+        qsettings().setValue(LAST_PRINTER, self.connection().name)
+        qsettings().setValue(LAST_START, self.start.isChecked())
+        qsettings().sync()
+        super().accept()
+
+
 class PrintPreviewDialog(QDialog):
-    """The G-code of a slice, layer by layer; `Save G-code…` hands it on (see `save_to`).
+    """The G-code of a slice, layer by layer; `Save G-code…` hands it on (see `save_to`)
+    and `Send to printer…` sends it to a printer on the network (see `printer_link`).
 
     `filaments` is what the print prints with, `(name, colour, mm, grams)` per filament
     (see `filament_color`): with more than one the view colours every line with its filament
@@ -366,13 +428,17 @@ class PrintPreviewDialog(QDialog):
     def __init__(self, win, gcode_path: str, preview: gp.Preview, bed, summary: str,
                  ask_path=None, filaments=()):
         super().__init__(win)
+        self.win = win
         self.gcode_path, self.preview = gcode_path, preview
         self.ask_path = ask_path
         self.saved_to = None
+        self.sent = None                      # what stands on the printer, once it is there
+        self._job = None
         self.filaments = list(filaments)
         self.by_filament = len(self.filaments) > 1 and preview.materials > 1
         settings = getattr(win, "settings", None)
         self.colour_blind = bool(getattr(settings, "colour_blind", False))
+        self.printers = list(getattr(settings, "printers", None) or [])
         self.setWindowTitle(tr("Print Preview"))
         self.resize(980, 780)
         lay = QVBoxLayout(self)
@@ -428,9 +494,12 @@ class PrintPreviewDialog(QDialog):
 
         bb = QDialogButtonBox()
         self.save_button = bb.addButton(tr("Save G-code…"), QDialogButtonBox.AcceptRole)
+        self.send_button = bb.addButton(tr("Send to printer…"), QDialogButtonBox.ActionRole)
         bb.addButton(QDialogButtonBox.Close)
         bb.accepted.connect(self._save)
         bb.rejected.connect(self.reject)
+        self.send_button.clicked.connect(self._send)
+        self._show_send()
         lay.addWidget(bb)
 
         self.timer = QTimer(self)
@@ -529,6 +598,52 @@ class PrintPreviewDialog(QDialog):
         if path:
             self.save_to(path)
             self.accept()
+
+    # ---- sending
+    def _show_send(self):
+        """Send to printer… only works once there is a printer under Preferences."""
+        self.send_button.setEnabled(bool(self.printers))
+        self.send_button.setToolTip("" if self.printers else
+                                    tr("Add a printer under Window > Preferences > Printers, "
+                                       "then send the G-code straight from here."))
+
+    def _send_name(self) -> str:
+        """What the G-code is called on the printer: the name of the model, or "volura"."""
+        path = getattr(getattr(self.win, "doc", None), "path", None)
+        stem = os.path.splitext(os.path.basename(path))[0] if path else None
+        return printer_link.file_name(stem)
+
+    def _send(self):
+        """Send to printer…: exactly the G-code of this preview, straight to the printer."""
+        dlg = SendDialog(self, self.printers, self._send_name())
+        if dlg.exec() != QDialog.Accepted:
+            return
+        conn, name, start = dlg.connection(), dlg.file_name(), dlg.start.isChecked()
+        self.send_button.setEnabled(False)
+
+        def work(report):
+            printer_link.upload(conn, self.gcode_path, name, start=start,
+                                on_progress=lambda fraction: report(fraction))
+            return name
+
+        def sent(what):
+            self.send_button.setEnabled(True)
+            started = tr("Sent {file} to {printer} and started printing")
+            plain = tr("Sent {file} to {printer}")
+            self.sent = (started if start else plain).format(file=what, printer=conn.name)
+            hint = getattr(self.win, "hint", None)
+            if hint is not None:
+                hint.setText(self.sent)
+
+        def failed(exc):
+            self.send_button.setEnabled(True)
+            QMessageBox.critical(self, tr("Send to printer"), str(exc))
+
+        self._job = background.run(self, work, can_cancel=True,
+                                   text=tr("Sending {file} to {printer}…")
+                                   .format(file=name, printer=conn.name),
+                                   on_done=sent, on_error=failed,
+                                   on_cancel=lambda: self.send_button.setEnabled(True))
 
     def done(self, result):
         self.timer.stop()

@@ -519,6 +519,12 @@ gets for free.
   with the download. The print preview then shows the G-code in 3D, layer by layer, every line as
   wide as it prints (turn, move and zoom it with the mouse), with a virtual printer that plays each layer as the printer will
   print it, the print time and the filament; save the G-code from there
+  - **Send to printer…**: in the print preview, next to *Save G-code…*, the same G-code goes over
+    the network to **OctoPrint**, **Klipper (Moonraker)** or **PrusaLink**. Add the printer under
+    *Window > Preferences > Printers* with its address and, where the printer wants one, its API
+    key; *Test connection* there says what answered. The little dialog asks under what name the
+    file goes to the printer and whether it starts printing right away, and remembers the printer
+    you used last
   - A model in more colours prints in more colours: every colour goes to the extruder you point it
     at, starting on the filament the multicolour 3MF would have given it, faces painted with the
     Paint Bucket print as a skin of the depth you choose, and a prime tower or ooze shield keeps
@@ -822,6 +828,7 @@ volura/
   spacemouse.py 3Dconnexion 3D mice (3DxWare, Raw Input, spacenavd)
   i18n.py       translations; locale/ holds the Dutch tables
   updater.py    checking for a newer version and installing it
+  printer_link.py  sending a slice to OctoPrint, Klipper (Moonraker) or PrusaLink
 tests/          tests without a GUI (pytest); test_brep.py compares with results from SketchUp 2017
                 test_portability.py keeps Windows assumptions out of volura/
 docs/website/   the feature cards and the manual of volura.dev, in English and Dutch; the site

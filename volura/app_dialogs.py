@@ -1,9 +1,9 @@
 """The general dialogs of the window: Simplify Model, Model Info and Preferences.
 
 The quality slider of Tools > Simplify Model, the pages of Window > Model Info (units,
-statistics and print bed) and of Window > Preferences (general, display, drawing, 3D
-mouse and the editable shortcuts). The window they talk to and the actions that open
-them live in `volura/app.py`.
+statistics and print bed) and of Window > Preferences (general, display, drawing,
+printers, 3D mouse and the editable shortcuts). The window they talk to and the actions
+that open them live in `volura/app.py`.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QSpinBox, QStackedWidget, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
 
-from . import background, i18n, keyschemes, ops, theme
+from . import background, i18n, keyschemes, ops, printer_link, theme
 from .i18n import tr, tr_noop
 from .panels import note
 from .tools import format_length, set_length_precision
@@ -396,9 +396,13 @@ class ModelInfoDialog(PageDialog):
 
 
 class PreferencesDialog(PageDialog):
-    """Window > Preferences: General, Display, Drawing, 3D Mouse and Shortcuts (SketchUp 2017)."""
+    """Window > Preferences: General, Display, Drawing, Printers, 3D Mouse and Shortcuts.
 
-    PAGES = (tr("General"), tr("Display"), tr("Drawing"), tr("3D Mouse"), tr("Shortcuts"))
+    The four first pages hold what SketchUp 2017 has there; Printers is Volura's own: the
+    printers on the network that File > Slice can send a G-code straight to."""
+
+    PAGES = (tr("General"), tr("Display"), tr("Drawing"), tr("Printers"), tr("3D Mouse"),
+             tr("Shortcuts"))
     SIZE = (680, 470)
     SPEED_STEPS = 20                       # slider 1..40 = speed 0.05..2 times
 
@@ -407,6 +411,7 @@ class PreferencesDialog(PageDialog):
         self._build_general()
         self._build_looks()
         self._build_drawing()
+        self._build_printers()
         self._build_spacemouse()
         self.shortcuts = ShortcutsPanel(win)
         self.add_page(self.shortcuts)
@@ -542,6 +547,155 @@ class PreferencesDialog(PageDialog):
         form.addRow(tr("Overhang limit"), self.overhang_limit)
         self.add_page(page)
 
+    # ------------------------------------------------------------------ printers
+    def _build_printers(self):
+        """Preferences > Printers: the printers a slice can go straight to."""
+        page = QWidget()
+        lay = QVBoxLayout(page)
+        row = QHBoxLayout()
+        self.printer_list = QListWidget()
+        self.printer_list.setAccessibleName(tr("Printers"))
+        self.printer_list.currentRowChanged.connect(self._show_printer)
+        row.addWidget(self.printer_list, 1)
+        side = QVBoxLayout()
+        self.printer_add = QPushButton(tr("Add"))
+        self.printer_add.setToolTip(tr("Put a new printer under the ones there are"))
+        self.printer_add.clicked.connect(self._add_printer)
+        self.printer_remove = QPushButton(tr("Remove"))
+        self.printer_remove.setToolTip(tr("Take the chosen printer off the list"))
+        self.printer_remove.clicked.connect(self._remove_printer)
+        side.addWidget(self.printer_add)
+        side.addWidget(self.printer_remove)
+        side.addStretch(1)
+        row.addLayout(side)
+        lay.addLayout(row, 1)
+        form = QFormLayout()
+        self.p_name = QLineEdit()
+        self.p_kind = QComboBox()
+        for kind in printer_link.KINDS:
+            self.p_kind.addItem(printer_link.kind_label(kind), kind)
+        self.p_url = QLineEdit()
+        self.p_url.setPlaceholderText("192.168.1.20:5000")
+        self.p_key = QLineEdit()
+        self.p_key.setEchoMode(QLineEdit.PasswordEchoOnEdit)
+        self.p_key.setToolTip(tr("The key the printer wants; OctoPrint makes one under "
+                                 "Settings > API, PrusaLink shows it on the printer itself"))
+        form.addRow(tr("Name"), self.p_name)
+        form.addRow(tr("Kind"), self.p_kind)
+        form.addRow(tr("Address"), self.p_url)
+        form.addRow(tr("API key"), self.p_key)
+        lay.addLayout(form)
+        under = QHBoxLayout()
+        self.p_test = QPushButton(tr("Test connection"))
+        self.p_test.clicked.connect(self._test_printer)
+        under.addWidget(self.p_test)
+        self.p_answer = QLabel()
+        self.p_answer.setWordWrap(True)
+        under.addWidget(self.p_answer, 1)
+        lay.addLayout(under)
+        lay.addWidget(note(tr("OctoPrint, Klipper (Moonraker) and PrusaLink take their G-code "
+                              "over the network; add one of them here and the print preview can "
+                              "send a slice straight to it with Send to printer…. A printer is "
+                              "kept once it has a name and an address.")))
+        self.printers = list(self.win.settings.printers)
+        self._printer_job = None
+        self._printer_filling = True             # what is typed stays out of the list for now
+        for field in (self.p_name, self.p_url, self.p_key):
+            field.textChanged.connect(self._edit_printer)
+        self.p_kind.currentIndexChanged.connect(self._edit_printer)
+        self._reload_printers(0)
+        self.add_page(page)
+
+    def _reload_printers(self, row):
+        """Fill the list with the names of the printers again and show the one at `row`."""
+        row = max(-1, min(int(row), len(self.printers) - 1))
+        self.printer_list.blockSignals(True)
+        self.printer_list.clear()
+        for conn in self.printers:
+            QListWidgetItem(conn.name, self.printer_list)
+        self.printer_list.setCurrentRow(row)
+        self.printer_list.blockSignals(False)
+        self._show_printer(row)
+
+    def _chosen_printer(self) -> int:
+        """The row of the printer the fields stand on, or -1 when there is none."""
+        return self.printer_list.currentRow()
+
+    def _printer_fields(self) -> printer_link.Connection:
+        """What stands in the fields, as a connection."""
+        return printer_link.Connection(self.p_name.text().strip(), self.p_kind.currentData(),
+                                       self.p_url.text().strip(), self.p_key.text())
+
+    def _show_printer(self, row):
+        """The fields show the chosen printer; nothing chosen means nothing to type in."""
+        conn = self.printers[row] if 0 <= row < len(self.printers) else None
+        self._printer_filling = True
+        kind = conn.kind if conn else "octoprint"
+        self.p_name.setText(conn.name if conn else "")
+        self.p_kind.setCurrentIndex(max(0, self.p_kind.findData(kind)))
+        self.p_url.setText(conn.url if conn else "")
+        self.p_key.setText(conn.api_key if conn else "")
+        self._printer_filling = False
+        for field in (self.p_name, self.p_kind, self.p_url, self.p_key):
+            field.setEnabled(conn is not None)
+        self.p_test.setEnabled(conn is not None)
+        self.p_answer.clear()
+
+    def _edit_printer(self, *_ignored):
+        """What is typed goes into the chosen printer right away, its list line along."""
+        row = self._chosen_printer()
+        if self._printer_filling or not 0 <= row < len(self.printers):
+            return
+        self.printers[row] = self._printer_fields()
+        item = self.printer_list.item(row)
+        if item is not None and item.text() != self.printers[row].name:
+            self.printer_list.blockSignals(True)
+            item.setText(self.printers[row].name)
+            self.printer_list.blockSignals(False)
+
+    def _add_printer(self):
+        """Add: an empty printer under the ones there are, ready to fill in."""
+        self.printers.append(printer_link.Connection(tr("New printer"), "octoprint", ""))
+        self._reload_printers(len(self.printers) - 1)
+        self.p_url.setFocus()
+
+    def _remove_printer(self):
+        """Remove: the chosen printer out of the list; the fields follow."""
+        row = self._chosen_printer()
+        if not 0 <= row < len(self.printers):
+            return
+        del self.printers[row]
+        self._reload_printers(row)
+
+    def _test_printer(self):
+        """Test connection: ask the printer what it is; the answer stands under the fields."""
+        conn = self._printer_fields()
+        if not conn.url:
+            self.p_answer.setText(tr("Fill in the address of the printer first."))
+            return
+        self.p_answer.setText(tr("Speaking to the printer…"))
+        self.p_test.setEnabled(False)
+
+        def work(report):
+            return printer_link.check(conn)
+
+        def answered(what):
+            self._printer_job = None
+            self._show_answer(str(what))
+
+        def failed(exc):
+            self._printer_job = None
+            self._show_answer(str(exc))
+
+        self._printer_job = background.run(self, work, text=tr("Speaking to the printer…"),
+                                           can_cancel=False, show_dialog=False,
+                                           on_done=answered, on_error=failed)
+
+    def _show_answer(self, text):
+        """What the printer answered, or what went wrong; the button works again."""
+        self.p_answer.setText(text)
+        self.p_test.setEnabled(self._chosen_printer() >= 0)
+
     def apply(self):
         s = self.win.settings
         s.circle_segments = self.segments.value()
@@ -549,6 +703,7 @@ class PreferencesDialog(PageDialog):
         s.ask_simplify_import = self.ask_simplify.isChecked()
         s.overhang_limit = self.overhang_limit.value()
         s.spacemouse_speed = self.sm_speed.value() / self.SPEED_STEPS
+        s.printers = [conn for conn in self.printers if conn.name and conn.url]
         sm_changed = s.spacemouse != self.sm_on.isChecked()
         s.spacemouse = self.sm_on.isChecked()
         theme_changed = s.theme != self.theme.currentData()

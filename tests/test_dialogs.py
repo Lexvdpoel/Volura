@@ -125,8 +125,8 @@ def test_dialogs_can_be_made_without_showing(win):
         assert not dlg.isVisible(), f"{dlg.windowTitle()} stands on its own, but is not shown"
         assert dlg.windowTitle()
     assert ModelInfoDialog(win).page_titles == ["Units", "Statistics", "Print Bed"]
-    assert PreferencesDialog(win).page_titles == ["General", "Display", "Drawing", "3D Mouse",
-                                                 "Shortcuts"]
+    assert PreferencesDialog(win).page_titles == ["General", "Display", "Drawing", "Printers",
+                                                 "3D Mouse", "Shortcuts"]
 
 
 def test_model_info_has_a_page_list_and_a_page_per_title(win):
