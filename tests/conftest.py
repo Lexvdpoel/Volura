@@ -18,7 +18,28 @@ os.environ.setdefault("VOLURA_WORKERS", "0")
 os.environ["VOLURA_SETTINGS_FILE"] = os.path.join(
     tempfile.mkdtemp(prefix="volura-settings-"), "volura.ini")
 
+import pytest  # noqa: E402
+
 _saved = None
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _delete_the_windows_of_a_test_file():
+    """Delete the windows a test file leaves open once it is done.
+
+    Left alone they all stay until the end of the run, and Qt then takes them down one
+    by one in its own exit code, in a time that grows faster than their number: with
+    the whole suite in one process that took half an hour after the summary."""
+    yield
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if not isinstance(app, QApplication):
+        return
+    for w in app.topLevelWidgets():
+        w.close()
+        w.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 def _settings():

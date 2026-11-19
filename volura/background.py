@@ -224,7 +224,7 @@ class BackgroundJob(QObject):
         _block_input()
         self._set_busy()
         if self._show_dialog:
-            QTimer.singleShot(self._delay_ms, self._show_progress)
+            QTimer.singleShot(self._delay_ms, self, self._show_progress)
         QThreadPool.globalInstance().start(self._worker)
         return self
 

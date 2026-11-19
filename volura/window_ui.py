@@ -460,7 +460,7 @@ class UiMixin:
     def set_tool(self, name):
         self.view.set_tool(name)
         if name == "text":
-            QTimer.singleShot(0, self.ask_text)
+            QTimer.singleShot(0, self, self.ask_text)
 
     def on_tool_changed(self, name):
         for n, a in self.tool_actions.items():
