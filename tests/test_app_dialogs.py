@@ -88,7 +88,8 @@ def test_model_info_still_reads_the_settings_of_the_window(win):
 
 def test_preferences_still_holds_the_shortcut_panel(win):
     dlg = app_module.PreferencesDialog(win)
-    assert dlg.page_titles == ["General", "Display", "Drawing", "3D Mouse", "Shortcuts"]
+    assert dlg.page_titles == ["General", "Display", "Drawing", "Printers", "3D Mouse",
+                               "Shortcuts"]
     assert isinstance(dlg.shortcuts, app_module.ShortcutsPanel)
     assert dlg.shortcuts.select_command("File/New")
 

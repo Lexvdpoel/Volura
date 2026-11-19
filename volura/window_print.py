@@ -1106,7 +1106,9 @@ class PrintMixin:
             dlg = PrintPreviewDialog(self, path, preview, (x0, y0, x0 + bed[0], y0 + bed[1]),
                                      summary, ask, self._filaments(plan, result, preview, stacks))
             dlg.exec()
-            if dlg.saved_to:
+            if dlg.sent:
+                self.hint.setText(dlg.sent)      # which printer it went to says more here
+            elif dlg.saved_to:
                 self.hint.setText(tr("Sliced: {summary}: {path}")
                                   .format(summary=summary, path=dlg.saved_to))
             else:

@@ -32,6 +32,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                fileio, gcode, gcode_mill, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar,
                nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
+               printer_link,
                sheet3d, sheettools, svg,
                spacemouse, spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers, workspaces)
@@ -1409,6 +1410,15 @@ class Settings:
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
+        # the printers a slice can go straight to: one line of JSON each (volura.printer_link)
+        self.printers = []
+        saved = self.q.value("printers", []) or []
+        if isinstance(saved, str):
+            saved = [saved]
+        for line in saved:
+            conn = printer_link.from_json(line)
+            if conn is not None:
+                self.printers.append(conn)
 
     def _bool(self, key, default):
         v = self.q.value(key, default)
@@ -1683,6 +1693,7 @@ class Settings:
         self.q.setValue("corner_radius", self.corner_radius)
         self.q.setValue("dogbone_tool_d", self.dogbone_tool_d)
         self.q.setValue("recent", self.recent[:8])
+        self.q.setValue("printers", [printer_link.to_json(conn) for conn in self.printers])
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
 

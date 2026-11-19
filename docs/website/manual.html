@@ -1206,8 +1206,8 @@ volura</code></pre>
 
     <!-- ===================================================== print -->
     <h2 id="print"><span lang="en">3D printing</span><span lang="nl">3D-printen</span></h2>
-    <p lang="en">Everything here is about the printer: the bed and the filament, what a part must satisfy before it prints, and the small test prints that tell you how your own machine behaves.</p>
-    <p lang="nl">Alles hier gaat over de printer: het bed en het filament, waaraan een onderdeel moet voldoen voordat het print, en de kleine testprints die zeggen hoe jouw machine zich gedraagt.</p>
+    <p lang="en">Everything here is about the printer: the bed and the filament, the <a href="#printers">printers on the network</a> that take a slice, what a part must satisfy before it prints, and the small test prints that tell you how your own machine behaves.</p>
+    <p lang="nl">Alles hier gaat over de printer: het bed en het filament, de <a href="#printers">printers op het netwerk</a> die een slice overnemen, waaraan een onderdeel moet voldoen voordat het print, en de kleine testprints die zeggen hoe jouw machine zich gedraagt.</p>
     <figure class="shots"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/menu_3d_printing.png" alt="The 3D Printing menu" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/menu_3d_printing.png" alt="Het menu 3D-printen" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"></figure>
     <h3><span lang="en">Printer setup</span><span lang="nl">Printer instellen</span></h3>
     <p lang="en">Say which printer you print on and what filament you use, so the bed, the print check and the filament numbers are all yours.</p>
@@ -1603,6 +1603,7 @@ volura</code></pre>
       <li>With <b>Colour-blind friendly colours</b> under <b>Window &gt; Preferences &gt; Display</b>, the preview draws the kinds of line in a palette that people with red-green colour blindness can tell apart; the legend beside the view names every colour.</li>
       <li>A print of more than one filament colours every line in the preview with the filament that prints it, and the legend names each filament with how much of it the print uses.</li>
       <li>The preview shows how long the print takes and how much filament it uses. <b>Save G-code…</b> writes the file; Close leaves it unsaved.</li>
+      <li><b>Send to printer…</b> beside it hands that same file over the network to <a href="#printers">OctoPrint, Klipper (Moonraker) or PrusaLink</a> under a name of your own, and starts printing right away when you tick that; the printer you used last is already filled in.</li>
       <li>The parts land in the middle of the bed, as they stand to each other. Volura remembers your choice for the next time.</li>
     </ul>
     <ul lang="nl">
@@ -1617,6 +1618,7 @@ volura</code></pre>
       <li>Met <b>Kleurenblind-vriendelijke kleuren</b> onder <b>Venster &gt; Voorkeuren &gt; Weergave</b> tekent het voorbeeld de soorten lijnen in een palet dat mensen met rood-groen kleurenblindheid uit elkaar kunnen houden; de legenda naast het beeld noemt elke kleur.</li>
       <li>Een print van meer dan één filament kleurt in het voorbeeld elke lijn met het filament dat hem print, en de legenda noemt elk filament met hoeveel de print ervan gebruikte.</li>
       <li>Het voorbeeld laat zien hoe lang de print duurt en hoeveel filament hij kost. <b>G-code opslaan…</b> schrijft het bestand; Sluiten laat het onopgeslagen.</li>
+      <li><b>Naar printer sturen…</b> ernaast geeft datzelfde bestand via het netwerk aan <a href="#printers">OctoPrint, Klipper (Moonraker) of PrusaLink</a> onder een naam die je zelf kiest, en begint hij meteen te printen als je dat aanvinkt; de printer die je de laatste keer gebruikte, staat er al ingevuld.</li>
       <li>De onderdelen komen midden op het bed, zoals ze ten opzichte van elkaar staan. Volura onthoudt je keuze voor de volgende keer.</li>
     </ul>
     <p class="note" lang="en">A Bambu printer wants Bambu Studio's own G-code: for those printers use <b>File &gt; Export &gt; Multicolor 3MF…</b>, which puts every colour on the right filament in a file Bambu Studio opens.</p>
@@ -2059,14 +2061,15 @@ volura</code></pre>
       <li><b>Printbed</b>: de printer en het <a href="#filament">filament</a>; <b>3D-printen &gt; Printer instellen…</b> opent deze pagina meteen.</li>
     </ul>
     <h3><span lang="en">Preferences</span><span lang="nl">Voorkeuren</span></h3>
-    <p lang="en">The few things Volura should do your way, in five pages.</p>
-    <p lang="nl">Het paar dingen die Volura op jouw manier moet doen, in vijf pagina's.</p>
+    <p lang="en">The few things Volura should do your way, in six pages.</p>
+    <p lang="nl">Het paar dingen die Volura op jouw manier moet doen, in zes pagina's.</p>
     <p class="where" lang="en">Where: <b>Window &gt; Preferences</b></p>
     <p class="where" lang="nl">Waar: <b>Venster &gt; Voorkeuren</b></p>
     <ul lang="en">
       <li><b>General</b>: the segments of a circle, the update check, the question to simplify a large import, the <a href="#language">language</a> and the <a href="#keys">keyboard scheme</a>.</li>
       <li><b>Display</b>: the <a href="#theme">theme</a> and the <a href="#line-width">line width</a>.</li>
       <li><b>Drawing</b>: the <a href="#overhangs">overhang limit</a> and the snapping of lengths.</li>
+      <li><b><a href="#printers">Printers</a></b>: OctoPrint, Klipper (Moonraker) and PrusaLink, so a slice goes from the preview straight to the printer.</li>
       <li><b>3D Mouse</b>: the <a href="#spacemouse">3D mouse</a> and its speed.</li>
       <li><b>Shortcuts</b>: search, add, remove and reset every key.</li>
     </ul>
@@ -2074,8 +2077,28 @@ volura</code></pre>
       <li><b>Algemeen</b>: de segmenten van een cirkel, de updatecontrole, de vraag om een grote import te vereenvoudigen, de <a href="#language">taal</a> en het <a href="#keys">toetsenschema</a>.</li>
       <li><b>Weergave</b>: het <a href="#theme">thema</a> en de <a href="#line-width">lijndikte</a>.</li>
       <li><b>Tekenen</b>: de <a href="#overhangs">overhanggrens</a> en het snappen van lengtes.</li>
+      <li><b><a href="#printers">Printers</a></b>: OctoPrint, Klipper (Moonraker) en PrusaLink, zodat een slice vanuit het voorbeeld meteen naar de printer gaat.</li>
       <li><b>3D-muis</b>: de <a href="#spacemouse">3D-muis</a> en zijn snelheid.</li>
       <li><b>Sneltoetsen</b>: elke toets zoeken, toevoegen, weghalen en terugzetten.</li>
+    </ul>
+    <h3 id="printers"><span lang="en">Printers on the network</span><span lang="nl">Printers op het netwerk</span></h3>
+    <p lang="en">OctoPrint, Klipper (Moonraker) and PrusaLink take their G-code over the network, so a slice can go straight from the print preview to the printer.</p>
+    <p lang="nl">OctoPrint, Klipper (Moonraker) en PrusaLink halen hun G-code binnen via het netwerk, zodat een slice rechtstreeks vanuit het printvoorbeeld naar de printer kan.</p>
+    <p class="where" lang="en">Where: <b>Window &gt; Preferences &gt; Printers</b></p>
+    <p class="where" lang="nl">Waar: <b>Venster &gt; Voorkeuren &gt; Printers</b></p>
+    <ul lang="en">
+      <li><b>Add</b> puts a printer on the list: a name, which kind it is, and the address you also type in a browser when you look at the printer, such as <code>192.168.1.20:5000</code> or <code>octoprint.local</code>; the http:// before it is added for you.</li>
+      <li>The <b>API key</b> is the pass the printer wants with every request. OctoPrint makes one under <b>Settings &gt; API</b>: under Application keys add a key, call it Volura and copy it here. PrusaLink shows the key of its API on the printer itself, under <b>Settings &gt; API</b>. Klipper (Moonraker) wants none on a home network unless you switched keys on; when it does, the key stands in the settings of Mainsail or Fluidd.</li>
+      <li><b>Test connection</b> asks the printer what it is: the answer beside the button names the printer and its version, or says what is wrong. A wrong key is said without saying the key, and nothing of it leaves your network.</li>
+      <li>A printer stays on the list once it has a name and an address; <b>Remove</b> takes it off again. The key belongs to your other preferences on this computer and goes to that printer and to nobody else.</li>
+      <li>In the print preview, <b>Send to printer…</b> sends exactly the G-code that preview showed, under a name of your own and, when you tick it, starts printing right away; the printer and that tick of last time come back next time.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Toevoegen</b> zet een printer op de lijst: een naam, wat voor soort het is en het adres dat je ook in je browser typt als je naar de printer kijkt, bijvoorbeeld <code>192.168.1.20:5000</code> of <code>octoprint.local</code>; de http:// ervoor krijg je erbij.</li>
+      <li>De <b>API-sleutel</b> is het paswoord dat de printer bij elk verzoek wil. OctoPrint maakt er een bij <b>Instellingen &gt; API</b>: voeg daar bij Application keys een sleutel toe, noem hem Volura en kopieer hem hierheen. PrusaLink laat de sleutel van zijn API op de printer zelf zien, bij <b>Instellingen &gt; API</b>. Klipper (Moonraker) wil thuis geen sleutel tenzij je ze hebt aangezet; wil hij er wel een, dan staat die in de instellingen van Mainsail of Fluidd.</li>
+      <li><b>Verbinding testen</b> vraagt de printer wat hij is: het antwoord naast de knop noemt de printer en zijn versie, of zegt wat er mis is. Een verkeerde sleutel wordt gezegd zonder de sleutel zelf, en er verlaat niets van je netwerk.</li>
+      <li>Een printer blijft op de lijst zodra hij een naam en een adres heeft; <b>Verwijderen</b> haalt hem eraf. De sleutel hoort bij je andere voorkeuren op deze computer en gaat naar die printer en naar niemand anders.</li>
+      <li>In het printvoorbeeld stuurt <b>Naar printer sturen…</b> precies de G-code die het voorbeeld liet zien, onder een naam die je zelf kiest, en als je het aanvinkt begint hij meteen te printen; de printer en dat vinkje van de vorige keer komen de volgende keer terug.</li>
     </ul>
     <h3><span lang="en">View options</span><span lang="nl">Beeldopties</span></h3>
     <p lang="en">How the model is drawn, and what you want to see while you work.</p>
