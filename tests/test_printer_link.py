@@ -849,6 +849,18 @@ def test_the_file_on_the_printer_is_called_after_the_model(win, sliced):
 # --------------------------------------------------------------- the status window
 
 
+def opened(win):
+    """The status window, asking only when the test says so.
+
+    An open window asks every printer again each `POLL_SECONDS` by itself. A test that waits
+    a while - a printer on a closed port takes seconds to fail on Windows, and longer when the
+    machine is busy - would otherwise get an asking of the timer in between its own, and count
+    one asking too many."""
+    panel = win.printer_status()
+    panel.timer.stop()
+    return panel
+
+
 def asked(panel):
     """Every asking the window has on its way, come to an end."""
     for job in [row.job for row in panel.rows]:
@@ -865,9 +877,10 @@ def test_the_window_shows_what_two_printers_are_doing(printer, win):
     klipper.answer(MOON_QUERY, moon_print(state="paused"))
     win.settings.printers = [octo.connection("Octo"), klipper.connection("Klipper")]
     win.settings.save()
-    panel = win.printer_status()
+    panel = opened(win)
     try:
         assert panel is win.printer_status(), "the second call makes a second window"
+        panel.timer.stop()                # shown again, and its timer with it
         assert [row.conn.name for row in panel.rows] == ["Octo", "Klipper"]
         assert "127.0.0.1" in panel.rows[0].name.toolTip()
         panel.poll()
@@ -891,7 +904,7 @@ def test_a_printer_that_answers_nothing_says_so_under_its_own_row(printer, win):
     gone = pl.Connection("Weg", "octoprint", f"127.0.0.1:{free_port()}")
     win.settings.printers = [gone, octo.connection("Octo")]
     win.settings.save()
-    panel = win.printer_status()
+    panel = opened(win)
     try:
         panel.poll()
         asked(panel)
