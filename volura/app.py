@@ -33,7 +33,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar,
                nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
                printer_link,
-               sheet3d, sheettools, svg,
+               sheet3d, sheettools, slice_presets, svg,
                spacemouse, spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers, workspaces)
 from .brep import Entities
@@ -988,10 +988,11 @@ class Settings:
             self.bracket_screw = "M4"
         self.bracket_countersink = self._bool("bracket_countersink", True)
         self.bracket_gussets = self._bool("bracket_gussets", True)
-        # File > Slice: the printer, nozzle, material and quality last sliced with
+        # File > Slice: the printer, nozzle, material and quality last sliced with, and the
+        # name of the preset that was chosen last
         for key in ("slice_printer", "slice_variant", "slice_material", "slice_quality",
                     "slice_adhesion", "slice_infill_pattern", "slice_changes",
-                    "slice_change_command"):
+                    "slice_change_command", "slice_preset"):
             setattr(self, key, str(self.q.value(key, "") or ""))
         if not self.slice_printer:
             self.slice_printer = "creality_ender3"
@@ -1019,6 +1020,8 @@ class Settings:
             self.slice_walls = max(0, min(10, int(float(self.q.value("slice_walls", 0)))))
         except (TypeError, ValueError):
             self.slice_walls = 0
+        # the presets of the user: one line of JSON each (volura.slice_presets)
+        self.slice_presets = slice_presets.from_lines(self.q.value("slice_presets", []) or [])
         # File > Slice for Resin: the printer and what was chosen for the last resin print
         self.resin_printer = str(self.q.value("resin_printer", "") or "")
         self.resin_level = str(self.q.value("resin_level", "Medium") or "Medium")
@@ -1620,8 +1623,9 @@ class Settings:
                     "slice_adhesion", "slice_infill", "slice_support", "slice_infill_pattern",
                     "slice_paint", "slice_changes", "slice_change_command",
                     "slice_adaptive", "slice_ironing", "slice_fuzzy", "slice_fuzz",
-                    "slice_walls"):
+                    "slice_walls", "slice_preset"):
             self.q.setValue(key, getattr(self, key))
+        self.q.setValue("slice_presets", slice_presets.to_lines(self.slice_presets))
         for key in ("resin_printer", "resin_level", "resin_layer", "resin_exposure",
                     "resin_bottom_exposure", "resin_bottom_layers", "resin_density",
                     "resin_elevation", "resin_supports", "resin_pad", "resin_hollow",

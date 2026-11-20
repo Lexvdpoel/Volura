@@ -4,7 +4,8 @@ The printers come from the Cura profile library that Volura brings along (see
 `volura.cura_profiles`): first the maker, then the printer, then what that printer offers. A few
 settings that you change on almost every print sit underneath - infill and its pattern, support and
 how the print sticks to the bed - and an Extras group with adaptive layers, ironing, a fuzzy skin
-and the number of walls; everything else comes from the profile. The choice is remembered in Settings.
+and the number of walls; everything else comes from the profile. The choice is remembered in Settings,
+and a choice you come back to is saved under a name above the Maker row (see `volura.slice_presets`).
 
 Below that sits what the print does with the colors of the model (see `volura.paint_split` and
 `volura.fileio`): which filament prints which color, how deep the skins of painted faces go,
@@ -18,11 +19,11 @@ import os
 
 from PySide6.QtCore import QSize, QStandardPaths, Qt
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-                               QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
-                               QListWidget, QListWidgetItem, QPushButton, QSpinBox, QTableWidget,
-                               QTableWidgetItem, QWidget)
+                               QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog,
+                               QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
+                               QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QWidget)
 
-from . import __version__, cura_profiles, slicer
+from . import __version__, cura_profiles, slice_presets, slicer
 from .i18n import tr, tr_noop
 from .panels import swatch
 
@@ -76,6 +77,26 @@ def parse_heights(text) -> list:
 def heights_text(heights) -> str:
     """Heights in millimetres as the one settings line `parse_heights` reads back."""
     return ",".join(f"{h:g}" for h in sorted({round(float(h), 3) for h in heights}))
+
+
+def _number(value, current, lo, hi, whole=True):
+    """The value a choice gives for a number field: `current` when it is not a number, and
+    never outside the range of the field."""
+    try:
+        value = int(float(value)) if whole else float(value)
+    except (TypeError, ValueError):
+        return current
+    return max(lo, min(hi, value))
+
+
+def _index_of(choices, want, current):
+    """The row of a combo box of (label, value) pairs that `want` names, or `current` when the
+    choice does not name one of them - an older preset may not know the setting yet."""
+    if want is None:
+        return current
+    kinds = [value for _label, value in choices]
+    want = str(want)
+    return kinds.index(want) if want in kinds else current
 
 
 class Multicolor:
@@ -165,10 +186,16 @@ class SliceDialog(QDialog):
 
     `colors` are the colors the model prints with, as `volura.fileio.model_colors` gives them;
     the dialog turns them into the filament plan of `multicolor()`.
+
+    The last choice is restored when the dialog opens and a choice you come back to is saved
+    under a name above the Maker row (see `volura.slice_presets`); both go over the dialog
+    through `apply_choice()`.
     """
 
     #: the filament changer belongs to the printer, so it is remembered per printer
     CHANGER = "slice_changer_"
+    #: in Settings: the presets of the user, and the name of the one chosen last
+    PRESETS, PRESET = "slice_presets", "slice_preset"
 
     def __init__(self, win, lib: cura_profiles.Library, colors=()):
         super().__init__(win)
@@ -180,6 +207,20 @@ class SliceDialog(QDialog):
         self.settings = s
         self.setWindowTitle(tr("Slice"))
         lay = QFormLayout(self)
+        # a whole choice, saved under a name to come back to (see `volura.slice_presets`)
+        self.preset_row = QWidget()
+        line = QHBoxLayout(self.preset_row)
+        line.setContentsMargins(0, 0, 0, 0)
+        self.preset = QComboBox()
+        self.preset.setToolTip(tr("A printer and everything to print with, kept under a name"))
+        self.b_preset_save = QPushButton(tr("Save…"))
+        self.b_preset_save.setToolTip(tr("Keep this choice under a name of your own"))
+        self.b_preset_delete = QPushButton(tr("Delete"))
+        self.b_preset_delete.setToolTip(tr("Forget the preset that is chosen now"))
+        self.b_preset_delete.setEnabled(False)
+        line.addWidget(self.preset, 1)
+        line.addWidget(self.b_preset_save)
+        line.addWidget(self.b_preset_delete)
         self.maker = QComboBox()
         self.printer_box = QComboBox()
         self.nozzle = QComboBox()
@@ -189,27 +230,19 @@ class SliceDialog(QDialog):
         self.infill = QSpinBox()
         self.infill.setRange(0, 100)
         self.infill.setSuffix(" %")
-        self.infill.setValue(int(s.slice_infill))
         self.infill.setToolTip(tr("How full the inside of the print is"))
         self.pattern = QComboBox()
         for label, _kind in INFILL_PATTERNS:
             self.pattern.addItem(tr(label))
-        patterns = [k for _label, k in INFILL_PATTERNS]
-        self.pattern.setCurrentIndex(patterns.index(s.slice_infill_pattern)
-                                     if s.slice_infill_pattern in patterns else 0)
         self.pattern.setToolTip(tr("The shape the inside of the print is filled with: gyroid and "
                                    "cubic are strong in every direction, lines and zig zag print "
                                    "fastest, lightning only holds up the top"))
         self.support = QComboBox()
         for label, _on, _kind in SUPPORTS:
             self.support.addItem(tr(label))
-        self.support.setCurrentIndex(max(0, min(len(SUPPORTS) - 1, int(s.slice_support))))
         self.adhesion = QComboBox()
         for label, _kind in ADHESION:
             self.adhesion.addItem(tr(label))
-        kinds = [k for _label, k in ADHESION]
-        self.adhesion.setCurrentIndex(kinds.index(s.slice_adhesion)
-                                      if s.slice_adhesion in kinds else 0)
         # the extras on top of the profile, with Cura's own setting names (checked against the
         # fdmprinter definitions of the Cura the profiles come from); off or 0 leaves it to the profile
         self.extras = QGroupBox(tr("Extras"))
@@ -228,18 +261,12 @@ class SliceDialog(QDialog):
         self.fuzz.setDecimals(2)
         self.fuzz.setSingleStep(0.05)
         self.fuzz.setSuffix(" mm")
-        self.fuzz.setValue(float(getattr(s, "slice_fuzz", FUZZ_DEFAULT)))
         self.fuzz.setToolTip(tr("How thick the bumps of the textured outer wall are"))
         self.walls = QSpinBox()
         self.walls.setRange(WALLS_MIN, WALLS_MAX)
         self.walls.setSpecialValueText(tr("Profile"))
         self.walls.setToolTip(tr("How many nozzle lines thick the walls of the print are; "
                                  "Profile leaves it to the profile"))
-        self.adaptive.setChecked(bool(getattr(s, "slice_adaptive", False)))
-        self.ironing.setChecked(bool(getattr(s, "slice_ironing", False)))
-        self.fuzzy.setChecked(bool(getattr(s, "slice_fuzzy", False)))
-        self.walls.setValue(max(WALLS_MIN, min(WALLS_MAX, int(getattr(s, "slice_walls",
-                                                                      WALLS_MIN)))))
         extras.addRow("", self.adaptive)
         extras.addRow("", self.ironing)
         extras.addRow("", self.fuzzy)
@@ -309,6 +336,7 @@ class SliceDialog(QDialog):
         self.change_cmd.setToolTip(tr("The G-code that asks the printer to change its filament"))
         self.info = QLabel()
         self.info.setWordWrap(True)
+        lay.addRow(tr("Preset"), self.preset_row)
         lay.addRow(tr("Maker"), self.maker)
         lay.addRow(tr("Printer"), self.printer_box)
         lay.addRow(tr("Nozzle"), self.nozzle)
@@ -339,13 +367,13 @@ class SliceDialog(QDialog):
         lay.addRow(bb)
         self._form = lay
         self.printer = None
+        self._remembered = {}         # what the cascade picks back up of the choice applied
+        self._preset = None           # the preset that stands in the combo box, None on "—"
+        self.preset_note = ""         # what that preset has to say about itself
+        self._applying = False        # the dialog is setting its own fields
 
         self.machines = lib.machines
-        makers = sorted({m[2] for m in self.machines}, key=str.lower)
-        self.maker.addItems(makers)
-        wanted = next((m for m in self.machines if m[0] == s.slice_printer), None)
-        if wanted is not None:
-            self.maker.setCurrentText(wanted[2])
+        self.maker.addItems(sorted({m[2] for m in self.machines}, key=str.lower))
         self.maker.currentIndexChanged.connect(self._maker_changed)
         self.printer_box.currentIndexChanged.connect(self._printer_changed)
         self.nozzle.currentIndexChanged.connect(self._nozzle_changed)
@@ -359,16 +387,204 @@ class SliceDialog(QDialog):
         self.b_add.clicked.connect(self._add_change)
         self.b_remove.clicked.connect(self._remove_change)
         self.b_3mf.clicked.connect(self._to_3mf)
-        self._remembered = {"variant": s.slice_variant, "material": s.slice_material,
-                            "quality": s.slice_quality}
+        # a field that says something else than the chosen preset puts the combo box back on "—"
+        for box in (self.maker, self.printer_box, self.nozzle, self.brand, self.material,
+                    self.quality, self.pattern, self.support, self.adhesion):
+            box.currentIndexChanged.connect(self._field_changed)
+        for box in (self.infill, self.fuzz, self.walls):
+            box.valueChanged.connect(self._field_changed)
+        for box in (self.adaptive, self.ironing, self.fuzzy):
+            box.toggled.connect(self._field_changed)
+        self.preset.currentIndexChanged.connect(self._preset_changed)
+        self.b_preset_save.clicked.connect(self._save_preset)
+        self.b_preset_delete.clicked.connect(self._delete_preset)
         self.change_cmd.setText(str(getattr(s, "slice_change_command", "")
                                     or slicer.FILAMENT_CHANGE))
         self._set_changes(parse_heights(getattr(s, "slice_changes", "")))
-        self._maker_changed()
+        self.apply_choice(self._last_choice())
+        self._fill_presets(self._matching_preset())
+
+    # ---- the whole choice: the one of the last slice, and presets of the user
+    def _last_choice(self) -> dict:
+        """What the last slice used, as it stands in Settings; `choice()` gives it back."""
+        s = self.settings
+        return {"printer": str(getattr(s, "slice_printer", "") or ""),
+                "variant": str(getattr(s, "slice_variant", "") or ""),
+                "material": str(getattr(s, "slice_material", "") or ""),
+                "quality": str(getattr(s, "slice_quality", "") or ""),
+                # the defaults are those of Settings, for a window that has nothing to remember
+                "infill": getattr(s, "slice_infill", 20),
+                "support": getattr(s, "slice_support", 0),
+                "adhesion": str(getattr(s, "slice_adhesion", "") or ""),
+                "infill_pattern": str(getattr(s, "slice_infill_pattern", "") or ""),
+                "adaptive": getattr(s, "slice_adaptive", False),
+                "ironing": getattr(s, "slice_ironing", False),
+                "fuzzy": getattr(s, "slice_fuzzy", False),
+                "fuzz": getattr(s, "slice_fuzz", FUZZ_DEFAULT),
+                "walls": getattr(s, "slice_walls", WALLS_MIN)}
+
+    def apply_choice(self, choice: dict):
+        """Put a choice over the dialog: the one of the last slice when the dialog opens, a
+        preset when one is chosen; one code path for both.
+
+        A key that `choice` does not hold leaves its field as it is, so a preset of an older
+        version that knows nothing about the number of walls keeps the number that stands
+        there now. What the print does with the colours of the model is not part of a choice:
+        those belong to the model and stay as the dialog has them."""
+        self._applying = True
+        # what the cascade of the printer picks back up once it is built again
+        self._remembered = {"variant": self.nozzle.currentText(),
+                            "material": str(self.material.currentData() or ""),
+                            "quality": str(self.quality.currentData() or "")}
+        for key in ("variant", "material", "quality"):
+            if key in choice:
+                self._remembered[key] = str(choice[key] or "")
+        self.infill.setValue(_number(choice.get("infill"), self.infill.value(), 0, 100))
+        self.support.setCurrentIndex(_number(choice.get("support"), self.support.currentIndex(),
+                                             0, len(SUPPORTS) - 1))
+        self.adhesion.setCurrentIndex(_index_of(ADHESION, choice.get("adhesion"),
+                                                self.adhesion.currentIndex()))
+        self.pattern.setCurrentIndex(_index_of(INFILL_PATTERNS, choice.get("infill_pattern"),
+                                               self.pattern.currentIndex()))
+        if "adaptive" in choice:
+            self.adaptive.setChecked(bool(choice["adaptive"]))
+        if "ironing" in choice:
+            self.ironing.setChecked(bool(choice["ironing"]))
+        if "fuzzy" in choice:
+            self.fuzzy.setChecked(bool(choice["fuzzy"]))
+        self.fuzz.setValue(_number(choice.get("fuzz"), self.fuzz.value(), FUZZ_MIN, FUZZ_MAX,
+                                   whole=False))
+        self.walls.setValue(_number(choice.get("walls"), self.walls.value(), WALLS_MIN,
+                                    WALLS_MAX))
+        wanted = next((m for m in self.machines if m[0] == str(choice.get("printer") or "")),
+                      None)
+        if wanted is not None:
+            self.maker.blockSignals(True)
+            self.maker.setCurrentText(wanted[2])
+            self.maker.blockSignals(False)
+        self._maker_changed()             # the cascade: printer, nozzle, material, quality
         if wanted is not None:
             i = self.printer_box.findData(wanted[0])
             if i >= 0:
                 self.printer_box.setCurrentIndex(i)
+        self._applying = False
+
+    def _presets(self) -> list:
+        """The presets of the user, as they stand in Settings (volura.slice_presets)."""
+        return slice_presets.from_lines(self.settings.q.value(self.PRESETS, []) or [])
+
+    def _store_presets(self, presets):
+        """Keep the presets of the user, also for what the window saves before it slices."""
+        self.settings.slice_presets = presets
+        self.settings.q.setValue(self.PRESETS, slice_presets.to_lines(presets))
+        self.settings.q.sync()
+
+    def preset_name(self):
+        """The name of the preset that stands in the combo box; None on "—" (no preset)."""
+        i = self.preset.currentIndex()
+        return self.preset.itemText(i) if i > 0 else None
+
+    def _fill_presets(self, want=""):
+        """The combo box of presets again: "—" and every name that is kept, `want` chosen when
+        it is one of them; what the dialog holds is left alone."""
+        self._applying = True
+        self.preset.clear()
+        self.preset.addItem(tr("—"))                          # nothing chosen
+        for preset in self._presets():
+            self.preset.addItem(str(preset["name"]))
+        self.preset.setCurrentIndex(max(0, self.preset.findText(want, Qt.MatchExactly))
+                                    if want else 0)
+        self._applying = False
+        name = self.preset_name()
+        self._preset = slice_presets.find(self._presets(), name) if name else None
+        self.b_preset_delete.setEnabled(self._preset is not None)
+
+    def _show_preset(self, name):
+        """Put the preset `name` (None for "—") in the combo box and remember it as the choice
+        of the last time; the fields of the dialog stay as they are."""
+        self._fill_presets(name or "")
+        self._remember_preset(name if self._preset is not None else "")
+
+    def _remember_preset(self, name):
+        """Which preset was chosen last, so that the next dialog can preselect it again."""
+        self.settings.slice_preset = name
+        self.settings.q.setValue(self.PRESET, name)
+        self.settings.q.sync()
+
+    def _matching_preset(self) -> str:
+        """The name of the preset chosen last, but only when the dialog now holds what that
+        preset holds; otherwise the combo box stays on "—"."""
+        name = str(getattr(self.settings, "slice_preset", "") or "")
+        preset = slice_presets.find(self._presets(), name) if name else None
+        if preset is None or not slice_presets.matches(preset, self.choice()):
+            return ""
+        return name
+
+    def _printer_gone(self, preset) -> bool:
+        """Whether a preset asks for a printer that is no longer in the profile library."""
+        did = str(preset.get("printer") or "")
+        return bool(did) and not any(m[0] == did for m in self.machines)
+
+    def _preset_changed(self, *_):
+        """A preset is chosen from the combo box: everything it holds goes over the dialog."""
+        if self._applying:
+            return
+        name = self.preset_name()
+        preset = slice_presets.find(self._presets(), name) if name else None
+        self.preset_note = ""
+        self._remember_preset(name or "")
+        self.b_preset_delete.setEnabled(preset is not None)
+        if preset is None:
+            self._show_info()
+            return
+        if self._printer_gone(preset):
+            self._preset = None         # the fields stay as they are: the printer is gone
+            self.preset_note = tr("This preset is for a printer that is no longer in the "
+                                  "list, so nothing changed.")
+            self._show_info()
+            return
+        self._preset = preset
+        self.apply_choice(preset)
+
+    def _field_changed(self, *_):
+        """A field moved, and with it possibly away from the chosen preset. The preset itself
+        never changes, so the combo box goes back to "—" - only when the fields really say
+        something else than the preset does."""
+        if self._applying or self._preset is None:
+            return
+        if not slice_presets.matches(self._preset, self.choice()):
+            self._show_preset(None)
+
+    def _save_preset(self):
+        """Keep this choice under a name of your own; a name that is taken is asked about."""
+        text, ok = QInputDialog.getText(self, tr("Save Preset"), tr("Name of this preset"))
+        name = str(text or "").strip()
+        if not ok or not name:
+            return
+        kept = self._presets()
+        if slice_presets.find(kept, name) is not None:
+            answer = QMessageBox.question(self, tr("Save Preset"),
+                                          tr("There is already a preset called {name}. "
+                                             "Replace it?").format(name=name))
+            if answer != QMessageBox.Yes:
+                return
+        got = self.choice()
+        preset = {"name": name}
+        preset.update({key: got[key] for key in slice_presets.PRESET_KEYS})
+        self._store_presets([item for item in kept if item["name"] != name] + [preset])
+        self._show_preset(name)
+
+    def _delete_preset(self):
+        """Forget the chosen preset, asking first; what the dialog holds stays on the screen."""
+        name = self.preset_name()
+        if name is None:
+            return
+        answer = QMessageBox.question(self, tr("Delete Preset"),
+                                      tr("Remove the preset {name}?").format(name=name))
+        if answer != QMessageBox.Yes:
+            return
+        self._store_presets([item for item in self._presets() if item["name"] != name])
+        self._show_preset(None)
 
     # ---- the cascade: maker -> printer -> nozzle -> material -> quality
     def _maker_changed(self, *_):
@@ -467,20 +683,21 @@ class SliceDialog(QDialog):
         self._show_info()
 
     def _show_info(self, *_):
+        """What the printer of the choice can do, with the note of a preset on top of it."""
         if self.printer is None:
-            self.info.setText("")
+            self.info.setText(self.preset_note)
             return
         st = self.stacks()
         g = st.glob
         height = float(g.get("machine_height") or 0)
         if height > 0:
             self.change_at.setMaximum(height)
-        self.info.setText(tr("Build volume {w:g} × {d:g} × {h:g} mm, {f:g} mm filament")
-                          .format(w=float(g.get("machine_width") or 0),
-                                  d=float(g.get("machine_depth") or 0),
-                                  h=float(g.get("machine_height") or 0),
-                                  f=float(st.extruders[0].get("material_diameter") or 0)
-                                  if st.extruders else 0))
+        text = tr("Build volume {w:g} × {d:g} × {h:g} mm, {f:g} mm filament").format(
+            w=float(g.get("machine_width") or 0),
+            d=float(g.get("machine_depth") or 0),
+            h=float(g.get("machine_height") or 0),
+            f=float(st.extruders[0].get("material_diameter") or 0) if st.extruders else 0)
+        self.info.setText(f"{self.preset_note}\n{text}" if self.preset_note else text)
 
     # ---- the colors of the model
     def extruder_count(self) -> int:

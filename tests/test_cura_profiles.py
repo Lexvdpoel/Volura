@@ -449,6 +449,305 @@ def test_the_extras_of_the_slice_dialog_follow_the_profile_and_are_remembered(li
         win.close()
 
 
+# ------------------------------------------------------------------ presets of the user
+
+
+@pytest.fixture
+def slice_window():
+    """A window with the settings of the last slice, and a store of presets that starts empty.
+
+    The presets live in the settings of this run, like the last choice does, so the store is
+    empty here and left empty again: the other tests of this run also open the slice dialog."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication, QWidget
+    QApplication.instance() or QApplication(sys.argv[:1])
+    from volura.settings import qsettings
+
+    class Prefs:
+        q = qsettings()
+        slice_printer, slice_variant = "testprinter", ""
+        slice_material, slice_quality = "", ""
+        slice_infill, slice_infill_pattern = 20, ""
+        slice_support, slice_adhesion = 0, ""
+        slice_paint, slice_changes, slice_change_command = 1.0, "", ""
+
+    class Window(QWidget):
+        settings = Prefs()
+
+    clear_presets()
+    return Window()
+
+
+def clear_presets():
+    """Take the presets and the name chosen last out of the settings again."""
+    from volura.settings import qsettings
+    q = qsettings()
+    for key in ("slice_presets", "slice_preset"):
+        q.remove(key)
+    q.sync()
+
+
+def stored_presets() -> list:
+    """The presets as they stand in the settings (volura.slice_presets)."""
+    from volura.settings import qsettings
+    from volura.slice_presets import from_lines
+    return from_lines(qsettings().value("slice_presets", []) or [])
+
+
+def stored_preset_name() -> str:
+    """The name of the preset that was chosen last, as it stands in the settings."""
+    from volura.settings import qsettings
+    return str(qsettings().value("slice_preset", "") or "")
+
+
+class Ask:
+    """Stands in for QInputDialog: answers the question for a name with `name`."""
+
+    def __init__(self, name=""):
+        self.name = name
+        self.asked = []
+
+    def getText(self, *args, **kwargs):
+        self.asked.append(args)
+        return self.name, bool(self.name)
+
+
+class Answer:
+    """Stands in for QMessageBox, so a test can answer a question without a dialog."""
+
+    Yes, No = 1, 0
+
+    def __init__(self, answer=1):
+        self.answer = answer
+        self.asked = []
+
+    def question(self, *args, **kwargs):
+        self.asked.append(args)
+        return self.answer
+
+
+def _every_field(dlg):
+    """Move every field a preset holds, so there is something to bring back."""
+    import volura.slice_dialog as slice_dialog
+    dlg.quality.setCurrentIndex(dlg.quality.findData("draft"))
+    dlg.infill.setValue(45)
+    dlg.support.setCurrentIndex(2)
+    dlg.adhesion.setCurrentIndex([k for _label, k in slice_dialog.ADHESION].index("raft"))
+    dlg.pattern.setCurrentIndex([k for _label, k in slice_dialog.INFILL_PATTERNS].index(
+        "honeycomb"))
+    dlg.adaptive.setChecked(True)
+    dlg.ironing.setChecked(True)
+    dlg.fuzzy.setChecked(True)
+    dlg.fuzz.setValue(0.5)
+    dlg.walls.setValue(2)
+
+
+def test_a_preset_keeps_a_choice_and_brings_it_back(slice_window, library, monkeypatch):
+    """File > Slice… > Preset: the choice under a name, every field back when the preset is
+    chosen again (the Extras included), the colours of the model left alone, and the name back
+    in the box the next time when the dialog still holds what the preset holds."""
+    import volura.slice_dialog as slice_dialog
+    from volura.slice_presets import matches
+    win = slice_window
+    dlg = slice_dialog.SliceDialog(win, library)
+    try:
+        assert dlg.preset_name() is None and not dlg.b_preset_delete.isEnabled()
+        _every_field(dlg)
+        assert dlg.preset_name() is None, "nothing was chosen yet"
+        monkeypatch.setattr(slice_dialog, "QInputDialog", Ask("PETG functional"))
+        dlg._save_preset()
+        assert dlg.preset_name() == "PETG functional" and dlg.b_preset_delete.isEnabled()
+        assert stored_preset_name() == "PETG functional"
+        kept = stored_presets()
+        assert len(kept) == 1 and kept[0]["infill"] == 45 and kept[0]["walls"] == 2
+        assert kept[0]["printer"] == "testprinter" and kept[0]["quality"] == "draft"
+        assert "paint" not in kept[0] and "changes" not in kept[0], "those are the model's"
+        # a field moves on its own: the combo box goes back to "—", the preset stays as it is
+        dlg.infill.setValue(20)
+        assert dlg.preset_name() is None and not dlg.b_preset_delete.isEnabled()
+        assert stored_presets()[0]["infill"] == 45, "the preset keeps its own number"
+        assert stored_preset_name() == ""
+        dlg.paint_depth.setValue(3.0)
+        dlg._set_changes([9.0])
+        # and the preset brings every field of its own back
+        dlg.preset.setCurrentText("PETG functional")
+        assert dlg.preset_name() == "PETG functional", "the colour depth is no preset field"
+        assert dlg.infill.value() == 45 and dlg.support.currentIndex() == 2
+        assert dlg.adhesion.currentText() == "Raft" and dlg.pattern.currentText() == "Honeycomb"
+        assert dlg.quality.currentData() == "draft"
+        assert dlg.adaptive.isChecked() and dlg.ironing.isChecked() and dlg.fuzzy.isChecked()
+        assert dlg.fuzz.value() == pytest.approx(0.5) and dlg.fuzz.isEnabled()
+        assert dlg.walls.value() == 2 and dlg.user_values()["wall_line_count"] == 2
+        assert dlg.paint_depth.value() == pytest.approx(3.0), "the depth belongs to the model"
+        assert [dlg.changes.item(i).text() for i in range(dlg.changes.count())] == ["9 mm"]
+        assert matches(kept[0], dlg.choice()), "the dialog holds what the preset holds"
+        # what the window saves before it slices, and the dialog of the next time
+        prefs = type(win.settings)
+        for key, value in dlg.choice().items():
+            setattr(prefs, "slice_" + key, value)
+        again = slice_dialog.SliceDialog(win, library)
+        try:
+            assert again.preset_name() == "PETG functional", "the dialog holds what it held"
+            assert again.infill.value() == 45 and again.walls.value() == 2
+            again.walls.setValue(4)
+            assert again.preset_name() is None and stored_preset_name() == ""
+        finally:
+            again.close()
+    finally:
+        dlg.close()
+        win.close()
+        clear_presets()
+
+
+def test_saving_over_a_preset_asks(slice_window, library, monkeypatch):
+    """A name that is taken is asked about: "no" keeps the old preset, "yes" writes the new
+    choice over it, and nothing at all is kept without a name."""
+    import volura.slice_dialog as slice_dialog
+    win = slice_window
+    monkeypatch.setattr(slice_dialog, "QInputDialog", Ask("PLA draft"))
+    box = Answer(Answer.No)
+    monkeypatch.setattr(slice_dialog, "QMessageBox", box)
+    dlg = slice_dialog.SliceDialog(win, library)
+    try:
+        dlg._save_preset()
+        assert not box.asked, "a name that is free is no question"
+        assert [p["name"] for p in stored_presets()] == ["PLA draft"]
+        assert dlg.preset_name() == "PLA draft"
+        dlg.infill.setValue(60)
+        assert dlg.preset_name() is None
+        dlg._save_preset()
+        assert box.asked, "a name that is taken should ask"
+        assert len(stored_presets()) == 1 and stored_presets()[0]["infill"] == 20, \
+            "saying no keeps the preset as it was"
+        box.asked.clear()
+        box.answer = Answer.Yes
+        dlg._save_preset()
+        assert box.asked, "the name is still taken, so it asks again"
+        assert len(stored_presets()) == 1 and stored_presets()[0]["infill"] == 60
+        assert dlg.preset_name() == "PLA draft" and stored_preset_name() == "PLA draft"
+        monkeypatch.setattr(slice_dialog, "QInputDialog", Ask(""))
+        dlg.infill.setValue(30)
+        dlg._save_preset()
+        assert len(stored_presets()) == 1 and stored_presets()[0]["infill"] == 60, \
+            "no name, nothing saved"
+    finally:
+        dlg.close()
+        win.close()
+        clear_presets()
+
+
+def test_forgetting_a_preset_asks(slice_window, library, monkeypatch):
+    """Delete asks first and only works on a chosen preset; what is on the screen stays."""
+    import volura.slice_dialog as slice_dialog
+    win = slice_window
+    monkeypatch.setattr(slice_dialog, "QInputDialog", Ask("PLA draft"))
+    box = Answer(Answer.No)
+    monkeypatch.setattr(slice_dialog, "QMessageBox", box)
+    dlg = slice_dialog.SliceDialog(win, library)
+    try:
+        dlg._save_preset()
+        dlg.infill.setValue(60)
+        dlg.preset.setCurrentText("PLA draft")
+        assert dlg.infill.value() == 20, "the preset is back as it was"
+        dlg._delete_preset()
+        assert box.asked and [p["name"] for p in stored_presets()] == ["PLA draft"], \
+            "saying no keeps the preset"
+        assert dlg.preset_name() == "PLA draft" and dlg.b_preset_delete.isEnabled()
+        assert dlg.infill.value() == 20, "forgetting changes nothing of the choice"
+        box.answer = Answer.Yes
+        box.asked.clear()
+        dlg._delete_preset()
+        assert stored_presets() == [] and stored_preset_name() == ""
+        assert dlg.preset_name() is None and not dlg.b_preset_delete.isEnabled()
+        assert dlg.infill.value() == 20, "the fields keep what the preset gave them"
+        box.asked.clear()
+        dlg._delete_preset()
+        assert not box.asked, 'on "—" there is nothing to ask about'
+    finally:
+        dlg.close()
+        win.close()
+        clear_presets()
+
+
+def test_a_preset_of_a_printer_that_is_no_longer_in_the_library(slice_window, library):
+    """The preset of a printer that is gone loads and says so; the fields stay as they are."""
+    import volura.slice_dialog as slice_dialog
+    from volura.slice_presets import to_lines
+    from volura.settings import qsettings
+    win = slice_window
+    ghost = {"name": "Old machine", "printer": "printer_of_a_past", "infill": 80, "walls": 6}
+    q = qsettings()
+    q.setValue("slice_presets", to_lines([ghost]))
+    q.sync()
+    dlg = slice_dialog.SliceDialog(win, library)
+    try:
+        names = [dlg.preset.itemText(i) for i in range(dlg.preset.count())]
+        assert names == ["—", "Old machine"]
+        assert dlg.preset_name() is None and not dlg.b_preset_delete.isEnabled()
+        dlg.preset.setCurrentText("Old machine")
+        assert dlg.infill.value() == 20 and dlg.walls.value() == 0, "nothing was applied"
+        assert "no longer in the list" in dlg.info.text()
+        assert "Build volume" in dlg.info.text(), "the note sits above what the printer can do"
+        assert dlg.b_preset_delete.isEnabled(), "it can still be forgotten"
+        assert stored_preset_name() == "Old machine"
+        dlg.preset.setCurrentIndex(0)
+        assert "no longer in the list" not in dlg.info.text(), "the note goes with the preset"
+        assert dlg.infill.value() == 20 and dlg.preset_name() is None
+    finally:
+        dlg.close()
+        win.close()
+        clear_presets()
+
+
+def test_apply_choice_leaves_what_a_preset_does_not_hold(slice_window, library):
+    """One code path for the last choice and for a preset, and a key that is not in it - or is
+    not a value the field understands - leaves the field alone."""
+    import volura.slice_dialog as slice_dialog
+    win = slice_window
+    dlg = slice_dialog.SliceDialog(win, library)
+    try:
+        _every_field(dlg)
+        dlg.apply_choice({"printer": "testprinter", "infill": "40", "support": None})
+        assert dlg.infill.value() == 40, "a number that stands in text is still a number"
+        assert dlg.support.currentIndex() == 2, "a field without a value in it is left alone"
+        assert dlg.walls.value() == 2 and dlg.fuzz.value() == pytest.approx(0.5)
+        assert dlg.adhesion.currentText() == "Raft" and dlg.ironing.isChecked()
+        dlg.apply_choice({"printer": "dual", "infill": 12})
+        assert dlg.printer_box.currentData() == "dual", "another printer of the same maker"
+        assert dlg.walls.value() == 2 and dlg.pattern.currentText() == "Honeycomb"
+        dlg.apply_choice({"adhesion": "glue", "infill_pattern": "nonsense", "walls": "many",
+                          "fuzz": None, "printer": "testprinter"})
+        assert dlg.adhesion.currentText() == "Raft" and dlg.pattern.currentText() == "Honeycomb"
+        assert dlg.walls.value() == 2 and dlg.fuzz.value() == pytest.approx(0.5)
+    finally:
+        dlg.close()
+        win.close()
+        clear_presets()
+
+
+def test_the_presets_survive_the_settings_of_the_window(slice_window, library, monkeypatch):
+    """The presets and the name chosen last are kept like every other preference: a new
+    Settings reads them, and what the window saves does not lose them again."""
+    import volura.slice_dialog as slice_dialog
+    from volura.app import Settings
+    win = slice_window
+    monkeypatch.setattr(slice_dialog, "QInputDialog", Ask("PLA draft"))
+    dlg = slice_dialog.SliceDialog(win, library)
+    try:
+        dlg.walls.setValue(3)
+        dlg._save_preset()
+        kept = Settings()
+        assert [p["name"] for p in kept.slice_presets] == ["PLA draft"]
+        assert kept.slice_presets[0]["walls"] == 3 and kept.slice_preset == "PLA draft"
+        kept.save()
+        assert [p["name"] for p in Settings().slice_presets] == ["PLA draft"]
+        assert Settings().slice_preset == "PLA draft"
+    finally:
+        dlg.close()
+        win.close()
+        clear_presets()
+
+
 # ------------------------------------------------------------------ reading it all at once
 
 def _everything(lib):

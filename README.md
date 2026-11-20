@@ -523,6 +523,16 @@ gets for free.
   with the download. The print preview then shows the G-code in 3D, layer by layer, every line as
   wide as it prints (turn, move and zoom it with the mouse), with a virtual printer that plays each layer as the printer will
   print it, the print time and the filament; save the G-code from there
+  - **Your own presets**: the combination you come back to - "PETG functional", "PLA quick
+    draft" - is saved under a name in the **Preset** box at the top of the dialog. *Save…* keeps
+    the choice that stands in the dialog under a name of your own (asking before it replaces a
+    name that is taken) and *Delete* forgets one again. Choosing a preset sets the printer, the
+    nozzle, the material, the quality, infill and its pattern, support, bed adhesion and the
+    Extras again, exactly the way Volura remembers the last choice now; the colours of the model
+    are not part of a preset and stay as they are. Change a field and the box says "—" again,
+    because the choice is no longer the preset's, while the preset keeps its own numbers; the
+    name is back in the box next time when the dialog still holds what the preset holds. A
+    preset of a printer that is no longer in the list does nothing except say so
   - **Send to printer…**: in the print preview, next to *Save G-code…*, the same G-code goes over
     the network to **OctoPrint**, **Klipper (Moonraker)** or **PrusaLink**. Add the printer under
     *Window > Preferences > Printers* with its address and, where the printer wants one, its API
