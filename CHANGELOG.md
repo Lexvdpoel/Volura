@@ -3,11 +3,14 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## Unreleased
+## 0.2.67 — 2026-11-20
 
 ### New
 - **Heat-set insert holes**: *Tools > Print Tools > Screw Hole* now also cuts the tapered hole for
   a heat-set insert, M2 to M6, a little deeper than the insert, with room for the screw under it.
+- **Thin wall check**: *View > Face Style > Thin Walls* colours every face of a wall or floor
+  thinner than your printer can lay down (0.8 mm by default, set under *Window > Preferences*), and
+  the status bar counts them. The check runs in the background.
 
 ## 0.2.66 — 2026-11-20
 
