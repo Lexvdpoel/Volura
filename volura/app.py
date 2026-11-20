@@ -1007,6 +1007,18 @@ class Settings:
             self.slice_paint = max(0.4, min(5.0, float(self.q.value("slice_paint", 1.0))))
         except (TypeError, ValueError):
             self.slice_paint = 1.0
+        # File > Slice: the extras (slice_dialog) - off and 0 leave it to the profile
+        self.slice_adaptive = self._bool("slice_adaptive", False)
+        self.slice_ironing = self._bool("slice_ironing", False)
+        self.slice_fuzzy = self._bool("slice_fuzzy", False)
+        try:            # the fuzz of the fuzzy skin (slice_dialog.FUZZ_MIN/MAX)
+            self.slice_fuzz = max(0.1, min(1.0, float(self.q.value("slice_fuzz", 0.3))))
+        except (TypeError, ValueError):
+            self.slice_fuzz = 0.3
+        try:            # 0 leaves the number of walls to the profile
+            self.slice_walls = max(0, min(10, int(float(self.q.value("slice_walls", 0)))))
+        except (TypeError, ValueError):
+            self.slice_walls = 0
         # File > Slice for Resin: the printer and what was chosen for the last resin print
         self.resin_printer = str(self.q.value("resin_printer", "") or "")
         self.resin_level = str(self.q.value("resin_level", "Medium") or "Medium")
@@ -1606,7 +1618,9 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("slice_printer", "slice_variant", "slice_material", "slice_quality",
                     "slice_adhesion", "slice_infill", "slice_support", "slice_infill_pattern",
-                    "slice_paint", "slice_changes", "slice_change_command"):
+                    "slice_paint", "slice_changes", "slice_change_command",
+                    "slice_adaptive", "slice_ironing", "slice_fuzzy", "slice_fuzz",
+                    "slice_walls"):
             self.q.setValue(key, getattr(self, key))
         for key in ("resin_printer", "resin_level", "resin_layer", "resin_exposure",
                     "resin_bottom_exposure", "resin_bottom_layers", "resin_density",

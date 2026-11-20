@@ -3,7 +3,8 @@
 The printers come from the Cura profile library that Volura brings along (see
 `volura.cura_profiles`): first the maker, then the printer, then what that printer offers. A few
 settings that you change on almost every print sit underneath - infill and its pattern, support and
-how the print sticks to the bed; everything else comes from the profile. The choice is remembered in Settings.
+how the print sticks to the bed - and an Extras group with adaptive layers, ironing, a fuzzy skin
+and the number of walls; everything else comes from the profile. The choice is remembered in Settings.
 
 Below that sits what the print does with the colors of the model (see `volura.paint_split` and
 `volura.fileio`): which filament prints which color, how deep the skins of painted faces go,
@@ -17,7 +18,7 @@ import os
 
 from PySide6.QtCore import QSize, QStandardPaths, Qt
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-                               QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+                               QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QPushButton, QSpinBox, QTableWidget,
                                QTableWidgetItem, QWidget)
 
@@ -53,6 +54,10 @@ PAINT_MIN, PAINT_MAX, PAINT_DEFAULT = 0.4, 5.0, 1.0
 #: the prime tower that wipes the nozzle of an extruder that is not printing: a square of this
 #: part of the smallest side of the bed, never smaller and never larger than these bounds
 TOWER_PART, TOWER_MIN, TOWER_MAX = 0.15, 15.0, 40.0
+#: how thick the bumps of the fuzzy skin are (mm), and the number of wall lines the dialog
+#: offers - 0 walls says "Profile": leave it to the profile
+FUZZ_MIN, FUZZ_MAX, FUZZ_DEFAULT = 0.1, 1.0, 0.3
+WALLS_MIN, WALLS_MAX = 0, 10
 
 
 def parse_heights(text) -> list:
@@ -205,6 +210,41 @@ class SliceDialog(QDialog):
         kinds = [k for _label, k in ADHESION]
         self.adhesion.setCurrentIndex(kinds.index(s.slice_adhesion)
                                       if s.slice_adhesion in kinds else 0)
+        # the extras on top of the profile, with Cura's own setting names (checked against the
+        # fdmprinter definitions of the Cura the profiles come from); off or 0 leaves it to the profile
+        self.extras = QGroupBox(tr("Extras"))
+        extras = QFormLayout(self.extras)
+        self.adaptive = QCheckBox(tr("Adaptive layer height"))
+        self.adaptive.setToolTip(tr("Thinner layers where the surface slopes, thicker where it "
+                                    "is steep; faster with smoother curves"))
+        self.ironing = QCheckBox(tr("Ironing"))
+        self.ironing.setToolTip(tr("The nozzle goes over the top surface once more with very "
+                                   "little filament, so a flat top comes out smooth"))
+        self.fuzzy = QCheckBox(tr("Fuzzy skin"))
+        self.fuzzy.setToolTip(tr("A rough, textured outer wall that hides layer lines and "
+                                 "grips well"))
+        self.fuzz = QDoubleSpinBox()
+        self.fuzz.setRange(FUZZ_MIN, FUZZ_MAX)
+        self.fuzz.setDecimals(2)
+        self.fuzz.setSingleStep(0.05)
+        self.fuzz.setSuffix(" mm")
+        self.fuzz.setValue(float(getattr(s, "slice_fuzz", FUZZ_DEFAULT)))
+        self.fuzz.setToolTip(tr("How thick the bumps of the textured outer wall are"))
+        self.walls = QSpinBox()
+        self.walls.setRange(WALLS_MIN, WALLS_MAX)
+        self.walls.setSpecialValueText(tr("Profile"))
+        self.walls.setToolTip(tr("How many nozzle lines thick the walls of the print are; "
+                                 "Profile leaves it to the profile"))
+        self.adaptive.setChecked(bool(getattr(s, "slice_adaptive", False)))
+        self.ironing.setChecked(bool(getattr(s, "slice_ironing", False)))
+        self.fuzzy.setChecked(bool(getattr(s, "slice_fuzzy", False)))
+        self.walls.setValue(max(WALLS_MIN, min(WALLS_MAX, int(getattr(s, "slice_walls",
+                                                                      WALLS_MIN)))))
+        extras.addRow("", self.adaptive)
+        extras.addRow("", self.ironing)
+        extras.addRow("", self.fuzzy)
+        extras.addRow(tr("Fuzz"), self.fuzz)
+        extras.addRow(tr("Walls"), self.walls)
         # what the print does with the colors of the model
         self.paint_depth = QDoubleSpinBox()
         self.paint_depth.setRange(PAINT_MIN, PAINT_MAX)
@@ -279,6 +319,7 @@ class SliceDialog(QDialog):
         lay.addRow(tr("Infill pattern"), self.pattern)
         lay.addRow(tr("Support"), self.support)
         lay.addRow(tr("Bed adhesion"), self.adhesion)
+        lay.addRow(self.extras)
         lay.addRow(tr("Colour depth of painted faces"), self.paint_depth)
         lay.addRow("", self.changer)
         lay.addRow(tr("Filaments"), self.filaments)
@@ -313,6 +354,8 @@ class SliceDialog(QDialog):
         self.quality.currentIndexChanged.connect(self._show_info)
         self.changer.toggled.connect(self._changer_changed)
         self.filaments.valueChanged.connect(self._changer_changed)
+        self.fuzzy.toggled.connect(self._fuzzy_changed)
+        self._fuzzy_changed(self.fuzzy.isChecked())
         self.b_add.clicked.connect(self._add_change)
         self.b_remove.clicked.connect(self._remove_change)
         self.b_3mf.clicked.connect(self._to_3mf)
@@ -477,6 +520,10 @@ class SliceDialog(QDialog):
         self._show_info()
         self._remember_changer()
 
+    def _fuzzy_changed(self, on):
+        """The thickness of the fuzz is of interest only when there is a fuzzy skin."""
+        self.fuzz.setEnabled(bool(on))
+
     def _colors_changed(self):
         """The color table and the filament choices, as the printer chosen now can use them."""
         n, one = self.extruder_count(), self.printer is not None
@@ -571,6 +618,17 @@ class SliceDialog(QDialog):
         pattern = INFILL_PATTERNS[self.pattern.currentIndex()][1]
         if pattern:
             values["infill_pattern"] = pattern
+        if self.adaptive.isChecked():
+            values["adaptive_layer_height_enabled"] = True
+        if self.ironing.isChecked():
+            values["ironing_enabled"] = True
+            # the smooth top of a part, not every flat step in it
+            values["ironing_only_highest_layer"] = True
+        if self.fuzzy.isChecked():
+            values["magic_fuzzy_skin_enabled"] = True
+            values["magic_fuzzy_skin_thickness"] = float(self.fuzz.value())
+        if self.walls.value():
+            values["wall_line_count"] = int(self.walls.value())
         return values
 
     def choice(self) -> dict:
@@ -585,7 +643,10 @@ class SliceDialog(QDialog):
                 "infill_pattern": INFILL_PATTERNS[self.pattern.currentIndex()][1],
                 "paint": self.paint_depth.value(),
                 "changes": heights_text(self._listed_changes()),
-                "change_command": self.change_cmd.text().strip()}
+                "change_command": self.change_cmd.text().strip(),
+                "adaptive": self.adaptive.isChecked(), "ironing": self.ironing.isChecked(),
+                "fuzzy": self.fuzzy.isChecked(), "fuzz": self.fuzz.value(),
+                "walls": self.walls.value()}
 
     def stacks(self) -> cura_profiles.Stacks:
         """The settings to slice with, following the colors of the model."""
