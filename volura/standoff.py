@@ -60,8 +60,12 @@ MARGIN = 0.5
 STANDOFF_SHAPES = ("round", "hex")
 STANDOFF_KINDS = ("through", "tap", "insert")
 
-#: size: the hole a heat-set insert is pressed into, in mm
-INSERTS = {"M2": 3.2, "M2.5": 3.6, "M3": 4.0, "M4": 5.6, "M5": 6.4}
+#: the screws whose heat-set insert a standoff takes: the sizes insert spacers are made in
+INSERT_SIZES = ("M2", "M2.5", "M3", "M4", "M5")
+#: size: the hole a heat-set insert is pressed into, in mm: the tapered inserts are tabulated
+#: in ``threads.HEAT_SET_INSERTS``, from which a standoff cuts the Ø at the top; its hole is
+#: straight, not tapered
+INSERTS = {size: threads.HEAT_SET_INSERTS[size][0] for size in INSERT_SIZES}
 
 
 def _outline(shape, outer):
