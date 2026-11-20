@@ -238,7 +238,7 @@ def test_the_thumbnails_stay_behind_the_header_of_the_g_code(tmp_path):
     path = _write(tmp_path, GCODE)
     one, two = gt.block(b"png-one", 48, 48), gt.block(b"png-two", 300, 300)
     gt.insert(str(path), [one, two])
-    got = path.read_text(encoding="utf-8", newline="")
+    got = path.read_bytes().decode("utf-8")
     at = _cut(GCODE)
     assert got == GCODE[:at] + one + two + GCODE[at:]
     assert got.startswith(";FLAVOR:Marlin") and got.endswith("M107\n")
@@ -251,7 +251,7 @@ def test_a_g_code_that_keeps_carriage_returns_keeps_them_everywhere(tmp_path):
     path = _write(tmp_path, text)
     block = gt.block(b"png", 32, 32)
     gt.insert(str(path), [block])
-    got = path.read_text(encoding="utf-8", newline="")
+    got = path.read_bytes().decode("utf-8")
     assert got == text[:_cut(text)] + block.replace("\n", "\r\n") + text[_cut(text):]
     assert "\n\r" not in got.replace("\r\n", "<CRLF>"), "a lone line feed in the file"
 
@@ -261,7 +261,7 @@ def test_a_file_that_starts_with_a_command_gets_its_thumbnails_in_front_of_it(tm
     path = _write(tmp_path, text, "no-header.gcode")
     block = gt.block(b"png", 48, 48)
     gt.insert(str(path), [block])
-    assert path.read_text(encoding="utf-8", newline="") == block + text
+    assert path.read_bytes().decode("utf-8") == block + text
 
 
 def test_a_file_that_is_nothing_but_a_header_still_gets_its_picture(tmp_path):
@@ -269,7 +269,7 @@ def test_a_file_that_is_nothing_but_a_header_still_gets_its_picture(tmp_path):
     path = _write(tmp_path, text, "empty.gcode")
     block = gt.block(b"png", 48, 48)
     gt.insert(str(path), [block])
-    assert path.read_text(encoding="utf-8", newline="") == text + block
+    assert path.read_bytes().decode("utf-8") == text + block
 
 
 def test_nothing_to_put_in_leaves_the_file_alone(tmp_path):
