@@ -390,6 +390,111 @@ def test_every_infill_pattern_of_the_slice_dialog_slices_its_own_way(tmp_path):
     assert not same, f"these patterns slice the same: {same}"
 
 
+def _moves_of_type(text, type_name):
+    """The G1 extrusion moves of one kind of line in the G-code, as the `;TYPE:` marks it."""
+    moves, on = 0, False
+    for line in text.splitlines():
+        if line.startswith(";TYPE:"):
+            on = line == f";TYPE:{type_name}"
+        elif on and line.startswith("G1") and " E" in line:
+            moves += 1
+    return moves
+
+
+def _top_layer_moves(text):
+    """The G1 extrusion moves of the top layer of a G-code (Cura writes ironing with its top
+    skin, without a `;TYPE:` of its own, so the count there is what shows the extra pass)."""
+    top = text.rsplit(";LAYER:", 1)[-1]
+    return sum(1 for line in top.splitlines() if line.startswith("G1") and " E" in line)
+
+
+def _ender3():
+    """The Ender 3 with its default nozzle and filament, as the slice dialog would set it up."""
+    p = cura_profiles.Library(RESOURCES).printer("creality_ender3")
+    v = p.default_variant()
+    return p, v, p.default_material(v)
+
+
+@needs_engine
+def test_ironing_lays_an_extra_pass_over_the_flat_top(tmp_path):
+    """A 20 mm cube with a flat top: ironing goes over that top once more, so the top layer
+    holds more moves than without it."""
+    p, v, m = _ender3()
+    meshes = [_cube(20.0, (40.0, 40.0, 0.0)) + (0,)]
+    plain = tmp_path / "plain.gcode"
+    slicer.slice_meshes(p.stacks(v, m, "standard", {"infill_sparse_density": 0.0}),
+                        meshes, str(plain))
+    without = _top_layer_moves(plain.read_text(encoding="utf-8"))
+    ironed = tmp_path / "ironed.gcode"
+    slicer.slice_meshes(p.stacks(v, m, "standard", {"infill_sparse_density": 0.0,
+                                                    "ironing_enabled": True,
+                                                    "ironing_only_highest_layer": True}),
+                        meshes, str(ironed))
+    with_ironing = _top_layer_moves(ironed.read_text(encoding="utf-8"))
+    assert without > 0 and with_ironing > without, \
+        f"ironed top layer {with_ironing} moves, plain top {without}"
+
+
+@needs_engine
+def test_fuzzy_skin_roughens_the_outer_wall(tmp_path):
+    """The bumpy wall is cut into far more little lines than the straight one."""
+    p, v, m = _ender3()
+    meshes = [_cube(20.0, (40.0, 40.0, 0.0)) + (0,)]
+    plain = tmp_path / "smooth.gcode"
+    slicer.slice_meshes(p.stacks(v, m, "standard", {"infill_sparse_density": 0.0}),
+                        meshes, str(plain))
+    smooth = _moves_of_type(plain.read_text(encoding="utf-8"), "WALL-OUTER")
+    fuzzy = tmp_path / "fuzzy.gcode"
+    slicer.slice_meshes(p.stacks(v, m, "standard", {"infill_sparse_density": 0.0,
+                                                    "magic_fuzzy_skin_enabled": True,
+                                                    "magic_fuzzy_skin_thickness": 0.3}),
+                        meshes, str(fuzzy))
+    rough = _moves_of_type(fuzzy.read_text(encoding="utf-8"), "WALL-OUTER")
+    assert 0 < smooth < rough, f"outer wall: {smooth} smooth moves, {rough} fuzzy"
+
+
+def _sphere(size=20.0, at=(40.0, 40.0)):
+    m = mf.Manifold.sphere(size / 2, 48).translate((*at, size / 2)).to_mesh()
+    return np.asarray(m.vert_properties)[:, :3], np.asarray(m.tri_verts)
+
+
+@needs_engine
+def test_adaptive_layer_height_gives_a_sphere_layers_of_more_than_one_height(tmp_path):
+    """Where the sphere curves the layers come thinner than 0.2 mm, elsewhere thicker, so the
+    print runs faster without losing the smoothness of the curves."""
+    p, v, m = _ender3()
+    meshes = [_sphere() + (0,)]
+
+    def steps(user):
+        """The thickness of the layers, as the difference between one layer height and the next."""
+        out = tmp_path / "sphere.gcode"
+        slicer.slice_meshes(p.stacks(v, m, "standard", user), meshes, str(out))
+        zs = sorted({round(z, 3) for _line, z in slicer.layer_heights(
+            out.read_text(encoding="utf-8"))})
+        return {round(b - a, 3) for a, b in zip(zs, zs[1:])}
+
+    plain = steps({})
+    adaptive = steps({"adaptive_layer_height_enabled": True})
+    assert plain == {0.2}, "an ordinary print stacks every layer of this quality on 0.2 mm"
+    assert len(adaptive) > 1, f"adaptive layers all take the same step: {sorted(adaptive)}"
+    assert max(adaptive) > 0.2, "the steep lower walls are not printed with thicker layers"
+
+
+@needs_engine
+def test_four_walls_print_more_inner_wall_lines_than_two(tmp_path):
+    p, v, m = _ender3()
+    meshes = [_cube(20.0, (40.0, 40.0, 0.0)) + (0,)]
+    inner = {}
+    for walls in (2, 4):
+        out = tmp_path / f"walls{walls}.gcode"
+        slicer.slice_meshes(p.stacks(v, m, "standard", {"infill_sparse_density": 0.0,
+                                                        "wall_line_count": walls}),
+                            meshes, str(out))
+        inner[walls] = _moves_of_type(out.read_text(encoding="utf-8"), "WALL-INNER")
+    assert inner[2] > 0 and inner[4] > inner[2], \
+        f"2 walls: {inner[2]} inner moves, 4 walls: {inner[4]}"
+
+
 @needs_engine
 def test_slice_from_the_file_menu(monkeypatch, tmp_path):
     from PySide6.QtCore import QCoreApplication

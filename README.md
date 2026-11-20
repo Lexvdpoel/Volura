@@ -515,7 +515,11 @@ gets for free.
 - **Slice** (File > Slice): G-code for your printer without a separate slicer. Choose the maker
   and the printer from the printer profiles of Cura and OrcaSlicer (nearly 1000 printers), then
   the nozzle, the filament brand and material and the quality, and set infill and its pattern,
-  support and bed adhesion; Volura works out the profile the way Cura does and slices with CuraEngine, which comes
+  support and bed adhesion; the Extras group adds adaptive layer height (thinner layers where
+  the surface slopes, thicker where it is steep), ironing (the nozzle passes over the top once
+  more, for a smooth flat top), a fuzzy skin (a rough outer wall that hides layer lines and
+  grips well, with a Fuzz thickness) and the number of walls;
+  Volura works out the profile the way Cura does and slices with CuraEngine, which comes
   with the download. The print preview then shows the G-code in 3D, layer by layer, every line as
   wide as it prints (turn, move and zoom it with the mouse), with a virtual printer that plays each layer as the printer will
   print it, the print time and the filament; save the G-code from there

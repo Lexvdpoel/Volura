@@ -375,6 +375,80 @@ def test_the_slice_dialog_of_this_library_follows_the_colors(library):
         win.close()
 
 
+def test_the_extras_of_the_slice_dialog_follow_the_profile_and_are_remembered(library):
+    """File > Slice… > Extras: unticked or 0 puts no key in the settings, the ticks land in
+    Cura's names, and a new dialog starts where the previous one left off."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication, QWidget
+    app = QApplication.instance() or QApplication(sys.argv[:1])
+    from volura.settings import qsettings
+    from volura.slice_dialog import FUZZ_DEFAULT, SliceDialog
+
+    class Prefs:
+        q = qsettings()
+        slice_printer, slice_variant = "testprinter", ""
+        slice_material, slice_quality = "", ""
+        slice_infill, slice_infill_pattern = 20, ""
+        slice_support, slice_adhesion = 0, ""
+        slice_paint, slice_changes, slice_change_command = 1.0, "", ""
+
+    class Window(QWidget):
+        settings = Prefs()
+
+    win = Window()
+    dlg = SliceDialog(win, library)
+    try:
+        off = dlg.user_values()
+        for key in ("adaptive_layer_height_enabled", "ironing_enabled",
+                    "ironing_only_highest_layer", "magic_fuzzy_skin_enabled",
+                    "magic_fuzzy_skin_thickness", "wall_line_count"):
+            assert key not in off, "unticked leaves it to the profile"
+        assert dlg.walls.value() == 0 and dlg.walls.specialValueText() == "Profile"
+        assert dlg.fuzz.value() == pytest.approx(FUZZ_DEFAULT)
+        assert not dlg.fuzz.isEnabled(), "the thickness follows the Fuzzy skin tick"
+        dlg.adaptive.setChecked(True)
+        dlg.ironing.setChecked(True)
+        dlg.fuzzy.setChecked(True)
+        assert dlg.fuzz.isEnabled()
+        dlg.fuzz.setValue(0.5)
+        dlg.walls.setValue(4)
+        on = dlg.user_values()
+        assert on["adaptive_layer_height_enabled"] is True
+        assert on["ironing_enabled"] is True and on["ironing_only_highest_layer"] is True, \
+            "the smooth top of a part, not every flat step"
+        assert on["magic_fuzzy_skin_enabled"] is True
+        assert on["magic_fuzzy_skin_thickness"] == pytest.approx(0.5)
+        assert on["wall_line_count"] == 4
+        st = dlg.stacks()
+        assert st.glob.get("adaptive_layer_height_enabled") is True
+        assert st.glob.get("ironing_only_highest_layer") is True
+        assert st.glob.get("magic_fuzzy_skin_thickness") == pytest.approx(0.5)
+        assert st.extruders[0].get("magic_fuzzy_skin_enabled") is True
+        assert st.glob.get("wall_line_count") == 4
+        got = dlg.choice()
+        assert got["adaptive"] is True and got["ironing"] is True and got["fuzzy"] is True
+        assert got["fuzz"] == pytest.approx(0.5) and got["walls"] == 4
+        for key, value in got.items():         # what the window saves to Settings before slicing
+            setattr(Prefs, "slice_" + key, value)
+        again = SliceDialog(win, library)
+        try:
+            assert again.adaptive.isChecked() and again.ironing.isChecked()
+            assert again.fuzzy.isChecked() and again.fuzz.isEnabled()
+            assert again.fuzz.value() == pytest.approx(0.5)
+            assert again.walls.value() == 4 and again.user_values()["wall_line_count"] == 4
+            again.fuzzy.setChecked(False)
+            assert not again.fuzz.isEnabled()
+            again.walls.setValue(0)
+            off = again.user_values()
+            assert "magic_fuzzy_skin_thickness" not in off and "wall_line_count" not in off
+            assert again.choice()["walls"] == 0
+        finally:
+            again.close()
+    finally:
+        dlg.close()
+        win.close()
+
+
 # ------------------------------------------------------------------ reading it all at once
 
 def _everything(lib):
