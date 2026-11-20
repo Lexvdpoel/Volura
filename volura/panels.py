@@ -450,7 +450,7 @@ class EntityInfoPanel(QWidget):
             if ents.version != version:
                 return                   # edited meanwhile: a newer refresh follows
             self._remember_part(ents, version, key, summary)
-            if self.body is not None and not self.body.isHidden():
+            if background.alive(self.body) and not self.body.isHidden():
                 self.refresh()           # shows it now, if this group is still selected
 
         background.run(None, task, text=tr("Calculating…"), can_cancel=False,

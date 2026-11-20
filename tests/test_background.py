@@ -420,3 +420,16 @@ def test_the_gil_switches_quickly_only_while_a_job_runs(win):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def test_alive_says_whether_a_widget_still_exists():
+    """A job may finish after its dialog is gone: `alive` lets on_done see that."""
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtWidgets import QLabel
+    from volura import background
+    label = QLabel()
+    assert background.alive(label)
+    assert not background.alive(None)
+    label.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    assert not background.alive(label)

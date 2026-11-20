@@ -146,7 +146,8 @@ class SimplifyDialog(QDialog):
             return before, after
 
         def done(result):
-            if token == self._token:
+            # the dialog may be closed and deleted while the estimate was on its way
+            if token == self._token and background.alive(self.preview_label):
                 self._show_estimate(*result)
 
         self._job = background.run(None, task, text=tr("Calculating…"), can_cancel=False,

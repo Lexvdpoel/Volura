@@ -332,6 +332,17 @@ class BackgroundJob(QObject):
                 pass
 
 
+def alive(widget) -> bool:
+    """Whether `widget` still exists on the Qt side.
+
+    A job outlives what started it: a dialog can be closed and deleted while its task
+    still runs, and its `on_done` then must not touch the widgets of that dialog."""
+    if widget is None:
+        return False
+    import shiboken6
+    return shiboken6.isValid(widget)
+
+
 def run(window, task, *, text, can_cancel=True, delay_ms=PROGRESS_DELAY_MS,
         on_done=None, on_error=None, on_cancel=None, show_dialog=True, wait=False):
     """Run ``task(report)`` in the background; return the :class:`BackgroundJob`.
