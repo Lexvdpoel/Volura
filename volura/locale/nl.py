@@ -2268,6 +2268,15 @@ TRANSLATIONS = {
     'How thick the bumps of the textured outer wall are': 'Hoe dik de bultjes van de getextureerde buitenwand zijn',
     'Fuzz': 'Ruwte',
     'Walls': 'Wanden',
+    # File > Slice > the thumbnail of the print in the G-code (gcode_thumbnail)
+    'Thumbnail': 'Minifoto',
+    'Off': 'Uit',
+    'Small and large (48 × 48 + 300 × 300)': 'Klein en groot (48 × 48 + 300 × 300)',
+    'Prusa (16 × 16 + 313 × 173 + 440 × 240)': 'Prusa (16 × 16 + 313 × 173 + 440 × 240)',
+    'Klipper (32 × 32 + 300 × 300)': 'Klipper (32 × 32 + 300 × 300)',
+    'A picture of the print in the G-code, for the screen of the printer': 'Een foto van de print in de G-code, voor het scherm van de printer',
+    'Drawing the thumbnail…': 'Minifoto tekenen…',
+    'there is nothing to draw': 'er is niets te tekenen',
     # File > Slice > the presets of the user (slice_presets)
     '—': '—',
     'Save…': 'Bewaren…',

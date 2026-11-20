@@ -35,7 +35,7 @@ from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, brack
                plant_pot, screw_jar, soap_dish, slicer, spool_adapter, standoff, storage_bin,
                stringing_test, text3d,
                theme, threads, tie_mount, wall_hook)
-from . import gcode_preview
+from . import gcode_preview, gcode_thumbnail
 from .print_preview import FILAMENT_STYLE, PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
 from .brep import Entities
@@ -1016,7 +1016,9 @@ class PrintMixin:
         """Slice `part_list` with `stacks` in the background, then show the print preview.
 
         The G-code goes to a temporary file first; the preview reads it back layer by layer
-        and Save G-code… there copies it to where you want it.
+        and Save G-code… there copies it to where you want it. When the Extras ask for a
+        thumbnail, the pictures of the print go into that same file too, so the preview, the
+        saved file and the printer that gets it all carry the same G-code.
 
         `plan` is the `slice_dialog.Multicolor` of the dialog: which extruder prints which
         colour, how deep the painted faces go and where the printer changes its filament.
@@ -1028,10 +1030,16 @@ class PrintMixin:
         os.close(fd)
         g = stacks.glob
         bed = [float(g.get(k) or 0) for k in ("machine_width", "machine_depth", "machine_height")]
+        # the pictures of the print the screen of the printer shows, when the Extras ask for any
+        sizes = gcode_thumbnail.sizes(self.settings.slice_thumbnail)
 
         def made_meshes(report):
-            """One mesh per extruder: a part in one colour, or its painted skins and the rest."""
-            meshes = []
+            """One mesh per extruder: a part in one colour, or its painted skins and the rest.
+
+            The second list is what the thumbnail on the printer's screen is drawn from: the same
+            meshes, each in the colour of the part that prints with it.
+            """
+            meshes, pictures = [], []
             parts = [p for p in part_list if p.manifold is not None]
             for i, p in enumerate(parts):
                 report(0.05 + 0.1 * i / max(1, len(parts)), tr("Colouring the parts…"))
@@ -1052,19 +1060,22 @@ class PrintMixin:
                                                                       error=exc)) from exc
                 per = {}                   # the pieces of one extruder print as one volume
                 for man, color in pieces:
-                    per.setdefault(plan.extruder(color), []).append(man)
-                for extruder, mans in per.items():
+                    per.setdefault(plan.extruder(color), []).append((man, color))
+                for extruder, group in per.items():
+                    mans = [man for man, _color in group]
                     man = (mans[0] if len(mans) == 1
                            else mf.Manifold.batch_boolean(mans, mf.OpType.Add))
                     mesh = man.to_mesh()
-                    meshes.append((np.asarray(mesh.vert_properties)[:, :3],
-                                   np.asarray(mesh.tri_verts), extruder))
+                    verts = np.asarray(mesh.vert_properties)[:, :3]
+                    tris = np.asarray(mesh.tri_verts)
+                    meshes.append((verts, tris, extruder))
+                    pictures.append((verts, tris, group[0][1]))
             if not meshes:
                 raise ValueError(tr("There is nothing to slice. Draw a face and use Push/Pull (P)."))
-            return meshes
+            return meshes, pictures
 
         def work(report):
-            meshes = made_meshes(report)
+            meshes, pictures = made_meshes(report)
             report(0.15, tr("Slicing…"))
             lo = np.min([v.min(axis=0) for v, _t, _e in meshes], axis=0)
             hi = np.max([v.max(axis=0) for v, _t, _e in meshes], axis=0)
@@ -1079,6 +1090,10 @@ class PrintMixin:
                                                                        tr("Slicing…")))
             if plan.changes:
                 slicer.insert_filament_changes(path, plan.changes, plan.command)
+            if sizes:
+                report(0.87, tr("Drawing the thumbnail…"))
+                gcode_thumbnail.insert(path, [gcode_thumbnail.block(
+                    gcode_thumbnail.render(pictures, w, h), w, h) for w, h in sizes])
             report(0.9, tr("Reading the G-code…"))
             filament = (float(stacks.extruders[0].get("material_diameter") or 1.75)
                         if stacks.extruders else 1.75)

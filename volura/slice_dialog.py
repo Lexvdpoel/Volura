@@ -3,9 +3,10 @@
 The printers come from the Cura profile library that Volura brings along (see
 `volura.cura_profiles`): first the maker, then the printer, then what that printer offers. A few
 settings that you change on almost every print sit underneath - infill and its pattern, support and
-how the print sticks to the bed - and an Extras group with adaptive layers, ironing, a fuzzy skin
-and the number of walls; everything else comes from the profile. The choice is remembered in Settings,
-and a choice you come back to is saved under a name above the Maker row (see `volura.slice_presets`).
+how the print sticks to the bed - and an Extras group with adaptive layers, ironing, a fuzzy skin,
+the number of walls and the thumbnail for the printer's screen; everything else comes from the
+profile. The choice is remembered in Settings, and a choice you come back to is saved under a name
+above the Maker row (see `volura.slice_presets`).
 
 Below that sits what the print does with the colors of the model (see `volura.paint_split` and
 `volura.fileio`): which filament prints which color, how deep the skins of painted faces go,
@@ -23,7 +24,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
                                QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QWidget)
 
-from . import __version__, cura_profiles, slice_presets, slicer
+from . import __version__, cura_profiles, gcode_thumbnail, slice_presets, slicer
 from .i18n import tr, tr_noop
 from .panels import swatch
 
@@ -90,11 +91,11 @@ def _number(value, current, lo, hi, whole=True):
 
 
 def _index_of(choices, want, current):
-    """The row of a combo box of (label, value) pairs that `want` names, or `current` when the
-    choice does not name one of them - an older preset may not know the setting yet."""
+    """The row of a combo box of (label, value, ...) pairs that `want` names, or `current` when
+    the choice does not name one of them - an older preset may not know the setting yet."""
     if want is None:
         return current
-    kinds = [value for _label, value in choices]
+    kinds = [value for _label, value, *_ in choices]
     want = str(want)
     return kinds.index(want) if want in kinds else current
 
@@ -267,11 +268,17 @@ class SliceDialog(QDialog):
         self.walls.setSpecialValueText(tr("Profile"))
         self.walls.setToolTip(tr("How many nozzle lines thick the walls of the print are; "
                                  "Profile leaves it to the profile"))
+        self.thumbnail = QComboBox()
+        for label, kind, _sizes in gcode_thumbnail.THUMBNAILS:
+            self.thumbnail.addItem(tr(label), kind)
+        self.thumbnail.setToolTip(tr("A picture of the print in the G-code, for the screen of "
+                                     "the printer"))
         extras.addRow("", self.adaptive)
         extras.addRow("", self.ironing)
         extras.addRow("", self.fuzzy)
         extras.addRow(tr("Fuzz"), self.fuzz)
         extras.addRow(tr("Walls"), self.walls)
+        extras.addRow(tr("Thumbnail"), self.thumbnail)
         # what the print does with the colors of the model
         self.paint_depth = QDoubleSpinBox()
         self.paint_depth.setRange(PAINT_MIN, PAINT_MAX)
@@ -389,7 +396,7 @@ class SliceDialog(QDialog):
         self.b_3mf.clicked.connect(self._to_3mf)
         # a field that says something else than the chosen preset puts the combo box back on "—"
         for box in (self.maker, self.printer_box, self.nozzle, self.brand, self.material,
-                    self.quality, self.pattern, self.support, self.adhesion):
+                    self.quality, self.pattern, self.support, self.adhesion, self.thumbnail):
             box.currentIndexChanged.connect(self._field_changed)
         for box in (self.infill, self.fuzz, self.walls):
             box.valueChanged.connect(self._field_changed)
@@ -421,7 +428,9 @@ class SliceDialog(QDialog):
                 "ironing": getattr(s, "slice_ironing", False),
                 "fuzzy": getattr(s, "slice_fuzzy", False),
                 "fuzz": getattr(s, "slice_fuzz", FUZZ_DEFAULT),
-                "walls": getattr(s, "slice_walls", WALLS_MIN)}
+                "walls": getattr(s, "slice_walls", WALLS_MIN),
+                "thumbnail": (str(getattr(s, "slice_thumbnail", "") or "")
+                              or gcode_thumbnail.DEFAULT)}
 
     def apply_choice(self, choice: dict):
         """Put a choice over the dialog: the one of the last slice when the dialog opens, a
@@ -456,6 +465,9 @@ class SliceDialog(QDialog):
                                    whole=False))
         self.walls.setValue(_number(choice.get("walls"), self.walls.value(), WALLS_MIN,
                                     WALLS_MAX))
+        self.thumbnail.setCurrentIndex(_index_of(gcode_thumbnail.THUMBNAILS,
+                                                 choice.get("thumbnail"),
+                                                 self.thumbnail.currentIndex()))
         wanted = next((m for m in self.machines if m[0] == str(choice.get("printer") or "")),
                       None)
         if wanted is not None:
@@ -863,7 +875,8 @@ class SliceDialog(QDialog):
                 "change_command": self.change_cmd.text().strip(),
                 "adaptive": self.adaptive.isChecked(), "ironing": self.ironing.isChecked(),
                 "fuzzy": self.fuzzy.isChecked(), "fuzz": self.fuzz.value(),
-                "walls": self.walls.value()}
+                "walls": self.walls.value(),
+                "thumbnail": gcode_thumbnail.THUMBNAILS[self.thumbnail.currentIndex()][1]}
 
     def stacks(self) -> cura_profiles.Stacks:
         """The settings to slice with, following the colors of the model."""

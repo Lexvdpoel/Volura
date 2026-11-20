@@ -5,11 +5,12 @@ as CuraEngine's resolved-settings file, runs CuraEngine and reads the print time
 back from the G-code. The parts are moved to the middle of the bed, because CuraEngine counts from
 there. These tests check the pieces on their own - the STL, the placement, reading the header in
 both G-code flavours - and, when CuraEngine and the Cura profiles are there
-(tools/fetch_curaengine.py), slice a real part for a real printer and check the G-code, and drive
-the dialog in the window.
+(tools/fetch_curaengine.py), slice a real part for a real printer and check the G-code and the
+picture of the print it carries for the screen of the printer, and drive the dialog in the window.
 
 Run with:  python -m pytest tests/test_slicer.py
 """
+import base64
 import os
 import re
 import struct
@@ -34,6 +35,24 @@ needs_engine = pytest.mark.skipif(
 def _cube(size=20.0, at=(0.0, 0.0, 0.0)):
     m = mf.Manifold.cube((size, size, size)).translate(at).to_mesh()
     return np.asarray(m.vert_properties)[:, :3], np.asarray(m.tri_verts)
+
+
+def _pictures(text):
+    """The pictures in the comments of a G-code, as the screen of a printer reads them: a list of
+    (width, height, the PNG, the length the file itself says that base64 has)."""
+    got, lines = [], text.splitlines()
+    for i, line in enumerate(lines):
+        word = line.split()
+        if word[:3] != [";", "thumbnail", "begin"]:
+            continue
+        body = ""
+        for follow in lines[i + 1:]:
+            if follow.startswith("; thumbnail end"):
+                break
+            body += follow[2:]
+        wide, high = word[3].split("x")
+        got.append((int(wide), int(high), base64.b64decode(body), int(word[4])))
+    return got
 
 
 def test_the_stl_is_a_binary_stl_of_the_mesh(tmp_path):
@@ -498,6 +517,7 @@ def test_four_walls_print_more_inner_wall_lines_than_two(tmp_path):
 @needs_engine
 def test_slice_from_the_file_menu(monkeypatch, tmp_path):
     from PySide6.QtCore import QCoreApplication
+    from PySide6.QtGui import QImage
     from PySide6.QtWidgets import QApplication, QDialog
     app = QApplication.instance() or QApplication(sys.argv[:1])
     import volura.app as app_module
@@ -534,6 +554,8 @@ def test_slice_from_the_file_menu(monkeypatch, tmp_path):
         dlg.support.setCurrentIndex(1)
         dlg.pattern.setCurrentIndex([k for _l, k in sd.INFILL_PATTERNS].index("gyroid"))
         assert dlg.user_values()["infill_pattern"] == "gyroid"
+        dlg.thumbnail.setCurrentIndex(dlg.thumbnail.findData("32x32/300x300"))
+        assert dlg.thumbnail.currentData() == "32x32/300x300"
         seen["opened"] = True
         return QDialog.Accepted
 
@@ -575,8 +597,17 @@ def test_slice_from_the_file_menu(monkeypatch, tmp_path):
         assert w.settings.slice_printer == "creality_ender3"
         assert w.settings.slice_infill == 15 and w.settings.slice_support == 1
         assert w.settings.slice_infill_pattern == "gyroid"
+        assert w.settings.slice_thumbnail == "32x32/300x300", "the next slice draws what you chose"
         text = out.read_text(encoding="utf-8")
         assert ";FLAVOR:Marlin" in text
+        shots = _pictures(text)
+        assert [(w, h) for w, h, _png, _n in shots] == [(32, 32), (300, 300)], \
+            "the two sizes of the choice, the little one first"
+        for wide, high, png, number in shots:
+            assert png[:8] == b"\x89PNG\r\n\x1a\n", "the picture in the G-code is no PNG"
+            assert len(base64.b64encode(png)) == number, "the block says another length"
+            img = QImage.fromData(png)
+            assert (img.width(), img.height()) == (wide, high), "another picture than its size says"
     finally:
         w.doc.dirty = False
         w.close()
