@@ -3,6 +3,12 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## Unreleased
+
+### New
+- **Heat-set insert holes**: *Tools > Print Tools > Screw Hole* now also cuts the tapered hole for
+  a heat-set insert, M2 to M6, a little deeper than the insert, with room for the screw under it.
+
 ## 0.2.66 — 2026-11-20
 
 The builds of 0.2.64 and 0.2.65 stopped on their own tests and were never released; this is
