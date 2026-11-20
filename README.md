@@ -155,9 +155,12 @@ gets for free.
   the face you clicked lies on the print bed, like "place on face" of a slicer
 - **Screw Hole** (Tools): turn a circle you drew on a part into a printable hole
   for a metric screw (M2 up to M8): straight, with a counterbore for a socket head, a 90°
-  countersink for a flat head or a hexagonal pocket that holds a nut; a hole that runs
-  sideways can get a 45° teardrop roof so it prints without support; the clearance (0.2 mm by
-  default) is added to every diameter, because a printed hole comes out smaller than drawn
+  countersink for a flat head, a hexagonal pocket that holds a nut or the tapered hole a
+  heat-set insert melts into (M2 up to M6), with the clearance hole of the screw under it; a
+  hole that runs sideways can get a 45° teardrop roof so it prints without support; the
+  clearance (0.2 mm by default) is added to every diameter, because a printed hole comes out
+  smaller than drawn; the hole of an insert is left alone, because the plastic has to melt
+  into it
 - **Clearance Test** (3D Printing): a small test print that shows which clearance your
   printer likes: a plate with a row of holes that grow by a step, each with its clearance in
   raised letters, and a loose pin next to it; print it, try the pin in every hole and use the

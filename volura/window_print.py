@@ -3039,7 +3039,8 @@ class PrintMixin:
     SCREW_HOLE_KINDS = [(tr("Through"), "through"),
                         (tr("Counterbore"), "counterbore"),
                         (tr("Countersunk"), "countersink"),
-                        (tr("Nut pocket"), "nutpocket")]
+                        (tr("Nut pocket"), "nutpocket"),
+                        (tr("Heat-set insert"), "insert")]
 
     def _screw_hole_target(self):
         """(ents, group, center, axis, length) of the selected circular face, or None.
@@ -3060,12 +3061,14 @@ class PrintMixin:
 
     def screw_hole_dialog(self):
         """Tools > Print Tools > Screw Hole…: a printable hole for a metric screw on the
-        circle that is selected on a part: straight, or with room for the head."""
+        circle that is selected on a part: straight, with room for the head, for a nut or
+        for a heat-set insert."""
         dlg = QDialog(self)
         dlg.setWindowTitle(tr("Screw Hole"))
         form = QFormLayout(dlg)
+        sizes = sorted(threads.SCREW_HOLES, key=lambda s: float(s[1:]))
         size_cb = QComboBox()
-        for size in sorted(threads.SCREW_HOLES, key=lambda s: float(s[1:])):
+        for size in sizes:
             size_cb.addItem(size)
         size_cb.setCurrentText(self.settings.screw_hole_size)
         kind_cb = QComboBox()
@@ -3077,10 +3080,48 @@ class PrintMixin:
         tear_cb = QCheckBox(tr("Teardrop for sideways holes"))
         tear_cb.setToolTip(tr("A 45° roof on a horizontal hole, so it prints without support"))
         tear_cb.setChecked(self.settings.screw_hole_teardrop)
+        insert_lb = QLabel()
         form.addRow(tr("Screw size"), size_cb)
+        form.addRow("", insert_lb)
         form.addRow(tr("Kind"), kind_cb)
         form.addRow("", tear_cb)
         form.addRow(tr("Clearance"), clr_sp)
+        # how thick the part is under the circle that is selected, when there is one: an
+        # insert that is longer than the part comes out at the back, which is worth saying
+        # before the hole is cut
+        target = self._screw_hole_target()
+        thick = target[4] if target is not None else None
+
+        def show_insert(*_):
+            """The hole of the insert that is chosen: an insert only comes in some sizes, so
+            the sizes without one drop out of the list while an insert is asked for."""
+            kind = self.SCREW_HOLE_KINDS[kind_cb.currentIndex()][1]
+            items = sizes if kind != "insert" else [s for s in sizes
+                                                    if s in threads.HEAT_SET_INSERTS]
+            if [size_cb.itemText(i) for i in range(size_cb.count())] != items:
+                want, at = size_cb.currentText(), size_cb.currentIndex()
+                size_cb.blockSignals(True)
+                size_cb.clear()
+                size_cb.addItems(items)
+                i = size_cb.findText(want)
+                size_cb.setCurrentIndex(i if i >= 0 else min(at, len(items) - 1))
+                size_cb.blockSignals(False)
+            form.setRowVisible(insert_lb, kind == "insert")
+            if kind != "insert":
+                insert_lb.clear()
+                return
+            top, bottom, insert_len = threads.HEAT_SET_INSERTS[size_cb.currentText()]
+            text = tr("Insert hole Ø {top} → {bottom} mm, {depth} mm deep").format(
+                top=f"{top:g}", bottom=f"{bottom:g}",
+                depth=f"{insert_len + threads.INSERT_ROOM:g}")
+            if thick is not None and thick < insert_len:
+                text += "\n" + tr("The part is thinner than the insert ({n} mm).").format(
+                    n=f"{round(thick, 2):g}")
+            insert_lb.setText(text)
+
+        kind_cb.currentIndexChanged.connect(show_insert)
+        size_cb.currentTextChanged.connect(show_insert)
+        show_insert()
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(dlg.accept)
         bb.rejected.connect(dlg.reject)

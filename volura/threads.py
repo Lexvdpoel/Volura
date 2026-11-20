@@ -171,11 +171,20 @@ HEX_NUTS = {
     "M2": (4.0, 1.6), "M2.5": (5.0, 2.0), "M3": (5.5, 2.4), "M4": (7.0, 3.2),
     "M5": (8.0, 4.7), "M6": (10.0, 5.2), "M8": (13.0, 6.8)}
 
-SCREW_HOLE_KINDS = ("through", "counterbore", "countersink", "nutpocket")
+# size: (hole Ø at the top, hole Ø at the bottom, insert length) in mm, the knurled inserts
+# that are melted into the plastic with a soldering iron (CNC Kitchen and Ruthex): the hole is
+# a little smaller at the bottom than at the top, because the insert is tapered
+HEAT_SET_INSERTS = {
+    "M2": (3.2, 3.1, 4.0), "M2.5": (3.6, 3.5, 5.7), "M3": (4.0, 3.9, 5.7),
+    "M4": (5.6, 5.5, 8.1), "M5": (6.4, 6.3, 9.5), "M6": (8.0, 7.9, 12.7)}
+
+SCREW_HOLE_KINDS = ("through", "counterbore", "countersink", "nutpocket", "insert")
 
 DEFAULT_HOLE_CLEARANCE = 0.2   # mm on every diameter of a hole: printed holes come out smaller
 COUNTERBORE_ROOM = 0.2         # mm the counterbore goes deeper than the head, so it sits low
 COUNTERSINK_OVER = 0.05        # mm the cone goes past the hole Ø, so it crosses the wall
+INSERT_ROOM = 1.0              # mm the hole of an insert goes deeper than the insert, so the
+                               # plastic the insert pushes down has room
 
 
 def _teardrop_loop(radius, up, segments):
@@ -200,19 +209,28 @@ def screw_hole(manifold, center, axis, length, size, kind, clearance=DEFAULT_HOL
     ``kind`` is "through" (a straight clearance hole), "counterbore" (a cylinder of the
     socket head Ø + clearance, ``head height`` + 0.2 mm deep from the face, for a socket
     head screw), "countersink" (a 90° cone from the countersunk head Ø + clearance at
-    the face down to the hole, for a flat head screw) or "nutpocket" (a hexagonal pocket of
+    the face down to the hole, for a flat head screw), "nutpocket" (a hexagonal pocket of
     the nut size + clearance, ``nut height`` + 0.2 mm deep from the face, that holds a hex
-    nut while the screw goes through the rest). The hole goes through the whole
-    ``length``, past the face and out at the back, so the cut leaves no skin behind.
-    ``clearance`` (mm) is added to every diameter, because printed holes come out smaller.
+    nut while the screw goes through the rest) or "insert" (the tapered hole of a heat-set
+    insert of ``HEAT_SET_INSERTS`` at the face, ``INSERT_ROOM`` deeper than the insert so the
+    plastic it pushes down has room, with the clearance hole of the screw under it the rest
+    of the way; an insert melts into the plastic, so its hole gets no clearance and a part
+    that is thinner than the insert simply gets a hole right through). The hole goes through
+    the whole ``length``, past the face and out at the back, so the cut leaves no skin
+    behind.
+    ``clearance`` (mm) is added to every diameter, because printed holes come out smaller;
+    only the hole of an insert is left alone, the plastic has to melt into that one.
     ``teardrop`` gives the straight hole a 45° roof that points up in the model, so a hole
     that runs sideways prints without support under its top; a hole that is more vertical
-    than that needs no roof, and the room for the head always stays round.
+    than that needs no roof, the room for the head always stays round, and so does the hole
+    of an insert.
     """
     if size not in SCREW_HOLES:
         raise ValueError(tr("unknown screw size {size}").format(size=size))
     if kind not in SCREW_HOLE_KINDS:
         raise ValueError(tr("unknown screw hole kind {kind}").format(kind=kind))
+    if kind == "insert" and size not in HEAT_SET_INSERTS:
+        raise ValueError(tr("no heat-set insert in {size}").format(size=size))
     length = float(length)
     if length <= 0:
         raise ValueError(tr("the depth of a screw hole must be greater than 0"))
@@ -220,15 +238,22 @@ def screw_hole(manifold, center, axis, length, size, kind, clearance=DEFAULT_HOL
     segments = max(12, int(segments))
     margin = max(0.5, 0.02 * length)      # mm past both faces, so no skin is left
     r_hole = (hole_d + clearance) / 2.0
+    # the hole of an insert stands in front of the hole of the screw, so the straight hole
+    # starts where the insert stops and the roof of a teardrop can never be in the insert;
+    # an insert that is longer than the part comes right out at the back
+    insert_depth, start = 0.0, -margin
+    if kind == "insert":
+        insert_depth = min(HEAT_SET_INSERTS[size][2] + INSERT_ROOM, length + margin)
+        start = min(insert_depth, length)
     if teardrop and abs(float(normalize(np.asarray(axis, dtype=float))[2])) < 0.5:
         # the roof has to point up in the model, so the profile turns with the hole: this is
         # the direction in its own plane that _place later maps onto world +Z
         up = (_rotation(axis).T @ np.array([0.0, 0.0, 1.0]))[:2]
         hole = mf.Manifold.extrude(mf.CrossSection([_teardrop_loop(r_hole, up, segments)]),
-                                   length + 2.0 * margin)
+                                   length + margin - start)
     else:
-        hole = mf.Manifold.cylinder(length + 2.0 * margin, r_hole, r_hole, segments)
-    cutter = hole.translate((0.0, 0.0, -margin))
+        hole = mf.Manifold.cylinder(length + margin - start, r_hole, r_hole, segments)
+    cutter = hole.translate((0.0, 0.0, start))
     if kind == "counterbore":
         depth = head_h + COUNTERBORE_ROOM + margin
         head = mf.Manifold.cylinder(depth, (head_d + clearance) / 2.0,
@@ -253,6 +278,17 @@ def screw_hole(manifold, center, axis, length, size, kind, clearance=DEFAULT_HOL
             mf.CrossSection([circle_points((s + clearance) / math.sqrt(3.0), 6)]),
             nut_h + COUNTERBORE_ROOM + margin).translate((0.0, 0.0, -margin))
         cutter = cutter + pocket
+    elif kind == "insert":
+        # the insert is tapered, so its hole is: the top Ø at the face and the bottom Ø as
+        # deep as the insert is long, the cone running on to the depth of the hole, which is
+        # INSERT_ROOM past the insert. No clearance here: an insert needs the plastic to
+        # melt into it.
+        top, bottom, insert_len = HEAT_SET_INSERTS[size]
+        slope = (top - bottom) / (2.0 * insert_len)   # mm of radius per mm of depth
+        cone = mf.Manifold.cylinder(insert_depth + margin, top / 2.0 + margin * slope,
+                                    top / 2.0 - insert_depth * slope,
+                                    segments).translate((0.0, 0.0, -margin))
+        cutter = cutter + cone
     return manifold - _place(cutter, center, axis)
 
 

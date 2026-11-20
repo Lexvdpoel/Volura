@@ -9,12 +9,16 @@ loses pi * 1.8² * 10 = 101.8 mm³. A counterbore adds a cylinder of the head Ø
 to the depth of the head + 0.2 mm; a countersink adds a 90° cone that ends in the hole; a
 nut pocket adds a hexagonal prism of the nut (`threads.HEX_NUTS`: width across flats and
 height, ISO 4032), so a hex nut lies in the pocket while the screw goes through the hole.
-A teardrop puts a 45° roof on a hole that runs sideways, so it prints without support.
+A teardrop puts a 45° roof on a hole that runs sideways, so it prints without support. A
+heat-set insert gets a hole that is tapered like the insert and 1 mm deeper than the insert
+is long, with the clearance hole of the screw under it; `threads.HEAT_SET_INSERTS` is the
+table of those inserts, which the Standoff also cuts from, and a part that is thinner than
+the insert simply gets a hole right through.
 
-These tests (Qt offscreen) check the volumes of the four kinds on a block with a circle
+These tests (Qt offscreen) check the volumes of every kind on a block with a circle
 drawn on top, that the hole goes through, the openings in the top and bottom face, the
-roof of a sideways hole, the error of a face that is not a circle, and one undo for the
-whole operation.
+roof of a sideways hole, the hole of a heat-set insert, the error of a face that is not a
+circle, and one undo for the whole operation.
 
 Run with:  python -m pytest tests/test_screw_hole.py
 """
@@ -29,9 +33,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import manifold3d as mf  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
-from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox  # noqa: E402
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,  # noqa: E402
+                               QDoubleSpinBox, QLabel)
 
-from volura import app as app_module, ops, threads  # noqa: E402
+from volura import app as app_module, ops, standoff, threads  # noqa: E402
 from volura.brep import Entities  # noqa: E402
 from volura.geom import Plane, circle_points  # noqa: E402
 from volura.model import Document  # noqa: E402
@@ -100,6 +105,26 @@ def cut(g, fid, size, kind, clearance=0.2, teardrop=False):
                               clearance=clearance, teardrop=teardrop)
 
 
+def insert_r(size, z):
+    """The radius of the hole of a heat-set insert of `size` at `z` mm under the face: the
+    hole is tapered like the insert, the top Ø at the face and the bottom Ø as deep as the
+    insert is long."""
+    top, bottom, length = threads.HEAT_SET_INSERTS[size]
+    return top / 2.0 - z * (top - bottom) / (2.0 * length)
+
+
+def insert_volume(size, depth):
+    """The plastic the hole of a heat-set insert of `size` takes out of `depth` mm of part."""
+    r0, r1 = insert_r(size, 0.0), insert_r(size, depth)
+    return math.pi * depth / 3.0 * (r0 * r0 + r0 * r1 + r1 * r1)
+
+
+def insert_depth(size, length):
+    """How deep the hole of an insert of `size` goes in a part of `length` mm: 1 mm past the
+    insert, or right through when the insert is longer than the part is thick."""
+    return min(threads.HEAT_SET_INSERTS[size][2] + threads.INSERT_ROOM, length)
+
+
 def hole_top(ents, x):
     """The highest point of the hole in the side face at x = `x`, or None."""
     for fid in ents.F:
@@ -152,6 +177,14 @@ def hexagon_opening(ents, z):
             dist = np.abs(np.sum((P - c) * n, axis=1)) / np.linalg.norm(n, axis=1)
             return 2.0 * float(np.min(dist))
     return None
+
+
+def hole_slice(m, z, size=BLOCK, width=0.2):
+    """The area of the hole in a thin slice of `width` mm at height `z`: what a plane cuts
+    out of a part of the same size, so a hole can be measured where it is not an opening."""
+    full = mf.Manifold.cube(size)
+    slab = mf.Manifold.cube([size[0], size[1], width]).translate((0.0, 0.0, z - width / 2.0))
+    return ((full ^ slab).volume() - (m ^ slab).volume()) / width
 
 
 def pump_until(predicate, timeout_ms=15000):
@@ -240,6 +273,85 @@ def test_a_nut_pocket_holds_a_hex_nut_and_the_screw_goes_through():
     assert opening(g.ents, 0.0) == pytest.approx(1.8, abs=0.02), "the screw cannot go through"
 
 
+def test_an_insert_hole_is_the_insert_with_the_screw_hole_under_it():
+    doc = Document()
+    g = block(doc)
+    fid = draw_circle(g)
+    res = cut(g, fid, "M3", "insert")
+    assert res.status() == mf.Error.NoError and not res.is_empty()
+    assert res.genus() == 1, "the screw cannot go through the hole of the insert"
+    # the tapered hole of the insert, 1 mm deeper than the insert is long so the plastic it
+    # pushes down has room, and the clearance hole of the screw under it the rest of the way
+    depth = insert_depth("M3", BLOCK[2])
+    assert BLOCK_VOLUME - res.volume() == pytest.approx(insert_volume("M3", depth)
+                                                        + math.pi * 1.8 ** 2
+                                                        * (BLOCK[2] - depth), rel=0.02)
+
+
+def test_the_hole_of_an_insert_is_the_top_of_the_insert_at_the_face():
+    doc = Document()
+    g = block(doc)
+    fid = draw_circle(g)
+    res = cut(g, fid, "M3", "insert")
+    top, _bottom, _length = threads.HEAT_SET_INSERTS["M3"]
+    assert hole_slice(res, BLOCK[2] - 0.1) == pytest.approx(math.pi * (0.5 * top) ** 2,
+                                                            rel=0.02), "not the top Ø here"
+    assert hole_slice(res, 1.0) == pytest.approx(math.pi * 1.8 ** 2, rel=0.02), \
+        "the hole under the insert is not the clearance hole of the screw"
+    assert hole_slice(res, BLOCK[2] - 0.1) > hole_slice(res, 1.0), "the insert does not fit"
+    g.ents = Entities.from_manifold(res)
+    assert opening(g.ents, 0.0) == pytest.approx(1.8, abs=0.02), "the screw cannot go through"
+
+
+def test_the_clearance_is_not_added_to_the_hole_of_an_insert():
+    doc = Document()
+    g = block(doc)
+    fid = draw_circle(g)
+    tight = cut(g, fid, "M3", "insert", clearance=0.0)
+    loose = cut(g, fid, "M3", "insert", clearance=0.6)
+    # an insert needs the plastic to melt into it, so only the hole of the screw takes the
+    # clearance the user asks for
+    assert hole_slice(tight, BLOCK[2] - 0.1) == pytest.approx(hole_slice(loose, BLOCK[2] - 0.1),
+                                                              rel=1e-9), "clearance on the insert"
+    assert hole_slice(tight, 1.0) == pytest.approx(math.pi * 1.7 ** 2, rel=0.02)
+    assert hole_slice(loose, 1.0) == pytest.approx(math.pi * 2.0 ** 2, rel=0.02)
+
+
+def test_a_part_thinner_than_the_insert_gets_a_hole_right_through():
+    doc = Document()
+    plate = ops.group_from_manifold(doc, mf.Manifold.cube([20.0, 20.0, 4.0]), "#cccccc", "plate")
+    fid = draw_circle(plate, center=(10.0, 10.0, 4.0))
+    res = cut(plate, fid, "M4", "insert")     # the insert is 8.1 mm long and the plate is 4
+    assert res.status() == mf.Error.NoError and not res.is_empty()
+    assert res.genus() == 1, "the hole has to come out at the back"
+    assert 20.0 * 20.0 * 4.0 - res.volume() == pytest.approx(insert_volume("M4", 4.0), rel=0.02)
+    plate.ents = Entities.from_manifold(res)
+    assert opening(plate.ents, 0.0) == pytest.approx(insert_r("M4", 4.0), abs=0.05), \
+        "the screw cannot come out at the back"
+
+
+def test_the_hole_of_an_insert_stays_round_under_a_teardrop_roof():
+    doc = Document()
+    g = block(doc)
+    fid = draw_circle(g, center=(BLOCK[0], BLOCK[1] / 2, BLOCK[2] / 2), normal=(1, 0, 0))
+    straight = BLOCK_VOLUME - cut(g, fid, "M3", "insert").volume()
+    roofed = BLOCK_VOLUME - cut(g, fid, "M3", "insert", teardrop=True).volume()
+    # the roof is on the hole of the screw, which only starts below the insert: the opening
+    # of the insert at the face stays the round top Ø of the insert
+    roof = (1.8 ** 2 - math.pi * 1.8 ** 2 / 4.0) * (BLOCK[0] - insert_depth("M3", BLOCK[0]))
+    assert roofed - straight == pytest.approx(roof, abs=0.5)
+    g.ents = Entities.from_manifold(cut(g, fid, "M3", "insert", teardrop=True))
+    assert hole_top(g.ents, BLOCK[0]) == pytest.approx(BLOCK[2] / 2 + 2.0, abs=0.02), \
+        "the hole of the insert got a roof"
+
+
+def test_the_standoff_cuts_its_insert_hole_from_the_same_table():
+    assert standoff.INSERTS == {"M2": 3.2, "M2.5": 3.6, "M3": 4.0, "M4": 5.6, "M5": 6.4}
+    for size, hole in standoff.INSERTS.items():
+        assert hole == pytest.approx(threads.HEAT_SET_INSERTS[size][0])
+    assert set(standoff.INSERTS) < set(threads.HEAT_SET_INSERTS)
+
+
 def test_a_sideways_teardrop_hole_gets_a_roof_of_45_degrees():
     doc = Document()
     g = block(doc)
@@ -291,12 +403,19 @@ def test_an_unknown_size_or_kind_is_refused():
         threads.screw_hole(block_man, (0, 0, 10), (0, 0, -1), 10.0, "M99", "through")
     with pytest.raises(ValueError, match="unknown screw hole kind"):
         threads.screw_hole(block_man, (0, 0, 10), (0, 0, -1), 10.0, "M3", "oval")
+    with pytest.raises(ValueError, match="no heat-set insert in M8"):
+        threads.screw_hole(block_man, (0, 0, 10), (0, 0, -1), 10.0, "M8", "insert")
 
 
 # -------------------------------------------------------------------- the window
 
 def select_circle(win, g, fid):
     win.doc.set_selection([("f", g.id, fid)])
+
+
+def insert_info(dlg):
+    """The text under the size of the dialog that says what the hole of an insert is."""
+    return " ".join(lb.text() for lb in dlg.findChildren(QLabel) if "Ø" in lb.text())
 
 
 def test_the_action_cuts_the_hole_and_keeps_the_name_and_color(win):
@@ -307,6 +426,18 @@ def test_the_action_cuts_the_hole_and_keeps_the_name_and_color(win):
     assert pump_until(lambda: g.ents.to_manifold().volume() < BLOCK_VOLUME - 120), "no hole"
     assert g.name == "my part" and g.color == "#d23b3b"
     assert opening(g.ents, BLOCK[2]) == pytest.approx(2.85, abs=0.02)
+    assert pump_until(lambda: "M3" in win.hint.text()), win.hint.text()
+
+
+def test_the_action_cuts_the_hole_of_an_insert(win):
+    g = block(win.doc)
+    fid = draw_circle(g)
+    select_circle(win, g, fid)
+    win._apply_screw_hole("M3", "insert", "Heat-set insert", 0.2)
+    # the hole of an insert takes 115 mm³ out of the block, a straight M3 hole only 102 mm³
+    assert pump_until(lambda: g.ents.to_manifold().volume() < BLOCK_VOLUME - 112), "no insert"
+    assert opening(g.ents, BLOCK[2]) == pytest.approx(2.0, abs=0.02), "not the top of the insert"
+    assert opening(g.ents, 0.0) == pytest.approx(1.8, abs=0.02), "the screw cannot go through"
     assert pump_until(lambda: "M3" in win.hint.text()), win.hint.text()
 
 
@@ -385,13 +516,87 @@ def test_the_dialog_offers_the_nut_pocket_and_remembers_it(win, monkeypatch):
     def accept(dlg):
         kinds = dlg.findChildren(QComboBox)[1]
         seen["items"] = [kinds.itemText(i) for i in range(kinds.count())]
-        kinds.setCurrentIndex(kinds.count() - 1)
+        kinds.setCurrentText("Nut pocket")
         return QDialog.Accepted
 
     monkeypatch.setattr(app_module.QDialog, "exec", accept)
     win.screw_hole_dialog()
-    assert seen["items"] == ["Through", "Counterbore", "Countersunk", "Nut pocket"]
+    assert seen["items"] == ["Through", "Counterbore", "Countersunk", "Nut pocket",
+                             "Heat-set insert"]
     assert win.settings.screw_hole_kind == "nutpocket"
+
+
+def test_the_dialog_keeps_only_the_sizes_of_the_inserts_and_remembers_the_kind(win, monkeypatch):
+    seen = {}
+
+    def accept(dlg):
+        size_cb, kinds = dlg.findChildren(QComboBox)[:2]
+        kinds.setCurrentText("Heat-set insert")
+        seen["sizes"] = [size_cb.itemText(i) for i in range(size_cb.count())]
+        seen["size"] = size_cb.currentText()
+        seen["info"] = insert_info(dlg)
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", accept)
+    win.settings.screw_hole_size = "M4"
+    win.settings.screw_hole_kind = "counterbore"
+    win.screw_hole_dialog()
+    assert seen["sizes"] == ["M2", "M2.5", "M3", "M4", "M5", "M6"], "M8 has no insert"
+    assert seen["size"] == "M4", "the size that stood there is gone with the kind"
+    assert seen["info"] == "Insert hole Ø 5.6 → 5.5 mm, 9.1 mm deep", seen["info"]
+    assert (win.settings.screw_hole_size, win.settings.screw_hole_kind) == ("M4", "insert")
+
+    def again(dlg):
+        size_cb, kinds = dlg.findChildren(QComboBox)[:2]
+        seen["start"] = (size_cb.currentText(), kinds.currentText())
+        seen["info"] = insert_info(dlg)
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", again)
+    win.screw_hole_dialog()
+    assert seen["start"] == ("M4", "Heat-set insert"), "the kind is not remembered"
+    assert "5.6" in seen["info"], "the size does not come back with its hole of the insert"
+
+
+def test_the_dialog_gives_the_sizes_back_when_no_insert_is_chosen(win, monkeypatch):
+    seen = {}
+
+    def accept(dlg):
+        size_cb, kinds = dlg.findChildren(QComboBox)[:2]
+        kinds.setCurrentText("Heat-set insert")
+        kinds.setCurrentText("Through")
+        seen["sizes"] = [size_cb.itemText(i) for i in range(size_cb.count())]
+        seen["info"] = insert_info(dlg)
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", accept)
+    win.settings.screw_hole_size = "M3"
+    win.settings.screw_hole_kind = "through"
+    win.screw_hole_dialog()
+    assert seen["sizes"] == ["M2", "M2.5", "M3", "M4", "M5", "M6", "M8"], "M8 is gone for good"
+    assert seen["info"] == "", "the insert keeps saying something about its hole"
+
+
+def test_the_dialog_says_when_the_part_is_thinner_than_the_insert(win, monkeypatch):
+    g = block(win.doc)                     # the block is 10 mm thick
+    fid = draw_circle(g)
+    select_circle(win, g, fid)
+    seen = []
+
+    def accept(dlg):
+        size_cb, kinds = dlg.findChildren(QComboBox)[:2]
+        kinds.setCurrentText("Heat-set insert")
+        seen.append(insert_info(dlg))      # the insert of M3 is 5.7 mm long
+        size_cb.setCurrentText("M6")       # the insert of M6 is 12.7 mm long
+        seen.append(insert_info(dlg))
+        return QDialog.Accepted
+
+    monkeypatch.setattr(app_module.QDialog, "exec", accept)
+    win.settings.screw_hole_size = "M3"
+    win.settings.screw_hole_kind = "insert"
+    win.screw_hole_dialog()
+    assert "thinner" not in seen[0], seen[0]
+    assert "thinner than the insert" in seen[1] and "(10 mm)" in seen[1], seen[1]
 
 
 def test_the_dialog_remembers_the_teardrop(win, monkeypatch):
