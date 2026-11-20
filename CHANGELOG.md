@@ -3,13 +3,16 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## Unreleased
+## 0.2.62 — 2026-11-20
 
 ### New
 - **Send to printer**: the print preview of *File > Slice* sends the G-code over the network to
   **OctoPrint**, **Klipper (Moonraker)** or **PrusaLink**, under a name of your choice and, if you
   like, starts the print right away. Add your printers under *Window > Preferences > Printers*;
   *Test connection* there says what answered.
+- **Printer Status** under *Window*: a window beside your model that shows what each of those
+  printers is doing: idle, printing, paused or offline, the file, how far the print is, the time
+  it has run and still needs, and the nozzle and bed temperatures, refreshed every five seconds.
 
 ## 0.2.61 — 2026-11-19
 
