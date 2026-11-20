@@ -3,12 +3,15 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## Unreleased
+## 0.2.63 — 2026-11-20
 
 ### New
 - **More slice options** in *File > Slice*, under Extras: **adaptive layer height** (thinner layers
   on gentle slopes), **ironing** for a smooth flat top, a **fuzzy skin** with its own thickness, and
   the **number of walls**. Left off, the printer profile decides as before.
+- **Slice presets**: keep a printer with its nozzle, material, quality, infill, support, adhesion
+  and extras under a name of your own (*Preset* at the top of *File > Slice*) and pick it again
+  with one click.
 
 ## 0.2.62 — 2026-11-20
 
