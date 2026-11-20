@@ -1280,6 +1280,25 @@ volura</code></pre>
       <li>Vlakken die op het printbed liggen (het laagste punt van het model) worden nooit gemarkeerd.</li>
     </ul>
     <figure class="shots"><img lang="en" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/en/overhangs.png" alt="The overhang view marks the faces that need support" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"><img lang="nl" src="https://raw.githubusercontent.com/Lexvdpoel/Volura/main/docs/website/img/nl/overhangs.png" alt="De overhangweergave markeert de vlakken die support nodig hebben" loading="lazy" style="border:1px solid #d0d7de;border-radius:8px"></figure>
+    <h3 id="thin-walls"><span lang="en">Thin wall view</span><span lang="nl">Dunne-wandweergave</span></h3>
+    <p lang="en">Colours every face of a wall thinner than your printer can lay down, so the fins and floors a slicer would drop are easy to find.</p>
+    <p lang="nl">Kleurt elk vlak van een wand die dunner is dan je printer kan neerleggen, zodat de vinnen en bodems die een slicer zou laten vallen makkelijk te vinden zijn.</p>
+    <p class="where" lang="en">Where: <b>View &gt; Face Style &gt; Thin Walls</b>; the thinnest wall under <b>Window &gt; Preferences &gt; Drawing</b></p>
+    <p class="where" lang="nl">Waar: <b>Beeld &gt; Vlakstijl &gt; Dunne wanden</b>; de dunste wand onder <b>Venster &gt; Voorkeuren &gt; Tekenen</b></p>
+    <ul lang="en">
+      <li>A place is thin where no circle of the thinnest wall fits in the material any more; the part is cut and measured along all three axes, so a wall that stands up and a floor that lies down are both found.</li>
+      <li>The default is 0.8 mm: two lines of a nozzle of 0.4 mm. Set it to the thinnest wall your own printer still prints cleanly.</li>
+      <li>The status bar counts the marked faces, together with the faces that need support when both views are on.</li>
+      <li>Where a face both hangs over and is thin, the overhang colour wins: support is the worse of the two problems.</li>
+      <li>On a big model the search runs in the background: the model keeps its own colours until the answer is there, and the window stays on screen.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Een plek is dun waar een cirkel van de dunste wand niet meer in het materiaal past; het onderdeel wordt langs alle drie de assen gesneden en gemeten, dus een wand die staat en een bodem die ligt worden allebei gevonden.</li>
+      <li>De standaard is 0,8 mm: twee lijnen van een nozzle van 0,4 mm. Zet hem op de dunste wand die je eigen printer nog netjes print.</li>
+      <li>De statusbalk telt de gemarkeerde vlakken, samen met de vlakken die support nodig hebben als beide weergaven aan staan.</li>
+      <li>Waar een vlak zowel overhangt als dun is, wint de overhangkleur: support is het ergste van de twee problemen.</li>
+      <li>Op een groot model loopt het zoeken op de achtergrond: het model houdt zijn eigen kleuren tot het antwoord er is, en het venster blijft gewoon in beeld.</li>
+    </ul>
     <h3><span lang="en">Orient for printing</span><span lang="nl">Oriënteren voor printen</span></h3>
     <p lang="en">Turns parts so that each one stands on the face that needs the least support, like the auto-orient of a slicer.</p>
     <p lang="nl">Draait onderdelen zodat elk op het vlak staat dat de minste support nodig heeft, zoals de auto-orient van een slicer.</p>
@@ -2080,7 +2099,7 @@ volura</code></pre>
     <ul lang="en">
       <li><b>General</b>: the segments of a circle, the update check, the question to simplify a large import, the <a href="#language">language</a> and the <a href="#keys">keyboard scheme</a>.</li>
       <li><b>Display</b>: the <a href="#theme">theme</a> and the <a href="#line-width">line width</a>.</li>
-      <li><b>Drawing</b>: the <a href="#overhangs">overhang limit</a> and the snapping of lengths.</li>
+      <li><b>Drawing</b>: the <a href="#overhangs">overhang limit</a>, the <a href="#thin-walls">thinnest wall</a> and the snapping of lengths.</li>
       <li><b><a href="#printers">Printers</a></b>: OctoPrint, Klipper (Moonraker) and PrusaLink, so a slice goes from the preview straight to the printer.</li>
       <li><b>3D Mouse</b>: the <a href="#spacemouse">3D mouse</a> and its speed.</li>
       <li><b>Shortcuts</b>: search, add, remove and reset every key.</li>
@@ -2088,7 +2107,7 @@ volura</code></pre>
     <ul lang="nl">
       <li><b>Algemeen</b>: de segmenten van een cirkel, de updatecontrole, de vraag om een grote import te vereenvoudigen, de <a href="#language">taal</a> en het <a href="#keys">toetsenschema</a>.</li>
       <li><b>Weergave</b>: het <a href="#theme">thema</a> en de <a href="#line-width">lijndikte</a>.</li>
-      <li><b>Tekenen</b>: de <a href="#overhangs">overhanggrens</a> en het snappen van lengtes.</li>
+      <li><b>Tekenen</b>: de <a href="#overhangs">overhanggrens</a>, de <a href="#thin-walls">dunste wand</a> en het snappen van lengtes.</li>
       <li><b><a href="#printers">Printers</a></b>: OctoPrint, Klipper (Moonraker) en PrusaLink, zodat een slice vanuit het voorbeeld meteen naar de printer gaat.</li>
       <li><b>3D-muis</b>: de <a href="#spacemouse">3D-muis</a> en zijn snelheid.</li>
       <li><b>Sneltoetsen</b>: elke toets zoeken, toevoegen, weghalen en terugzetten.</li>
@@ -2135,13 +2154,13 @@ volura</code></pre>
     <p class="where" lang="en">Where: <b>View</b></p>
     <p class="where" lang="nl">Waar: <b>Beeld</b></p>
     <ul lang="en">
-      <li><b>Face Style</b>: Wireframe, Hidden Line, Shaded and Monochrome, plus <a href="#overhangs">Overhangs</a>.</li>
+      <li><b>Face Style</b>: Wireframe, Hidden Line, Shaded and Monochrome, plus <a href="#overhangs">Overhangs</a> and <a href="#thin-walls">Thin Walls</a>.</li>
       <li><b>Edge Style</b>: the profile edges and the back edges (<kbd>K</kbd>).</li>
       <li>X-ray (<kbd>Alt</kbd>+<kbd>X</kbd>), hidden geometry, guides, the axes and the grid of the print bed.</li>
       <li>On the worksheet here you also switch the grid and the <a href="#laser">layers</a> of the worksheet.</li>
     </ul>
     <ul lang="nl">
-      <li><b>Vlakstijl</b>: draadmodel, verborgen lijnen, gearceerd en monochroom, plus <a href="#overhangs">Overhang</a>.</li>
+      <li><b>Vlakstijl</b>: draadmodel, verborgen lijnen, gearceerd en monochroom, plus <a href="#overhangs">Overhang</a> en <a href="#thin-walls">Dunne wanden</a>.</li>
       <li><b>Randstijl</b>: de profielranden en de achterliggende randen (<kbd>K</kbd>).</li>
       <li>Röntgen (<kbd>Alt</kbd>+<kbd>X</kbd>), verborgen geometrie, hulplijnen, de assen en het raster van het printbed.</li>
       <li>Op het werkblad zet je hier ook het raster en de <a href="#laser">lagen</a> van het werkblad aan en uit.</li>

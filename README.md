@@ -483,6 +483,12 @@ gets for free.
   than the limit (45° from the vertical by default, under *Window > Preferences > Drawing*) in a
   warning colour, so you see at a glance what needs support; faces that lie on the print bed are
   left alone and the status bar counts the faces that need it
+- **Thin Walls view** (View > Face Style > Thin Walls): marks every face of a wall thinner than the
+  thinnest wall your printer can lay down (0.8 mm by default, under *Window > Preferences >
+  Drawing*), so fins and floors that a slicer would drop or blob are easy to find; a place is thin
+  where no circle of that diameter fits in the material any more, measured in all three directions,
+  and the status bar counts the faces that are thin. The cut of the model runs in the background,
+  so a big model stays on screen while it is searched
 - **Model Info** (Window) with the pages Units (length rounding and the number of decimals of the
   Measurements box), Statistics (groups, loose edges and faces, total volume) and Print Bed
 - **Filament** (3D Printing > Printer Setup > Print Bed): the material (PLA, PETG, ABS, ASA, TPU, Nylon

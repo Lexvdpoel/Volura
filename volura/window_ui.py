@@ -852,6 +852,15 @@ class UiMixin:
         self.view.update()
         self.view.update_overhang_status()
 
+    def toggle_thin_walls(self, on):
+        """View > Face Style > Thin Walls: mark the faces of walls that are thinner than the
+        printer can lay down. The cut of the model runs in the background (see
+        :meth:`Viewport._thin_mask_of`), so the colours appear a moment later on a big model."""
+        self.settings.show_thin_walls = bool(on)
+        self.settings.save()
+        self.view.update()
+        self.view.update_view_status()
+
     def toggle_back_edges(self, on):
         self.settings.back_edges = bool(on)
         self.settings.save()

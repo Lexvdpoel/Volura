@@ -546,6 +546,15 @@ class PreferencesDialog(PageDialog):
                                           "vertical need support; View > Face Style > Overhangs "
                                           "marks them."))
         form.addRow(tr("Overhang limit"), self.overhang_limit)
+        self.min_wall = QDoubleSpinBox()
+        self.min_wall.setRange(0.1, 10.0)
+        self.min_wall.setSingleStep(0.1)
+        self.min_wall.setDecimals(2)
+        self.min_wall.setSuffix(" mm")
+        self.min_wall.setValue(self.win.settings.min_wall)
+        self.min_wall.setToolTip(tr("The thinnest wall your printer can lay down; View > Face "
+                                    "Style > Thin Walls marks the faces that are thinner."))
+        form.addRow(tr("Thinnest wall"), self.min_wall)
         self.add_page(page)
 
     # ------------------------------------------------------------------ printers
@@ -703,6 +712,7 @@ class PreferencesDialog(PageDialog):
         s.check_updates = self.updates.isChecked()
         s.ask_simplify_import = self.ask_simplify.isChecked()
         s.overhang_limit = self.overhang_limit.value()
+        s.min_wall = self.min_wall.value()
         s.spacemouse_speed = self.sm_speed.value() / self.SPEED_STEPS
         s.printers = [conn for conn in self.printers if conn.name and conn.url]
         sm_changed = s.spacemouse != self.sm_on.isChecked()
@@ -727,7 +737,7 @@ class PreferencesDialog(PageDialog):
         self.win.view.tools["circle"].segments = s.circle_segments
         self.win.view.update()
         self.win.sheet_view.update()      # the line width also changes the worksheet
-        self.win.view.update_overhang_status()
+        self.win.view.update_view_status()
 
 
 class ShortcutsPanel(QWidget):

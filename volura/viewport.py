@@ -8,7 +8,7 @@ from PySide6.QtCore import QEvent, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QSurfaceFormat
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
-from . import errors, icons, ops, theme
+from . import background, errors, icons, ops, theme, thin_walls
 from .camera import Camera, horizon_line
 from .i18n import tr, trn
 from .inference import InferenceEngine
@@ -315,7 +315,10 @@ class Viewport(QOpenGLWidget):
         self._fstate = _FaceState()   # which GL states the model pass already set
         self._overhang_cache = None   # (key, (bed_z, faces)) of the overhang view
         self._overhang_ctx = None     # (bed_z, limit) the current frame tints faces with
-        self._overhang_hint = ""      # the overhang count the status bar shows, "" when none
+        self._thin_cache = {}         # id(ents) -> (ents, version, wall, bool per triangle)
+        self._thin_busy = {}          # id(ents) -> that same key while its cut is running
+        self._thin_answers = {}       # id(ents) -> answers landed; see _thin_context
+        self._view_hint = ""          # what the colours in the model mean, "" when nothing does
         self._drag = None
         self._last = None
         self.middle_pans = False        # the Fusion scheme pans with the middle button
@@ -326,7 +329,7 @@ class Viewport(QOpenGLWidget):
         self.view_cube = ViewCube(self, "main")   # the cube in the top right corner
         doc.changed.connect(self.update)
         doc.selection_changed.connect(self.update)
-        doc.changed.connect(self.update_overhang_status)
+        doc.changed.connect(self.update_view_status)
 
     # ------------------------------------------------------------- tools
     def set_tool(self, name):
@@ -582,7 +585,8 @@ class Viewport(QOpenGLWidget):
     # ------------------------------------------------------------- model
     def _render_data(self, ents, gcolor):
         octx = self._overhang_ctx       # (bed_z, limit) while the overhang view is on, else None
-        key = (id(ents), ents.version, gcolor, octx)
+        wctx = self._thin_context(ents)   # (wall, answers) while the thin wall view is on
+        key = (id(ents), ents.version, gcolor, octx, wctx)
         rc = self._rcache.get(id(ents))
         if rc is not None and rc["key"] == key and rc["ents"] is ents:
             return rc
@@ -593,6 +597,8 @@ class Viewport(QOpenGLWidget):
         colors = {f: face.color for f, face in ents.F.items()}
         T, fids = c["T"], c["tri_fid"]
         warn = theme.rgb("overhang") if octx else None
+        thin = theme.rgb("thin") if wctx else None
+        mask = self._thin_mask_of(ents) if wctx else None
 
         def faces(keep):
             """Vertex, normal and colour arrays of the faces selected by `keep`."""
@@ -606,6 +612,12 @@ class Viewport(QOpenGLWidget):
                               dtype=np.float32)
                 front[:, :3] = np.repeat(fc, 3, axis=0)
                 back[:, :3] = np.repeat(bc, 3, axis=0)
+                if thin is not None and mask is not None:
+                    # the thin walls go on first: a face that both hangs over and is thin
+                    # stays red, because support is the worse of the two problems
+                    vmask = np.repeat(mask[keep], 3)
+                    front[vmask, :3] = thin
+                    back[vmask, :3] = thin
                 if warn is not None:
                     bed_z, limit = octx
                     over = ops.overhang_mask(c["tri_nrm"][keep], T[keep].mean(axis=1)[:, 2],
@@ -725,6 +737,9 @@ class Viewport(QOpenGLWidget):
         live = {id(e) for e in doc.all_ents()}
         for key in [k for k in self._rcache if k not in live]:
             _free_render_data(self._rcache.pop(key))
+        for table in (self._thin_cache, self._thin_busy, self._thin_answers):
+            for key in [k for k in table if k not in live]:
+                table.pop(key)
 
     # ------------------------------------------------------------- overhangs
     def _overhang_faces(self):
@@ -763,27 +778,135 @@ class Viewport(QOpenGLWidget):
         info = self._overhang_faces()
         return None if info is None else (info[0], getattr(self.settings, "overhang_limit", 45))
 
-    def update_overhang_status(self):
-        """The status bar hint of the overhang view: how many faces need support.
+    # ------------------------------------------------------------- thin walls
+    def _thin_context(self, ents):
+        """``(wall, answers)`` the faces of `ents` are tinted with, or None when off.
 
-        Off, or nothing overhanging: the hint goes away and the instruction of the current
-        tool comes back, so the bar never keeps a count that is no longer true."""
+        The answers that landed for this geometry belong in the key of its render cache: while
+        a cut is on its way there is nothing to tint yet, and the frame right after one
+        arrives may not be skipped as though nothing in the model had changed."""
+        if not getattr(self.settings, "show_thin_walls", False):
+            return None
+        return getattr(self.settings, "min_wall", 0.8), self._thin_answers.get(id(ents), 0)
+
+    def _thin_mask_of(self, ents):
+        """The bool per triangle of `ents` whether it lies in a wall thinner than the setting,
+        or None while that is not known yet.
+
+        The cut takes seconds on a big model, so it runs in the background (see
+        :meth:`_run_thin_job`) and the faces are drawn as they always were until its answer
+        has landed. An answer belongs to one version of one geometry and to one wall width:
+        a cut of a model that has moved on since is never shown."""
+        if not getattr(self.settings, "show_thin_walls", False):
+            return None
+        wall = getattr(self.settings, "min_wall", 0.8)
+        got = self._thin_cache.get(id(ents))
+        if got is not None and got[0] is ents and got[1] == ents.version and got[2] == wall:
+            mask = got[3]
+            # the triangles of this version are counted the same way the answer was made;
+            # when the render cache says otherwise, the answer is not the one for this frame
+            return mask if len(mask) == len(self.engine.cache.get(ents)["tri_fid"]) else None
+        job = (ents, ents.version, wall)
+        if self._thin_busy.get(id(ents)) != job:
+            self._thin_busy[id(ents)] = job
+            self._run_thin_job(job)
+        return None
+
+    def _run_thin_job(self, job):
+        """The cut of one geometry off the GUI thread; the answer is checked before it lands.
+
+        The window takes no input while it runs (like every job that reads the model), so the
+        faces cannot change under the cut; a big model takes seconds, and the status bar says
+        what the wait is for. Until the answer has landed the model is drawn without tint,
+        which is why a cut that is too late for this frame costs nothing."""
+        ents, wall = job[0], job[2]
+        # the centres of the triangles the view draws; the answer comes back for these
+        points = np.array(self.engine.cache.get(ents)["T"].mean(axis=1), dtype=float)
+        checking = tr("Checking wall thickness…")
+
+        def work(report):
+            return thin_walls.thin_mask(ents.to_manifold(), points, wall)
+
+        def told():
+            """The bar showed what it was waiting for; now it shows the count, or - when
+            nothing is thin - the instruction of the tool again."""
+            if self._status_note == checking:
+                self._status_note = None
+            self._view_hint = ""            # so the count comes back even when it is the same
+            self.update_view_status()
+            self.refresh_status()
+            if self._status_shown == checking:
+                # nothing thin and a tool without an instruction: the wait is over all the same
+                self._status_shown = ""
+                self.status_changed.emit("")
+
+        def stored(mask):
+            if not background.alive(self) or self._thin_busy.get(id(ents)) != job:
+                return                     # another file, another version, another wall width
+            self._thin_busy.pop(id(ents), None)
+            self._thin_cache[id(ents)] = job + (np.asarray(mask, dtype=bool),)
+            self._thin_answers[id(ents)] = self._thin_answers.get(id(ents), 0) + 1
+            told()
+            self.update()
+
+        def failed(_exc):
+            # nothing to show: the faces stay as they are, and the next frame asks again
+            if self._thin_busy.get(id(ents)) == job:
+                self._thin_busy.pop(id(ents), None)
+                told()
+
+        background.run(self.window(), work, text=checking, can_cancel=False,
+                       show_dialog=False, on_done=stored, on_error=failed)
+        self.set_status(checking)
+
+    def _thin_faces(self):
+        """How many faces of the model lie in a wall thinner than the setting; 0 when unknown.
+
+        A face counts as soon as one of its triangles does, read off the triangles the render
+        cache holds for the answer of :meth:`_thin_mask_of`. While a cut still runs its
+        geometry counts as nothing, so the number can still rise before the view is done."""
+        if not getattr(self.settings, "show_thin_walls", False):
+            return 0
+        total = 0
+        for e in [e for _, e, _ in self.doc.contexts()]:
+            mask = self._thin_mask_of(e)
+            if mask is None or not mask.any():
+                continue
+            total += int(len(np.unique(self.engine.cache.get(e)["tri_fid"][mask])))
+        return total
+
+    def update_view_status(self):
+        """The status bar hint of the face style views: what the colours in the model mean.
+
+        Both hints in one line, the overhang count first. Off, or nothing to see: the hint
+        goes away and the instruction of the current tool comes back, so the bar never keeps
+        a count that is no longer true."""
+        parts = []
         info = self._overhang_faces()
         if info and info[1]:
-            text = trn("Overhangs: {n} face needs support (over {limit}°)",
-                       "Overhangs: {n} faces need support (over {limit}°)", info[1]).format(
-                n=info[1], limit=int(self.settings.overhang_limit))
-        else:
-            text = ""
-        if text == self._overhang_hint:
+            parts.append(trn("Overhangs: {n} face needs support (over {limit}°)",
+                             "Overhangs: {n} faces need support (over {limit}°)", info[1]).format(
+                n=info[1], limit=int(self.settings.overhang_limit)))
+        thin = self._thin_faces()
+        if thin:
+            parts.append(trn("Thin walls: {n} face under {mm} mm",
+                             "Thin walls: {n} faces under {mm} mm", thin).format(
+                n=thin, mm=f"{self.settings.min_wall:g}"))
+        text = " · ".join(parts)
+        if text == self._view_hint:
             return
-        was, self._overhang_hint = self._overhang_hint, text
+        was, self._view_hint = self._view_hint, text
         if text:
             self.set_status(text)
         else:
             if self._status_note == was:
                 self._status_note = None
             self.refresh_status()
+
+    def update_overhang_status(self):
+        """The overhang hint on its own (see :meth:`update_view_status`), as the overhang
+        view and its tests ask for it."""
+        self.update_view_status()
 
     def release_gl(self):
         """Everything this viewport gave the driver, back before the window closes."""

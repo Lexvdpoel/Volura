@@ -218,6 +218,13 @@ class Settings:
         except (TypeError, ValueError):
             self.overhang_limit = 45
         self.overhang_limit = max(0, min(89, self.overhang_limit))
+        self.show_thin_walls = self._bool("show_thin_walls", False)
+        try:
+            self.min_wall = float(self.q.value("min_wall", 0.8))
+        except (TypeError, ValueError):
+            self.min_wall = 0.8
+        if not 0.1 <= self.min_wall <= 10.0:
+            self.min_wall = 0.8            # two lines of a 0.4 mm nozzle is the usual floor
         self.face_style = str(self.q.value("face_style", SHADED))
         if self.face_style not in FACE_STYLES:
             self.face_style = SHADED
@@ -1457,6 +1464,8 @@ class Settings:
         self.q.setValue("xray", self.xray)
         self.q.setValue("show_overhangs", self.show_overhangs)
         self.q.setValue("overhang_limit", self.overhang_limit)
+        self.q.setValue("show_thin_walls", self.show_thin_walls)
+        self.q.setValue("min_wall", self.min_wall)
         self.q.setValue("check_updates", self.check_updates)
         self.q.setValue("ask_simplify_import", self.ask_simplify_import)
         self.q.setValue("theme", self.theme)
@@ -2433,6 +2442,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_overhangs = A(tr("Overhangs"), self.toggle_overhangs, None, None, checkable=True,
                              tip=tr("Mark the faces that hang over too far to print without support"))
         self.a_overhangs.setChecked(self.settings.show_overhangs)
+        self.a_thin_walls = A(tr("Thin Walls"), self.toggle_thin_walls, None, None,
+                              checkable=True,
+                              tip=tr("Mark the faces of walls thinner than your printer can make"))
+        self.a_thin_walls.setChecked(self.settings.show_thin_walls)
         self.face_style_group = QActionGroup(self)
         self.face_style_group.setExclusive(True)
         self.face_style_actions = {}
@@ -3066,8 +3079,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         m = mb.addMenu(tr("&View"))
         edge_style = sub(tr("&Edge Style"), m, (self.a_edges, self.a_back_edges))
         face_style = sub(tr("Face St&yle"), m,
-                         (self.a_xray, self.a_overhangs, None, self.a_wireframe,
-                          self.a_hidden_lines, self.a_shaded, self.a_monochrome))
+                         (self.a_xray, self.a_overhangs, self.a_thin_walls, None,
+                          self.a_wireframe, self.a_hidden_lines, self.a_shaded,
+                          self.a_monochrome))
         comp_edit = sub(tr("Co&mponent Edit"), m, (self.a_hide_rest,))
         self.fill(m, (self.a_toolbars, self.a_sheet, None)
                   + only("3d", self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid,
