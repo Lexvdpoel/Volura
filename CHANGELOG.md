@@ -3,6 +3,13 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## Unreleased
+
+### New
+- **Section view**: *View > Section* cuts the 3D view open with a plane along X, Y or Z, so you
+  can look at walls, holes and hollows inside a model. The cut surface is drawn solid; move or
+  flip the plane in the Section panel. The model itself is not changed.
+
 ## 0.2.67 — 2026-11-20
 
 ### New
