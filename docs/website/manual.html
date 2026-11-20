@@ -153,6 +153,27 @@ volura</code></pre>
       <li><b>Rechter muisknop</b> op de kubus maakt van de huidige weergave je startweergave, of wisselt tussen perspectief en parallelle projectie.</li>
       <li><b>Beeld &gt; Zichtkubus</b> toont of verbergt de kubus in elke 3D-weergave.</li>
     </ul>
+    <h3 id="section"><span lang="en">Section view</span><span lang="nl">Doorsnedeweergave</span></h3>
+    <p lang="en">Slides a plane through the model and hides everything on its far side, so you can look into a box or see how a wall runs, without cutting the model open.</p>
+    <p lang="nl">Schuift een vlak door het model en verbergt alles aan de andere kant, zodat je in een doos kijkt of ziet hoe een wand loopt, zonder het model open te snijden.</p>
+    <p class="where" lang="en">Where: <b>View &gt; Section</b>, and the <b>Section</b> panel in the Default Tray</p>
+    <p class="where" lang="nl">Waar: <b>Beeld &gt; Doorsnede</b> en het paneel <b>Doorsnede</b> in het Standaardvenster</p>
+    <ul lang="en">
+      <li>The plane stands along <b>x</b>, <b>y</b> or <b>z</b> and slides over the whole model; the slider and the millimetres follow each other, and <b>Middle of the model</b> puts the plane back in the centre.</li>
+      <li><b>Keep the other half</b> cuts away the other side of the plane instead.</li>
+      <li>Where the plane cuts material the cut surface is drawn, taken from the solid of the part, so a part that is hollow inside also looks hollow inside.</li>
+      <li>What is cut away is gone from picking and snapping too, so a click cannot reach a face that is not in the picture.</li>
+      <li>The status bar says along which axis the plane stands and how far it is; on a big model the cut surfaces come a moment later while the window keeps working.</li>
+      <li>The section belongs to the view and not to the model: it is not saved in the file, it is off when Volura starts, and nothing of the geometry changes.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Het vlak staat langs <b>x</b>, <b>y</b> of <b>z</b> en glijdt over het hele model; de schuif en de millimeters volgen elkaar, en <b>Midden van het model</b> zet het vlak terug in het midden.</li>
+      <li><b>De andere helft houden</b> snijdt juist de andere kant van het vlak weg.</li>
+      <li>Waar het vlak materiaal snijdt wordt het snijvlak getekend, uit het volume van het onderdeel, dus een onderdeel dat van binnen hol is oogt ook hol.</li>
+      <li>Wat is weggesneden is ook weg bij klikken en snappen, dus een klik kan geen vlak meer bereiken dat niet in beeld is.</li>
+      <li>De statusbalk zegt langs welke as het vlak staat en hoe ver; op een groot model komen de snvlakken even later terwijl het venster doorwerkt.</li>
+      <li>De doorsnede hoort bij de weergave en niet bij het model: hij wordt niet in het bestand opgeslagen, staat bij het starten uit en de geometrie verandert niet.</li>
+    </ul>
 
     <!-- ===================================================== spacemouse -->
     <h2 id="spacemouse"><span lang="en">3D mouse</span><span lang="nl">3D-muis</span></h2>
@@ -2157,12 +2178,14 @@ volura</code></pre>
       <li><b>Face Style</b>: Wireframe, Hidden Line, Shaded and Monochrome, plus <a href="#overhangs">Overhangs</a> and <a href="#thin-walls">Thin Walls</a>.</li>
       <li><b>Edge Style</b>: the profile edges and the back edges (<kbd>K</kbd>).</li>
       <li>X-ray (<kbd>Alt</kbd>+<kbd>X</kbd>), hidden geometry, guides, the axes and the grid of the print bed.</li>
+      <li><a href="#section">Section</a>: a plane you slide through the model to look inside it.</li>
       <li>On the worksheet here you also switch the grid and the <a href="#laser">layers</a> of the worksheet.</li>
     </ul>
     <ul lang="nl">
       <li><b>Vlakstijl</b>: draadmodel, verborgen lijnen, gearceerd en monochroom, plus <a href="#overhangs">Overhang</a> en <a href="#thin-walls">Dunne wanden</a>.</li>
       <li><b>Randstijl</b>: de profielranden en de achterliggende randen (<kbd>K</kbd>).</li>
       <li>Röntgen (<kbd>Alt</kbd>+<kbd>X</kbd>), verborgen geometrie, hulplijnen, de assen en het raster van het printbed.</li>
+      <li><a href="#section">Doorsnede</a>: een vlak dat je door het model schuift om erin te kijken.</li>
       <li>Op het werkblad zet je hier ook het raster en de <a href="#laser">lagen</a> van het werkblad aan en uit.</li>
     </ul>
     <h3 id="language"><span lang="en">Language</span><span lang="nl">Taal</span></h3>

@@ -15,10 +15,11 @@ from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QColorDialog, QComboBox, QDialog,
                                QDialogButtonBox, QDoubleSpinBox, QFormLayout, QHBoxLayout,
                                QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem,
-                               QMessageBox, QPushButton, QSpinBox, QTableWidget, QTableWidgetItem,
-                               QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+                               QMessageBox, QPushButton, QSlider, QSpinBox, QTableWidget,
+                               QTableWidgetItem, QToolButton, QTreeWidget, QTreeWidgetItem,
+                               QVBoxLayout, QWidget)
 
-from . import background, laser_image, ops, theme
+from . import background, laser_image, ops, section, theme
 from .i18n import tr, trn
 from .icons import icon
 from .model import ROOT
@@ -1165,3 +1166,165 @@ class LayersPanel(QWidget):
         def change():
             lay.params = {**dict(lay.params or {}), **values}
         self._edit(change, tr("Settings of layer {name} changed.").format(name=lay.name))
+
+
+class SectionPanel(QWidget):
+    """Tray panel "Section": the plane with which View > Section cuts the view open.
+
+    The plane stands along one of the three axes and slides through the model; everything on
+    the far side of it is gone from the view, while the model itself is not touched. The plane
+    stands on the model, so the range of the position is that of the model along the chosen
+    axis, and without a position of its own the plane stands in the middle of it (see
+    :func:`section.view_position`).
+    """
+
+    #: how many places the slider has between the two ends of the model
+    STEPS = 1000
+
+    def __init__(self, win):
+        super().__init__()
+        self.win = win
+        self._busy = False            # no reaction to the changes the panel makes itself
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(6, 6, 6, 6)
+        lay.setSpacing(6)
+        form = QFormLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        self.axis = QComboBox()
+        self.axis.addItems(list(section.AXES))     # x, y and z: the names of the axes, not of words
+        self.axis.setToolTip(tr("The direction the cut plane stands in"))
+        self.axis.currentIndexChanged.connect(self.set_axis)
+        form.addRow(tr("Cut along"), self.axis)
+        place = QWidget()
+        row = QHBoxLayout(place)
+        row.setContentsMargins(0, 0, 0, 0)
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setRange(0, self.STEPS)
+        self.slider.setToolTip(tr("Slide the cut plane through the model"))
+        self.slider.valueChanged.connect(self.set_from_slider)
+        self.pos = QDoubleSpinBox()
+        self.pos.setDecimals(1)
+        self.pos.setSuffix(" mm")
+        self.pos.setToolTip(tr("How far the cut plane stands along its axis"))
+        self.pos.valueChanged.connect(self.set_position)
+        row.addWidget(self.slider, 1)
+        row.addWidget(self.pos)
+        form.addRow(tr("Position"), place)
+        lay.addLayout(form)
+        self.flip = QCheckBox(tr("Keep the other half"))
+        self.flip.setToolTip(tr("Cut away the other side of the plane"))
+        self.flip.toggled.connect(self.set_flip)
+        lay.addWidget(self.flip)
+        self.note = note(tr("The cut is only in the view: the model itself is not changed."))
+        lay.addWidget(self.note)
+        self.centre = QPushButton(tr("Middle of the model"))
+        self.centre.setToolTip(tr("Put the cut plane back in the middle of the model"))
+        self.centre.clicked.connect(self.go_middle)
+        lay.addWidget(self.centre)
+        self.off = QLabel(tr("<i>View &gt; Section is off.</i>"))
+        self.off.setWordWrap(True)
+        lay.addWidget(self.off)
+        self.refresh()
+
+    @contextmanager
+    def _quiet(self):
+        """No reaction to our own changes: they come from the model or from the view."""
+        saved, self._busy = self._busy, True
+        try:
+            yield
+        finally:
+            self._busy = saved
+
+    def limits(self):
+        """The low and the high of the model along the axis of the plane, or None without one."""
+        return section.span(self.win.doc.model_bbox(), self.win.settings.section_axis)
+
+    def refresh(self, checked=False):
+        """The plane as the view cuts with it now, and the range of the model around it.
+
+        The panel shows what is really cut (see :func:`section.cut_of`), so a position that
+        stands beside the model after an edit appears at the edge it was moved to."""
+        settings = self.win.settings
+        box = self.win.doc.model_bbox()
+        axis = getattr(settings, "section_axis", "z")
+        axis = axis if axis in section.AXES else "z"
+        limits = section.span(box, axis)
+        at = section.view_position(getattr(settings, "section_pos", None), *limits) \
+            if limits else 0.0
+        with self._quiet():
+            on = bool(getattr(settings, "section_on", False))
+            self.axis.setCurrentIndex(section.AXES.index(axis))
+            self.flip.setChecked(bool(getattr(settings, "section_flip", False)))
+            self.flip.setEnabled(on)
+            self.centre.setEnabled(limits is not None and on)
+            self.pos.setEnabled(limits is not None and on)
+            # a slider needs a stretch to slide over: a flat model has one position only
+            self.slider.setEnabled(limits is not None and limits[1] > limits[0] and on)
+            self.pos.setRange(*(limits if limits else (0.0, 0.0)))
+            self.pos.setValue(at)
+            self.slider.setValue(self._slider_value(at, limits))
+            self.off.setVisible(not on)
+
+    def _slider_value(self, at, limits):
+        """Where the slider stands for the millimetres `at`, between the ends of the model."""
+        if not limits or limits[1] <= limits[0]:
+            return 0
+        return int(round((at - limits[0]) / (limits[1] - limits[0]) * self.STEPS))
+
+    # ------------------------------------------------------------ changes
+
+    def set_axis(self, index):
+        """A plane along another axis cuts another model: the position of the old axis means
+        nothing here, so the plane goes back to the middle."""
+        if self._busy:
+            return
+        self.win.settings.section_axis = section.AXES[max(0, min(len(section.AXES) - 1, index))]
+        self.win.settings.section_pos = None
+        self.refresh()
+        self.apply()
+
+    def set_flip(self, on):
+        if self._busy:
+            return
+        self.win.settings.section_flip = bool(on)
+        self.apply()
+
+    def set_from_slider(self, at):
+        """The slider runs over the whole model; the field holds the millimetres."""
+        if self._busy:
+            return
+        limits = self.limits()
+        if not limits:
+            return
+        self.set_position(limits[0] + (limits[1] - limits[0]) * at / self.STEPS)
+
+    def set_position(self, value):
+        """The plane goes where the field or the slider puts it, and the other one follows.
+
+        What stands beside the model is moved to the nearest edge (see
+        :func:`section.view_position`), so the plane never wanders off out of the model."""
+        if self._busy:
+            return
+        limits = self.limits()
+        if not limits:
+            return
+        at = section.view_position(value, *limits)
+        self.win.settings.section_pos = at
+        with self._quiet():
+            self.slider.setValue(self._slider_value(at, limits))
+            if abs(self.pos.value() - at) > 1e-9:
+                self.pos.setValue(at)
+        self.apply()
+
+    def go_middle(self):
+        """The plane back to the middle of the model, whatever the model is now."""
+        if self._busy:
+            return
+        self.win.settings.section_pos = None
+        self.refresh()
+        self.apply()
+
+    def apply(self):
+        """The view cuts with the new plane and the bar says where it stands."""
+        self.win.view.update()
+        self.win.view.update_view_status()

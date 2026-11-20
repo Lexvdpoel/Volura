@@ -8,7 +8,7 @@ from PySide6.QtCore import QEvent, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QSurfaceFormat
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
-from . import background, errors, icons, ops, theme, thin_walls
+from . import background, errors, icons, ops, section, theme, thin_walls
 from .camera import Camera, horizon_line
 from .i18n import tr, trn
 from .inference import InferenceEngine
@@ -318,6 +318,9 @@ class Viewport(QOpenGLWidget):
         self._thin_cache = {}         # id(ents) -> (ents, version, wall, bool per triangle)
         self._thin_busy = {}          # id(ents) -> that same key while its cut is running
         self._thin_answers = {}       # id(ents) -> answers landed; see _thin_context
+        self._cap_cache = {}          # (id(ents), version, axis, pos) -> triangles of the cut
+        self._cap_solids = {}         # id(ents) -> (ents, version, manifold) to cut in
+        self._cap_busy = {}           # id(ents) -> that same key while its solid is being made
         self._view_hint = ""          # what the colours in the model mean, "" when nothing does
         self._drag = None
         self._last = None
@@ -478,6 +481,7 @@ class Viewport(QOpenGLWidget):
         gl.glDisable(gl.GL_LIGHTING)
         gl.glDisable(gl.GL_COLOR_MATERIAL)
         gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
+        gl.glDisable(gl.GL_CLIP_PLANE0)     # View > Section; the model pass switches it on
         gl.glDepthMask(gl.GL_TRUE)
         gl.glDepthFunc(gl.GL_LEQUAL)
         gl.glEnable(gl.GL_BLEND)
@@ -678,6 +682,11 @@ class Viewport(QOpenGLWidget):
         show_back = getattr(self.settings, "back_edges", False) and not xray and style != WIREFRAME
         show_edges = self.settings.show_edges
         self._overhang_ctx = self._overhang_context()
+        cut = self.engine.section_cut()
+        if cut is None:
+            self._forget_caps()
+        else:
+            self._start_section(cut[3])
         for ctx, ents, g, rc, mats in self._draw_contexts(hiding_rest):
             faded = editing and ctx != doc.active
             selected = g is not None and g.id in sel_groups
@@ -722,8 +731,11 @@ class Viewport(QOpenGLWidget):
                     self._push(M)
                     self._draw_back_edges(rc["edges"], buf)
                     self._pop(M)
+        if cut is not None:
+            self._draw_caps(cut, hiding_rest)
         self._end_model_pass()
         self._draw_selection()
+        self._end_section()
         self._prune_rcache()
 
     def _prune_rcache(self):
@@ -740,6 +752,11 @@ class Viewport(QOpenGLWidget):
         for table in (self._thin_cache, self._thin_busy, self._thin_answers):
             for key in [k for k in table if k not in live]:
                 table.pop(key)
+        for table in (self._cap_solids, self._cap_busy):
+            for key in [k for k in table if k not in live]:
+                table.pop(key)
+        for key in [k for k in self._cap_cache if k[0] not in live]:
+            self._cap_cache.pop(key)
 
     # ------------------------------------------------------------- overhangs
     def _overhang_faces(self):
@@ -875,12 +892,157 @@ class Viewport(QOpenGLWidget):
             total += int(len(np.unique(self.engine.cache.get(e)["tri_fid"][mask])))
         return total
 
+    # ------------------------------------------------------------- section
+    def _start_section(self, eq):
+        """View > Section: the model pass cuts with the plane, so what stands behind it is gone.
+
+        The driver reads a clip plane once, when it is handed over, and keeps it for every
+        vertex after that; that is why this happens before the first group is drawn, while
+        only the matrix of the camera stands (see :meth:`_draw_model`)."""
+        gl.glClipPlane(gl.GL_CLIP_PLANE0, (float(eq[0]), float(eq[1]), float(eq[2]), float(eq[3])))
+        self._fstate.set(gl.GL_CLIP_PLANE0, True)
+
+    def _end_section(self):
+        """The plane leaves with the model: the overlays and the next frame draw whole again."""
+        self._fstate.set(gl.GL_CLIP_PLANE0, False)
+
+    def _forget_caps(self):
+        """View > Section off: the cut surfaces go, and with them the answers on their way.
+
+        Called from a frame in which the view is off, so the context is current; the clip
+        plane is switched off in `_reset_state`, but a frame that turns the view off between
+        two draws has to give the driver back what a frame that turns it on takes."""
+        self._end_section()
+        self._cap_solids.clear()
+        self._cap_cache.clear()
+        self._cap_busy.clear()
+
+    def _cap_solid_of(self, ents):
+        """The solid to cut `ents` open in, or None while that solid is not there yet.
+
+        Making a manifold of a part takes seconds on a big model and may not stop the view,
+        so it runs in the background (see :meth:`_run_cap_job`). An answer of a geometry that
+        moved on since is never used; the plane itself is cheap to cut, so that happens here
+        on the GUI thread, as often as the panel moves it."""
+        got = self._cap_solids.get(id(ents))
+        if got is not None and got[0] is ents and got[1] == ents.version:
+            return got[2]
+        job = (ents, ents.version)
+        if self._cap_busy.get(id(ents)) != job:
+            self._cap_busy[id(ents)] = job
+            self._run_cap_job(job)
+        return None
+
+    def _run_cap_job(self, job):
+        """The solid of one geometry, made off the GUI thread.
+
+        The window takes no input while it runs (like every job that reads the model), so the
+        geometry cannot change under it; until the answer has landed the model is simply drawn
+        without a cut surface, which is why a job that is too late for this frame costs
+        nothing more than the wait."""
+        ents = job[0]
+        making = tr("Preparing the section…")
+
+        def work(report):
+            return ents.to_manifold()
+
+        def told():
+            """The bar showed what it waited for; now it shows the plane again, or - when the
+            view went off in the meantime - the instruction of the tool."""
+            if self._status_note == making:
+                self._status_note = None
+            self._view_hint = ""            # so the position of the plane comes back
+            self.update_view_status()
+            self.refresh_status()
+            if self._status_shown == making:
+                # the view is off and a tool without an instruction: the wait is over too
+                self._status_shown = ""
+                self.status_changed.emit("")
+
+        def stored(md):
+            if not background.alive(self) or self._cap_busy.get(id(ents)) != job:
+                return                     # another file, another version, another view
+            self._cap_busy.pop(id(ents), None)
+            self._cap_solids[id(ents)] = job + (md,)
+            told()
+            self.update()
+
+        def failed(_exc):
+            # nothing to draw: the model stays cut open and the next frame asks again
+            if self._cap_busy.get(id(ents)) == job:
+                self._cap_busy.pop(id(ents), None)
+                told()
+
+        background.run(self.window(), work, text=making, can_cancel=False, show_dialog=False,
+                       on_done=stored, on_error=failed)
+        self.set_status(making)
+
+    def _cap_triangles_of(self, ents, axis, pos):
+        """The cut surface of `ents` at `pos`, or None while its solid is still being made.
+
+        One surface per geometry is kept: a plane only stands in one place at a time, so the
+        cut of the position before it is worth nothing."""
+        solid = self._cap_solid_of(ents)
+        if solid is None:
+            return None
+        key = (id(ents), ents.version, axis, pos)
+        at = self._cap_cache.get(key)
+        if at is None:
+            at = section.cap_triangles(solid, axis, pos)
+            for gone in [k for k in self._cap_cache if k[0] == id(ents)]:
+                self._cap_cache.pop(gone)      # the plane moved on; the old cut goes with it
+            self._cap_cache[key] = at
+        return at
+
+    def _draw_caps(self, cut, hiding_rest):
+        """The surface the plane cuts open, so that a part hollow inside also looks hollow.
+
+        The cap comes from the solid of the part (see :func:`section.cap_triangles`), so it
+        covers nothing but the material the plane cut: the hollow of a tray stays empty. It is
+        drawn with the clip plane switched off - its own vertices stand in that plane, where a
+        hair of round-off is enough to clip them away - and lifted towards the eye with the
+        polygon offset, so a flat face of the part that happens to lie in the same plane does
+        not win the depth test."""
+        if getattr(self.settings, "face_style", SHADED) == WIREFRAME:
+            return                       # no faces in a wireframe, so nothing to close off
+        axis, pos, flip, _eq = cut
+        st = self._fstate
+        st.set(gl.GL_CLIP_PLANE0, False)
+        st.set(gl.GL_LIGHTING, True)
+        st.set(gl.GL_COLOR_MATERIAL, True)
+        st.set(gl.GL_POLYGON_OFFSET_FILL, True)
+        gl.glPolygonOffset(-1.5, -1.5)
+        gl.glColor4f(*theme.rgb("section"), 1.0)
+        # the cut surface looks into the half that was cut away, so its normal stands that way
+        normal = np.zeros(3, dtype=np.float32)
+        normal[section.AXES.index(axis)] = -1.0 if flip else 1.0
+        for ctx, ents, g, rc, mats in self._draw_contexts(hiding_rest):
+            tris = self._cap_triangles_of(ents, axis, pos)
+            if tris is None or not len(tris):
+                continue
+            pts = np.ascontiguousarray(tris.reshape(-1, 3), dtype=np.float32)
+            nrm = np.repeat(normal[None, :], len(pts), axis=0)
+            st.array(gl.GL_VERTEX_ARRAY, True)
+            st.array(gl.GL_NORMAL_ARRAY, True)
+            for M in mats:
+                self._push(M)
+                gl.glVertexPointer(3, gl.GL_FLOAT, 0, pts)
+                gl.glNormalPointer(gl.GL_FLOAT, 0, nrm)
+                gl.glDrawArrays(gl.GL_TRIANGLES, 0, len(pts))
+                self._pop(M)
+        st.array(gl.GL_NORMAL_ARRAY, False)
+        st.array(gl.GL_VERTEX_ARRAY, False)
+        st.set(gl.GL_LIGHTING, False)
+        st.set(gl.GL_COLOR_MATERIAL, False)
+        st.set(gl.GL_POLYGON_OFFSET_FILL, False)
+        st.set(gl.GL_CLIP_PLANE0, True)      # the selection is clipped along with the model
+
     def update_view_status(self):
         """The status bar hint of the face style views: what the colours in the model mean.
 
-        Both hints in one line, the overhang count first. Off, or nothing to see: the hint
-        goes away and the instruction of the current tool comes back, so the bar never keeps
-        a count that is no longer true."""
+        All of them in one line, the overhang count first and the place of the section plane
+        last. Off, or nothing to see: the hint goes away and the instruction of the current
+        tool comes back, so the bar never keeps a count that is no longer true."""
         parts = []
         info = self._overhang_faces()
         if info and info[1]:
@@ -892,6 +1054,11 @@ class Viewport(QOpenGLWidget):
             parts.append(trn("Thin walls: {n} face under {mm} mm",
                              "Thin walls: {n} faces under {mm} mm", thin).format(
                 n=thin, mm=f"{self.settings.min_wall:g}"))
+        cut = self.engine.section_cut()
+        if cut is not None:
+            # where the plane stands is otherwise invisible: the panel is often closed and the
+            # slider does not say it either; the section is the one view with a place to show
+            parts.append(tr("Section: {axis} at {mm} mm").format(axis=cut[0], mm=f"{cut[1]:g}"))
         text = " · ".join(parts)
         if text == self._view_hint:
             return

@@ -136,6 +136,13 @@ gets for free.
   house to go back to the iso view with the whole model in view. The four arrows beside the cube
   turn to the face next to the one you look at, and right-clicking the cube makes the view you are
   in your own home view or switches between perspective and parallel projection
+- **Section view** (View > Section): slides a cut plane along x, y or z through the model and hides
+  everything on its far side, so you can look into a box or see how a wall runs; where the plane cuts
+  material the cut surface is drawn from the solid of the part, so a part that is hollow inside also
+  looks hollow inside. The panel that opens with it holds the axis, the position and which half stays,
+  picking and snapping only reach what the plane leaves, and the status bar says where the plane
+  stands. The section belongs to the view: nothing of the model changes and nothing is saved in the
+  file
 - **Themes**: *Window > Preferences > Display > Theme*: System, Light, Dark or High contrast
 - **Accessible**: every command has a menu entry and a shortcut you can change, and every button,
   field and list has a name a screen reader can read, also the ones that only show an icon. The

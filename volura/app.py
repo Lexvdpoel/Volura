@@ -48,7 +48,7 @@ from .model import ROOT, LOCKED_MSG, Document
 from .app_dialogs import (FILAMENT_MATERIALS, ModelInfoDialog, PageDialog,
                           PreferencesDialog, PRINTERS, ShortcutsPanel, SimplifyDialog)
 from .panels import (ColorsPanel, EntityInfoPanel, LayerParamsDialog, LayersPanel, MaterialsPanel,
-                     OutlinerPanel, PrintCheckPanel, note, swatch)
+                     OutlinerPanel, PrintCheckPanel, SectionPanel, note, swatch)
 from .part_dialogs import (CableClipDialog, HingeDialog, KnobDialog, LabelPlateDialog,
                            ProjectBoxDialog, SpurGearDialog, StandoffDialog, Text3DDialog)
 from .mill3d_dialog import Mill3DDialog
@@ -69,8 +69,8 @@ from .vector2d import (SHEET_SPACING, Drawing, MILL_OPS, OP_LABELS, VPath, _tran
 from .viewport import (FACE_STYLES, HIDDENLINE, MONOCHROME, SHADED, WIREFRAME, Viewport)
 from .window_print import PANEL_PRINT_CHECK, PrintMixin, TOOL_INFO
 from .window_sheet import SheetMixin
-from .window_ui import (MOVED_COMMANDS, OTHER_COMMANDS, PANEL_INFO, SHORTCUTS_KEY,
-                        SOURCE_TEXT, TIP_BASE, UiMixin, clean_text,
+from .window_ui import (MOVED_COMMANDS, OTHER_COMMANDS, PANEL_INFO, PANEL_SECTION,
+                        SHORTCUTS_KEY, SOURCE_TEXT, TIP_BASE, UiMixin, clean_text,
                         source_text_of, translation_tables)
 
 #: how narrow the machine next to the view may get in Laser and CNC (pixels)
@@ -181,7 +181,7 @@ PANEL_LAYERS = tr_noop("Layers")
 SPONSOR_URL = "https://github.com/sponsors/Lexvdpoel"
 
 PANELS = (PANEL_INFO, PANEL_COLORS, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT_CHECK,
-          PANEL_LAYERS)
+          PANEL_LAYERS, PANEL_SECTION)
 
 # Draw > Parts: every part of the model in the category whose submenu it stands in, by the
 # name of its action. A category is sorted by the English name of its parts and the four
@@ -225,6 +225,13 @@ class Settings:
             self.min_wall = 0.8
         if not 0.1 <= self.min_wall <= 10.0:
             self.min_wall = 0.8            # two lines of a 0.4 mm nozzle is the usual floor
+        # View > Section: the cut of the view, never of the model or the file. It is not stored
+        # and it is off when Volura starts, because a model that is half hidden at start-up
+        # looks broken (see volura/section.py).
+        self.section_on = False
+        self.section_axis = "z"
+        self.section_pos = None            # None: the plane stands in the middle of the model
+        self.section_flip = False
         self.face_style = str(self.q.value("face_style", SHADED))
         if self.face_style not in FACE_STYLES:
             self.face_style = SHADED
@@ -2065,14 +2072,15 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
 
     #: The panels of the Default Tray per tab under the viewer and per view (English keys,
     #: see PANELS): the tray only shows what belongs to the tab that is open. The print
-    #: check is for the Print tab, the filaments for the model, the layers for the sheet.
+    #: check is for the Print tab, the filaments for the model, the layers for the sheet and
+    #: the cut plane for the 3D view.
     WORKSPACE_PANELS = {
-        ("design", "3d"): (PANEL_INFO, PANEL_COLORS, PANEL_OUTLINER),
+        ("design", "3d"): (PANEL_INFO, PANEL_COLORS, PANEL_OUTLINER, PANEL_SECTION),
         ("design", "2d"): (PANEL_INFO, PANEL_LAYERS),
-        ("print", "3d"): (PANEL_INFO, PANEL_MATERIALS, PANEL_PRINT_CHECK),
+        ("print", "3d"): (PANEL_INFO, PANEL_MATERIALS, PANEL_PRINT_CHECK, PANEL_SECTION),
         ("laser", "2d"): (PANEL_INFO, PANEL_LAYERS),
         ("cnc", "2d"): (PANEL_INFO, PANEL_LAYERS),
-        ("cnc", "3d"): (PANEL_INFO, PANEL_COLORS, PANEL_OUTLINER),
+        ("cnc", "3d"): (PANEL_INFO, PANEL_COLORS, PANEL_OUTLINER, PANEL_SECTION),
     }
 
     def tray_panels(self, workspace=None, mode=None) -> tuple:
@@ -2446,6 +2454,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                               checkable=True,
                               tip=tr("Mark the faces of walls thinner than your printer can make"))
         self.a_thin_walls.setChecked(self.settings.show_thin_walls)
+        self.a_section = A(tr("Section"), self.toggle_section, None, None, checkable=True,
+                           tip=tr("Cut the view open with a plane you can move; the model "
+                                  "itself stays as it is"))
+        self.a_section.setChecked(self.settings.section_on)
         self.face_style_group = QActionGroup(self)
         self.face_style_group.setExclusive(True)
         self.face_style_actions = {}
@@ -3085,7 +3097,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         comp_edit = sub(tr("Co&mponent Edit"), m, (self.a_hide_rest,))
         self.fill(m, (self.a_toolbars, self.a_sheet, None)
                   + only("3d", self.a_hidden_geometry, self.a_axes, self.a_guides, self.a_grid,
-                         self.a_view_cube,
+                         self.a_view_cube, self.a_section,
                          None, edge_style, face_style, comp_edit)
                   + only("2d", self.a_sheet_grid, self.a_sheet_layers))
 
@@ -3682,13 +3694,15 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.outliner = OutlinerPanel(self)
         self.print_panel = PrintCheckPanel(self)
         self.layers_panel = LayersPanel(self)
+        self.section_panel = SectionPanel(self)
         self.tray = Tray(((tr(PANEL_INFO), self.info), (tr(PANEL_COLORS), self.colors_panel),
                           (tr(PANEL_MATERIALS), self.materials),
                           (tr(PANEL_OUTLINER), self.outliner)),
                          open_panels=(tr(PANEL_INFO), tr(PANEL_COLORS), tr(PANEL_MATERIALS)),
                          parent=self,
                          extra_panels=((tr(PANEL_PRINT_CHECK), self.print_panel),
-                                       (tr(PANEL_LAYERS), self.layers_panel)))
+                                       (tr(PANEL_LAYERS), self.layers_panel),
+                                       (tr(PANEL_SECTION), self.section_panel)))
         self.addDockWidget(Qt.RightDockWidgetArea, self.tray)
         self.resizeDocks([self.tray], [TRAY_WIDTH], Qt.Horizontal)
         self._build_tray_menu()

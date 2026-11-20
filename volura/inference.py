@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from . import workers
+from . import section, workers
 from .brep import render_payload, render_triangulate_job
 from .geom import AXES, GROUND, Plane, closest_on_line_to_ray
 from .i18n import tr
@@ -188,7 +188,7 @@ class GeoCache:
         return GeoCache._assemble(ents, GeoCache._triangulate(ents))
 
 
-def ray_tris(c, o, d, allow_hidden=False):
+def ray_tris(c, o, d, allow_hidden=False, tspan=None):
     if not len(c["T"]):
         return None
     e1, e2 = c["e1"], c["e2"]
@@ -201,9 +201,16 @@ def ray_tris(c, o, d, allow_hidden=False):
         qvec = np.cross(tvec, e1)
         v = (qvec @ d) * inv
         t = np.einsum("ij,ij->i", e2, qvec) * inv
-    ok = (np.abs(det) > 1e-14) & (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1 + 1e-9) & (t > 1e-9)
+        # a ray along a triangle makes det zero: u, v and t are nonsense then, and only the
+        # test on det below decides that nothing was hit there
+        ok = (np.abs(det) > 1e-14) & (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1 + 1e-9) \
+            & (t > 1e-9)
     if not allow_hidden and c.get("nhidden"):
         ok &= ~c["tri_hidden"]
+    if tspan is not None:
+        # View > Section: only the stretch of the ray the plane leaves may be hit, so a
+        # face behind the cut is passed through to the geometry that is still there
+        ok &= (t >= tspan[0] - 1e-9) & (t <= tspan[1] + 1e-9)
     if not ok.any():
         return None
     cand = np.nonzero(ok)[0]
@@ -257,6 +264,7 @@ class InferenceEngine:
         self.cam = camera
         self.settings = settings
         self.cache = GeoCache()
+        self._section = None          # (key, cut) of the plane picking filters on
 
     @property
     def show_hidden(self):
@@ -338,6 +346,7 @@ class InferenceEngine:
         best = None
         if points:
             S, ok = self.cam.project(np.array([g.point for g in points]))
+            ok = ok & self.keep_mask([g.point for g in points])
             dist = np.where(ok, np.linalg.norm(S - m, axis=1), np.inf)
             k = int(np.argmin(dist))
             if dist[k] < px:
@@ -346,6 +355,8 @@ class InferenceEngine:
             hit = self._on_guide(g, o, d, m)
             if hit is None or hit[0] >= px:
                 continue
+            if not self.keep_mask(hit[1])[0]:
+                continue                 # View > Section: the guide runs on behind the plane
             depth = float(np.dot(hit[1] - o, d))
             if depth > hit_t + occl * (1 + depth / max(self.cam.distance, 1)):
                 continue                 # behind geometry
@@ -354,8 +365,40 @@ class InferenceEngine:
         return best
 
     # --------------------------------------------------------- picking
+    def section_cut(self):
+        """``(axis, pos, flip, equation)`` of View > Section, or None while the view is off.
+
+        Picking filters on the very plane the view clips with, so what you click is what you
+        see: a face behind the cut is gone from the picture and from the picking alike. The
+        plane stands on the model, so its position follows the model; that box is only asked
+        again when the model has moved on, because on a big model it is not free (see
+        :func:`section.cut_of`)."""
+        settings = self.settings
+        if settings is None or not getattr(settings, "section_on", False):
+            self._section = None
+            return None
+        key = (getattr(settings, "section_axis", "z"), getattr(settings, "section_pos", None),
+               bool(getattr(settings, "section_flip", False)),
+               tuple((id(e), e.version) for e in self.doc.all_ents()))
+        if self._section is None or self._section[0] != key:
+            self._section = (key, section.cut_of(settings, self.doc.model_bbox()))
+        return self._section[1]
+
+    def keep_mask(self, points):
+        """Which of `points` the section view still shows, as one bool per point.
+
+        All of them when the view is off: the picking then does exactly what it always did."""
+        cut = self.section_cut()
+        if cut is None:
+            return np.ones(len(np.asarray(points).reshape(-1, 3)), dtype=bool)
+        return section.keeps(cut[3], points)
+
     def pick_face(self, o, d, exclude=(), only=None, allow_hidden=None):
         allow = self.show_hidden if allow_hidden is None else allow_hidden
+        cut = self.section_cut()
+        span = None if cut is None else section.ray_span(cut[3], o, d)
+        if cut is not None and span is None:
+            return None            # the eye is behind the plane: all of the model is cut away
         best = None
         for ctx, ents, _ in self.doc.contexts():
             if ctx in exclude or (only is not None and ctx not in only):
@@ -363,7 +406,7 @@ class InferenceEngine:
             c = self.cache.get(ents)
             if c["bbox"] is None or not _ray_box(o, d, c["bbox"][0] - 1e-3, c["bbox"][1] + 1e-3):
                 continue
-            h = ray_tris(c, o, d, allow)
+            h = ray_tris(c, o, d, allow, tspan=span)
             if h and (best is None or h[0] < best[0]):
                 best = (h[0], ctx, h[1], o + d * h[0])
         return best
@@ -424,6 +467,21 @@ class InferenceEngine:
         dist = np.where(ok, dist, np.inf)
         if mask is not None:
             dist = np.where(mask, dist, np.inf)
+        cut = self.section_cut()
+        if cut is not None:
+            # View > Section: an edge that hangs in the cut cannot be picked, and one that
+            # crosses the plane only at the point that was cut away. Where the cursor meets
+            # the edge is what counts; `s` is a fraction on the screen, while the plane stands
+            # in the model, so the same fraction in space is what has to be compared with it
+            # (the same parameter the point of the hit is made of further down).
+            e, w = B - A, A - np.asarray(o, dtype=float)
+            ed = np.einsum("ij,j->i", e, np.asarray(d, dtype=float))
+            den = np.einsum("ij,ij->i", e, e) - ed * ed      # d is a unit vector
+            with np.errstate(divide="ignore", invalid="ignore"):
+                u = np.divide(ed * np.einsum("ij,j->i", w, d) - np.einsum("ij,ij->i", w, e), den,
+                              out=s, where=np.abs(den) > 1e-12)     # along the ray: `s` is left
+            lo, hi = section.keep_span(cut[3], A, B)
+            dist = np.where((u >= lo - 1e-9) & (u <= hi + 1e-9), dist, np.inf)
         k = int(np.argmin(dist))
         if not np.isfinite(dist[k]):
             return None, None, None
@@ -486,8 +544,10 @@ class InferenceEngine:
         P = np.concatenate(P)
 
         def visible(pts):
+            """What the cursor may still reach: in front of the first hit and not cut away."""
             depth = np.linalg.norm(pts - o, axis=1) if not self.cam.ortho else (pts - o) @ d
-            return depth <= hit_t + occl * (1 + depth / max(self.cam.distance, 1))
+            near = depth <= hit_t + occl * (1 + depth / max(self.cam.distance, 1))
+            return near & self.keep_mask(pts)
 
         snap = None
         S, ok = self.cam.project(P)
