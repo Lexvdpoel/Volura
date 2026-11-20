@@ -156,6 +156,9 @@ TIP_BASE = "tip_base"         # QAction property: the help text of a tool, witho
 
 # The Entity Info panel of the Default Tray; the Tray knows it by its translated title.
 PANEL_INFO = tr_noop("Entity Info")
+# The Section panel too: it is a Volura panel next to the SketchUp ones, and the method that
+# opens it lives here, with the rest of the view.
+PANEL_SECTION = tr_noop("Section")
 
 
 def clean_text(text):
@@ -495,6 +498,8 @@ class UiMixin:
         self.info.refresh()
         if hasattr(self, "layers_panel"):
             self.layers_panel.refresh()
+        if hasattr(self, "section_panel"):
+            self.section_panel.refresh()    # the plane stands on the model; the model moved
         if self.view.problem_items:
             self.print_panel.clear_marks()      # the marked geometry may be gone now
 
@@ -858,6 +863,22 @@ class UiMixin:
         :meth:`Viewport._thin_mask_of`), so the colours appear a moment later on a big model."""
         self.settings.show_thin_walls = bool(on)
         self.settings.save()
+        self.view.update()
+        self.view.update_view_status()
+
+    def toggle_section(self, on):
+        """View > Section: cut the view open with a plane you can move (see SectionPanel).
+
+        The section belongs to the view: nothing of the model changes, and switching the view
+        off gives the model back exactly as it was. The panel with the plane opens along with
+        the view, because that plane is what a user wants to move. The solid of the parts is
+        made in the background (see :meth:`Viewport._cap_solid_of`), so on a big model the cut
+        surfaces appear a moment later."""
+        self.settings.section_on = bool(on)
+        self.section_panel.refresh()
+        if on:
+            self.tray.show()
+            self.tray.open_panel(tr(PANEL_SECTION))
         self.view.update()
         self.view.update_view_status()
 

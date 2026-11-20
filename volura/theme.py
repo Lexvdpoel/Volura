@@ -69,6 +69,7 @@ COLORS = {
     "view_text": ("#5a5a5a", "#e3e6ea", "#ffffff"),
     "overhang": ("#e0491f", "#ff7043"),        # a face that needs support (View > Overhangs)
     "thin": ("#a03cc9", "#c77dff"),            # a face of a wall too thin to print
+    "section": ("#7f8b9e", "#9aa5b8"),         # the cut surface of View > Section
     "edge": ("#0d0d0d", "#0d0d0d", "#ffffff"),   # the edges between the faces of the 3D view
 }
 
