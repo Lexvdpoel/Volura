@@ -1864,6 +1864,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.clipboard = []
         self._busy = False          # a background job is reading the model: keep it still
         self._mill3d_dialog = None   # the 3D mill dialog, open beside the model
+        self._printer_status = None   # what the printers on the network are doing
         self.tool_actions = {}
         self.sheet_tool_actions = {}
         self.resize(1400, 900)
@@ -2505,6 +2506,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
 
         self.a_prefs = A(tr("&Preferences"), self.preferences)
         self.a_model_info = A(tr("&Model Info"), lambda checked=False: self.model_info())
+        self.a_printer_status = A(tr("Printer &Status"),
+                                  lambda checked=False: self.printer_status(), None, None,
+                                  False,
+                                  tr("What every printer on the network is doing right now"))
         self.a_welcome = A(tr("&Welcome to Volura"), self.show_welcome)
         self.a_updates = A(tr("Check for &Updates…"), lambda checked=False: self.check_for_updates())
         self.a_help = A(tr("&Keyboard Shortcuts"), self.show_help, "F1")
@@ -3125,7 +3130,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         # ---- Window and Help
         m = mb.addMenu(tr("&Window"))
         self.standard_menu = QMenu(tr("Default &Tray"), m)
-        self.fill(m, (self.standard_menu, None, self.a_model_info, self.a_prefs))
+        self.fill(m, (self.standard_menu, None, self.a_model_info, self.a_prefs, None,
+                      self.a_printer_status))
 
         m = mb.addMenu(tr("&Help"))
         self.fill(m, (self.a_welcome, self.a_help, None, self.a_updates, None, self.a_sponsor,
@@ -3727,6 +3733,28 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         dlg = PreferencesDialog(self)
         dlg.exec()
         return dlg
+
+    def printer_status(self):
+        """Window > Printer Status: what the printers on the network are doing now.
+
+        Modeless, so a print can be watched while the model is worked on. One window per
+        Volura: calling it again brings the window there is to the front. It asks every
+        printer every five seconds in the background, and only while it is on the screen.
+        """
+        from .printer_status import PrinterStatusWindow
+        panel = getattr(self, "_printer_status", None)
+        if panel is None:
+            panel = self._printer_status = PrinterStatusWindow(self)
+        panel.show()
+        panel.raise_()
+        panel.activateWindow()
+        return panel
+
+    def refresh_printer_status(self):
+        """Preferences > Printers changed the list: the status window takes the rows anew."""
+        panel = getattr(self, "_printer_status", None)
+        if panel is not None:
+            panel.reload()
 
     # ------------------------------------------------------------ 3D mouse
     def start_spacemouse(self):

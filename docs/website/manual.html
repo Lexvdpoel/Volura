@@ -2092,6 +2092,7 @@ volura</code></pre>
       <li><b>Test connection</b> asks the printer what it is: the answer beside the button names the printer and its version, or says what is wrong. A wrong key is said without saying the key, and nothing of it leaves your network.</li>
       <li>A printer stays on the list once it has a name and an address; <b>Remove</b> takes it off again. The key belongs to your other preferences on this computer and goes to that printer and to nobody else.</li>
       <li>In the print preview, <b>Send to printer…</b> sends exactly the G-code that preview showed, under a name of your own and, when you tick it, starts printing right away; the printer and that tick of last time come back next time.</li>
+      <li>Once it prints, <b><a href="#printer-status">Printer Status</a></b> shows how far it is.</li>
     </ul>
     <ul lang="nl">
       <li><b>Toevoegen</b> zet een printer op de lijst: een naam, wat voor soort het is en het adres dat je ook in je browser typt als je naar de printer kijkt, bijvoorbeeld <code>192.168.1.20:5000</code> of <code>octoprint.local</code>; de http:// ervoor krijg je erbij.</li>
@@ -2099,6 +2100,22 @@ volura</code></pre>
       <li><b>Verbinding testen</b> vraagt de printer wat hij is: het antwoord naast de knop noemt de printer en zijn versie, of zegt wat er mis is. Een verkeerde sleutel wordt gezegd zonder de sleutel zelf, en er verlaat niets van je netwerk.</li>
       <li>Een printer blijft op de lijst zodra hij een naam en een adres heeft; <b>Verwijderen</b> haalt hem eraf. De sleutel hoort bij je andere voorkeuren op deze computer en gaat naar die printer en naar niemand anders.</li>
       <li>In het printvoorbeeld stuurt <b>Naar printer sturen…</b> precies de G-code die het voorbeeld liet zien, onder een naam die je zelf kiest, en als je het aanvinkt begint hij meteen te printen; de printer en dat vinkje van de vorige keer komen de volgende keer terug.</li>
+      <li>Eenmaal aan het printen laat <b><a href="#printer-status">Printerstatus</a></b> zien hoe ver hij is.</li>
+    </ul>
+    <h3 id="printer-status"><span lang="en">Printer status</span><span lang="nl">Printerstatus</span></h3>
+    <p lang="en">What every printer on your list is doing, beside your model.</p>
+    <p lang="nl">Wat elke printer op je lijst doet, naast je model.</p>
+    <p class="where" lang="en">Where: <b>Window &gt; Printer Status</b></p>
+    <p class="where" lang="nl">Waar: <b>Venster &gt; Printerstatus</b></p>
+    <ul lang="en">
+      <li>One line per <a href="#printers">printer</a>: whether it is idle, printing, paused or offline, or that something is wrong, which file it has, how far the print got, how long it has run and still needs, and how hot the nozzle and the bed are.</li>
+      <li>Every printer is asked again every five seconds, and only while this window is on the screen; close it or hide it and Volura asks nothing at all. A printer that answers nothing keeps its own line with what went wrong, and the others keep answering.</li>
+      <li>The window sits beside the model, so you can go on working while the print runs, and there is always just one of it.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Eén regel per <a href="#printers">printer</a>: of hij inactief is, printt, gepauzeerd is of offline is, of dat er iets mis is, welk bestand hij heeft, hoe ver de print kwam, hoe lang hij loopt en nog nodig heeft, en hoe heet de nozzle en het bed zijn.</li>
+      <li>Elke printer wordt om de vijf seconden opnieuw gevraagd, en alleen zolang dit venster op het scherm staat; sluit het of verberg het en Volura vraagt helemaal niets meer. Een printer die niets antwoordt, houdt zijn eigen regel met wat er mis was, en de andere blijven antwoorden.</li>
+      <li>Het venster staat naast het model, dus je werkt gewoon door terwijl de print loopt, en er is er altijd maar één.</li>
     </ul>
     <h3><span lang="en">View options</span><span lang="nl">Beeldopties</span></h3>
     <p lang="en">How the model is drawn, and what you want to see while you work.</p>

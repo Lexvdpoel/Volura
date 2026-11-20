@@ -3,7 +3,8 @@
 Every kind of printer is played here by a small HTTP server on 127.0.0.1 that answers
 what OctoPrint, Moonraker or PrusaLink answer and remembers everything they sent, so the
 tests look at the requests without anything leaving this computer. The printers page of
-Window > Preferences and Send to printer… of the print preview use the same fakes.
+Window > Preferences, Send to printer… of the print preview and the Printer Status window
+use the same fakes.
 
 Run with:  python -m pytest tests/test_printer_link.py
 """
@@ -38,6 +39,8 @@ class Fake:
         self.kind = kind                # "octoprint", "moonraker" or "prusalink"
         self.api_key = api_key          # the key it wants, "" when it wants none
         self.code = code                # a status to answer everything else with
+        self.answers = {}               # a path to answer with this JSON from now on
+        self.codes = {}                 # a path to answer with this status instead
         self.requests = []
 
 
@@ -66,6 +69,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _as_kind(self):
         """Only the routes the program of this fake really has; the rest is a 404."""
         fake, path = self.server.fake, self.path
+        if path in fake.codes:                   # what a test asked this printer to answer
+            return self._reply(fake.codes[path], b'{"error": "Not Doing That"}')
+        if path in fake.answers:
+            return self._reply(200, json.dumps(fake.answers[path]).encode())
         if fake.kind == "octoprint" and self.command == "GET" and path == "/api/version":
             return self._reply(200, json.dumps({"server": "1.10.2", "api": "0.1"}).encode())
         if fake.kind == "octoprint" and self.command == "POST" and path == "/api/files/local":
@@ -118,6 +125,14 @@ class FakePrinter:
     @property
     def last(self) -> Request:
         return self.fake.requests[-1]
+
+    def answer(self, path, payload):
+        """What this printer answers to that path from now on: sent back as JSON."""
+        self.fake.answers[path] = payload
+
+    def refuse(self, path, code):
+        """The status this printer answers that path with, instead of an answer."""
+        self.fake.codes[path] = code
 
     def connection(self, name="Octo", api_key="") -> pl.Connection:
         """A connection to this printer, of the kind it answers as."""
@@ -279,6 +294,219 @@ def test_a_certificate_that_is_not_trusted():
     problem = urllib.error.URLError(ssl.SSLCertVerificationError(1, "certificate verify failed"))
     said = str(pl._error(problem, "https://print.thuis", "OctoPrint"))
     assert "certificate" in said and "address" in said
+
+
+# ------------------------------------------------------------ what a printer is doing
+
+#: the paths a printer is asked about what it is doing, as volura/printer_link.py asks them
+OCTO_JOB = "/api/job"
+OCTO_PRINTER = "/api/printer"
+MOON_QUERY = "/printer/objects/query?print_stats&display_status&extruder&heater_bed"
+PRUSA_STATUS = "/api/v1/status"
+PRUSA_JOB = "/api/v1/job"
+
+
+def octo_job(state="Printing", name="box.gcode", done=41.0, went=600, left=900) -> dict:
+    """What OctoPrint answers on /api/job: the G-code it has, and how far it got in it."""
+    return {"job": {"file": {"name": name}}, "state": state,
+            "progress": {"completion": done, "printTime": went, "printTimeLeft": left}}
+
+
+def moon_print(state="printing", name="box.gcode", went=300.0, part=0.25) -> dict:
+    """What Klipper (Moonraker) answers on the objects Volura asks for."""
+    return {"result": {"print_stats": {"state": state, "filename": name,
+                                       "print_duration": went},
+                       "display_status": {"progress": part},
+                       "extruder": {"temperature": 210.2, "target": 210.0},
+                       "heater_bed": {"temperature": 59.4, "target": 60.0}}}
+
+
+def prusa_status(state="PRINTING", done=60, went=1200, left=800, **temps) -> dict:
+    """What PrusaLink answers on /api/v1/status: the printer, and its job if it has one."""
+    printer = {"state": state}
+    printer.update(temps)
+    return {"printer": printer,
+            "job": {"id": "1", "progress": done, "time_printing": went,
+                    "time_remaining": left}}
+
+
+def test_octoprint_says_what_it_is_doing(printer):
+    octo = printer("octoprint", api_key="secret")
+    octo.answer(OCTO_JOB, octo_job(name="my_box.gcode"))
+    octo.answer(OCTO_PRINTER, {"temperature": {"tool0": {"actual": 205.4, "target": 210.0},
+                                               "bed": {"actual": 60.2, "target": 60.0}}})
+    got = pl.status(octo.connection(api_key="secret"))
+    assert (got.state, got.file) == ("printing", "my_box.gcode")
+    assert got.progress == pytest.approx(0.41), "OctoPrint says a percentage of the whole"
+    assert (got.elapsed, got.left) == (600, 900)
+    assert got.nozzle == pytest.approx(205.4) and got.nozzle_target == 210.0
+    assert got.bed == pytest.approx(60.2) and got.bed_target == 60.0
+    assert [r.path for r in octo.requests] == [OCTO_JOB, OCTO_PRINTER]
+    assert header(octo.requests[1], "X-Api-Key") == "secret"
+    assert "secret" not in repr(got), "the key came back with the answer"
+
+
+def test_octoprint_that_is_not_printing_says_so(printer):
+    octo = printer("octoprint")
+    octo.answer(OCTO_JOB, octo_job(state="Operational", name="", done=None, went=None,
+                                   left=None))
+    octo.answer(OCTO_PRINTER, {"temperature": {"tool0": {"actual": 24.0, "target": 0.0}}})
+    got = pl.status(octo.connection())
+    assert (got.state, got.file, got.progress) == ("idle", "", None)
+    assert got.elapsed is None and got.left is None
+    assert got.nozzle == 24.0 and got.nozzle_target == 0.0
+    assert got.bed is None, "this OctoPrint has nothing to say about a bed"
+
+
+def test_octoprint_without_a_printer_is_offline_and_not_wrong(printer):
+    octo = printer("octoprint")
+    octo.answer(OCTO_JOB, octo_job(state="Offline", name="", done=None, went=None, left=None))
+    octo.refuse(OCTO_PRINTER, 409)         # OctoPrint answers; the printer behind it does not
+    got = pl.status(octo.connection())
+    assert got.state == "offline"
+    assert (got.file, got.progress, got.nozzle) == ("", None, None)
+
+
+def test_klipper_says_what_it_is_doing(printer):
+    klipper = printer("moonraker")
+    klipper.answer(MOON_QUERY, moon_print())
+    got = pl.status(klipper.connection("Klipper"))
+    assert (got.state, got.file) == ("printing", "box.gcode")
+    assert got.progress == pytest.approx(0.25), "Moonraker already speaks in parts of one"
+    assert got.elapsed == 300
+    assert got.left == pytest.approx(900), "a quarter of the print took five minutes"
+    assert got.nozzle == pytest.approx(210.2) and got.nozzle_target == 210.0
+    assert got.bed == pytest.approx(59.4) and got.bed_target == 60.0
+    assert klipper.last.path == MOON_QUERY
+
+
+def test_klipper_that_stands_by_needs_nothing(printer):
+    klipper = printer("moonraker")
+    klipper.answer(MOON_QUERY, {"result": {"print_stats": {"state": "standby", "filename": "",
+                                                           "print_duration": 0},
+                                            "display_status": {"progress": 0.0}}})
+    got = pl.status(klipper.connection("Klipper"))
+    assert (got.state, got.file, got.progress) == ("idle", "", 0.0)
+    assert got.left is None, "nothing printing has no time left"
+    assert got.nozzle is None and got.bed is None, "this Klipper did not answer those objects"
+
+
+def test_klipper_that_is_done_is_not_stuck(printer):
+    klipper = printer("moonraker")
+    klipper.answer(MOON_QUERY, moon_print(state="complete", part=1.0, went=1200.0))
+    got = pl.status(klipper.connection("Klipper"))
+    assert got.state == "idle" and got.progress == 1.0 and got.left == 0
+
+
+def test_prusalink_says_what_it_is_doing(printer):
+    prusa = printer("prusalink", api_key="key")
+    prusa.answer(PRUSA_STATUS, prusa_status(temp_nozzle=210.5, target_nozzle=210.0,
+                                            temp_bed=60.0, target_bed=60.0))
+    prusa.answer(PRUSA_JOB, {"file": {"display_name": "Box with lid",
+                                      "path": "/usb/box_with_lid.gcode"}})
+    got = pl.status(prusa.connection("Prusa", api_key="key"))
+    assert (got.state, got.file) == ("printing", "Box with lid")
+    assert got.progress == pytest.approx(0.6), "PrusaLink says a percentage of the whole"
+    assert (got.elapsed, got.left) == (1200, 800)
+    assert (got.nozzle, got.nozzle_target) == (210.5, 210.0)
+    assert (got.bed, got.bed_target) == (60.0, 60.0)
+    assert [r.path for r in prusa.requests] == [PRUSA_STATUS, PRUSA_JOB]
+    assert header(prusa.requests[0], "X-Api-Key") == "key"
+
+
+def test_prusalink_names_a_print_from_its_own_page(printer):
+    prusa = printer("prusalink")
+    prusa.answer(PRUSA_STATUS, prusa_status(state="PAUSED"))
+    got = pl.status(prusa.connection("Prusa"))
+    assert (got.state, got.file) == ("paused", "")
+    assert [r.path for r in prusa.requests] == [PRUSA_STATUS], "only a print is asked for its file"
+    prusa.answer(PRUSA_STATUS, prusa_status())
+    prusa.answer(PRUSA_JOB, {"file": {"name": "box.gcode"}})
+    assert pl.status(prusa.connection("Prusa")).file == "box.gcode", "a plain name is enough"
+
+
+def test_prusalink_states_there_are_are_the_closest_of_the_five(printer):
+    prusa = printer("prusalink")
+    prusa.answer(PRUSA_JOB, {"file": {"name": "box.gcode"}})
+    for word, state in (("IDLE", "idle"), ("PRINTING", "printing"), ("PAUSED", "paused"),
+                        ("BUSY", "printing"), ("PREPARING", "printing"),
+                        ("FINISHED", "idle"), ("ERROR", "error"), ("ATTENTION", "error")):
+        prusa.answer(PRUSA_STATUS, prusa_status(state=word))
+        assert pl.status(prusa.connection("Prusa")).state == state, word
+
+
+def test_every_program_words_its_states_differently(printer):
+    """Every answer of every program comes back as one of the five states."""
+    octo = printer("octoprint")
+    octo.answer(OCTO_PRINTER, {"temperature": {}})
+    for word, state in (("Printing", "printing"), ("Paused", "paused"),
+                        ("Cancelling", "printing"), ("Starting", "printing"),
+                        ("Operational", "idle"), ("Offline", "offline"), ("Error", "error")):
+        octo.answer(OCTO_JOB, octo_job(state=word, name="", done=None, went=None, left=None))
+        assert pl.status(octo.connection()).state == state, f"OctoPrint says {word}"
+    klipper = printer("moonraker")
+    for word, state in (("printing", "printing"), ("paused", "paused"),
+                        ("complete", "idle"), ("cancelled", "idle"), ("standby", "idle"),
+                        ("error", "error")):
+        klipper.answer(MOON_QUERY, moon_print(state=word))
+        assert pl.status(klipper.connection("Klipper")).state == state, f"Klipper says {word}"
+
+
+def test_a_state_there_is_not_is_said_as_the_closest_one():
+    assert pl._state("PRINTING FROM SD CARD") == "printing"
+    assert pl._state("Closed / without printer") == "offline"
+    assert pl._state("Suspended") == "printing"
+    assert pl._state(None) == "idle" and pl._state("") == "idle"
+
+
+def test_the_states_a_window_shows_are_the_states_a_printer_has():
+    assert set(pl.STATE_LABELS) == set(pl.STATES)
+    assert pl.state_label("idle") == "Idle"
+    assert pl.state_label("printing") == "Printing"
+    assert pl.state_label("paused") == "Paused"
+    assert pl.state_label("error") == "Error"
+    assert pl.state_label("offline") == "Offline"
+    assert pl.state_label("a state there is not") == "Offline"
+
+
+def test_times_are_said_the_way_a_window_does():
+    assert pl.format_duration(None) == ""
+    assert pl.format_duration(9) == "< 1 min"
+    assert pl.format_duration(59) == "< 1 min"
+    assert pl.format_duration(720) == "12 min"
+    assert pl.format_duration(3599) == "59 min"
+    assert pl.format_duration(3600) == "1 h 00 min"
+    assert pl.format_duration(3930) == "1 h 05 min"
+    assert pl.format_duration(7320) == "2 h 02 min"
+
+
+def test_what_went_wrong_is_said_the_way_check_says_it(printer):
+    octo = printer("octoprint", api_key="the right one")
+    octo.answer(OCTO_JOB, octo_job())
+    with pytest.raises(pl.LinkError) as bad:
+        pl.status(octo.connection(api_key="a wrong one"))
+    assert "API key" in str(bad.value)
+    assert "right one" not in str(bad.value) and "wrong one" not in str(bad.value)
+    with pytest.raises(pl.LinkError) as bad:
+        pl.status(pl.Connection("Thuis", "octoprint", f"127.0.0.1:{free_port()}"))
+    assert "Nothing answers at" in str(bad.value)
+    klipper = printer("moonraker")                       # it has no /api/job: another kind
+    with pytest.raises(pl.LinkError) as bad:
+        pl.status(pl.Connection("Octo", "octoprint", klipper.url))
+    assert "does not answer as OctoPrint" in str(bad.value)
+    with pytest.raises(pl.LinkError) as bad:
+        pl.status(pl.Connection("Octo", "toslink", octo.url))
+    assert "kind of printer" in str(bad.value)
+    with pytest.raises(pl.LinkError) as bad:
+        pl.status(pl.Connection("Octo", "octoprint", "het printernetwerk"))
+    assert "is not the address of a printer" in str(bad.value)
+
+
+def test_an_answer_that_is_no_answer_at_all(printer):
+    klipper = printer("moonraker")
+    klipper.answer(MOON_QUERY, {"result": {"print_stats": "not a dict at all"}})
+    got = pl.status(klipper.connection("Klipper"))
+    assert (got.state, got.file, got.progress) == ("idle", "", None)
 
 
 # ------------------------------------------------------------------- what is sent
@@ -616,3 +844,113 @@ def test_the_file_on_the_printer_is_called_after_the_model(win, sliced):
     finally:
         win.doc.path = old
         dlg.close()
+
+
+# --------------------------------------------------------------- the status window
+
+
+def asked(panel):
+    """Every asking the window has on its way, come to an end."""
+    for job in [row.job for row in panel.rows]:
+        assert job is not None, "the window asked nothing"
+        assert job.wait(20000), f"asking the printer never came to an end: {job.error}"
+
+
+def test_the_window_shows_what_two_printers_are_doing(printer, win):
+    octo = printer("octoprint")
+    octo.answer(OCTO_JOB, octo_job(name="my_box.gcode"))
+    octo.answer(OCTO_PRINTER, {"temperature": {"tool0": {"actual": 205.0, "target": 210.0},
+                                               "bed": {"actual": 60.0, "target": 60.0}}})
+    klipper = printer("moonraker")
+    klipper.answer(MOON_QUERY, moon_print(state="paused"))
+    win.settings.printers = [octo.connection("Octo"), klipper.connection("Klipper")]
+    win.settings.save()
+    panel = win.printer_status()
+    try:
+        assert panel is win.printer_status(), "the second call makes a second window"
+        assert [row.conn.name for row in panel.rows] == ["Octo", "Klipper"]
+        assert "127.0.0.1" in panel.rows[0].name.toolTip()
+        panel.poll()
+        asked(panel)
+        first, second = panel.rows
+        assert first.state.text() == "Printing" and first.file.text() == "my_box.gcode"
+        assert first.bar.value() == 41
+        assert first.times.text() == "10 min / 15 min"
+        assert first.temps.text() == "nozzle 205 / 210 °C   ·   bed 60 / 60 °C"
+        assert not first.error.text()
+        assert second.state.text() == "Paused" and second.file.text() == "box.gcode"
+        assert second.bar.value() == 25 and second.times.text() == "5 min / 15 min"
+    finally:
+        panel.close()
+
+
+def test_a_printer_that_answers_nothing_says_so_under_its_own_row(printer, win):
+    octo = printer("octoprint")
+    octo.answer(OCTO_JOB, octo_job(state="Paused"))
+    octo.answer(OCTO_PRINTER, {"temperature": {}})
+    gone = pl.Connection("Weg", "octoprint", f"127.0.0.1:{free_port()}")
+    win.settings.printers = [gone, octo.connection("Octo")]
+    win.settings.save()
+    panel = win.printer_status()
+    try:
+        panel.poll()
+        asked(panel)
+        bad, good = panel.rows
+        assert bad.state.text() == "Offline" and bad.times.text() == ""
+        assert "Nothing answers at" in bad.error.text()
+        assert "127.0.0.1" in bad.error.text()
+        assert good.state.text() == "Paused" and good.file.text() == "box.gcode"
+        asked_jobs = len([r for r in octo.requests if r.path == OCTO_JOB])
+        panel.poll()
+        asked(panel)
+        assert len([r for r in octo.requests if r.path == OCTO_JOB]) == asked_jobs + 1, \
+            "a printer that was wrong once is asked again"
+        assert panel.rows[1].state.text() == "Paused"
+    finally:
+        panel.close()
+
+
+def test_a_window_without_printers_says_where_to_add_one(win):
+    win.settings.printers = []
+    win.settings.save()
+    panel = win.printer_status()
+    try:
+        assert panel.rows == [] and panel.conns == []
+        assert "Preferences > Printers" in panel.hint.text()
+    finally:
+        panel.close()
+
+
+def test_the_window_asks_while_it_is_on_the_screen(win):
+    from volura import printer_status as ps
+    win.settings.printers = []
+    win.settings.save()
+    panel = win.printer_status()
+    assert panel.timer.isActive(), "an open window follows its printers"
+    assert panel.timer.interval() == ps.POLL_SECONDS * 1000
+    panel.close()
+    assert not panel.timer.isActive(), "a window that is gone asks nothing"
+    assert win.printer_status() is panel, "the window there is is brought back, not made again"
+    panel.close()
+
+
+def test_the_window_follows_the_printers_under_preferences(printer, win):
+    from volura.app import PreferencesDialog
+    octo = printer("octoprint")
+    prusa = printer("prusalink")
+    win.settings.printers = [octo.connection("Octo")]
+    win.settings.save()
+    panel = win.printer_status()
+    panel.close()                        # out of sight, and still following along
+    dlg = PreferencesDialog(win, "Printers")
+    dlg._add_printer()
+    dlg.p_name.setText("Prusa")
+    dlg.p_kind.setCurrentIndex(dlg.p_kind.findData("prusalink"))
+    dlg.p_url.setText(prusa.url)
+    dlg.apply()
+    assert [row.conn.name for row in panel.rows] == ["Octo", "Prusa"]
+    win.settings.printers = []
+    win.settings.save()
+    win.printer_status()                  # shown again: the rows follow what is there now
+    assert panel.rows == [] and "Preferences > Printers" in panel.hint.text()
+    panel.close()

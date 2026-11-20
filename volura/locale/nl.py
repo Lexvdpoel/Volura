@@ -2936,4 +2936,16 @@ TRANSLATIONS = {
     '{url} will not take this API key. Copy it again from the settings of the printer.': '{url} wil deze API-sleutel niet. Kopieer hem opnieuw uit de instellingen van de printer.',
     '{url} answered error {code}.': '{url} antwoordde met fout {code}.',
     '{url} has a certificate this computer does not trust. Is the address right?': '{url} heeft een certificaat dat deze computer niet vertrouwt. Klopt het adres?',
+    # Printer Status: Window > Printer Status (volura/printer_status.py)
+    'Error': 'Fout',
+    'Offline': 'Offline',
+    '< 1 min': '< 1 min',
+    'Printer Status': 'Printerstatus',
+    'Printer &Status': 'Printer&status',
+    'What every printer on the network is doing right now': 'Wat elke printer op het netwerk nu doet',
+    'There are no printers yet. Add one under Window > Preferences > Printers and what it is doing shows up here.': 'Er zijn nog geen printers. Voeg er een toe onder Venster > Voorkeuren > Printers, en wat hij doet verschijnt dan hier.',
+    'How far the print is': 'Hoe ver de print is',
+    'how long the print has run / how long it still needs': 'hoe lang de print loopt / hoe lang hij nog nodig heeft',
+    'nozzle': 'nozzle',
+    'bed': 'bed',
 }

@@ -5,6 +5,7 @@ and shows what comes back. Three programs answer on the network for a printer:
 OctoPrint, Moonraker (the API of Klipper) and PrusaLink on a Prusa printer. A
 `Connection` says which of them it is, where it stands and with which key it lets you
 in; the settings keep them (volura.app.Settings) and Preferences > Printers edits them.
+`status` asks what one of them is doing right now, which Window > Printer Status shows.
 
 An API key is a password: it never stands in a message or in the log, only in the
 `X-Api-Key` header of the request. It is kept in the settings like every other
@@ -21,7 +22,7 @@ import json
 import os
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from . import __version__
 from .i18n import tr, tr_noop
@@ -37,7 +38,15 @@ DEFAULT_NAME = "volura"
 
 
 class LinkError(Exception):
-    """What went wrong speaking to a printer, in words for the user."""
+    """What went wrong speaking to a printer, in words for the user.
+
+    `code` is the answer the printer gave with it, or None when the request never got an
+    answer; `status` asks for it, because OctoPrint answers 409 when it has no printer and
+    that is a state and not an error."""
+
+    def __init__(self, text, code=None):
+        super().__init__(text)
+        self.code = code
 
 
 @dataclass
@@ -132,23 +141,27 @@ def from_json(text) -> Connection | None:
 # ------------------------------------------------------------------ what went wrong
 
 
-def _wrong_kind(url, what) -> LinkError:
+def _wrong_kind(url, what, code=None) -> LinkError:
     """There is another kind of printer at that address than the one that was asked for."""
     return LinkError(tr("{url} does not answer as {what}. Is this printer really a "
-                        "{what}?").format(url=url, what=what))
+                        "{what}?").format(url=url, what=what), code)
 
 
 def _error(exc, url, what) -> LinkError:
-    """What a failed request means for the user; an API key is never one of the words."""
+    """What a failed request means for the user; an API key is never one of the words.
+
+    The answer the printer gave with it stays on the LinkError, so a caller can tell one
+    of them apart without reading words back out of a message."""
     import ssl
     import urllib.error
     if isinstance(exc, urllib.error.HTTPError):
         if exc.code in (401, 403):
             return LinkError(tr("{url} will not take this API key. Copy it again from the "
-                                "settings of the printer.").format(url=url))
+                                "settings of the printer.").format(url=url), exc.code)
         if exc.code == 404:
-            return _wrong_kind(url, what)
-        return LinkError(tr("{url} answered error {code}.").format(url=url, code=exc.code))
+            return _wrong_kind(url, what, exc.code)
+        return LinkError(tr("{url} answered error {code}.").format(url=url, code=exc.code),
+                         exc.code)
     if isinstance(exc, ssl.SSLError) or isinstance(getattr(exc, "reason", None), ssl.SSLError):
         return LinkError(tr("{url} has a certificate this computer does not trust. Is the "
                             "address right?").format(url=url))
@@ -232,6 +245,178 @@ def check(conn, timeout=5) -> str:
     if not version:
         raise _wrong_kind(url, what)
     return f"{what} {version}"
+
+
+# ------------------------------------------------------------------ what it is doing
+
+#: what a printer can be doing, and what the status window says of it
+STATES = ("idle", "printing", "paused", "error", "offline")
+STATE_LABELS = {"idle": tr_noop("Idle"), "printing": tr_noop("Printing"),
+                "paused": tr_noop("Paused"), "error": tr_noop("Error"),
+                "offline": tr_noop("Offline")}
+#: how the three programs word those states: the first group an answer agrees with wins
+STATE_WORDS = (("error", ("error", "attention")),
+               ("paused", ("paus",)),
+               ("offline", ("offline", "closed", "without printer")),
+               ("printing", ("print", "busy", "preparing", "operating", "starting",
+                             "cancelling", "queued", "suspend")),
+               ("idle", ("idle", "ready", "standby", "operational", "operations",
+                         "complete", "finished", "cancel")))
+
+
+@dataclass
+class Status:
+    """What a printer is doing: the state it is in and, while it prints, how far it got.
+
+    `state` is one of `STATES` and `file` is what the printer calls the G-code; `progress`
+    is a part of the whole print (0..1), `elapsed` and `left` are seconds and the four
+    temperatures are degrees Celsius. What a printer does not say stays None, and an API
+    key is never part of any of this.
+    """
+
+    state: str
+    file: str = ""
+    progress: float | None = None
+    elapsed: float | None = None
+    left: float | None = None
+    nozzle: float | None = None
+    nozzle_target: float | None = None
+    bed: float | None = None
+    bed_target: float | None = None
+
+
+def state_label(state) -> str:
+    """What the status window calls a state, as "Printing"; "Offline" for anything unknown."""
+    return tr(STATE_LABELS.get(state, STATE_LABELS["offline"]))
+
+
+def format_duration(seconds) -> str:
+    """How long a stretch of seconds is, as the window says it: "1 h 05 min", "12 min",
+    "< 1 min"; nothing at all when there is no stretch to say."""
+    if seconds is None:
+        return ""
+    minutes = int(float(seconds) // 60)
+    if minutes < 1:
+        return tr("< 1 min")
+    hours, mins = divmod(minutes, 60)
+    return f"{hours} h {mins:02d} min" if hours else f"{mins} min"
+
+
+def _state(word, default="idle") -> str:
+    """One of `STATES` out of the word a program uses for it; `default` for a word there is not."""
+    word = str(word or "").strip().lower()
+    for name, words in STATE_WORDS:
+        if any(part in word for part in words):
+            return name
+    return default
+
+
+def _json(text) -> dict:
+    """What a printer answered to a small GET, as the dict it is; an empty one if it is not JSON."""
+    try:
+        answer = json.loads(text)
+    except ValueError:
+        return {}
+    return answer if isinstance(answer, dict) else {}
+
+
+def _object(value) -> dict:
+    """A piece of an answer that holds fields of its own: nothing when the printer left it out."""
+    return value if isinstance(value, dict) else {}
+
+
+def _number(value):
+    """A time or a temperature as the printer gave it, or None when it gave nothing."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _fraction(percent) -> float | None:
+    """A percentage, as OctoPrint and PrusaLink answer it, as a part of the whole."""
+    value = _number(percent)
+    return None if value is None else max(0.0, min(1.0, value / 100.0))
+
+
+def _octoprint_status(conn, url, what, timeout) -> Status:
+    """What OctoPrint says of the print it is running, and how hot its nozzle and bed are."""
+    job = _json(_get(conn, url, "/api/job", what, timeout))
+    done = _object(job.get("progress"))
+    status = Status(_state(job.get("state")),
+                    str(_object(_object(job.get("job")).get("file")).get("name", "")),
+                    _fraction(done.get("completion")), _number(done.get("printTime")),
+                    _number(done.get("printTimeLeft")))
+    try:
+        heat = _object(_json(_get(conn, url, "/api/printer", what, timeout)
+                             ).get("temperature"))
+    except LinkError as exc:
+        if exc.code != 409:                 # 409: OctoPrint answers, the printer does not
+            raise
+        return replace(status, state="offline")
+    hot, bed = _object(heat.get("tool0")), _object(heat.get("bed"))
+    return replace(status, nozzle=_number(hot.get("actual")),
+                   nozzle_target=_number(hot.get("target")), bed=_number(bed.get("actual")),
+                   bed_target=_number(bed.get("target")))
+
+
+def _moonraker_status(conn, url, what, timeout) -> Status:
+    """What Klipper (Moonraker) says of the print it is running, and how hot it is."""
+    got = _json(_get(conn, url, "/printer/objects/query?print_stats&display_status"
+                               "&extruder&heater_bed", what, timeout))
+    result = _object(got.get("result"))
+    stats = _object(result.get("print_stats"))
+    shown = _object(result.get("display_status"))
+    hot, bed = _object(result.get("extruder")), _object(result.get("heater_bed"))
+    went = _number(stats.get("print_duration"))
+    part = _number(shown.get("progress"))
+    part = None if part is None else max(0.0, min(1.0, part))
+    # how long it still needs is not said anywhere: what is left of the print is what is
+    # left of the time it has taken so far to get this far
+    left = None if not part or not went else went / part - went
+    return Status(_state(stats.get("state")), str(stats.get("filename", "")), part, went,
+                  left, _number(hot.get("temperature")), _number(hot.get("target")),
+                  _number(bed.get("temperature")), _number(bed.get("target")))
+
+
+def _file_name_of(job) -> str:
+    """The name PrusaLink gives the file of a job: what stands on the printer, or its name."""
+    stored = _object(job.get("file"))
+    return str(stored.get("display_name") or stored.get("name") or "")
+
+
+def _prusalink_status(conn, url, what, timeout) -> Status:
+    """What PrusaLink says of the print on its USB stick, and how hot the printer is."""
+    got = _json(_get(conn, url, "/api/v1/status", what, timeout))
+    printer, job = _object(got.get("printer")), _object(got.get("job"))
+    state = _state(printer.get("state"))
+    name = ""                               # the status names a job by its number, not its file
+    if state == "printing":
+        name = _file_name_of(_json(_get(conn, url, "/api/v1/job", what, timeout)))
+    return Status(state, name, _fraction(job.get("progress")),
+                  _number(job.get("time_printing")), _number(job.get("time_remaining")),
+                  _number(printer.get("temp_nozzle")), _number(printer.get("target_nozzle")),
+                  _number(printer.get("temp_bed")), _number(printer.get("target_bed")))
+
+
+def status(conn, timeout=5) -> Status:
+    """What the printer at `conn` is doing right now.
+
+    What went wrong is the very `LinkError` `check` gives: nothing answers, the API key is
+    not taken, or the printer at that address is another kind than the one filled in. A
+    printer that is switched off while its OctoPrint answers is not said as an error but
+    as state "offline". An API key stands in neither the `Status` and what comes with it,
+    nor in anything asked of the printer.
+    """
+    if conn.kind not in KINDS:
+        raise LinkError(tr("Say what kind of printer {name} is.").format(name=conn.name))
+    what = server_name(conn.kind)
+    url = _address(conn, normalise_url(conn.url))
+    if conn.kind == "octoprint":
+        return _octoprint_status(conn, url, what, timeout)
+    if conn.kind == "moonraker":
+        return _moonraker_status(conn, url, what, timeout)
+    return _prusalink_status(conn, url, what, timeout)
 
 
 # ------------------------------------------------------------------ sending a file

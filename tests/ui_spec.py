@@ -150,6 +150,8 @@ MENUS = [
         "---",
         ("Model Info", None),
         ("Preferences", None),
+        "---",
+        ("Printer Status", None),            # Volura: what the printers on the network are doing
     ]),
     ("Help", [
         ("Welcome to Volura", None),

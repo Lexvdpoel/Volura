@@ -525,6 +525,11 @@ gets for free.
     key; *Test connection* there says what answered. The little dialog asks under what name the
     file goes to the printer and whether it starts printing right away, and remembers the printer
     you used last
+    - **Printer Status** (*Window > Printer Status*) shows beside your model what each of those
+      printers is doing: whether it is idle, printing, paused or offline, or that something is
+      wrong, which file it has, how far the print got, how long it has run and still needs, and how
+      hot the nozzle and the bed are; every printer is asked again every five seconds while the
+      window is open
   - A model in more colours prints in more colours: every colour goes to the extruder you point it
     at, starting on the filament the multicolour 3MF would have given it, faces painted with the
     Paint Bucket print as a skin of the depth you choose, and a prime tower or ooze shield keeps
@@ -829,6 +834,7 @@ volura/
   i18n.py       translations; locale/ holds the Dutch tables
   updater.py    checking for a newer version and installing it
   printer_link.py  sending a slice to OctoPrint, Klipper (Moonraker) or PrusaLink
+  printer_status.py  what those printers are doing right now (Window > Printer Status)
 tests/          tests without a GUI (pytest); test_brep.py compares with results from SketchUp 2017
                 test_portability.py keeps Windows assumptions out of volura/
 docs/website/   the feature cards and the manual of volura.dev, in English and Dutch; the site

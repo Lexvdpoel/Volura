@@ -722,6 +722,7 @@ class PreferencesDialog(PageDialog):
             self.win.start_spacemouse()
         if scheme_changed:
             self.win.set_key_scheme(scheme)
+        self.win.refresh_printer_status()   # the printers of this page may have changed
         self.win.view.tools["circle"].segments = s.circle_segments
         self.win.view.update()
         self.win.sheet_view.update()      # the line width also changes the worksheet
