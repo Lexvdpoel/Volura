@@ -3,6 +3,13 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## Unreleased
+
+### New
+- **A thumbnail in the G-code**: *File > Slice* puts a picture of the print in the G-code, so the
+  screen of a Prusa printer, a Klipper printer (Mainsail, Fluidd, KlipperScreen) or OctoPrint shows
+  what is about to print. Choose the sizes under Extras > Thumbnail, or Off.
+
 ## 0.2.63 — 2026-11-20
 
 ### New
