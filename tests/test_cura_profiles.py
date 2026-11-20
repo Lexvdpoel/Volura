@@ -449,6 +449,163 @@ def test_the_extras_of_the_slice_dialog_follow_the_profile_and_are_remembered(li
         win.close()
 
 
+def test_the_seam_of_the_slice_dialog_is_curas_seam_and_is_remembered(library):
+    """File > Slice… > Extras > Seam: <i>Profile</i> says nothing at all, the other four speak
+    Cura's own settings, and a new dialog starts where the previous one left off."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication, QWidget
+    QApplication.instance() or QApplication(sys.argv[:1])
+    import volura.slice_dialog as slice_dialog
+    from volura.settings import qsettings
+    from volura.slice_dialog import SliceDialog
+
+    class Prefs:
+        q = qsettings()
+        slice_printer, slice_variant = "testprinter", ""
+        slice_material, slice_quality = "", ""
+        slice_infill, slice_infill_pattern = 20, ""
+        slice_support, slice_adhesion = 0, ""
+        slice_paint, slice_changes, slice_change_command = 1.0, "", ""
+        slice_seam = ""                           # nothing was ever chosen on this computer
+
+    class Window(QWidget):
+        settings = Prefs()
+
+    win = Window()
+    dlg = SliceDialog(win, library)
+    try:
+        assert dlg.seam.currentText() == "Profile" and dlg.choice()["seam"] == ""
+        assert not [k for k in dlg.user_values() if k.startswith("z_seam")], \
+            "Profile leaves the seam to the profile"
+        for i, (_label, kind, extra) in enumerate(slice_dialog.SEAMS[1:], start=1):
+            dlg.seam.setCurrentIndex(i)
+            got = {k: v for k, v in dlg.user_values().items() if k.startswith("z_seam")}
+            assert got == dict(extra, z_seam_type=kind), kind
+            assert dlg.choice()["seam"] == kind
+        st = dlg.stacks()
+        assert st.glob.get("z_seam_type") == "shortest", "the last choice wins"
+        assert st.global_settings().get("z_seam_type") == "shortest", "CuraEngine reads it there"
+        for key, value in dlg.choice().items():     # what the window saves before slicing
+            setattr(Prefs, "slice_" + key, value)
+        again = SliceDialog(win, library)
+        try:
+            assert again.seam.currentText() == "Shortest" and again.choice()["seam"] == "shortest"
+            again.seam.setCurrentIndex([k for _l, k, _e in slice_dialog.SEAMS].index(
+                "sharpest_corner"))
+            assert again.user_values()["z_seam_corner"] == "z_seam_corner_weighted"
+        finally:
+            again.close()
+    finally:
+        dlg.close()
+        win.close()
+
+
+def test_vase_mode_prints_one_wall_and_stands_aside_from_the_rest(library):
+    """File > Slice… > Extras > Vase mode: Cura's spiralize, the fields a vase does not print
+    stand aside without losing what they hold, the info label says what a vase prints, and what
+    you ticked is what the next dialog starts with."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication, QWidget
+    app = QApplication.instance() or QApplication(sys.argv[:1])
+    import volura.slice_dialog as slice_dialog
+    from volura.settings import qsettings
+    from volura.slice_dialog import SliceDialog
+
+    class Prefs:
+        q = qsettings()
+        slice_printer, slice_variant = "testprinter", ""
+        slice_material, slice_quality = "", ""
+        slice_infill, slice_infill_pattern = 20, ""
+        slice_support, slice_adhesion = 0, ""
+        slice_paint, slice_changes, slice_change_command = 1.0, "", ""
+
+    class Window(QWidget):
+        settings = Prefs()
+
+    win = Window()
+    dlg = SliceDialog(win, library)
+    try:
+        assert not dlg.vase.isChecked() and "magic_spiralize" not in dlg.user_values()
+        assert "Vase mode" not in dlg.info.text(), "off has nothing to say"
+        dlg.infill.setValue(45)
+        dlg.pattern.setCurrentIndex([k for _label, k in slice_dialog.INFILL_PATTERNS].index(
+            "honeycomb"))
+        dlg.support.setCurrentIndex(2)
+        dlg.ironing.setChecked(True)
+        dlg.walls.setValue(3)
+        dlg.vase.setChecked(True)
+        app.processEvents()
+        for field in (dlg.infill, dlg.support, dlg.ironing, dlg.walls):
+            assert not field.isEnabled(), "a vase prints one wall: the rest has nothing to say"
+        assert dlg.infill.value() == 45 and dlg.support.currentIndex() == 2
+        assert dlg.ironing.isChecked() and dlg.walls.value() == 3, "the values wait it out"
+        on = dlg.user_values()
+        assert on["magic_spiralize"] is True
+        for key in ("infill_sparse_density", "infill_pattern", "support_enable", "support_type",
+                    "ironing_enabled", "ironing_only_highest_layer", "wall_line_count"):
+            assert key not in on, f"a vase does not print that: {key}"
+        assert dlg.choice()["vase"] is True
+        assert "Vase mode prints one wall" in dlg.info.text()
+        assert "Build volume" in dlg.info.text(), "the note sits above what the printer can do"
+        assert "spiralizes on its own" not in dlg.info.text(), "one part says nothing about it"
+        assert dlg.stacks().glob.get("magic_spiralize") is True
+        dlg.vase.setChecked(False)
+        app.processEvents()
+        for field in (dlg.infill, dlg.support, dlg.ironing, dlg.walls):
+            assert field.isEnabled()
+        off = dlg.user_values()
+        assert "magic_spiralize" not in off and "Vase mode" not in dlg.info.text()
+        assert off["infill_sparse_density"] == pytest.approx(45.0)
+        assert off["infill_pattern"] == "honeycomb", "everything is back as it was"
+        assert off["wall_line_count"] == 3 and off["ironing_enabled"] is True
+        dlg.vase.setChecked(True)
+        for key, value in dlg.choice().items():     # what the window saves before slicing
+            setattr(Prefs, "slice_" + key, value)
+        again = SliceDialog(win, library)
+        try:
+            assert again.vase.isChecked() and again.user_values()["magic_spiralize"] is True
+            assert not again.infill.isEnabled() and not again.walls.isEnabled()
+            assert "Vase mode prints one wall" in again.info.text()
+        finally:
+            again.close()
+    finally:
+        dlg.close()
+        win.close()
+
+
+def test_vase_mode_over_more_than_one_part_says_so(library):
+    """Cura spirals every part of a print on its own, so a vase mode over a part list of more
+    than one part only warns - and with one part it keeps quiet about it."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication, QWidget
+    QApplication.instance() or QApplication(sys.argv[:1])
+    from volura.settings import qsettings
+    from volura.slice_dialog import SliceDialog
+
+    class Prefs:
+        q = qsettings()
+        slice_printer, slice_variant = "testprinter", ""
+        slice_material, slice_quality = "", ""
+        slice_infill, slice_infill_pattern = 20, ""
+        slice_support, slice_adhesion = 0, ""
+        slice_paint, slice_changes, slice_change_command = 1.0, "", ""
+
+    class Window(QWidget):
+        settings = Prefs()
+
+    win = Window()
+    dlg = SliceDialog(win, library, [], 3)
+    try:
+        assert not dlg.vase.isChecked() and "parts" not in dlg.info.text()
+        dlg.vase.setChecked(True)
+        assert "3 parts" in dlg.info.text()
+        assert "Vase mode prints one wall" in dlg.info.text(), "the two sayings are one note"
+        assert "Build volume" in dlg.info.text()
+    finally:
+        dlg.close()
+        win.close()
+
+
 def test_the_thumbnail_of_the_slice_dialog_is_remembered(library):
     """File > Slice… > Extras > Thumbnail: a computer that never sliced with one draws the pair
     most printer screens show, and what you choose there is what the next dialog starts with -
@@ -774,6 +931,66 @@ def test_apply_choice_leaves_what_a_preset_does_not_hold(slice_window, library):
         clear_presets()
 
 
+def test_a_preset_keeps_the_seam_and_vase_mode(slice_window, library, monkeypatch):
+    """The two new Extras ride along with a preset: saved with it, back when the preset is chosen
+    again, and back with the fields standing aside again when the preset has vase mode."""
+    import volura.slice_dialog as slice_dialog
+    from volura.slice_presets import matches
+    seams = [k for _label, k, _extra in slice_dialog.SEAMS]
+    win = slice_window
+    monkeypatch.setattr(slice_dialog, "QInputDialog", Ask("Vase nad"))
+    dlg = slice_dialog.SliceDialog(win, library)
+    try:
+        dlg.walls.setValue(3)
+        dlg.seam.setCurrentIndex(seams.index("random"))
+        dlg.vase.setChecked(True)
+        dlg._save_preset()
+        assert dlg.preset_name() == "Vase nad"
+        kept = stored_presets()
+        assert kept[0]["seam"] == "random" and kept[0]["vase"] is True
+        dlg.seam.setCurrentIndex(0)
+        dlg.vase.setChecked(False)
+        assert dlg.preset_name() is None, "the dialog moved away from the preset"
+        dlg.preset.setCurrentText("Vase nad")
+        assert dlg.seam.currentText() == "Random" and dlg.choice()["seam"] == "random"
+        assert dlg.vase.isChecked(), "the fields are back the way the preset has them"
+        assert not dlg.walls.isEnabled() and "wall_line_count" not in dlg.user_values()
+        assert dlg.user_values()["z_seam_type"] == "random"
+        assert matches(kept[0], dlg.choice())
+    finally:
+        dlg.close()
+        win.close()
+        clear_presets()
+
+
+def test_an_older_choice_leaves_the_seam_and_vase_mode_alone(slice_window, library):
+    """A choice of a Volura that knows nothing about the seam or vase mode - the last choice of
+    the settings or an old preset - applies everything it does hold and leaves those two fields
+    standing where they are."""
+    import volura.slice_dialog as slice_dialog
+    from volura.slice_presets import matches
+    seams = [k for _label, k, _extra in slice_dialog.SEAMS]
+    win = slice_window
+    dlg = slice_dialog.SliceDialog(win, library)
+    try:
+        dlg.seam.setCurrentIndex(seams.index("sharpest_corner"))
+        dlg.vase.setChecked(True)
+        old = {"printer": "testprinter", "infill": 80, "walls": 5}
+        dlg.apply_choice(old)
+        assert dlg.infill.value() == 80 and dlg.walls.value() == 5, "the rest is applied"
+        assert dlg.seam.currentText() == "Sharpest corner" and dlg.vase.isChecked()
+        assert dlg.user_values()["z_seam_corner"] == "z_seam_corner_weighted"
+        assert not dlg.infill.isEnabled(), "the vase still stands aside, as it did"
+        assert matches(dict(old, name="old"), dlg.choice()), \
+            "the old preset matches whatever the two new fields say"
+        dlg.apply_choice({"printer": "testprinter", "seam": "nonsense", "vase": "yes"})
+        assert dlg.seam.currentText() == "Sharpest corner", "an unknown seam is left alone"
+    finally:
+        dlg.close()
+        win.close()
+        clear_presets()
+
+
 def test_the_presets_survive_the_settings_of_the_window(slice_window, library, monkeypatch):
     """The presets and the name chosen last are kept like every other preference: a new
     Settings reads them, and what the window saves does not lose them again."""
@@ -883,3 +1100,31 @@ def test_the_ender_3_slices_at_standard_quality_with_its_own_settings(real):
     assert e["wall_thickness"] == pytest.approx(0.8)
     assert e["material_diameter"] == pytest.approx(1.75)
     assert g["adhesion_type"] in ("skirt", "brim", "raft", "none")
+
+
+@needs_real
+def test_the_seam_and_vase_mode_speak_curas_own_settings():
+    """File > Slice… > Extras: the seam and vase mode name what Cura's own fdmprinter definition
+    names, with the values that definition offers; <i>Profile</i> names nothing."""
+    path = os.path.join(REAL, "definitions", "fdmprinter.def.json")
+    with open(path, encoding="utf-8") as fh:
+        doc = json.load(fh)
+    settings = {}
+
+    def walk(children):
+        for key, spec in (children or {}).items():
+            settings[key] = spec
+            walk(spec.get("children"))
+
+    walk(doc.get("settings"))
+    import volura.slice_dialog as slice_dialog
+    wanted = [dict(extra, z_seam_type=kind) if kind else dict(extra)
+              for _label, kind, extra in slice_dialog.SEAMS]
+    assert wanted[0] == {}, "Profile says nothing at all"
+    for got in wanted[1:]:
+        for key, value in got.items():
+            assert key in settings, f"{key} is no setting of fdmprinter"
+            assert settings[key]["type"] == "enum", key
+            assert value in settings[key]["options"], f"{key} has nothing called {value}"
+    spiral = settings["magic_spiralize"]
+    assert spiral["type"] == "bool" and spiral["default_value"] is False, "vase mode spirals"

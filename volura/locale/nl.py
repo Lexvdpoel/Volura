@@ -2268,6 +2268,17 @@ TRANSLATIONS = {
     'How thick the bumps of the textured outer wall are': 'Hoe dik de bultjes van de getextureerde buitenwand zijn',
     'Fuzz': 'Ruwte',
     'Walls': 'Wanden',
+    # File > Slice > where the seam sits and vase mode (slice_dialog)
+    'Seam': 'Nad',
+    'Sharpest corner': 'Scherpste hoek',
+    'At the back': 'Aan de achterkant',
+    'Random': 'Willekeurig',
+    'Shortest': 'Kortste',
+    'Where the thin vertical line of the print sits: at a corner, at the back, moved around, or wherever the nozzle has the shortest way': 'Waar het dunne verticale lijntje van de print zit: op een hoek, aan de achterkant, door elkaar, of waar de nozzle het kortst onderweg is',
+    'Vase mode (one spiral wall)': 'Vasemodus (één spiraalwand)',
+    'One wall that spirals up in one continuous line, with a bottom under it: a vase, without infill or a top': 'Eén wand die in één lijn omhoog spiraalt, met een onderkant eronder: een vaas, zonder vulling of bovenkant',
+    'Vase mode prints one wall and a bottom, without infill or a top.': 'Vasemodus print één wand en een onderkant, zonder vulling of bovenkant.',
+    'There are {n} parts, so each of them spiralizes on its own.': 'Er zijn {n} onderdelen, dus elk onderdeel spiraalt apart.',
     # File > Slice > the thumbnail of the print in the G-code (gcode_thumbnail)
     'Thumbnail': 'Minifoto',
     'Off': 'Uit',

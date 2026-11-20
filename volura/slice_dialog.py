@@ -4,9 +4,10 @@ The printers come from the Cura profile library that Volura brings along (see
 `volura.cura_profiles`): first the maker, then the printer, then what that printer offers. A few
 settings that you change on almost every print sit underneath - infill and its pattern, support and
 how the print sticks to the bed - and an Extras group with adaptive layers, ironing, a fuzzy skin,
-the number of walls and the thumbnail for the printer's screen; everything else comes from the
-profile. The choice is remembered in Settings, and a choice you come back to is saved under a name
-above the Maker row (see `volura.slice_presets`).
+the number of walls, where the seam sits and a vase mode that prints one wall spiralling up,
+besides the thumbnail for the printer's screen; everything else comes from the profile. The
+choice is remembered in Settings, and a choice you come back to is saved under a name above the
+Maker row (see `volura.slice_presets`).
 
 Below that sits what the print does with the colors of the model (see `volura.paint_split` and
 `volura.fileio`): which filament prints which color, how deep the skins of painted faces go,
@@ -45,6 +46,14 @@ INFILL_PATTERNS = [(tr_noop("As the profile has it"), ""), (tr_noop("Grid"), "gr
                    (tr_noop("Gyroid"), "gyroid"), (tr_noop("Honeycomb"), "honeycomb"),
                    (tr_noop("Concentric"), "concentric"), (tr_noop("Zig Zag"), "zigzag"),
                    (tr_noop("Cross"), "cross"), (tr_noop("Lightning"), "lightning")]
+#: where the seam of the print sits: (label, z_seam_type or "" for the profile's own, the settings
+#: that go with it; the names and the values are those of Cura's fdmprinter definitions)
+SEAMS = [(tr_noop("Profile"), "", {}),
+         (tr_noop("Sharpest corner"), "sharpest_corner",
+          {"z_seam_corner": "z_seam_corner_weighted"}),
+         (tr_noop("At the back"), "back", {"z_seam_position": "back"}),
+         (tr_noop("Random"), "random", {}),
+         (tr_noop("Shortest"), "shortest", {})]
 
 
 #: a filament changer in front of one nozzle: from two filaments up to what the largest
@@ -186,7 +195,8 @@ class SliceDialog(QDialog):
     """File > Slice…: choose what to slice with; `choice()` gives it, `stacks()` the settings.
 
     `colors` are the colors the model prints with, as `volura.fileio.model_colors` gives them;
-    the dialog turns them into the filament plan of `multicolor()`.
+    the dialog turns them into the filament plan of `multicolor()`. `parts` is how many parts the
+    print has, which is of interest to vase mode alone: Cura spirals every one of them.
 
     The last choice is restored when the dialog opens and a choice you come back to is saved
     under a name above the Maker row (see `volura.slice_presets`); both go over the dialog
@@ -198,10 +208,11 @@ class SliceDialog(QDialog):
     #: in Settings: the presets of the user, and the name of the one chosen last
     PRESETS, PRESET = "slice_presets", "slice_preset"
 
-    def __init__(self, win, lib: cura_profiles.Library, colors=()):
+    def __init__(self, win, lib: cura_profiles.Library, colors=(), parts=1):
         super().__init__(win)
         self.lib = lib
         self.colors = list(colors)
+        self.parts = max(1, int(parts))
         self.went_3mf = False
         self._boxes = []                        # the extruder box of every row of the table
         s = win.settings
@@ -268,6 +279,15 @@ class SliceDialog(QDialog):
         self.walls.setSpecialValueText(tr("Profile"))
         self.walls.setToolTip(tr("How many nozzle lines thick the walls of the print are; "
                                  "Profile leaves it to the profile"))
+        self.seam = QComboBox()
+        for label, _kind, _extra in SEAMS:
+            self.seam.addItem(tr(label))
+        self.seam.setToolTip(tr("Where the thin vertical line of the print sits: at a corner, "
+                                "at the back, moved around, or wherever the nozzle has the "
+                                "shortest way"))
+        self.vase = QCheckBox(tr("Vase mode (one spiral wall)"))
+        self.vase.setToolTip(tr("One wall that spirals up in one continuous line, with a bottom "
+                               "under it: a vase, without infill or a top"))
         self.thumbnail = QComboBox()
         for label, kind, _sizes in gcode_thumbnail.THUMBNAILS:
             self.thumbnail.addItem(tr(label), kind)
@@ -278,6 +298,8 @@ class SliceDialog(QDialog):
         extras.addRow("", self.fuzzy)
         extras.addRow(tr("Fuzz"), self.fuzz)
         extras.addRow(tr("Walls"), self.walls)
+        extras.addRow(tr("Seam"), self.seam)
+        extras.addRow("", self.vase)
         extras.addRow(tr("Thumbnail"), self.thumbnail)
         # what the print does with the colors of the model
         self.paint_depth = QDoubleSpinBox()
@@ -391,16 +413,19 @@ class SliceDialog(QDialog):
         self.filaments.valueChanged.connect(self._changer_changed)
         self.fuzzy.toggled.connect(self._fuzzy_changed)
         self._fuzzy_changed(self.fuzzy.isChecked())
+        self.vase.toggled.connect(self._vase_changed)
+        self._vase_changed(self.vase.isChecked())
         self.b_add.clicked.connect(self._add_change)
         self.b_remove.clicked.connect(self._remove_change)
         self.b_3mf.clicked.connect(self._to_3mf)
         # a field that says something else than the chosen preset puts the combo box back on "—"
         for box in (self.maker, self.printer_box, self.nozzle, self.brand, self.material,
-                    self.quality, self.pattern, self.support, self.adhesion, self.thumbnail):
+                    self.quality, self.pattern, self.support, self.adhesion, self.seam,
+                    self.thumbnail):
             box.currentIndexChanged.connect(self._field_changed)
         for box in (self.infill, self.fuzz, self.walls):
             box.valueChanged.connect(self._field_changed)
-        for box in (self.adaptive, self.ironing, self.fuzzy):
+        for box in (self.adaptive, self.ironing, self.fuzzy, self.vase):
             box.toggled.connect(self._field_changed)
         self.preset.currentIndexChanged.connect(self._preset_changed)
         self.b_preset_save.clicked.connect(self._save_preset)
@@ -429,6 +454,8 @@ class SliceDialog(QDialog):
                 "fuzzy": getattr(s, "slice_fuzzy", False),
                 "fuzz": getattr(s, "slice_fuzz", FUZZ_DEFAULT),
                 "walls": getattr(s, "slice_walls", WALLS_MIN),
+                "seam": str(getattr(s, "slice_seam", "") or ""),
+                "vase": getattr(s, "slice_vase", False),
                 "thumbnail": (str(getattr(s, "slice_thumbnail", "") or "")
                               or gcode_thumbnail.DEFAULT)}
 
@@ -465,6 +492,9 @@ class SliceDialog(QDialog):
                                    whole=False))
         self.walls.setValue(_number(choice.get("walls"), self.walls.value(), WALLS_MIN,
                                     WALLS_MAX))
+        self.seam.setCurrentIndex(_index_of(SEAMS, choice.get("seam"), self.seam.currentIndex()))
+        if "vase" in choice:
+            self.vase.setChecked(bool(choice["vase"]))
         self.thumbnail.setCurrentIndex(_index_of(gcode_thumbnail.THUMBNAILS,
                                                  choice.get("thumbnail"),
                                                  self.thumbnail.currentIndex()))
@@ -695,9 +725,11 @@ class SliceDialog(QDialog):
         self._show_info()
 
     def _show_info(self, *_):
-        """What the printer of the choice can do, with the note of a preset on top of it."""
+        """What the printer of the choice can do, with the note of a preset and the one of vase
+        mode on top of it."""
+        note = "\n".join(part for part in (self.preset_note, self._vase_note()) if part)
         if self.printer is None:
-            self.info.setText(self.preset_note)
+            self.info.setText(note)
             return
         st = self.stacks()
         g = st.glob
@@ -709,7 +741,7 @@ class SliceDialog(QDialog):
             d=float(g.get("machine_depth") or 0),
             h=float(g.get("machine_height") or 0),
             f=float(st.extruders[0].get("material_diameter") or 0) if st.extruders else 0)
-        self.info.setText(f"{self.preset_note}\n{text}" if self.preset_note else text)
+        self.info.setText(f"{note}\n{text}" if note else text)
 
     # ---- the colors of the model
     def extruder_count(self) -> int:
@@ -752,6 +784,25 @@ class SliceDialog(QDialog):
     def _fuzzy_changed(self, on):
         """The thickness of the fuzz is of interest only when there is a fuzzy skin."""
         self.fuzz.setEnabled(bool(on))
+
+    def _vase_changed(self, on):
+        """A vase is one wall that spirals up with a bottom under it: what goes inside the print,
+        how many lines its walls take, ironing and support have nothing to say about it. Their
+        values stay as they are, so a vase that goes off prints what it printed before."""
+        for field in (self.infill, self.support, self.ironing, self.walls):
+            field.setEnabled(not on)
+        self._show_info()
+
+    def _vase_note(self) -> str:
+        """What vase mode has to say about the print: what it prints, and that Cura spirals every
+        part of a print of more than one part on its own - which is allowed, only worth knowing."""
+        if not self.vase.isChecked():
+            return ""
+        note = tr("Vase mode prints one wall and a bottom, without infill or a top.")
+        if self.parts > 1:
+            note += " " + tr("There are {n} parts, so each of them spiralizes on its own.").format(
+                n=self.parts)
+        return note
 
     def _colors_changed(self):
         """The color table and the filament choices, as the printer chosen now can use them."""
@@ -839,25 +890,33 @@ class SliceDialog(QDialog):
     def user_values(self) -> dict:
         """Your own settings on top of the profile."""
         _label, support, kind = SUPPORTS[self.support.currentIndex()]
-        values = {"infill_sparse_density": float(self.infill.value()),
-                  "support_enable": support, "support_type": kind}
+        # a vase is one wall spiralling up with a bottom under it: the infill, the walls, ironing
+        # and support say nothing about it, so those fields stand aside and stay with the profile
+        vase = self.vase.isChecked()
+        values = ({"magic_spiralize": True} if vase else
+                  {"infill_sparse_density": float(self.infill.value()),
+                   "support_enable": support, "support_type": kind})
         adhesion = ADHESION[self.adhesion.currentIndex()][1]
         if adhesion:
             values["adhesion_type"] = adhesion
         pattern = INFILL_PATTERNS[self.pattern.currentIndex()][1]
-        if pattern:
+        if pattern and not vase:
             values["infill_pattern"] = pattern
         if self.adaptive.isChecked():
             values["adaptive_layer_height_enabled"] = True
-        if self.ironing.isChecked():
+        if self.ironing.isChecked() and not vase:
             values["ironing_enabled"] = True
             # the smooth top of a part, not every flat step in it
             values["ironing_only_highest_layer"] = True
         if self.fuzzy.isChecked():
             values["magic_fuzzy_skin_enabled"] = True
             values["magic_fuzzy_skin_thickness"] = float(self.fuzz.value())
-        if self.walls.value():
+        if self.walls.value() and not vase:
             values["wall_line_count"] = int(self.walls.value())
+        _label, seam, extra = SEAMS[self.seam.currentIndex()]
+        if seam:
+            values["z_seam_type"] = seam
+            values.update(extra)
         return values
 
     def choice(self) -> dict:
@@ -876,6 +935,7 @@ class SliceDialog(QDialog):
                 "adaptive": self.adaptive.isChecked(), "ironing": self.ironing.isChecked(),
                 "fuzzy": self.fuzzy.isChecked(), "fuzz": self.fuzz.value(),
                 "walls": self.walls.value(),
+                "seam": SEAMS[self.seam.currentIndex()][1], "vase": self.vase.isChecked(),
                 "thumbnail": gcode_thumbnail.THUMBNAILS[self.thumbnail.currentIndex()][1]}
 
     def stacks(self) -> cura_profiles.Stacks:

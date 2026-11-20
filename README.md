@@ -518,7 +518,11 @@ gets for free.
   support and bed adhesion; the Extras group adds adaptive layer height (thinner layers where
   the surface slopes, thicker where it is steep), ironing (the nozzle passes over the top once
   more, for a smooth flat top), a fuzzy skin (a rough outer wall that hides layer lines and
-  grips well, with a Fuzz thickness), the number of walls and a Thumbnail: a picture of the
+  grips well, with a Fuzz thickness), the number of walls, a **Seam** that says where the little
+  vertical line of the print sits (the sharpest corner, at the back, moved around at random, or
+  wherever the nozzle has the shortest way) and a **Vase mode** that prints one wall spiralling
+  up with a bottom under it and nothing inside - a vase, a lamp shade - while the infill, the
+  walls, ironing and support stand aside. The group also holds a Thumbnail: a picture of the
   print in the G-code, so the screen of a Prusa printer, a Klipper printer or OctoPrint shows
   what is about to print;
   Volura works out the profile the way Cura does and slices with CuraEngine, which comes

@@ -1021,6 +1021,10 @@ class Settings:
             self.slice_walls = max(0, min(10, int(float(self.q.value("slice_walls", 0)))))
         except (TypeError, ValueError):
             self.slice_walls = 0
+        # where the seam of the print sits (slice_dialog.SEAMS); "" leaves it to the profile
+        self.slice_seam = str(self.q.value("slice_seam", "") or "")
+        # one wall spiralling up with a bottom under it: a vase
+        self.slice_vase = self._bool("slice_vase", False)
         # the picture the printer's screen shows of the print (gcode_thumbnail); the pair of
         # sizes most screens read, for a Volura that never chose one
         self.slice_thumbnail = (str(self.q.value("slice_thumbnail", "") or "")
@@ -1628,7 +1632,8 @@ class Settings:
                     "slice_adhesion", "slice_infill", "slice_support", "slice_infill_pattern",
                     "slice_paint", "slice_changes", "slice_change_command",
                     "slice_adaptive", "slice_ironing", "slice_fuzzy", "slice_fuzz",
-                    "slice_walls", "slice_thumbnail", "slice_preset"):
+                    "slice_walls", "slice_seam", "slice_vase", "slice_thumbnail",
+                    "slice_preset"):
             self.q.setValue(key, getattr(self, key))
         self.q.setValue("slice_presets", slice_presets.to_lines(self.slice_presets))
         for key in ("resin_printer", "resin_level", "resin_layer", "resin_exposure",

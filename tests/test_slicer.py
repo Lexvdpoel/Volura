@@ -477,6 +477,25 @@ def _sphere(size=20.0, at=(40.0, 40.0)):
     return np.asarray(m.vert_properties)[:, :3], np.asarray(m.tri_verts)
 
 
+def _cylinder(radius=15.0, height=30.0, at=(40.0, 40.0)):
+    m = mf.Manifold.cylinder(height, radius, radius, 64).translate((*at, height / 2)).to_mesh()
+    return np.asarray(m.vert_properties)[:, :3], np.asarray(m.tri_verts)
+
+
+def _zs_within_layers(text):
+    """The heights the nozzle extrudes at inside every layer of a G-code: an ordinary print keeps
+    one height to a layer, a spiral rises through the layer it is in."""
+    out = []
+    for part in re.split(r"^;LAYER:", text, flags=re.M)[1:]:
+        heights = set()
+        for line in part.splitlines():
+            code = line.split(";", 1)[0].strip()
+            if code.startswith(("G1", "G0")) and "Z" in code and "E" in code:
+                heights.add(round(float(re.search(r"\bZ(-?\d*\.?\d+)", code).group(1)), 3))
+        out.append(sorted(heights))
+    return out
+
+
 @needs_engine
 def test_adaptive_layer_height_gives_a_sphere_layers_of_more_than_one_height(tmp_path):
     """Where the sphere curves the layers come thinner than 0.2 mm, elsewhere thicker, so the
@@ -512,6 +531,49 @@ def test_four_walls_print_more_inner_wall_lines_than_two(tmp_path):
         inner[walls] = _moves_of_type(out.read_text(encoding="utf-8"), "WALL-INNER")
     assert inner[2] > 0 and inner[4] > inner[2], \
         f"2 walls: {inner[2]} inner moves, 4 walls: {inner[4]}"
+
+
+@needs_engine
+def test_vase_mode_spirals_one_wall_up_with_a_bottom_under_it(tmp_path):
+    """A cylinder in vase mode: the wall rises in one line through every layer and nothing is
+    filled, where the same cylinder without it fills its inside and keeps every layer flat."""
+    p, v, m = _ender3()
+    meshes = [_cylinder() + (0,)]
+    plain = tmp_path / "plain.gcode"
+    slicer.slice_meshes(p.stacks(v, m, "standard", {"infill_sparse_density": 20.0}),
+                        meshes, str(plain))
+    text = plain.read_text(encoding="utf-8")
+    assert _moves_of_type(text, "FILL") > 0 and not [zs for zs in _zs_within_layers(text)
+                                                     if len(zs) > 1], \
+        "an ordinary print fills the inside and keeps every layer flat"
+    vase = tmp_path / "vase.gcode"
+    slicer.slice_meshes(p.stacks(v, m, "standard", {"infill_sparse_density": 20.0,
+                                                    "magic_spiralize": True}),
+                        meshes, str(vase))
+    spiral = vase.read_text(encoding="utf-8")
+    layers = _zs_within_layers(spiral)
+    rising = [zs for zs in layers if len(zs) > 1]
+    assert len(layers) > 20 and ";TYPE:FILL" not in spiral, "a vase has no infill"
+    assert _moves_of_type(spiral, "WALL-OUTER") > 0
+    assert len(rising) > len(layers) // 2, \
+        f"only {len(rising)} of {len(layers)} layers rise as a spiral does"
+    assert rising[-1][-1] > rising[0][0], "and the wall climbs the whole way up"
+
+
+@needs_engine
+def test_every_seam_of_the_slice_dialog_reaches_the_engine(tmp_path):
+    """File > Slice… > Extras > Seam: the names and the values are Cura's own, so CuraEngine
+    takes each of them and still prints a wall after wall."""
+    import volura.slice_dialog as slice_dialog
+    p, v, m = _ender3()
+    meshes = [_cube(20.0, (40.0, 40.0, 0.0)) + (0,)]
+    for _label, kind, extra in slice_dialog.SEAMS[1:]:
+        st = p.stacks(v, m, "standard", dict(extra, z_seam_type=kind))
+        assert st.global_settings()["z_seam_type"] == kind, "CuraEngine reads it from there"
+        out = tmp_path / f"seam_{kind}.gcode"
+        slicer.slice_meshes(st, meshes, str(out))
+        text = out.read_text(encoding="utf-8")
+        assert ";LAYER:0" in text and _moves_of_type(text, "WALL-OUTER") > 0, f"{kind} slices"
 
 
 @needs_engine

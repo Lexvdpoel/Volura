@@ -994,7 +994,7 @@ class PrintMixin:
             part_list = self._validated_parts(part_list)
             if part_list is None:
                 return
-            dlg = sd.SliceDialog(self, lib, colors)
+            dlg = sd.SliceDialog(self, lib, colors, len(part_list))
             if dlg.exec() != QDialog.Accepted:
                 self.setFocus()
                 if dlg.went_3mf:
