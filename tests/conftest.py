@@ -29,7 +29,11 @@ def _delete_the_windows_of_a_test_file():
 
     Left alone they all stay until the end of the run, and Qt then takes them down one
     by one in its own exit code, in a time that grows faster than their number: with
-    the whole suite in one process that took half an hour after the summary."""
+    the whole suite in one process that took half an hour after the summary.
+
+    They are hidden and deleted, never closed: closing a main window saves its settings,
+    and a window a test left behind still holds the settings of that test (the Fusion key
+    scheme, say), which the next window of the run would then start with."""
     yield
     from PySide6.QtCore import QCoreApplication, QEvent
     from PySide6.QtWidgets import QApplication
@@ -37,7 +41,7 @@ def _delete_the_windows_of_a_test_file():
     if not isinstance(app, QApplication):
         return
     for w in app.topLevelWidgets():
-        w.close()
+        w.hide()
         w.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 

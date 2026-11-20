@@ -29,8 +29,13 @@ def shortcut_of(action):
 
 @pytest.fixture(scope="module")
 def win():
+    from volura import keyschemes
     from volura.app import MainWindow
     w = MainWindow()
+    # the spec is the default SketchUp keys: whatever scheme or keys an earlier test of
+    # this process left in the settings, this window starts from those defaults
+    w.set_key_scheme(keyschemes.SKETCHUP)
+    w.restore_shortcuts()
     yield w
     w.doc.dirty = False
     w.close()
