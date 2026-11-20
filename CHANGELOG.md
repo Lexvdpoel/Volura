@@ -3,6 +3,11 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.65 — 2026-11-20
+
+The 0.2.64 build stopped on a test that needed a newer Python than the build uses; 0.2.65 is
+that same version with the test fixed.
+
 ## 0.2.64 — 2026-11-20
 
 ### New
