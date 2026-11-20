@@ -24,7 +24,8 @@ def choice(**over):
            "material": "generic_pla_175", "quality": "standard",
            "infill": 20, "support": 1, "adhesion": "brim", "infill_pattern": "gyroid",
            "paint": 1.0, "changes": "5", "change_command": "M600",
-           "adaptive": True, "ironing": False, "fuzzy": True, "fuzz": 0.35, "walls": 3}
+           "adaptive": True, "ironing": False, "fuzzy": True, "fuzz": 0.35, "walls": 3,
+           "thumbnail": "48x48/300x300"}
     got.update(over)
     return got
 

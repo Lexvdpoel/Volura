@@ -23,7 +23,7 @@ import json
 #: what a preset holds: the keys of the dict `SliceDialog.choice()` returns that say how a
 #: print is made; the colours of the model and the filament changes are not among them
 PRESET_KEYS = ("printer", "variant", "material", "quality", "infill", "support", "adhesion",
-               "infill_pattern", "adaptive", "ironing", "fuzzy", "fuzz", "walls")
+               "infill_pattern", "adaptive", "ironing", "fuzzy", "fuzz", "walls", "thumbnail")
 
 
 def to_json(preset) -> str:

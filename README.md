@@ -518,7 +518,9 @@ gets for free.
   support and bed adhesion; the Extras group adds adaptive layer height (thinner layers where
   the surface slopes, thicker where it is steep), ironing (the nozzle passes over the top once
   more, for a smooth flat top), a fuzzy skin (a rough outer wall that hides layer lines and
-  grips well, with a Fuzz thickness) and the number of walls;
+  grips well, with a Fuzz thickness), the number of walls and a Thumbnail: a picture of the
+  print in the G-code, so the screen of a Prusa printer, a Klipper printer or OctoPrint shows
+  what is about to print;
   Volura works out the profile the way Cura does and slices with CuraEngine, which comes
   with the download. The print preview then shows the G-code in 3D, layer by layer, every line as
   wide as it prints (turn, move and zoom it with the mouse), with a virtual printer that plays each layer as the printer will
@@ -849,6 +851,7 @@ volura/
   updater.py    checking for a newer version and installing it
   printer_link.py  sending a slice to OctoPrint, Klipper (Moonraker) or PrusaLink
   printer_status.py  what those printers are doing right now (Window > Printer Status)
+  gcode_thumbnail.py  the picture of the print in the G-code, for the screen of the printer
 tests/          tests without a GUI (pytest); test_brep.py compares with results from SketchUp 2017
                 test_portability.py keeps Windows assumptions out of volura/
 docs/website/   the feature cards and the manual of volura.dev, in English and Dutch; the site

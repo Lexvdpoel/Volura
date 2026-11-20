@@ -449,6 +449,55 @@ def test_the_extras_of_the_slice_dialog_follow_the_profile_and_are_remembered(li
         win.close()
 
 
+def test_the_thumbnail_of_the_slice_dialog_is_remembered(library):
+    """File > Slice… > Extras > Thumbnail: a computer that never sliced with one draws the pair
+    most printer screens show, and what you choose there is what the next dialog starts with -
+    also the Off, which draws nothing at all."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication, QWidget
+    QApplication.instance() or QApplication(sys.argv[:1])
+    from volura import gcode_thumbnail
+    from volura.settings import qsettings
+    from volura.slice_dialog import SliceDialog
+
+    class Prefs:
+        q = qsettings()
+        slice_printer, slice_variant = "testprinter", ""
+        slice_material, slice_quality = "", ""
+        slice_infill, slice_infill_pattern = 20, ""
+        slice_support, slice_adhesion = 0, ""
+        slice_paint, slice_changes, slice_change_command = 1.0, "", ""
+
+    class Window(QWidget):
+        settings = Prefs()
+
+    win = Window()
+    Prefs.slice_thumbnail = ""                      # nothing was ever chosen on this computer
+    dlg = SliceDialog(win, library)
+    try:
+        assert dlg.thumbnail.currentData() == gcode_thumbnail.DEFAULT
+        assert dlg.choice()["thumbnail"] == gcode_thumbnail.DEFAULT
+        assert gcode_thumbnail.sizes(dlg.choice()["thumbnail"]) == [(48, 48), (300, 300)]
+        off = dlg.thumbnail.findData("off")
+        assert off >= 0 and dlg.thumbnail.itemText(off)
+        dlg.thumbnail.setCurrentIndex(off)
+        assert dlg.choice()["thumbnail"] == "off"
+        assert gcode_thumbnail.sizes("off") == [], "Off draws nothing"
+        for key, value in dlg.choice().items():     # what the window saves before slicing
+            setattr(Prefs, "slice_" + key, value)
+        again = SliceDialog(win, library)
+        try:
+            assert again.thumbnail.currentData() == "off", "the next dialog draws one after all"
+            again.thumbnail.setCurrentIndex(again.thumbnail.findData("32x32/300x300"))
+            assert again.choice()["thumbnail"] == "32x32/300x300"
+            assert gcode_thumbnail.sizes(again.choice()["thumbnail"]) == [(32, 32), (300, 300)]
+        finally:
+            again.close()
+    finally:
+        dlg.close()
+        win.close()
+
+
 # ------------------------------------------------------------------ presets of the user
 
 

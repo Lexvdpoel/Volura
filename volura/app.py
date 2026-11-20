@@ -29,7 +29,8 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                cable_chain, cable_clip, cable_comb, cable_winder, cam, card_holder, coaster,
                desk_hook, door_wedge, drawer_organizer,
                dxf, enclosure, errors, fan_guard, filament_clip,
-               fileio, gcode, gcode_mill, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, i18n, joints,
+               fileio, gcode, gcode_mill, gcode_thumbnail, gears, gridfinity, grommet,
+               hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar,
                nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
                printer_link,
@@ -1020,6 +1021,10 @@ class Settings:
             self.slice_walls = max(0, min(10, int(float(self.q.value("slice_walls", 0)))))
         except (TypeError, ValueError):
             self.slice_walls = 0
+        # the picture the printer's screen shows of the print (gcode_thumbnail); the pair of
+        # sizes most screens read, for a Volura that never chose one
+        self.slice_thumbnail = (str(self.q.value("slice_thumbnail", "") or "")
+                                or gcode_thumbnail.DEFAULT)
         # the presets of the user: one line of JSON each (volura.slice_presets)
         self.slice_presets = slice_presets.from_lines(self.q.value("slice_presets", []) or [])
         # File > Slice for Resin: the printer and what was chosen for the last resin print
@@ -1623,7 +1628,7 @@ class Settings:
                     "slice_adhesion", "slice_infill", "slice_support", "slice_infill_pattern",
                     "slice_paint", "slice_changes", "slice_change_command",
                     "slice_adaptive", "slice_ironing", "slice_fuzzy", "slice_fuzz",
-                    "slice_walls", "slice_preset"):
+                    "slice_walls", "slice_thumbnail", "slice_preset"):
             self.q.setValue(key, getattr(self, key))
         self.q.setValue("slice_presets", slice_presets.to_lines(self.slice_presets))
         for key in ("resin_printer", "resin_level", "resin_layer", "resin_exposure",
