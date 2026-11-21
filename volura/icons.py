@@ -270,6 +270,15 @@ SVG = {
                          f'<rect x="8.4" y="7.5" width="7.2" height="4" rx="0.5" fill="#5fa0e0" {S(w=1.1)}/>'
                          f'<rect x="8.4" y="11.5" width="7.2" height="4" fill="#f2c230" {S(w=1.1)}/>'
                          f'<rect x="8.4" y="15.5" width="7.2" height="4.5" fill="#d23b3b" {S(w=1.1)}/>',
+    # pressure advance test: a hollow square tower with sharp corners and a value in every band
+    "pressure_advance_test": f'<rect x="7.5" y="3" width="9" height="17.5" rx="0.6" fill="#eef2f7" {S()}/>'
+                             f'<rect x="9.6" y="5.1" width="4.8" height="13.4" fill="#fff" {S(w=1.1)}/>'
+                             f'<path d="M8.6 7.4 h2.2 M8.6 11.4 h2.2 M13.2 7.4 h2.2 M13.2 11.4 h2.2" '
+                             f'stroke="#2f6fd6" stroke-width="1.2" stroke-linecap="round"/>'
+                             f'<path d="M8.6 15.4 h2.2 M13.2 15.4 h2.2" stroke="#f2c230" '
+                             f'stroke-width="1.2" stroke-linecap="round"/>'
+                             f'<path d="M3.4 20.6 L3.4 4.4 L5.4 6.6" {N} stroke="#5fa0e0" '
+                             f'stroke-width="1.3" stroke-linecap="round"/>',
     # vent pattern: a plate with a field of round holes
     "vent": f'<rect x="2.5" y="4" width="19" height="16" rx="1" fill="#eef2f7" {S()}/>'
             f'<circle cx="7" cy="9" r="1.7" fill="#fff" stroke="#d23b3b" stroke-width="1.2"/>'
