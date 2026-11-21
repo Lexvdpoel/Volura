@@ -1220,7 +1220,14 @@ class PrintMixin:
         area = 0.25 * np.pi * diameter * diameter      # mm² of filament behind every mm³
         made = plan.filaments()
         if len([color for color, _name in made if color]) < 2:
-            return []                                 # one filament: the kinds say enough
+            # one filament: the kinds of line say enough for the view, but the spool it comes
+            # off still wants to know what the print uses (see PrintPreviewDialog)
+            color, name = made[0] if made else ("", "")
+            mm = 1000.0 * float(sum(lengths)) if lengths else 0.0
+            grams = float(getattr(result, "grams", 0.0) or 0.0)
+            if not mm and not grams:
+                return []
+            return [(name or tr("Filament {n}").format(n=1), color, mm, grams)]
         if plan.extruders > 1 or not plan.changes:
             out = []
             for i, (color, name) in enumerate(made):

@@ -13,6 +13,12 @@ move it; the wheel zooms towards the mouse and a double-click shows the whole pr
 at the speed of the real print times a factor and goes on to the next layer; the slider and the
 arrow keys pick a layer. Save G-code… writes the file, and Send to printer… hands it to
 OctoPrint, Klipper (Moonraker) or PrusaLink over the network (see volura/printer_link.py).
+
+Every print has its spool beside it: which roll on the shelf its filament comes off and whether
+that roll still holds enough for the print (Window > Spools…, volura.spools) - one row for a
+print of one filament, one row per filament when the print uses more. A print that starts on a
+printer through Volura has its grams taken off those spools, and so has one the user started by
+hand with Mark as printed.
 """
 from __future__ import annotations
 
@@ -25,10 +31,10 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
-                               QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
-                               QSlider, QVBoxLayout)
+                               QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
+                               QPushButton, QSlider, QVBoxLayout)
 
-from . import background, errors, printer_link
+from . import background, errors, printer_link, spools, theme
 from . import gcode_preview as gp
 from .camera import Camera
 from .i18n import tr, tr_noop
@@ -70,6 +76,9 @@ VERTS = 2 * len(PROFILE)
 BACKGROUND, BED, GRID = "#20242a", "#2b3038", "#3a404a"
 #: the settings keys of the printer the last slice went to and whether it started there
 LAST_PRINTER, LAST_START = "send_printer", "send_start"
+#: the settings keys of the filament spools on the shelf (volura.spools) and of which spool
+#: every filament slot of the print preview comes off
+SPOOLS, SPOOL_SLOTS = "spools", "spool_for_slot"
 
 
 def kind_style(colour_blind: bool):
@@ -423,6 +432,13 @@ class PrintPreviewDialog(QDialog):
     `filaments` is what the print prints with, `(name, colour, mm, grams)` per filament
     (see `filament_color`): with more than one the view colours every line with its filament
     and the legend names them, instead of the kinds of line.
+
+    Beside those rows - one for a print of one filament, one per filament for a print of more -
+    stands a spool (volura.spools): the roll on the shelf that filament comes off, and whether
+    it still holds enough for the print. A print that really starts on a printer through Volura
+    has its grams taken off those spools, and so has one the user started by hand with
+    `Mark as printed` - never both. Saving the G-code takes nothing: a file on an SD card has
+    printed nothing yet.
     """
 
     def __init__(self, win, gcode_path: str, preview: gp.Preview, bed, summary: str,
@@ -436,9 +452,19 @@ class PrintPreviewDialog(QDialog):
         self._job = None
         self.filaments = list(filaments)
         self.by_filament = len(self.filaments) > 1 and preview.materials > 1
-        settings = getattr(win, "settings", None)
+        self.settings = settings = getattr(win, "settings", None)
         self.colour_blind = bool(getattr(settings, "colour_blind", False))
         self.printers = list(getattr(settings, "printers", None) or [])
+        self.spools = spools.records(self._read_spools())
+        self.slot_choice = spools.slot_ids(self._read_slot_choices())
+        # one row per filament of the print, and one for a print of a single filament too:
+        # that is the print most people run off a spool, and it is the one that runs dry
+        self.row_count = max(preview.materials, len(self.filaments)) if self.by_filament \
+            else (1 if self.filaments else 0)
+        self.spool_combos, self.spool_notes = [], []      # one of each per filament
+        self.mark = None                      # only when the print says what it used
+        self.taken_note = None                # "Taken from the spools", once they are lighter
+        self._taken = False                   # what this print used came off the spools
         self.setWindowTitle(tr("Print Preview"))
         self.resize(980, 780)
         lay = QVBoxLayout(self)
@@ -476,9 +502,7 @@ class PrintPreviewDialog(QDialog):
 
         legend = QHBoxLayout()
         if self.by_filament:
-            for i in range(max(preview.materials, len(self.filaments))):
-                legend.addWidget(QLabel("<span style='color:{c}'>■</span> {t}".format(
-                    c=filament_color(self.filaments, i), t=self._filament_legend(i))))
+            legend.addLayout(self._spool_rows(), 1)
         else:
             used = set()
             for layer in preview.layers:
@@ -486,21 +510,33 @@ class PrintPreviewDialog(QDialog):
             for k, (color, name) in enumerate(kind_style(self.colour_blind)):
                 if k in used and k != gp.TRAVEL:
                     legend.addWidget(QLabel(f"<span style='color:{color}'>■</span> {tr(name)}"))
-        legend.addStretch(1)
+            legend.addStretch(1)
         hint = QLabel(tr("Drag to turn, right-drag to move, wheel to zoom"))
         hint.setEnabled(False)
         legend.addWidget(hint)
         lay.addLayout(legend)
+        if self.row_count and not self.by_filament:
+            lay.addLayout(self._spool_rows())     # one row, under the colours of the line kinds
 
         bb = QDialogButtonBox()
         self.save_button = bb.addButton(tr("Save G-code…"), QDialogButtonBox.AcceptRole)
         self.send_button = bb.addButton(tr("Send to printer…"), QDialogButtonBox.ActionRole)
+        if self.row_count:
+            self.mark = bb.addButton(tr("Mark as printed"), QDialogButtonBox.ActionRole)
+            self.mark.setToolTip(tr("Take what this print used off the spools above, for a "
+                                    "print started from an SD card or a USB stick"))
+            self.mark.clicked.connect(self._mark_printed)
         bb.addButton(QDialogButtonBox.Close)
         bb.accepted.connect(self._save)
         bb.rejected.connect(self.reject)
         self.send_button.clicked.connect(self._send)
         self._show_send()
-        lay.addWidget(bb)
+        self.taken_note = QLabel()
+        self.taken_note.setEnabled(False)
+        actions = QHBoxLayout()
+        actions.addWidget(self.taken_note, 1)
+        actions.addWidget(bb)
+        lay.addLayout(actions)
 
         self.timer = QTimer(self)
         self.timer.setInterval(int(1000 / FPS))
@@ -524,6 +560,168 @@ class PrintPreviewDialog(QDialog):
         if grams:
             return tr("{name}: {g:.1f} g, {m:.2f} m").format(name=name, g=grams, m=mm / 1000.0)
         return tr("{name}: {m:.2f} m").format(name=name, m=mm / 1000.0)
+
+    # ---- the spools every filament comes off
+    def _read_spools(self) -> list:
+        """The spools on the shelf: the settings of the window, or the store itself when this
+        preview has no window with settings of its own."""
+        saved = getattr(self.settings, "spools", None)
+        if saved is None:
+            saved = qsettings().value(SPOOLS, []) or []
+        return spools.from_lines(saved)
+
+    def _read_slot_choices(self):
+        """Which spool every filament slot came off with the last print."""
+        saved = getattr(self.settings, "spool_for_slot", None)
+        if saved is None:
+            saved = qsettings().value(SPOOL_SLOTS, []) or []
+        return spools.slot_ids(saved)
+
+    def _slot_name(self, i: int) -> str:
+        """The name of filament slot `i`, the way the legend names it."""
+        if i >= len(self.filaments):
+            return tr("Filament {n}").format(n=i + 1)
+        return str(self.filaments[i][0])
+
+    def _spool_grams(self, i: int) -> float:
+        """What this print wants of filament `i`, in grams; 0.0 when the slice does not know."""
+        if i >= len(self.filaments):
+            return 0.0
+        try:
+            return float(self.filaments[i][3])
+        except (TypeError, ValueError, IndexError):
+            return 0.0
+
+    def _shelf(self, name: str) -> list:
+        """The spools to point a filament at: the ones whose material comes back in its name
+        first, each group in the order of the shelf."""
+        return sorted(self.spools, key=lambda spool: not spools.matches(spool, name))
+
+    def _spool_rows(self):
+        """One row per filament of the print: what it is, which spool it comes off and whether
+        that spool still has enough for it. A print of one filament gets one row, and that row
+        stands without a name, because there is nothing to choose between."""
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        for i in range(self.row_count):
+            # a print of one filament needs no name beside the spool: there is only one, and
+            # the colours of the kinds of line already stand in the legend above
+            name = self._filament_legend(i) if self.by_filament else ""
+            label = QLabel("<span style='color:{c}'>■</span> {t}".format(
+                c=filament_color(self.filaments, i), t=name))
+            combo = QComboBox()
+            combo.setAccessibleName(tr("Spool of this filament"))
+            combo.setToolTip(tr("The spool this filament comes off; the spools of the same "
+                                "material stand first, and Window > Spools… fills the shelf"))
+            combo.addItem(tr("No spool"), "")
+            for spool in self._shelf(self._slot_name(i)):
+                combo.addItem(spool.name or spool.id, spool.id)
+            combo.setCurrentIndex(max(0, combo.findData(
+                self.slot_choice[i] if i < len(self.slot_choice) else "")))
+            combo.currentIndexChanged.connect(lambda _index, row=i: self._spool_changed(row))
+            amount = QLabel()
+            grid.addWidget(label, i, 0)
+            grid.addWidget(combo, i, 1)
+            grid.addWidget(amount, i, 2)
+            self.spool_combos.append(combo)
+            self.spool_notes.append(amount)
+            self._show_spool(i)
+        grid.setColumnStretch(2, 1)
+        return grid
+
+    def _spool_of(self, i):
+        """The spool filament `i` is pointed at; None for "No spool" or one that is gone."""
+        return spools.find(self.spools, self.spool_combos[i].currentData())
+
+    def _show_spool(self, i):
+        """How much of filament `i` this print wants, and whether the chosen spool has it."""
+        label, spool = self.spool_notes[i], self._spool_of(i)
+        if spool is None:
+            label.setStyleSheet("")
+            label.setText("")
+            return
+        need = self._spool_grams(i)
+        if need <= 0.0:
+            label.setStyleSheet("")
+            label.setText(spools.left_text(spool))    # the slice does not know what it wants
+            return
+        text = tr("{g} g needed, {left} g left").format(g=spools.grams_text(need),
+                                                        left=spools.grams_text(spool.left_g))
+        if spools.enough(spool, need):
+            label.setStyleSheet("")
+            label.setText(text)
+        else:
+            label.setStyleSheet(f"color: {theme.color('warn')};")
+            label.setText(f"{text} - {tr('Not enough filament on this spool')}")
+
+    def _spool_changed(self, i):
+        """Another spool for this filament: keep the choice and show what that one holds."""
+        self._keep_slot_choices()
+        self._show_spool(i)
+
+    def _keep_slot_choices(self):
+        """Which spool every filament slot comes off, so the next slice starts from it."""
+        self.slot_choice = [str(combo.currentData() or "") for combo in self.spool_combos]
+        if self.settings is not None and hasattr(self.settings, "spool_for_slot"):
+            self.settings.spool_for_slot = list(self.slot_choice)
+            self.settings.save()
+        else:
+            qsettings().setValue(SPOOL_SLOTS, list(self.slot_choice))
+            qsettings().sync()
+
+    def _keep_spools(self):
+        """The spools as they are now, back where they came from."""
+        saved = [spools.to_dict(spool) for spool in self.spools]
+        if self.settings is not None and hasattr(self.settings, "spools"):
+            self.settings.spools = saved
+            self.settings.save()
+        else:
+            qsettings().setValue(SPOOLS, spools.to_lines(saved))
+            qsettings().sync()
+
+    def _take_spools(self) -> list:
+        """Take what this print uses off the spools its filaments are pointed at.
+
+        Once per dialog, for a print that started on a printer may not be counted again by
+        `Mark as printed`. The shelf is read again first: a spool that left it since this
+        preview opened cannot give anything, and the spools that are there are written back
+        as they stand. A spool two filaments share is weighed once."""
+        if self._taken:
+            return []
+        need = {}
+        for i, combo in enumerate(self.spool_combos):
+            spool_id = str(combo.currentData() or "")
+            grams = self._spool_grams(i)
+            if spool_id and grams > 0.0:
+                need[spool_id] = need.get(spool_id, 0.0) + grams
+        if not need:
+            return []
+        took, kept = [], []
+        for spool in spools.records(self._read_spools()):
+            if spool.id in need:
+                took.append((spool.name or spool.id, need[spool.id]))
+                kept.append(spools.take(spool, need[spool.id]))
+            else:
+                kept.append(spool)
+        if not took:
+            return []
+        self.spools = kept
+        self._taken = True
+        self._keep_spools()
+        for i in range(len(self.spool_notes)):
+            self._show_spool(i)
+        self._show_taken()
+        return took
+
+    def _mark_printed(self):
+        """Mark as printed: this print was started by hand, so the grams come off here."""
+        self._take_spools()
+
+    def _show_taken(self):
+        """Under the buttons: the spools are lighter now, and nothing is taken a second time."""
+        self.taken_note.setText(tr("Taken from the spools"))
+        if self.mark is not None:
+            self.mark.setEnabled(False)
 
     def _layer_changed(self, value):
         self.view.layer = int(value)
@@ -631,6 +829,8 @@ class PrintPreviewDialog(QDialog):
             started = tr("Sent {file} to {printer} and started printing")
             plain = tr("Sent {file} to {printer}")
             self.sent = (started if start else plain).format(file=what, printer=conn.name)
+            if start:
+                self._take_spools()         # the print is running: the grams are gone now
             hint = getattr(self.win, "hint", None)
             if hint is not None:
                 hint.setText(self.sent)

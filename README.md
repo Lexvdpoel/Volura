@@ -581,6 +581,15 @@ gets for free.
       wrong, which file it has, how far the print got, how long it has run and still needs, and how
       hot the nozzle and the bed are; every printer is asked again every five seconds while the
       window is open
+  - **Spools** (*Window > Spools…*): the rolls of filament on your shelf, each with its colour,
+    its material, what a full spool holds and what is still on it. *Set left…* takes the weight
+    of the empty spool off what your scale says, so what you keep is the filament alone. In the
+    print preview, every filament points at its spool - one row for a print of one filament,
+    one per filament for a print of more, with the spools of the same material standing first -
+    and beside it says how many grams that filament needs and whether the spool still holds
+    them, warned beforehand when it does not. What a
+    print used goes off those spools when the print starts on the printer, or from *Mark as
+    printed* when you start the print yourself from an SD card or a USB stick
   - A model in more colours prints in more colours: every colour goes to the extruder you point it
     at, starting on the filament the multicolour 3MF would have given it, faces painted with the
     Paint Bucket print as a skin of the depth you choose, and a prime tower or ooze shield keeps
@@ -886,6 +895,8 @@ volura/
   updater.py    checking for a newer version and installing it
   printer_link.py  sending a slice to OctoPrint, Klipper (Moonraker) or PrusaLink
   printer_status.py  what those printers are doing right now (Window > Printer Status)
+  spools.py     the rolls of filament on the shelf and what is left on each; spools_dialog.py is
+                Window > Spools…
   gcode_thumbnail.py  the picture of the print in the G-code, for the screen of the printer
 tests/          tests without a GUI (pytest); test_brep.py compares with results from SketchUp 2017
                 test_portability.py keeps Windows assumptions out of volura/

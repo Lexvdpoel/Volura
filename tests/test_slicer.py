@@ -632,6 +632,9 @@ def test_slice_from_the_file_menu(monkeypatch, tmp_path):
         seen["layers"] = len(dlg.preview.layers)
         assert " g filament (" in dlg.summary.text() and "≈ " in dlg.summary.text(), \
             "the summary does not say what the filament costs"
+        # a print of one filament still says what it uses, so its spool can be chosen
+        assert len(dlg.filaments) == 1 and dlg.filaments[0][3] > 0.0
+        assert len(dlg.spool_combos) == 1, "a print of one filament has no spool to choose"
         dlg.slider.setValue(5)
         dlg.play.setChecked(True)
         dlg._tick()

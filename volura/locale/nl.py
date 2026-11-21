@@ -3051,4 +3051,68 @@ TRANSLATIONS = {
     'how long the print has run / how long it still needs': 'hoe lang de print loopt / hoe lang hij nog nodig heeft',
     'nozzle': 'nozzle',
     'bed': 'bed',
+    # Filament Spools: Window > Spools… and the print preview (volura/spools.py)
+    '&Spools…': '&Spoelen…',
+    'Spools': 'Spoelen',
+    'Filament spools': 'Filamentspoelen',
+    'Filament spool': 'Filamentspoel',
+    'The filament on every spool on your shelf, so a print does not run out halfway':
+        'Wat er op elke spoel op je plank zit, zodat een print niet halverwege stilvalt',
+    'The print preview takes what a print uses off the spool you point every filament at, and '
+    'says beforehand whether that spool still has enough. Weigh a spool with Set left… and the '
+    'weight of the empty spool is subtracted for you; what you change here is kept right away.':
+        'Het printvoorbeeld haalt wat een print verbruikt van de spoel die je bij elk filament '
+        'kiest, en zegt van tevoren of die spoel nog genoeg heeft. Weeg een spoel met Nog '
+        'over… en het gewicht van de lege spoel gaat er af; wat je hier verandert blijft '
+        'meteen bewaard.',
+    'What is left': 'Wat er nog op zit',
+    'How much is left on this spool': 'Hoeveel er nog op deze spoel zit',
+    '{left} g of {full} g left ({pct} %)': '{left} g van de {full} g over ({pct} %)',
+    'Put a new spool on the shelf': 'Een nieuwe spoel op de plank zetten',
+    'Change the name, the material, the colour or the weights of the chosen spool':
+        'Naam, materiaal, kleur of gewichten van de gekozen spoel veranderen',
+    'Set left…': 'Nog over…',
+    'Set left': 'Nog over',
+    'Weigh the spool with its filament on it and type what the scale says; Volura subtracts the '
+    'weight of the empty spool':
+        'Weeg de spoel met zijn filament erop en typ wat de weegschaal zegt; Volura trekt het '
+        'gewicht van de lege spoel eraf',
+    'Take the chosen spool off the shelf': 'De gekozen spoel van de plank halen',
+    'Full spool': 'Volle spoel',
+    'Empty spool weight': 'Gewicht van de lege spoel',
+    'New spool': 'Nieuwe spoel',
+    'Remove spool': 'Spoel verwijderen',
+    'Remove {name} from the spools?': '{name} van de spoelen halen?',
+    'What does the scale say for {name}? The weight of the empty spool ({tare} g) is subtracted.':
+        'Wat zegt de weegschaal voor {name}? Het gewicht van de lege spoel ({tare} g) gaat eraf.',
+    'The name you know this spool by': 'De naam waaronder jij deze spoel kent',
+    'What the filament is made of; the print preview puts the spools of the same material first '
+    'on a filament':
+        'Waar het filament van gemaakt is; het printvoorbeeld zet spoelen van hetzelfde materiaal '
+        'vooraan bij een filament',
+    'Colour of the spool': 'Kleur van de spoel',
+    'The colour this filament has on the spool': 'De kleur die dit filament op de spoel heeft',
+    'What a full spool holds, without the empty spool': 'Wat een volle spoel bevat, zonder de lege spoel',
+    'What is still on it, without the empty spool; weigh it with Set left… in the list':
+        'Wat er nog op zit, zonder de lege spoel; weeg hem met Nog over… in de lijst',
+    'What the empty spool weighs: Set left… in the list subtracts this from what your scale says':
+        'Wat een lege spoel weegt: Nog over… in de lijst trekt dit af van wat jouw weegschaal zegt',
+    'What a full spool cost, so the cost of a print can be worked out from what it used':
+        'Wat een volle spoel kostte, zodat de kosten van een print te berekenen zijn uit wat hij '
+        'verbruikte',
+    # the spool of every filament in the print preview (volura/print_preview.py)
+    'Spool of this filament': 'Spoel van dit filament',
+    'The spool this filament comes off; the spools of the same material stand first, and Window '
+    '> Spools… fills the shelf':
+        'De spoel waar dit filament afkomt; spoelen van hetzelfde materiaal staan vooraan, en '
+        'Venster > Spoelen… vult de plank',
+    'No spool': 'Geen spoel',
+    '{g} g needed, {left} g left': '{g} g nodig, nog {left} g over',
+    'Not enough filament on this spool': 'Te weinig filament op deze spoel',
+    'Mark as printed': 'Markeren als geprint',
+    'Take what this print used off the spools above, for a print started from an SD card or a '
+    'USB stick':
+        'Haal wat deze print verbruikte van de spoelen hierboven, voor een print die vanaf een '
+        'sd-kaart of usb-stick is begonnen',
+    'Taken from the spools': 'Van de spoelen afgenomen',
 }

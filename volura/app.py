@@ -35,7 +35,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
                printer_link,
                sheet3d, sheettools, slice_presets, svg,
-               spacemouse, spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
+               spacemouse, spool_adapter, spools, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers, workspaces)
 from .brep import Entities
 from .inference import GeoCache
@@ -1485,6 +1485,11 @@ class Settings:
             conn = printer_link.from_json(line)
             if conn is not None:
                 self.printers.append(conn)
+        # the filament spools on the shelf: one line of JSON each, like the printers above
+        # (volura.spools). `spool_for_slot` says which of them every filament slot of the
+        # print preview comes off; a slot with no spool is an empty string there.
+        self.spools = spools.from_lines(self.q.value("spools", []) or [])
+        self.spool_for_slot = spools.slot_ids(self.q.value("spool_for_slot", []))
 
     def _bool(self, key, default):
         v = self.q.value(key, default)
@@ -1770,6 +1775,8 @@ class Settings:
         self.q.setValue("dogbone_tool_d", self.dogbone_tool_d)
         self.q.setValue("recent", self.recent[:8])
         self.q.setValue("printers", [printer_link.to_json(conn) for conn in self.printers])
+        self.q.setValue("spools", spools.to_lines(self.spools))
+        self.q.setValue("spool_for_slot", spools.slot_ids(self.spool_for_slot))
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
 
@@ -2601,6 +2608,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                   lambda checked=False: self.printer_status(), None, None,
                                   False,
                                   tr("What every printer on the network is doing right now"))
+        self.a_spools = A(tr("&Spools…"), lambda checked=False: self.spools(), None, None,
+                          False,
+                          tr("The filament on every spool on your shelf, so a print does not "
+                             "run out halfway"))
         self.a_welcome = A(tr("&Welcome to Volura"), self.show_welcome)
         self.a_updates = A(tr("Check for &Updates…"), lambda checked=False: self.check_for_updates())
         self.a_help = A(tr("&Keyboard Shortcuts"), self.show_help, "F1")
@@ -3232,7 +3243,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         m = mb.addMenu(tr("&Window"))
         self.standard_menu = QMenu(tr("Default &Tray"), m)
         self.fill(m, (self.standard_menu, None, self.a_model_info, self.a_prefs, None,
-                      self.a_printer_status))
+                      self.a_printer_status, self.a_spools))
 
         m = mb.addMenu(tr("&Help"))
         self.fill(m, (self.a_welcome, self.a_help, None, self.a_updates, None, self.a_sponsor,
@@ -3858,6 +3869,18 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         panel = getattr(self, "_printer_status", None)
         if panel is not None:
             panel.reload()
+
+    def spools(self):
+        """Window > Spools…: the rolls of filament on the shelf and what is left on each.
+
+        The print preview takes what a print uses off the spool every filament is pointed
+        at and says beforehand whether that spool holds enough, so weighing a spool here is
+        what keeps those numbers right.
+        """
+        from .spools_dialog import SpoolsDialog
+        dlg = SpoolsDialog(self)
+        dlg.exec()
+        return dlg
 
     # ------------------------------------------------------------ 3D mouse
     def start_spacemouse(self):
