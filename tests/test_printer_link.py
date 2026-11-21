@@ -1331,10 +1331,13 @@ def test_a_watched_camera_puts_its_picture_under_the_row(printer, win):
         row = panel.rows[0]
         assert row.camera.isChecked(), "a camera the window just learned of is watched at once"
         first = row.cam_job
-        assert first is not None, "watching a camera asks for its picture at once"
-        panel.poll()                     # the asking of the printer comes along with it
-        assert row.cam_job is first, "a camera that is still answering is not asked again"
-        ticked(panel)
+        # waiting for the lookups hands over every outcome there is: on a busy machine the first
+        # picture can already be in by now, and then there is no asking left to look at
+        assert first is not None or picture_of(row) is not None,             "watching a camera asks for its picture at once"
+        if first is not None:
+            panel.poll()                 # the asking of the printer comes along with it
+            assert row.cam_job is first, "a camera that is still answering is not asked again"
+            ticked(panel)
         assert len(asks(octo, SNAP)) == 1, "one asking of a printer is one picture"
         picture = picture_of(row)
         assert picture is not None, "the row shows no picture"

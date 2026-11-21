@@ -3,6 +3,13 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## Unreleased
+
+### New
+- **Pressure advance test** under *Tools > Print Tools*: a thin-walled tower whose pressure (or
+  linear) advance rises per segment, with the command for Klipper, Marlin or RepRapFirmware and
+  presets for direct drive and Bowden. Pick the lowest segment with sharp corners.
+
 ## 0.2.73 — 2026-11-21
 
 ### New
