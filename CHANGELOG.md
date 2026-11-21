@@ -3,12 +3,16 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## Unreleased
+## 0.2.70 — 2026-11-21
 
 ### New
 - **Tight fit check**: *View > Face Style > Tight Fits* colours the faces of a part that come
   closer to another part than your printer's clearance (from the clearance test), so a lid, a pin
   or a hinge that would print fused together is easy to spot.
+- **Spool tracker**: *Window > Spools…* keeps how much filament is left on each spool (type what
+  your scale says and the empty spool weight is taken off). The print preview shows per filament
+  which spool it comes off and warns when that spool does not hold enough; the grams come off
+  when the print starts through Volura, or with *Mark as printed* for an SD card print.
 
 ## 0.2.69 — 2026-11-21
 
