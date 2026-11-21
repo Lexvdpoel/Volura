@@ -11,9 +11,11 @@ picture of the print it carries for the screen of the printer, and drive the dia
 Run with:  python -m pytest tests/test_slicer.py
 """
 import base64
+import json
 import os
 import re
 import struct
+import subprocess
 import sys
 import time
 
@@ -574,6 +576,66 @@ def test_every_seam_of_the_slice_dialog_reaches_the_engine(tmp_path):
         slicer.slice_meshes(st, meshes, str(out))
         text = out.read_text(encoding="utf-8")
         assert ";LAYER:0" in text and _moves_of_type(text, "WALL-OUTER") > 0, f"{kind} slices"
+
+
+def _t_shape(height=30.0, arm=40.0, thick=10.0):
+    """A column with a bar across the top: the two ends of that bar hang in the air, so the print
+    needs support under them."""
+    column = mf.Manifold.cube((thick, thick, height))
+    bar = mf.Manifold.cube((arm, thick, thick)).translate((0.0, 0.0, 0.5 * (height + thick)))
+    mesh = (column + bar).to_mesh()
+    return np.asarray(mesh.vert_properties)[:, :3], np.asarray(mesh.tri_verts)
+
+
+class EngineSettings:
+    """`subprocess` with its `Popen` wrapped, so a test reads the settings file CuraEngine was
+    asked to slice with before the temporary folder that holds it is gone again. That file is
+    what `-r` names, so it is exactly what the engine was told."""
+
+    def __init__(self, docs):
+        self.docs = docs
+
+    def Popen(self, cmd, *args, **kwargs):
+        with open(cmd[cmd.index("-r") + 1], encoding="utf-8") as fh:
+            self.docs.append(json.load(fh))
+        return subprocess.Popen(cmd, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(subprocess, name)
+
+
+@needs_engine
+def test_tree_support_grows_branches_where_normal_grows_pillars(tmp_path, monkeypatch):
+    """File > Slice… > Style: Tree hands CuraEngine support_structure tree and grows thin branches
+    up to the overhangs of a T, where normal support stands pillars under them; both hold the bar
+    up, and the tree print uses far less plastic."""
+    docs = []
+    monkeypatch.setattr(slicer, "subprocess", EngineSettings(docs))
+    p, v, m = _ender3()
+    meshes = [_t_shape() + (0,)]
+    base = {"infill_sparse_density": 0.0, "support_enable": True, "support_type": "buildplate"}
+    got = {}
+    for style in ("normal", "tree"):
+        user = dict(base) if style == "normal" else dict(base, support_structure="tree")
+        out = tmp_path / f"support-{style}.gcode"
+        result = slicer.slice_meshes(p.stacks(v, m, "standard", user), meshes, str(out))
+        got[style] = (result, out.read_text(encoding="utf-8"))
+    normal, tree = docs[0]["global"], docs[1]["global"]
+    assert tree["support_structure"] == "tree", "that is what CuraEngine sliced with"
+    assert tree["support_enable"] is True and tree["support_type"] == "buildplate"
+    assert normal.get("support_structure", "normal") == "normal", "the profile has normal anyway"
+    for style, (_result, text) in got.items():
+        assert ";TYPE:SUPPORT" in text, f"{style} support holds nothing up"
+    assert got["tree"][1] != got["normal"][1], "the two slice the same"
+    assert got["tree"][0].grams < 0.85 * got["normal"][0].grams, \
+        f"tree {got['tree'][0].grams} g, normal {got['normal'][0].grams} g"
+    # a printer with two extruders carries the setting on both of them
+    dual = cura_profiles.Library(RESOURCES).printer("creality_cr-x")
+    variant = dual.default_variant()
+    st = dual.stacks(variant, dual.default_material(variant), "standard",
+                     dict(base, support_structure="tree"))
+    assert len(st.extruders) == 2
+    assert [e.get("support_structure") for e in st.extruders] == ["tree", "tree"]
 
 
 @needs_engine

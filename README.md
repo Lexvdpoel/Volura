@@ -546,9 +546,11 @@ gets for free.
 - **Slice** (File > Slice): G-code for your printer without a separate slicer. Choose the maker
   and the printer from the printer profiles of Cura and OrcaSlicer (nearly 1000 printers), then
   the nozzle, the filament brand and material and the quality, and set infill and its pattern,
-  support and bed adhesion; the Extras group adds adaptive layer height (thinner layers where
-  the surface slopes, thicker where it is steep), ironing (the nozzle passes over the top once
-  more, for a smooth flat top), a fuzzy skin (a rough outer wall that hides layer lines and
+  support and the **Style** of that support - normal pillars, or **Tree** branches that grow thin
+  up to the overhangs, so a print uses less plastic, shows fewer marks and breaks off cleaner -
+  and bed adhesion; the Extras group adds adaptive layer height (thinner layers where the surface
+  slopes, thicker where it is steep), ironing (the nozzle passes over the top once more, for a
+  smooth flat top), a fuzzy skin (a rough outer wall that hides layer lines and
   grips well, with a Fuzz thickness), the number of walls, a **Seam** that says where the little
   vertical line of the print sits (the sharpest corner, at the back, moved around at random, or
   wherever the nozzle has the shortest way) and a **Vase mode** that prints one wall spiralling
@@ -564,8 +566,9 @@ gets for free.
     draft" - is saved under a name in the **Preset** box at the top of the dialog. *Save…* keeps
     the choice that stands in the dialog under a name of your own (asking before it replaces a
     name that is taken) and *Delete* forgets one again. Choosing a preset sets the printer, the
-    nozzle, the material, the quality, infill and its pattern, support, bed adhesion and the
-    Extras again, exactly the way Volura remembers the last choice now; the colours of the model
+    nozzle, the material, the quality, infill and its pattern, support with its style, bed
+    adhesion and the Extras again, exactly the way Volura remembers the last choice now; the
+    colours of the model
     are not part of a preset and stay as they are. Change a field and the box says "—" again,
     because the choice is no longer the preset's, while the preset keeps its own numbers; the
     name is back in the box next time when the dialog still holds what the preset holds. A

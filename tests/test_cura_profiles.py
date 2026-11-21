@@ -500,6 +500,130 @@ def test_the_seam_of_the_slice_dialog_is_curas_seam_and_is_remembered(library):
         win.close()
 
 
+def test_the_style_of_the_support_is_curas_support_structure_and_is_remembered(library):
+    """File > Slice… > Style: Normal says nothing at all, because that is what Cura grows anyway,
+    Tree asks Cura for its tree structure, the combo only matters when there is support, a vase
+    has no support to give a style, and what you picked is what the next dialog starts with -
+    also the junk of a settings file that was edited by hand."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication, QWidget
+    app = QApplication.instance() or QApplication(sys.argv[:1])
+    import volura.slice_dialog as slice_dialog
+    from volura.settings import qsettings
+    from volura.slice_dialog import SliceDialog
+
+    class Prefs:
+        q = qsettings()
+        slice_printer, slice_variant = "testprinter", ""
+        slice_material, slice_quality = "", ""
+        slice_infill, slice_infill_pattern = 20, ""
+        slice_support, slice_adhesion = 0, ""
+        slice_support_style = "normal"          # a computer that never picked a style
+        slice_paint, slice_changes, slice_change_command = 1.0, "", ""
+
+    class Window(QWidget):
+        settings = Prefs()
+
+    win = Window()
+    dlg = SliceDialog(win, library)
+    try:
+        kinds = [kind for _label, kind in slice_dialog.SUPPORT_STYLES]
+        normal, tree = kinds
+        assert dlg.support_style.currentText() == "Normal"
+        assert dlg.choice()["support_style"] == normal
+        assert not dlg.support_style.isEnabled(), "no support, so no style to pick"
+        assert "support_structure" not in dlg.user_values(), "nothing to support, nothing to say"
+
+        def row(on, kind):
+            """The row of the support combo that prints support_enable `on` with support_type
+            `kind`; "None" and "Touching the bed" share the kind, so both are needed."""
+            return next(i for i, (_label, enable, what) in enumerate(slice_dialog.SUPPORTS)
+                        if enable is on and what == kind)
+
+        touching, everywhere = row(True, "buildplate"), row(True, "everywhere")
+        assert row(False, "buildplate") == 0, "the first row prints no support at all"
+        dlg.support.setCurrentIndex(touching)
+        app.processEvents()
+        assert dlg.support_style.isEnabled(), "there is support now, so it may have a style"
+        assert "support_structure" not in dlg.user_values(), "Normal is what Cura grows anyway"
+        dlg.support_style.setCurrentIndex(kinds.index(tree))
+        app.processEvents()
+        assert dlg.user_values()["support_structure"] == tree
+        assert dlg.choice()["support_style"] == tree, "the style belongs to the choice"
+        st = dlg.stacks()
+        assert st.glob.get("support_structure") == tree, "CuraEngine reads it from the global stack"
+        assert st.extruders and all(e.get("support_structure") == tree for e in st.extruders), \
+            "every extruder the print uses has it, also the ones a filament changer adds"
+        # support that stands everywhere still gets its style from the same combo
+        dlg.support.setCurrentIndex(everywhere)
+        app.processEvents()
+        assert dlg.support_style.isEnabled() and dlg.user_values()["support_structure"] == tree
+        # support off again: the style stands aside but keeps what it holds
+        Prefs.slice_support, Prefs.slice_support_style = 0, tree
+        off = SliceDialog(win, library)
+        try:
+            assert off.support.currentIndex() == 0 and not off.support_style.isEnabled()
+            assert off.support_style.currentText() == "Tree", "the style waits for support again"
+            values = off.user_values()
+            assert values["support_enable"] is False
+            assert "support_structure" not in values, "support that is not printed has no shape"
+        finally:
+            off.close()
+        # a vase prints no support at all, so its style stands aside with the rest
+        dlg.support.setCurrentIndex(touching)
+        dlg.vase.setChecked(True)
+        app.processEvents()
+        assert not dlg.support_style.isEnabled(), "a vase has no support to give a style"
+        on = dlg.user_values()
+        assert on["magic_spiralize"] is True and "support_structure" not in on
+        dlg.vase.setChecked(False)
+        app.processEvents()
+        assert dlg.support_style.isEnabled(), "and it is back where it was"
+        assert dlg.user_values()["support_structure"] == tree
+        # what the window saves before it slices, and the dialog of the next time
+        for key, value in dlg.choice().items():
+            setattr(Prefs, "slice_" + key, value)
+        again = SliceDialog(win, library)
+        try:
+            assert again.support_style.currentText() == "Tree"
+            assert again.support_style.isEnabled(), "the support that comes back enables it"
+            assert again.choice()["support_style"] == tree
+            assert again.user_values()["support_structure"] == tree
+            # a settings file that says something else is what Cura grows anyway
+            for junk in ("sideways", "", None, 4):
+                Prefs.slice_support_style = junk
+                odd = SliceDialog(win, library)
+                try:
+                    assert odd.support_style.currentText() == "Normal", repr(junk)
+                    assert "support_structure" not in odd.user_values()
+                finally:
+                    odd.close()
+        finally:
+            again.close()
+    finally:
+        dlg.close()
+        win.close()
+
+
+def test_the_style_of_the_support_survives_the_settings_of_the_window():
+    """What the window saves before it slices is what the Settings of the next start reads back;
+    a settings file that was edited by hand and says something else gets what Cura grows anyway."""
+    from volura.app import Settings
+    keep = Settings()
+    try:
+        for want in ("normal", "tree"):
+            keep.slice_support_style = want
+            keep.save()
+            assert Settings().slice_support_style == want
+        for junk in ("sideways", "", None, 4):
+            keep.q.setValue("slice_support_style", junk)
+            keep.q.sync()
+            assert Settings().slice_support_style == "normal", repr(junk)
+    finally:
+        keep.q.remove("slice_support_style")
+        keep.q.sync()
+
+
 def test_vase_mode_prints_one_wall_and_stands_aside_from_the_rest(library):
     """File > Slice… > Extras > Vase mode: Cura's spiralize, the fields a vase does not print
     stand aside without losing what they hold, the info label says what a vase prints, and what
@@ -975,16 +1099,21 @@ def test_an_older_choice_leaves_the_seam_and_vase_mode_alone(slice_window, libra
     try:
         dlg.seam.setCurrentIndex(seams.index("sharpest_corner"))
         dlg.vase.setChecked(True)
+        dlg.support.setCurrentIndex(1)                # support, so the style has something to say
+        dlg.support_style.setCurrentIndex(1)          # Tree
         old = {"printer": "testprinter", "infill": 80, "walls": 5}
         dlg.apply_choice(old)
         assert dlg.infill.value() == 80 and dlg.walls.value() == 5, "the rest is applied"
         assert dlg.seam.currentText() == "Sharpest corner" and dlg.vase.isChecked()
         assert dlg.user_values()["z_seam_corner"] == "z_seam_corner_weighted"
         assert not dlg.infill.isEnabled(), "the vase still stands aside, as it did"
+        assert dlg.support_style.currentText() == "Tree", "an old choice has no style to give"
         assert matches(dict(old, name="old"), dlg.choice()), \
             "the old preset matches whatever the two new fields say"
-        dlg.apply_choice({"printer": "testprinter", "seam": "nonsense", "vase": "yes"})
+        dlg.apply_choice({"printer": "testprinter", "seam": "nonsense", "vase": "yes",
+                          "support_style": "sideways"})
         assert dlg.seam.currentText() == "Sharpest corner", "an unknown seam is left alone"
+        assert dlg.support_style.currentText() == "Normal", "unknown style is what Cura grows"
     finally:
         dlg.close()
         win.close()

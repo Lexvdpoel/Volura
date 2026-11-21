@@ -22,7 +22,8 @@ def choice(**over):
     """A choice as `SliceDialog.choice()` gives it, with these fields different."""
     got = {"printer": "creality_ender3", "variant": "0.4mm Nozzle",
            "material": "generic_pla_175", "quality": "standard",
-           "infill": 20, "support": 1, "adhesion": "brim", "infill_pattern": "gyroid",
+           "infill": 20, "support": 1, "support_style": "tree", "adhesion": "brim",
+           "infill_pattern": "gyroid",
            "paint": 1.0, "changes": "5", "change_command": "M600",
            "adaptive": True, "ironing": False, "fuzzy": True, "fuzz": 0.35, "walls": 3,
            "seam": "sharpest_corner", "vase": False, "thumbnail": "48x48/300x300"}
@@ -102,6 +103,8 @@ def test_matches_says_whether_the_dialog_still_holds_the_preset():
     assert not slice_presets.matches(kept, choice(quality="draft")), "another quality"
     assert not slice_presets.matches(kept, choice(walls=0)), "0 leaves it to the profile"
     assert not slice_presets.matches(kept, choice(seam="random")), "another seam"
+    assert not slice_presets.matches(kept, choice(support_style="normal")), \
+        "normal pillars instead of tree branches"
     assert not slice_presets.matches(kept, choice(vase=True)), "vase mode belongs to the preset"
     assert not slice_presets.matches(kept, {}), "an empty dialog holds nothing"
 

@@ -1047,6 +1047,10 @@ class Settings:
             self.slice_support = max(0, min(2, int(float(self.q.value("slice_support", 0)))))
         except (TypeError, ValueError):
             self.slice_support = 0
+        # how that support stands (slice_dialog.SUPPORT_STYLES); junk is what Cura grows anyway
+        self.slice_support_style = str(self.q.value("slice_support_style", "normal") or "normal")
+        if self.slice_support_style not in ("normal", "tree"):
+            self.slice_support_style = "normal"
         try:            # how deep the skins of painted faces go (slice_dialog.PAINT_MIN/MAX)
             self.slice_paint = max(0.4, min(5.0, float(self.q.value("slice_paint", 1.0))))
         except (TypeError, ValueError):
@@ -1685,8 +1689,9 @@ class Settings:
                     "bracket_gussets"):
             self.q.setValue(key, getattr(self, key))
         for key in ("slice_printer", "slice_variant", "slice_material", "slice_quality",
-                    "slice_adhesion", "slice_infill", "slice_support", "slice_infill_pattern",
-                    "slice_paint", "slice_changes", "slice_change_command",
+                    "slice_adhesion", "slice_infill", "slice_support", "slice_support_style",
+                    "slice_infill_pattern", "slice_paint", "slice_changes",
+                    "slice_change_command",
                     "slice_adaptive", "slice_ironing", "slice_fuzzy", "slice_fuzz",
                     "slice_walls", "slice_seam", "slice_vase", "slice_thumbnail",
                     "slice_preset"):

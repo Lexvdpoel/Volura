@@ -2,12 +2,12 @@
 
 The printers come from the Cura profile library that Volura brings along (see
 `volura.cura_profiles`): first the maker, then the printer, then what that printer offers. A few
-settings that you change on almost every print sit underneath - infill and its pattern, support and
-how the print sticks to the bed - and an Extras group with adaptive layers, ironing, a fuzzy skin,
-the number of walls, where the seam sits and a vase mode that prints one wall spiralling up,
-besides the thumbnail for the printer's screen; everything else comes from the profile. The
-choice is remembered in Settings, and a choice you come back to is saved under a name above the
-Maker row (see `volura.slice_presets`).
+settings that you change on almost every print sit underneath - infill and its pattern, support
+and the style of that support, and how the print sticks to the bed - and an Extras group with
+adaptive layers, ironing, a fuzzy skin, the number of walls, where the seam sits and a vase mode
+that prints one wall spiralling up, besides the thumbnail for the printer's screen; everything else
+comes from the profile. The choice is remembered in Settings, and a choice you come back to is
+saved under a name above the Maker row (see `volura.slice_presets`).
 
 Below that sits what the print does with the colors of the model (see `volura.paint_split` and
 `volura.fileio`): which filament prints which color, how deep the skins of painted faces go,
@@ -36,6 +36,9 @@ _LIBRARIES: dict[str, cura_profiles.Library] = {}
 SUPPORTS = [(tr_noop("None"), False, "buildplate"),
             (tr_noop("Touching the bed"), True, "buildplate"),
             (tr_noop("Everywhere"), True, "everywhere")]
+#: how that support stands: (label, support_structure of Cura's fdmprinter definitions); Normal is
+#: what Cura grows anyway, so only Tree has anything to say to the profile
+SUPPORT_STYLES = [(tr_noop("Normal"), "normal"), (tr_noop("Tree"), "tree")]
 #: the bed adhesion choices: (label, adhesion_type or "" for the printer's own)
 ADHESION = [(tr_noop("As the printer has it"), ""), (tr_noop("Skirt"), "skirt"),
             (tr_noop("Brim"), "brim"), (tr_noop("Raft"), "raft"), (tr_noop("None"), "none")]
@@ -107,6 +110,13 @@ def _index_of(choices, want, current):
     kinds = [value for _label, value, *_ in choices]
     want = str(want)
     return kinds.index(want) if want in kinds else current
+
+
+def _style_of(value) -> str:
+    """The support style a choice names: Tree or Normal; anything else is Normal, because that is
+    what Cura grows when nothing tells it otherwise."""
+    want = str(value or "").strip().lower()
+    return want if want in [kind for _label, kind in SUPPORT_STYLES] else "normal"
 
 
 class Multicolor:
@@ -252,6 +262,19 @@ class SliceDialog(QDialog):
         self.support = QComboBox()
         for label, _on, _kind in SUPPORTS:
             self.support.addItem(tr(label))
+        self.support_style = QComboBox()
+        for label, _kind in SUPPORT_STYLES:
+            self.support_style.addItem(tr(label))
+        self.support_style.setToolTip(tr("Tree support grows thin branches up to the overhangs: "
+                                         "less plastic, fewer marks on the model, easier to "
+                                         "remove. Best for figures and organic shapes; normal "
+                                         "support is better under large flat overhangs."))
+        self.support_row = QWidget()          # support and the style of that support, side by side
+        line = QHBoxLayout(self.support_row)
+        line.setContentsMargins(0, 0, 0, 0)
+        line.addWidget(self.support, 1)
+        line.addWidget(QLabel(tr("Style")))
+        line.addWidget(self.support_style)
         self.adhesion = QComboBox()
         for label, _kind in ADHESION:
             self.adhesion.addItem(tr(label))
@@ -374,7 +397,7 @@ class SliceDialog(QDialog):
         lay.addRow(tr("Quality"), self.quality)
         lay.addRow(tr("Infill"), self.infill)
         lay.addRow(tr("Infill pattern"), self.pattern)
-        lay.addRow(tr("Support"), self.support)
+        lay.addRow(tr("Support"), self.support_row)
         lay.addRow(tr("Bed adhesion"), self.adhesion)
         lay.addRow(self.extras)
         lay.addRow(tr("Colour depth of painted faces"), self.paint_depth)
@@ -415,13 +438,15 @@ class SliceDialog(QDialog):
         self._fuzzy_changed(self.fuzzy.isChecked())
         self.vase.toggled.connect(self._vase_changed)
         self._vase_changed(self.vase.isChecked())
+        self.support.currentIndexChanged.connect(self._support_changed)
+        self._support_changed()
         self.b_add.clicked.connect(self._add_change)
         self.b_remove.clicked.connect(self._remove_change)
         self.b_3mf.clicked.connect(self._to_3mf)
         # a field that says something else than the chosen preset puts the combo box back on "—"
         for box in (self.maker, self.printer_box, self.nozzle, self.brand, self.material,
-                    self.quality, self.pattern, self.support, self.adhesion, self.seam,
-                    self.thumbnail):
+                    self.quality, self.pattern, self.support, self.support_style, self.adhesion,
+                    self.seam, self.thumbnail):
             box.currentIndexChanged.connect(self._field_changed)
         for box in (self.infill, self.fuzz, self.walls):
             box.valueChanged.connect(self._field_changed)
@@ -447,6 +472,7 @@ class SliceDialog(QDialog):
                 # the defaults are those of Settings, for a window that has nothing to remember
                 "infill": getattr(s, "slice_infill", 20),
                 "support": getattr(s, "slice_support", 0),
+                "support_style": _style_of(getattr(s, "slice_support_style", "normal")),
                 "adhesion": str(getattr(s, "slice_adhesion", "") or ""),
                 "infill_pattern": str(getattr(s, "slice_infill_pattern", "") or ""),
                 "adaptive": getattr(s, "slice_adaptive", False),
@@ -478,6 +504,10 @@ class SliceDialog(QDialog):
         self.infill.setValue(_number(choice.get("infill"), self.infill.value(), 0, 100))
         self.support.setCurrentIndex(_number(choice.get("support"), self.support.currentIndex(),
                                              0, len(SUPPORTS) - 1))
+        if "support_style" in choice:
+            kinds = [kind for _label, kind in SUPPORT_STYLES]
+            self.support_style.setCurrentIndex(kinds.index(_style_of(choice["support_style"])))
+        self._support_changed()
         self.adhesion.setCurrentIndex(_index_of(ADHESION, choice.get("adhesion"),
                                                 self.adhesion.currentIndex()))
         self.pattern.setCurrentIndex(_index_of(INFILL_PATTERNS, choice.get("infill_pattern"),
@@ -785,12 +815,19 @@ class SliceDialog(QDialog):
         """The thickness of the fuzz is of interest only when there is a fuzzy skin."""
         self.fuzz.setEnabled(bool(on))
 
+    def _support_changed(self, *_):
+        """The style of the support is of interest only when there is support; in vase mode the
+        support says nothing at all, so the style has nothing to say either."""
+        self.support_style.setEnabled(self.support.currentIndex() > 0
+                                      and not self.vase.isChecked())
+
     def _vase_changed(self, on):
         """A vase is one wall that spirals up with a bottom under it: what goes inside the print,
         how many lines its walls take, ironing and support have nothing to say about it. Their
         values stay as they are, so a vase that goes off prints what it printed before."""
-        for field in (self.infill, self.support, self.ironing, self.walls):
+        for field in (self.infill, self.support, self.support_style, self.ironing, self.walls):
             field.setEnabled(not on)
+        self._support_changed()
         self._show_info()
 
     def _vase_note(self) -> str:
@@ -899,6 +936,11 @@ class SliceDialog(QDialog):
         adhesion = ADHESION[self.adhesion.currentIndex()][1]
         if adhesion:
             values["adhesion_type"] = adhesion
+        # tree is the one thing the profile is not left to pick here: Normal is what Cura grows
+        # when nothing tells it otherwise, and support that is not printed needs no structure
+        style = SUPPORT_STYLES[self.support_style.currentIndex()][1]
+        if style != "normal" and support and not vase:
+            values["support_structure"] = style
         pattern = INFILL_PATTERNS[self.pattern.currentIndex()][1]
         if pattern and not vase:
             values["infill_pattern"] = pattern
@@ -927,6 +969,7 @@ class SliceDialog(QDialog):
                 "material": self.material.currentData() or "",
                 "quality": self.quality.currentData() or "",
                 "infill": self.infill.value(), "support": self.support.currentIndex(),
+                "support_style": SUPPORT_STYLES[self.support_style.currentIndex()][1],
                 "adhesion": ADHESION[self.adhesion.currentIndex()][1],
                 "infill_pattern": INFILL_PATTERNS[self.pattern.currentIndex()][1],
                 "paint": self.paint_depth.value(),

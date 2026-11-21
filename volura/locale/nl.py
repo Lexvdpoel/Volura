@@ -2256,6 +2256,13 @@ TRANSLATIONS = {
     'How full the inside of the print is': 'Hoe vol de binnenkant van de print is',
     'Touching the bed': 'Op het bed',
     'Everywhere': 'Overal',
+    'Tree': 'Boom',
+    'Tree support grows thin branches up to the overhangs: less plastic, fewer marks on the '
+    'model, easier to remove. Best for figures and organic shapes; normal support is better '
+    'under large flat overhangs.':
+        'Boomsupport laat dunne takken naar de overhangen toe groeien: minder plastic, minder '
+        'sporen op het model en makkelijker te verwijderen. Het beste voor figuren en organische '
+        'vormen; gewone support is beter onder grote platte overhangen.',
     'As the printer has it': 'Zoals de printer het heeft',
     'Skirt': 'Skirt',
     'Brim': 'Brim',
