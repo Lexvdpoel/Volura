@@ -225,6 +225,7 @@ class Settings:
             self.min_wall = 0.8
         if not 0.1 <= self.min_wall <= 10.0:
             self.min_wall = 0.8            # two lines of a 0.4 mm nozzle is the usual floor
+        self.show_tight_fits = self._bool("show_tight_fits", False)
         # View > Section: the cut of the view, never of the model or the file. It is not stored
         # and it is off when Volura starts, because a model that is half hidden at start-up
         # looks broken (see volura/section.py).
@@ -1500,6 +1501,7 @@ class Settings:
         self.q.setValue("overhang_limit", self.overhang_limit)
         self.q.setValue("show_thin_walls", self.show_thin_walls)
         self.q.setValue("min_wall", self.min_wall)
+        self.q.setValue("show_tight_fits", self.show_tight_fits)
         self.q.setValue("check_updates", self.check_updates)
         self.q.setValue("ask_simplify_import", self.ask_simplify_import)
         self.q.setValue("theme", self.theme)
@@ -2484,6 +2486,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                               checkable=True,
                               tip=tr("Mark the faces of walls thinner than your printer can make"))
         self.a_thin_walls.setChecked(self.settings.show_thin_walls)
+        self.a_tight_fits = A(tr("Tight Fits"), self.toggle_tight_fits, None, None,
+                              checkable=True,
+                              tip=tr("Mark the faces that come closer to another part than "
+                                     "the clearance of your printer, from 3D Printing > "
+                                     "Clearance Test"))
+        self.a_tight_fits.setChecked(self.settings.show_tight_fits)
         self.a_section = A(tr("Section"), self.toggle_section, None, None, checkable=True,
                            tip=tr("Cut the view open with a plane you can move; the model "
                                   "itself stays as it is"))
@@ -3129,7 +3137,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         m = mb.addMenu(tr("&View"))
         edge_style = sub(tr("&Edge Style"), m, (self.a_edges, self.a_back_edges))
         face_style = sub(tr("Face St&yle"), m,
-                         (self.a_xray, self.a_overhangs, self.a_thin_walls, None,
+                         (self.a_xray, self.a_overhangs, self.a_thin_walls,
+                          self.a_tight_fits, None,
                           self.a_wireframe, self.a_hidden_lines, self.a_shaded,
                           self.a_monochrome))
         comp_edit = sub(tr("Co&mponent Edit"), m, (self.a_hide_rest,))
