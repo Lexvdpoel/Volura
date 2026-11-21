@@ -3,11 +3,14 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## Unreleased
+## 0.2.73 — 2026-11-21
 
 ### New
 - **Bed mesh view**: *Window > Bed Mesh…* shows the bed mesh of a Klipper printer as a coloured
   map seen from above, with the probed heights, how flat the bed is, and the point under the mouse.
+- **Temperature tower** under *Tools > Print Tools*: one segment per temperature, each with an
+  overhang, a bridge and a spire and its temperature on the front. Presets for PLA, PETG, ABS, ASA
+  and TPU. Slicing really changes the nozzle temperature at every segment.
 
 ## 0.2.72 — 2026-11-21
 
