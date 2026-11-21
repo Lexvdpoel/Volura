@@ -3,6 +3,13 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## Unreleased
+
+### New
+- **Tight fit check**: *View > Face Style > Tight Fits* colours the faces of a part that come
+  closer to another part than your printer's clearance (from the clearance test), so a lid, a pin
+  or a hinge that would print fused together is easy to spot.
+
 ## 0.2.69 — 2026-11-21
 
 The Windows build of 0.2.68 stopped on one of its own tests, so 0.2.68 only came out for Linux;
