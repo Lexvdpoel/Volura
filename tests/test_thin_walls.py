@@ -220,7 +220,11 @@ def win():
     w.settings.show_thin_walls = False
     w.settings.min_wall = 0.8
     w.settings.overhang_limit = 45
-    w.a_thin_walls.setChecked(False)
+    # the switches too: a test before this one may have stored them on, and trigger()
+    # would then switch them off
+    for a in (w.a_thin_walls, w.a_overhangs):
+        a.setChecked(False)
+    w.settings.show_overhangs = False
     yield w
     w.doc.dirty = False
     w.close()

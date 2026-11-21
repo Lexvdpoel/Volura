@@ -333,7 +333,10 @@ def win():
     w.settings.min_wall = 0.8
     w.settings.overhang_limit = 45
     w.settings.screw_hole_clearance = 0.2
-    w.a_tight_fits.setChecked(False)
+    # the switches too: a test before this one may have stored them on, and trigger()
+    # would then switch them off
+    for a in (w.a_tight_fits, w.a_thin_walls, w.a_overhangs):
+        a.setChecked(False)
     yield w
     w.doc.dirty = False
     w.close()
