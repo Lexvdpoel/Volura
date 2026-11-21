@@ -277,7 +277,9 @@ def test_a_wrong_key_is_said_without_saying_it(printer):
     with pytest.raises(pl.LinkError) as bad:
         pl.check(octo.connection(api_key="a wrong one"))
     said = str(bad.value)
-    assert "API key" in said and "401" not in said
+    # the address of the fake printer has a random port, which can hold "401" itself
+    told = said.replace(octo.url, "")
+    assert "API key" in said and "401" not in told
     assert "right one" not in said and "wrong one" not in said
 
 
