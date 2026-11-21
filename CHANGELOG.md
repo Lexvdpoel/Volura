@@ -3,6 +3,15 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.69 — 2026-11-21
+
+The Windows build of 0.2.68 stopped on one of its own tests, so 0.2.68 only came out for Linux;
+this version brings the same to Windows.
+
+### Fixed
+- A test of the snap-fit clip compared against the default clearance instead of the one stored
+  in the settings, and failed when another test had changed it.
+
 ## 0.2.68 — 2026-11-21
 
 ### New

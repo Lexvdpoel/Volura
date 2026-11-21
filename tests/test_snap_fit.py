@@ -356,7 +356,10 @@ def test_the_clip_is_one_group_that_one_undo_takes_away(win):
     assert g.name == "Snap-fit clip"
     m = g.ents.to_manifold()
     assert m.status() == mf.Error.NoError
-    assert m.volume() == pytest.approx(clip().volume(), rel=1e-6)
+    # the window cuts the slot with the clearance this printer proved, which another test
+    # may have changed in the stored settings: compare with a clip of that same clearance
+    want = clip(clearance=win.settings.screw_hole_clearance)
+    assert m.volume() == pytest.approx(want.volume(), rel=1e-6)
     assert [g.id for g in win.doc.selected_groups()] == [g.id for g in win.doc.groups]
     win.doc.undo()
     assert win.doc.groups == []
