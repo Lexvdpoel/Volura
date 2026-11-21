@@ -1969,6 +1969,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self._busy = False          # a background job is reading the model: keep it still
         self._mill3d_dialog = None   # the 3D mill dialog, open beside the model
         self._printer_status = None   # what the printers on the network are doing
+        self._bed_mesh = None         # how flat the bed of a Klipper printer is
         self._print_queue = None      # the prints that wait for a free printer
         self.tool_actions = {}
         self.sheet_tool_actions = {}
@@ -2630,6 +2631,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                   lambda checked=False: self.printer_status(), None, None,
                                   False,
                                   tr("What every printer on the network is doing right now"))
+        self.a_bed_mesh = A(tr("Bed &Mesh…"), lambda checked=False: self.bed_mesh(), None, None,
+                            False,
+                            tr("How flat the bed of a Klipper printer is, point by point"))
         self.a_spools = A(tr("&Spools…"), lambda checked=False: self.spools(), None, None,
                           False,
                           tr("The filament on every spool on your shelf, so a print does not "
@@ -3272,7 +3276,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         m = mb.addMenu(tr("&Window"))
         self.standard_menu = QMenu(tr("Default &Tray"), m)
         self.fill(m, (self.standard_menu, None, self.a_model_info, self.a_prefs, None,
-                      self.a_printer_status, self.a_print_queue, self.a_spools,
+                      self.a_printer_status, self.a_bed_mesh, self.a_print_queue, self.a_spools,
                       self.a_print_history))
 
         m = mb.addMenu(tr("&Help"))
@@ -3897,6 +3901,29 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
     def refresh_printer_status(self):
         """Preferences > Printers changed the list: the status window takes the rows anew."""
         panel = getattr(self, "_printer_status", None)
+        if panel is not None:
+            panel.reload()
+
+    def bed_mesh(self):
+        """Window > Bed Mesh…: how flat the bed of a Klipper printer is, point by point.
+
+        Modeless, like Window > Printer Status. One window per Volura: calling it again brings
+        the window there is to the front. It asks the printer that is chosen in its box once when
+        it comes on the screen, and again only when you press Refresh, because a bed mesh does
+        not change by itself.
+        """
+        from .bed_mesh_dialog import BedMeshWindow
+        panel = getattr(self, "_bed_mesh", None)
+        if panel is None:
+            panel = self._bed_mesh = BedMeshWindow(self)
+        panel.show()
+        panel.raise_()
+        panel.activateWindow()
+        return panel
+
+    def refresh_bed_mesh(self):
+        """Preferences > Printers changed the list: the bed mesh window takes its printers anew."""
+        panel = getattr(self, "_bed_mesh", None)
         if panel is not None:
             panel.reload()
 

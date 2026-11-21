@@ -3064,6 +3064,29 @@ TRANSLATIONS = {
     'Camera': 'Camera',
     'Watch the camera of this printer': 'Kijken door de camera van deze printer',
     'The camera sent nothing that is a picture.': 'De camera stuurde niets dat een foto is.',
+    # Bed Mesh: Window > Bed Mesh… (volura/bed_mesh.py, volura/bed_mesh_dialog.py)
+    'Bed Mesh': 'Bedmesh',
+    'Bed &Mesh…': 'Bed&mesh…',
+    'How flat the bed of a Klipper printer is, point by point':
+        'Hoe vlak het bed van een Klipper-printer is, punt voor punt',
+    'Range {r} mm (from {lo} to {hi} mm), {n}×{m} points, profile {p}':
+        'Bereik {r} mm (van {lo} tot {hi} mm), {n}×{m} punten, profiel {p}',
+    'Bed mesh needs a Klipper (Moonraker) printer; add one under Window > Preferences > Printers':
+        'Bedmesh heeft een Klipper (Moonraker)-printer nodig; voeg er een toe onder '
+        'Venster > Voorkeuren > Printers',
+    'This printer has no bed mesh loaded. Run a bed mesh calibration on the printer and press '
+    'Refresh.':
+        'Deze printer heeft geen bedmesh geladen. Doe een bedmesh-calibratie op de printer en '
+        'druk op Vernieuwen.',
+    'The mesh of the bed as a heat map': 'Het bedmesh als warmtekaart',
+    'Press Refresh to ask this printer how flat its bed is':
+        'Druk op Vernieuwen om deze printer te vragen hoe vlak zijn bed is',
+    'The colours of the heat map': 'De kleuren van de warmtekaart',
+    'The Klipper (Moonraker) printers under Window > Preferences > Printers':
+        'De Klipper (Moonraker)-printers onder Venster > Voorkeuren > Printers',
+    'Ask this printer for the mesh of its bed again':
+        'Deze printer opnieuw vragen om het bedmesh van zijn bed',
+    'x {x} mm, y {y} mm, z {z} mm': 'x {x} mm, y {y} mm, z {z} mm',
     # Filament Spools: Window > Spools… and the print preview (volura/spools.py)
     '&Spools…': '&Spoelen…',
     'Spools': 'Spoelen',

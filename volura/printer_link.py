@@ -6,6 +6,7 @@ OctoPrint, Moonraker (the API of Klipper) and PrusaLink on a Prusa printer. A
 `Connection` says which of them it is, where it stands and with which key it lets you
 in; the settings keep them (volura.app.Settings) and Preferences > Printers edits them.
 `status` asks what one of them is doing right now, which Window > Printer Status shows.
+`bed_mesh` asks a Klipper printer how flat its bed is, which Window > Bed Mesh… paints.
 `snapshot_url` says where the printer's camera keeps a still picture and `snapshot` asks
 that camera for one, which the same window can put beside the status of that printer.
 
@@ -21,12 +22,16 @@ Volura may not wait on them (tests/test_startup_imports.py).
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import uuid
 from dataclasses import dataclass, replace
 
+import numpy as np
+
 from . import __version__
+from .bed_mesh import BedMesh, no_grid
 from .i18n import tr, tr_noop
 
 #: every kind of printer, with the program that answers at it and what Preferences calls it
@@ -580,6 +585,84 @@ def _same_host(a, b) -> bool:
     import urllib.parse
     one, two = urllib.parse.urlsplit(a), urllib.parse.urlsplit(b)
     return (one.scheme.lower(), (one.hostname or "").lower(), one.port) ==         (two.scheme.lower(), (two.hostname or "").lower(), two.port)
+
+
+# ------------------------------------------------------------------ the mesh of the bed
+
+#: what a Klipper printer is asked for to know how flat its bed is
+MOON_MESH = "/printer/objects/query?bed_mesh"
+
+
+def _pair(value):
+    """One corner of the box a mesh covers, as (x, y); None when that is not a pair of numbers."""
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        return None
+    got = [_number(item) for item in value]
+    if any(one is None or not math.isfinite(one) for one in got):
+        return None
+    return float(got[0]), float(got[1])
+
+
+def _matrix(value):
+    """A matrix an answer holds, as a 2D array of numbers; None when it is not a whole one.
+
+    A bed that was never probed comes back as [] or as [[]], and a half answer as rows that are
+    not all as long as each other, or that hold something that is no number, or a NaN; none of
+    that is a mesh a window can paint numbers on."""
+    if not isinstance(value, list) or not value:
+        return None
+    rows = []
+    for row in value:
+        if not isinstance(row, list) or not row:
+            return None
+        numbers = [_number(item) for item in row]
+        if any(one is None or not math.isfinite(one) for one in numbers):
+            return None
+        rows.append(numbers)
+    if len({len(row) for row in rows}) != 1:
+        return None
+    return np.asarray(rows, dtype=float)
+
+
+def bed_mesh(conn, timeout=5) -> BedMesh | None:
+    """The mesh of the bed of `conn`, or None when there is none to look at.
+
+    Only Klipper has a bed mesh, and Moonraker answers it on `MOON_MESH` under
+    `result.status.bed_mesh`: the profile it is saved under, the two corners of the bed it
+    covers, the grid the probe touched (`probed_matrix`, whose first row is the lowest y of the
+    bed) and the finer grid a print follows (`mesh_matrix`). The probed grid is what the numbers
+    of a window come from; the interpolated one is gone when the printer did not send one, and
+    the window then paints what was probed.
+
+    None says there is nothing to look at, and is no error: the printer has no mesh loaded (an
+    empty grid, or [[]]), or what it answers is of no use (rows of different length, a value
+    that is no number, corners that bound nothing). OctoPrint is answered None without being
+    asked, because it has a bed mesh only through a plugin, and PrusaLink not at all. What does
+    not answer at all, or will not take the key, raises the very `LinkError` `check` gives: a
+    printer that is silent is something else than a bed that was never probed, and a window says
+    that difference.
+    """
+    if conn.kind != "moonraker":
+        return None                     # nothing to ask of a printer without a bed mesh
+    what = server_name(conn.kind)
+    url = _address(conn, normalise_url(conn.url))
+    got = _json(_get(conn, url, MOON_MESH, what, timeout))
+    result = _object(got.get("result"))
+    # the mesh stands under `status`; a Moonraker that answers it straight under `result` is
+    # met the same way, as with the webcams of `snapshot_url`
+    mesh = _object(_object(result.get("status")).get("bed_mesh"))
+    mesh = mesh or _object(result.get("bed_mesh"))
+    corner, other = _pair(mesh.get("mesh_min")), _pair(mesh.get("mesh_max"))
+    probed = _matrix(mesh.get("probed_matrix"))
+    if corner is None or other is None or probed is None:
+        return None
+    if other[0] <= corner[0] or other[1] <= corner[1]:
+        return None                     # a bed without width or depth is no bed to paint
+    # the interpolated grid is only for the picture: one printer does not send it and another
+    # sends it wrong, and neither is a reason to hide a bed that was probed
+    smooth = _matrix(mesh.get("mesh_matrix"))
+    return BedMesh(_text(mesh.get("profile_name")), corner[0], corner[1], other[0], other[1],
+                   probed, no_grid() if smooth is None else smooth)
 
 
 # ------------------------------------------------------------------ sending a file
