@@ -12,7 +12,9 @@ move it; the wheel zooms towards the mouse and a double-click shows the whole pr
 3D switch the view; Only this layer hides the layers below. Play moves the nozzle through the layer
 at the speed of the real print times a factor and goes on to the next layer; the slider and the
 arrow keys pick a layer. Save G-code… writes the file, and Send to printer… hands it to
-OctoPrint, Klipper (Moonraker) or PrusaLink over the network (see volura/printer_link.py).
+OctoPrint, Klipper (Moonraker) or PrusaLink over the network (see volura/printer_link.py). What
+became of a print - saved, sent, started or marked as printed - goes to Window > Print History…
+(volura/print_history.py), where the G-code of a print that really ran can go to a printer again.
 
 Every print has its spool beside it: which roll on the shelf its filament comes off and whether
 that roll still holds enough for the print (Window > Spools…, volura.spools) - one row for a
@@ -34,7 +36,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
                                QPushButton, QSlider, QVBoxLayout)
 
-from . import background, errors, printer_link, spools, theme
+from . import background, errors, printer_link, print_history, spools, theme
 from . import gcode_preview as gp
 from .camera import Camera
 from .i18n import tr, tr_noop
@@ -425,6 +427,48 @@ class SendDialog(QDialog):
         super().accept()
 
 
+def send_to_printer(parent, printers, gcode_path: str, name: str, busy=None, on_sent=None):
+    """Send the G-code at `gcode_path` to one of `printers`: the flow of the print preview.
+
+    Which printer takes it, under what name and whether it starts right away is asked with
+    the very `SendDialog` of the preview, so the printer and that last answer stay remembered
+    (volura.print_preview.SendDialog). The file itself goes out in a background job, so a
+    print of fifty megabytes leaves the window answering while it travels.
+
+    `busy(True)` is called while the send runs and `busy(False)` when it ended, so the button
+    that started it is not pressed twice; `on_sent(conn, name, start)` says on the GUI thread
+    what the printer has, and what went wrong stands in a message box. The job comes back,
+    or None when the user chose no printer."""
+    dlg = SendDialog(parent, printers, name)
+    if dlg.exec() != QDialog.Accepted:
+        return None
+    conn, name, start = dlg.connection(), dlg.file_name(), dlg.start.isChecked()
+
+    def changed(running):
+        if busy is not None:
+            busy(running)
+
+    def work(report):
+        printer_link.upload(conn, gcode_path, name, start=start,
+                            on_progress=lambda fraction: report(fraction))
+        return name
+
+    def sent(what):
+        changed(False)
+        if on_sent is not None:
+            on_sent(conn, what, start)
+
+    def failed(exc):
+        changed(False)
+        QMessageBox.critical(parent, tr("Send to printer"), str(exc))
+
+    changed(True)
+    return background.run(parent, work, can_cancel=True,
+                          text=tr("Sending {file} to {printer}…")
+                          .format(file=name, printer=conn.name),
+                          on_done=sent, on_error=failed, on_cancel=lambda: changed(False))
+
+
 class PrintPreviewDialog(QDialog):
     """The G-code of a slice, layer by layer; `Save G-code…` hands it on (see `save_to`)
     and `Send to printer…` sends it to a printer on the network (see `printer_link`).
@@ -439,10 +483,15 @@ class PrintPreviewDialog(QDialog):
     has its grams taken off those spools, and so has one the user started by hand with
     `Mark as printed` - never both. Saving the G-code takes nothing: a file on an SD card has
     printed nothing yet.
+
+    When the preview closes, what became of this print goes to Window > Print History…
+    (volura.print_history): saved, sent, started or marked as printed, the strongest of
+    those. A preview that was only looked at leaves nothing behind - there is nothing to say
+    about a print that did not happen.
     """
 
     def __init__(self, win, gcode_path: str, preview: gp.Preview, bed, summary: str,
-                 ask_path=None, filaments=()):
+                 ask_path=None, filaments=(), grams=0.0, minutes=0.0):
         super().__init__(win)
         self.win = win
         self.gcode_path, self.preview = gcode_path, preview
@@ -451,6 +500,11 @@ class PrintPreviewDialog(QDialog):
         self.sent = None                      # what stands on the printer, once it is there
         self._job = None
         self.filaments = list(filaments)
+        # what the slice worked out for this print, for the history (volura.print_history)
+        self.grams, self.minutes = grams, minutes
+        self._started = self._sent = self._marked = False     # what this print became
+        self._printer = None                  # the printer it went to, by its name
+        self._recorded = False                # the history gets one entry, never two
         self.by_filament = len(self.filaments) > 1 and preview.materials > 1
         self.settings = settings = getattr(win, "settings", None)
         self.colour_blind = bool(getattr(settings, "colour_blind", False))
@@ -715,6 +769,7 @@ class PrintPreviewDialog(QDialog):
 
     def _mark_printed(self):
         """Mark as printed: this print was started by hand, so the grams come off here."""
+        self._marked = True
         self._take_spools()
 
     def _show_taken(self):
@@ -813,38 +868,58 @@ class PrintPreviewDialog(QDialog):
 
     def _send(self):
         """Send to printer…: exactly the G-code of this preview, straight to the printer."""
-        dlg = SendDialog(self, self.printers, self._send_name())
-        if dlg.exec() != QDialog.Accepted:
-            return
-        conn, name, start = dlg.connection(), dlg.file_name(), dlg.start.isChecked()
-        self.send_button.setEnabled(False)
-
-        def work(report):
-            printer_link.upload(conn, self.gcode_path, name, start=start,
-                                on_progress=lambda fraction: report(fraction))
-            return name
-
-        def sent(what):
-            self.send_button.setEnabled(True)
+        def sent(conn, what, start):
             started = tr("Sent {file} to {printer} and started printing")
             plain = tr("Sent {file} to {printer}")
             self.sent = (started if start else plain).format(file=what, printer=conn.name)
+            self._printer = conn.name
+            self._started = self._started or start
+            self._sent = True                 # it stands on the printer, whether it runs or not
             if start:
-                self._take_spools()         # the print is running: the grams are gone now
+                self._take_spools()           # the print is running: the grams are gone now
             hint = getattr(self.win, "hint", None)
             if hint is not None:
                 hint.setText(self.sent)
 
-        def failed(exc):
-            self.send_button.setEnabled(True)
-            QMessageBox.critical(self, tr("Send to printer"), str(exc))
+        self._job = send_to_printer(self, self.printers, self.gcode_path, self._send_name(),
+                                    busy=lambda running: self.send_button.setEnabled(not running),
+                                    on_sent=sent)
 
-        self._job = background.run(self, work, can_cancel=True,
-                                   text=tr("Sending {file} to {printer}…")
-                                   .format(file=name, printer=conn.name),
-                                   on_done=sent, on_error=failed,
-                                   on_cancel=lambda: self.send_button.setEnabled(True))
+    # ---- what became of this print (Window > Print History…)
+    def _print_name(self) -> str:
+        """What the history calls this print: the name of the model, or "Untitled"."""
+        path = getattr(getattr(self.win, "doc", None), "path", None)
+        stem = os.path.splitext(os.path.basename(path))[0] if path else ""
+        return stem or tr("Untitled")
+
+    def _print_filaments(self) -> list:
+        """The filaments of this print as the history keeps them: a name and a colour each."""
+        return [[str(filament[0]), str(filament[1] or "")] for filament in self.filaments
+                if filament and filament[0]]
+
+    def _remember_print(self):
+        """One entry in the history about this print, the strongest thing that happened to it.
+
+        A preview that was only looked at is recorded as nothing at all: there is nothing to
+        print again and nothing was printed. Of a print that went to a printer the G-code is
+        kept too, because the file this preview works on is taken away once it closes; of a
+        file the user saved the saved place is remembered, for that file keeps being there."""
+        if self._recorded:
+            return
+        self._recorded = True
+        happened = [how for how, did in ((print_history.STARTED, self._started),
+                                        (print_history.MARKED, self._marked),
+                                        (print_history.SENT, self._sent),
+                                        (print_history.SAVED, bool(self.saved_to))) if did]
+        how = print_history.strongest(happened)
+        if not how:
+            return
+        entry = print_history.Entry(name=self._print_name(), how=how, gcode=self.saved_to or "",
+                                    printer=self._printer or "", grams=self.grams,
+                                    minutes=self.minutes, filaments=self._print_filaments())
+        print_history.store(self.settings, entry, source=self.gcode_path)
 
     def done(self, result):
         self.timer.stop()
+        self._remember_print()
         super().done(result)

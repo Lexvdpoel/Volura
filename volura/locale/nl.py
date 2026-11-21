@@ -3115,4 +3115,54 @@ TRANSLATIONS = {
         'Haal wat deze print verbruikte van de spoelen hierboven, voor een print die vanaf een '
         'sd-kaart of usb-stick is begonnen',
     'Taken from the spools': 'Van de spoelen afgenomen',
+    # Print History: Window > Print History… and what the print preview writes there
+    # (volura/print_history.py)
+    'Saved': 'Opgeslagen',
+    'Sent': 'Gestuurd',
+    'Started': 'Gestart',
+    'Marked as printed': 'Gemarkeerd als geprint',
+    '{how} {when}: {name}': '{how} {when}: {name}',
+    'on {printer}': 'op {printer}',
+    '{grams} in {time}': '{grams} in {time}',
+    '{n} print, {kg} kg filament, {h} h printing':
+        '{n} print, {kg} kg filament, {h} u printwerk',
+    '{n} prints, {kg} kg filament, {h} h printing':
+        '{n} prints, {kg} kg filament, {h} u printwerk',
+    'Print &History…': 'Print&geschiedenis…',
+    'What you printed and what it took, so a print that went well can go on the bed again':
+        'Wat je geprint hebt en wat het kostte, zodat een goede print weer op het bed kan',
+    # the list of Window > Print History… (volura/print_history_dialog.py)
+    'Print History': 'Printgeschiedenis',
+    'Prints': 'Prints',
+    'When': 'Wanneer',
+    'Model': 'Model',
+    'How': 'Hoe',
+    'Print Again…': 'Opnieuw printen…',
+    'Send the G-code of this print to a printer, the way the print preview does':
+        'Stuur de G-code van deze print naar een printer, zoals het printvoorbeeld dat doet',
+    'Show File': 'Bestand tonen',
+    'Open the folder that holds the G-code of this print':
+        'Open de map met de G-code van deze print',
+    'Take this print off the history': 'Deze print uit de geschiedenis halen',
+    'Clear All': 'Alles wissen',
+    'Take every print off the history, with the G-codes Volura kept of them':
+        'Alle prints uit de geschiedenis halen, met de G-codes die Volura ervan bewaarde',
+    'A print that was only saved has printed nothing, so it counts with nothing. Of a print '
+    'that went to a printer Volura keeps the G-code, so a good print can go on the bed again '
+    'without slicing it over; what you saved yourself stays where you put it.':
+        'Een print die alleen is opgeslagen heeft niets geprint, dus telt hij niet mee. Van een '
+        'print die naar een printer ging bewaart Volura de G-code, zodat een goede print weer op '
+        'het bed kan zonder hem opnieuw te slicen; wat jij zelf opsloeg blijft liggen waar je '
+        'het legde.',
+    'Choose the print that has to go on the bed again': 'Kies de print die weer op het bed moet',
+    'This print has no G-code of its own': 'Deze print heeft geen eigen G-code',
+    'The G-code is no longer there': 'De G-code is er niet meer',
+    'Remove print': 'Print verwijderen',
+    'Remove {name} from the print history? The G-code Volura kept of it goes with it.':
+        '{name} uit de printgeschiedenis halen? De G-code die Volura ervan bewaarde gaat eraf.',
+    'Clear print history': 'Printgeschiedenis wissen',
+    'Clear the print history? The G-codes Volura kept itself go with it; the files you saved '
+    'yourself stay.':
+        'De printgeschiedenis wissen? De G-codes die Volura zelf bewaarde gaan eraf; de bestanden '
+        'die jij zelf opsloeg blijven.',
 }

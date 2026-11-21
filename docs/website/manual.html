@@ -2188,7 +2188,7 @@ volura</code></pre>
       <li><b>Test connection</b> asks the printer what it is: the answer beside the button names the printer and its version, or says what is wrong. A wrong key is said without saying the key, and nothing of it leaves your network.</li>
       <li>A printer stays on the list once it has a name and an address; <b>Remove</b> takes it off again. The key belongs to your other preferences on this computer and goes to that printer and to nobody else.</li>
       <li>In the print preview, <b>Send to printer…</b> sends exactly the G-code that preview showed, under a name of your own and, when you tick it, starts printing right away; the printer and that tick of last time come back next time.</li>
-      <li>Once it prints, <b><a href="#printer-status">Printer Status</a></b> shows how far it is.</li>
+      <li>Once it prints, <b><a href="#printer-status">Printer Status</a></b> shows how far it is, and afterwards <b><a href="#print-history">Print History</a></b> keeps what it took with the G-code beside it, so the same print can go on the bed again.</li>
     </ul>
     <ul lang="nl">
       <li><b>Toevoegen</b> zet een printer op de lijst: een naam, wat voor soort het is en het adres dat je ook in je browser typt als je naar de printer kijkt, bijvoorbeeld <code>192.168.1.20:5000</code> of <code>octoprint.local</code>; de http:// ervoor krijg je erbij.</li>
@@ -2196,7 +2196,7 @@ volura</code></pre>
       <li><b>Verbinding testen</b> vraagt de printer wat hij is: het antwoord naast de knop noemt de printer en zijn versie, of zegt wat er mis is. Een verkeerde sleutel wordt gezegd zonder de sleutel zelf, en er verlaat niets van je netwerk.</li>
       <li>Een printer blijft op de lijst zodra hij een naam en een adres heeft; <b>Verwijderen</b> haalt hem eraf. De sleutel hoort bij je andere voorkeuren op deze computer en gaat naar die printer en naar niemand anders.</li>
       <li>In het printvoorbeeld stuurt <b>Naar printer sturen…</b> precies de G-code die het voorbeeld liet zien, onder een naam die je zelf kiest, en als je het aanvinkt begint hij meteen te printen; de printer en dat vinkje van de vorige keer komen de volgende keer terug.</li>
-      <li>Eenmaal aan het printen laat <b><a href="#printer-status">Printerstatus</a></b> zien hoe ver hij is.</li>
+      <li>Eenmaal aan het printen laat <b><a href="#printer-status">Printerstatus</a></b> zien hoe ver hij is, en daarna houdt <b><a href="#print-history">Printgeschiedenis</a></b> bij wat de print kostte, met de G-code erbij, zodat dezelfde print weer op het bed kan.</li>
     </ul>
     <h3 id="printer-status"><span lang="en">Printer status</span><span lang="nl">Printerstatus</span></h3>
     <p lang="en">What every printer on your list is doing, beside your model.</p>
@@ -2233,6 +2233,25 @@ volura</code></pre>
       <li>In het <a href="#slice">printvoorbeeld</a> wijst elk filament naar de spoel waar het afkomt - één regel bij een print van één filament, één regel per filament bij een print van meer - en spoelen van hetzelfde materiaal staan vooraan in die lijst. Erbij staat hoeveel gram dat filament nodig heeft en hoeveel de spoel nog houdt - in de waarschuwingkleur, met <i>Te weinig filament op deze spoel</i>, als hij er te weinig heeft voor de print plus vijf procent.</li>
       <li>Wat een print verbruikte gaat van die spoelen af zodra de print begint op een <a href="#printers">OctoPrint-, Klipper- of PrusaLink-printer</a>. Voor een print die je zelf start, vanaf een sd-kaart of usb-stick, heeft het voorbeeld <b>Markeren als geprint</b>. Dat gebeurt één keer per voorbeeld, en een spoel die twee filaments delen, wordt één keer gewogen.</li>
       <li>Wat je hier verandert, blijft meteen bewaard, en welke spoel elk filament de vorige keer afkwam, komt in het volgende voorbeeld terug. Een filament waarvan de spoel van de plank is, heeft simpelweg weer geen spoel.</li>
+    </ul>
+    <h3 id="print-history"><span lang="en">Print history</span><span lang="nl">Printgeschiedenis</span></h3>
+    <p lang="en">What you printed and what it took, so a print that went well can go on the bed again.</p>
+    <p lang="nl">Wat je geprint hebt en wat het kostte, zodat een goede print weer op het bed kan.</p>
+    <p class="where" lang="en">Where: <b>Window &gt; Print History…</b></p>
+    <p class="where" lang="nl">Waar: <b>Venster &gt; Printgeschiedenis…</b></p>
+    <ul lang="en">
+      <li>One row per print, the newest first: the moment it was made, the model it was sliced from, the printer that took it, what became of it - <i>Saved</i>, <i>Sent</i>, <i>Started</i> or <i>Marked as printed</i> - and what it used in grams and hours of printing. The strongest thing that happened is what stands there: a G-code that was saved, then sent and then started is kept as a started print.</li>
+      <li>Under the list stands what really ran - how many prints started or were marked as printed, and how much filament and how many hours they took together. A print that was only saved printed nothing, so it counts for nothing; that is the same difference the <a href="#spools">spools</a> make.</li>
+      <li><b>Print Again…</b> hands the G-code of the chosen print to a <a href="#printers">printer</a> again through the same dialog the <a href="#slice">print preview</a> uses, so nothing has to be sliced over, and what it does then is written in the history like everything else. <b>Show File</b> opens the folder that holds that G-code.</li>
+      <li>Of every print that went to a printer Volura keeps the G-code itself, because the file the preview works on does not last. A print whose G-code is gone stands grey and says <i>The G-code is no longer there</i>, and there is nothing to print again.</li>
+      <li>Those kept G-codes live with the other files of Volura and leave with the print, so the folder never grows without end: <b>Remove</b> takes one print off the list and <b>Clear All</b> the whole list, both after asking. A G-code you saved yourself is never copied and never taken away.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Eén regel per print, de nieuwste eerst: het moment waarop hij gemaakt werd, het model waar hij vanaf geslicet is, de printer die hem kreeg, wat er van geworden is - <i>Opgeslagen</i>, <i>Gestuurd</i>, <i>Gestart</i> of <i>Gemarkeerd als geprint</i> - en wat hij gebruikte in grammen en uren printwerk. Het sterkste dat gebeurd is, staat er: een G-code die opgeslagen, toen gestuurd en toen gestart werd, blijft als een gestarte print staan.</li>
+      <li>Onder de lijst staat wat echt liep - hoeveel prints begonnen zijn of als geprint gemarkeerd, en hoeveel filament en hoeveel uren ze samen kostten. Een print die alleen opgeslagen is, heeft niets geprint en telt dus niet mee; dat is hetzelfde verschil dat de <a href="#spools">spoelen</a> maken.</li>
+      <li><b>Opnieuw printen…</b> geeft de G-code van de gekozen print opnieuw aan een <a href="#printers">printer</a> door via hetzelfde venster dat het <a href="#slice">printvoorbeeld</a> gebruikt, dus er hoeft niets opnieuw geslicet te worden, en wat hij dan doet, staat in de geschiedenis zoals alles. <b>Bestand tonen</b> opent de map met die G-code.</li>
+      <li>Van elke print die naar een printer ging, bewaart Volura de G-code zelf, want het bestand waarop het voorbeeld werkt, bestaat niet langer. Een print waarvan die G-code weg is, staat grijs en zegt <i>De G-code is er niet meer</i>, en er is niets om opnieuw te printen.</li>
+      <li>Die bewaarde G-codes staan bij de andere bestanden van Volura en gaan weg met de print erbij, dus die map groeit nooit eindeloos: <b>Verwijderen</b> haalt één print van de lijst en <b>Alles wissen</b> de hele lijst, allebei na vragen. Een G-code die jij zelf opsloeg, wordt nooit gekopieerd en nooit weggehaald.</li>
     </ul>
     <h3><span lang="en">View options</span><span lang="nl">Beeldopties</span></h3>
     <p lang="en">How the model is drawn, and what you want to see while you work.</p>
