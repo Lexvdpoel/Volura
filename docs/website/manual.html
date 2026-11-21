@@ -2208,11 +2208,15 @@ volura</code></pre>
     <ul lang="en">
       <li>One line per <a href="#printers">printer</a>: whether it is idle, printing, paused or offline, or that something is wrong, which file it has, how far the print got, how long it has run and still needs, and how hot the nozzle and the bed are.</li>
       <li>Every printer is asked again every five seconds, and only while this window is on the screen; close it or hide it and Volura asks nothing at all. A printer that answers nothing keeps its own line with what went wrong, and the others keep answering.</li>
+      <li>A printer whose camera can give a still picture has a <b>Camera</b> button under its line: OctoPrint and Klipper (Moonraker) say where the picture of their camera stands, and PrusaLink has no camera of its own. Turn it on and the picture shows under the line, at most 320 pixels wide and with its shape kept, asked again with those same five seconds; turn it off and Volura asks that camera nothing more. Which cameras you had on comes back next time you open this window.</li>
+      <li>A picture that does not come is said under the line, muted, and the next asking tries again; a camera that answers nothing says nothing wrong about the printer itself, and a window that is off the screen asks nothing of a camera either.</li>
       <li>The window sits beside the model, so you can go on working while the print runs, and there is always just one of it.</li>
     </ul>
     <ul lang="nl">
       <li>Eén regel per <a href="#printers">printer</a>: of hij inactief is, printt, gepauzeerd is of offline is, of dat er iets mis is, welk bestand hij heeft, hoe ver de print kwam, hoe lang hij loopt en nog nodig heeft, en hoe heet de nozzle en het bed zijn.</li>
       <li>Elke printer wordt om de vijf seconden opnieuw gevraagd, en alleen zolang dit venster op het scherm staat; sluit het of verberg het en Volura vraagt helemaal niets meer. Een printer die niets antwoordt, houdt zijn eigen regel met wat er mis was, en de andere blijven antwoorden.</li>
+      <li>Een printer waarvan de camera een stilstaand beeld kan geven, heeft een <b>Camera</b>-knop onder zijn regel: OctoPrint en Klipper (Moonraker) zeggen waar het beeld van hun camera staat, en PrusaLink heeft geen eigen camera. Zet hem aan en het beeld verschijnt onder de regel, van hooguit 320 pixels breed en met zijn vorm behouden, en wordt met diezelfde vijf seconden opnieuw opgevraagd; zet hem uit en Volura vraagt die camera niets meer. Welke camera's je aan had, komt de volgende keer dat je dit venster opent terug.</li>
+      <li>Een beeld dat niet komt, wordt gedempt onder de regel gezegd en de volgende vraag probeert het opnieuw; een camera die niets antwoordt, zegt niets verkeerds over de printer zelf, en een venster dat niet op het scherm staat, vraagt een camera ook niets.</li>
       <li>Het venster staat naast het model, dus je werkt gewoon door terwijl de print loopt, en er is er altijd maar één.</li>
     </ul>
     <h3 id="spools"><span lang="en">Spools of filament</span><span lang="nl">Spoelen filament</span></h3>

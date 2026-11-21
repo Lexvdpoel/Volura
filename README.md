@@ -584,6 +584,13 @@ gets for free.
       wrong, which file it has, how far the print got, how long it has run and still needs, and how
       hot the nozzle and the bed are; every printer is asked again every five seconds while the
       window is open
+      - a printer whose camera has a still picture to give has a **Camera** button under its line
+        — OctoPrint and Klipper (Moonraker) say where that picture stands, PrusaLink has no camera
+        of its own. Turn it on and the picture appears under the line, at most 320 pixels wide and
+        asked again with the same five seconds; turn it off and Volura asks that camera nothing
+        more. Which cameras you had on come back next time you open the window, and a window that
+        is off the screen asks nothing of a camera either. A picture that does not come is said
+        under the line and the next asking tries again
   - **Spools** (*Window > Spools…*): the rolls of filament on your shelf, each with its colour,
     its material, what a full spool holds and what is still on it. *Set left…* takes the weight
     of the empty spool off what your scale says, so what you keep is the filament alone. In the
@@ -905,8 +912,10 @@ volura/
   spacemouse.py 3Dconnexion 3D mice (3DxWare, Raw Input, spacenavd)
   i18n.py       translations; locale/ holds the Dutch tables
   updater.py    checking for a newer version and installing it
-  printer_link.py  sending a slice to OctoPrint, Klipper (Moonraker) or PrusaLink
-  printer_status.py  what those printers are doing right now (Window > Printer Status)
+  printer_link.py  sending a slice to OctoPrint, Klipper (Moonraker) or PrusaLink, and asking
+                their cameras a picture
+  printer_status.py  what those printers are doing right now, and what their cameras see
+                (Window > Printer Status)
   spools.py     the rolls of filament on the shelf and what is left on each; spools_dialog.py is
                 Window > Spools…
   print_history.py  the prints you made and the G-codes Volura kept of them;

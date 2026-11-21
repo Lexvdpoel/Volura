@@ -41,6 +41,7 @@ class Fake:
         self.code = code                # a status to answer everything else with
         self.answers = {}               # a path to answer with this JSON from now on
         self.codes = {}                 # a path to answer with this status instead
+        self.bodies = {}                # a path to answer with these bytes and this content type
         self.requests = []
 
 
@@ -73,6 +74,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._reply(fake.codes[path], b'{"error": "Not Doing That"}')
         if path in fake.answers:
             return self._reply(200, json.dumps(fake.answers[path]).encode())
+        if path in fake.bodies:                  # what a camera or a page behind it answers
+            status, kind, data = fake.bodies[path]
+            return self._reply(status, data, kind)
         if fake.kind == "octoprint" and self.command == "GET" and path == "/api/version":
             return self._reply(200, json.dumps({"server": "1.10.2", "api": "0.1"}).encode())
         if fake.kind == "octoprint" and self.command == "POST" and path == "/api/files/local":
@@ -92,13 +96,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._reply(200, b"")
         return self._reply(404, b'{"error": "Not Found"}')
 
-    def _reply(self, status, body):
+    def _reply(self, status, body, kind="application/json"):
+        """Answer with exactly these bytes, in pieces.
+
+        A reader who stops reading halfway - which is what a picture bigger than Volura
+        asks for is about - is not something a printer is wrong about, so it is said here
+        and dropped."""
         self.send_response(status)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", kind)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        if body:
-            self.wfile.write(body)
+        for start in range(0, len(body), pl.CHUNK):
+            try:
+                self.wfile.write(body[start:start + pl.CHUNK])
+            except OSError:
+                self.close_connection = True
+                return
 
     def log_message(self, *args):
         pass
@@ -133,6 +146,17 @@ class FakePrinter:
     def refuse(self, path, code):
         """The status this printer answers that path with, instead of an answer."""
         self.fake.codes[path] = code
+
+    def accept(self, path):
+        """This printer answers that path again: what a test asked it to refuse is forgotten."""
+        self.fake.codes.pop(path, None)
+
+    def body(self, path, data, content_type="image/jpeg", status=200):
+        """What this printer answers that path with from now on: exactly these bytes.
+
+        What a camera or the web server behind one really sends: a JPEG, a PNG, or the
+        web page that stands where the camera should stand."""
+        self.fake.bodies[path] = (status, content_type, data)
 
     def connection(self, name="Octo", api_key="") -> pl.Connection:
         """A connection to this printer, of the kind it answers as."""
@@ -509,6 +533,202 @@ def test_an_answer_that_is_no_answer_at_all(printer):
     assert (got.state, got.file, got.progress) == ("idle", "", None)
 
 
+# ------------------------------------------------------------- a picture from the camera
+
+#: the paths a printer is asked about its camera, as volura/printer_link.py asks them
+OCTO_SETTINGS = "/api/settings"
+MOON_WEBCAMS = "/server/webcams/list"
+#: where the picture of a camera stands, on the printer itself
+SNAP = "/snapshot"
+#: what a camera sends: the front of a JPEG and of a PNG, with a little of the picture after it
+JPEG = b"\xff\xd8\xff\xe0" + b"j" * 40
+PNG = b"\x89PNG\r\n\x1a\n" + b"p" * 40
+HTML = b"<!DOCTYPE html><html><head></head><body>Sign in</body></html>"
+
+
+def octo_webcam(url) -> dict:
+    """What OctoPrint answers on /api/settings when its webcam has a picture at that address."""
+    return {"webcam": {"streamUrl": "webcam/?action=stream", "snapshotUrl": url}}
+
+
+def webcam(name, url, **fields) -> dict:
+    """One webcam as Moonraker lists it: its picture address and what is switched on."""
+    cam = {"uid": f"webcam_{name}", "name": name, "enabled": True, "type": "mjpeg_streamer",
+           "stream_url": f"/{name}/stream", "snapshot_url": url}
+    cam.update(fields)
+    return cam
+
+
+def moon_webcams(*cams) -> dict:
+    """What Moonraker answers on /server/webcams/list about the webcams it manages."""
+    return {"result": {"webcams": list(cams)}}
+
+
+def test_octoprint_says_where_its_camera_has_a_picture(printer):
+    octo = printer("octoprint", api_key="secret")
+    octo.answer(OCTO_SETTINGS, octo_webcam("http://192.168.1.20:8080/?action=snapshot"))
+    conn = octo.connection(api_key="secret")
+    assert pl.snapshot_url(conn) == "http://192.168.1.20:8080/?action=snapshot"
+    assert octo.last.path == OCTO_SETTINGS
+    assert header(octo.last, "X-Api-Key") == "secret"
+    assert "secret" not in octo.last.path, "the key stands in the address of a request"
+
+
+def test_octoprint_that_names_its_camera_half_or_behind_plugins(printer):
+    octo = printer("octoprint")
+    conn = octo.connection()
+    octo.answer(OCTO_SETTINGS, {"plugins":
+                                {"webcam": {"snapshotUrl": "http://cam.thuis/snapshot.jpg"}}})
+    assert pl.snapshot_url(conn) == "http://cam.thuis/snapshot.jpg", "a plugin camera is a camera"
+    octo.answer(OCTO_SETTINGS, octo_webcam("webcam/?action=snapshot"))
+    assert pl.snapshot_url(conn) == octo.url + "/webcam/?action=snapshot"
+    octo.answer(OCTO_SETTINGS, octo_webcam("/webcam/?action=snapshot"))
+    assert pl.snapshot_url(conn) == octo.url + "/webcam/?action=snapshot", "/ in front is the same"
+    octo.answer(OCTO_SETTINGS, {"webcam": [{"snapshotUrl": "http://eerste.thuis/s.jpg"},
+                                           {"snapshotUrl": "http://tweede.thuis/s.jpg"}]})
+    assert pl.snapshot_url(conn) == "http://eerste.thuis/s.jpg", "the first camera is the one"
+    both = octo_webcam("http://octoprint.thuis/a.jpg")
+    both["plugins"] = {"webcam": {"snapshotUrl": "http://plugin.thuis/b.jpg"}}
+    octo.answer(OCTO_SETTINGS, both)
+    assert pl.snapshot_url(conn) == "http://octoprint.thuis/a.jpg", "the camera of OctoPrint first"
+
+
+def test_a_camera_behind_an_octoprint_under_a_path_stands_under_that_path(printer):
+    octo = printer("octoprint")
+    octo.answer("/octoprint" + OCTO_SETTINGS, octo_webcam("webcam/?action=snapshot"))
+    conn = pl.Connection("Octo", "octoprint", octo.url + "/octoprint")
+    assert pl.snapshot_url(conn) == octo.url + "/octoprint/webcam/?action=snapshot"
+    assert octo.last.path == "/octoprint" + OCTO_SETTINGS, "its settings are under that path too"
+
+
+def test_an_octoprint_without_a_camera_or_without_an_answer_has_no_camera(printer):
+    octo = printer("octoprint")
+    conn = octo.connection()
+    for answer in ({}, {"webcam": {}}, {"webcam": None}, {"webcam": []}, {"webcam": "camera"},
+                   {"webcam": {"snapshotUrl": None}}, {"webcam": {"snapshotUrl": "   "}},
+                   {"webcam": {"snapshotUrl": 7}}, {"plugins": None},
+                   {"plugins": {"webcam": {"streamUrl": "webcam/?action=stream"}}}):
+        octo.answer(OCTO_SETTINGS, answer)
+        assert pl.snapshot_url(conn) is None, answer
+    octo.refuse(OCTO_SETTINGS, 500)
+    assert pl.snapshot_url(conn) is None, "an answer that is an error is no camera"
+    assert pl.snapshot_url(pl.Connection("Thuis", "octoprint",
+                                         f"127.0.0.1:{free_port()}")) is None, "nothing answers"
+    klipper = printer("moonraker")        # it answers, only not as OctoPrint
+    assert pl.snapshot_url(pl.Connection("Octo", "octoprint", klipper.url)) is None
+    assert pl.snapshot_url(pl.Connection("Octo", "toslink", octo.url)) is None
+    assert pl.snapshot_url(pl.Connection("Octo", "octoprint", "het printernetwerk")) is None
+
+
+def test_klipper_lists_the_webcams_it_manages(printer):
+    klipper = printer("moonraker")
+    conn = klipper.connection("Klipper")
+    klipper.answer(MOON_WEBCAMS, moon_webcams(
+        webcam("uit", "http://uit.thuis/snapshot.jpg", enabled=False),
+        webcam("aan", "/webcam/?action=snapshot")))
+    assert pl.snapshot_url(conn) == klipper.url + "/webcam/?action=snapshot", \
+        "the first webcam that is on is the one to look at"
+    assert klipper.last.path == MOON_WEBCAMS
+    klipper.answer(MOON_WEBCAMS, {"result": {"webcams": [
+        {"name": "geen woord over aan", "snapshot_url": "http://stille.thuis/s.jpg"}]}})
+    assert pl.snapshot_url(conn) == "http://stille.thuis/s.jpg", \
+        "a webcam that does not say it is off, is on"
+    klipper.answer(MOON_WEBCAMS, {"webcams": [webcam("los", "http://los.thuis/s.jpg")]})
+    assert pl.snapshot_url(conn) == "http://los.thuis/s.jpg", "that list need not stand wrapped"
+
+
+def test_klipper_without_a_webcam_to_look_at_says_so(printer):
+    klipper = printer("moonraker")
+    conn = klipper.connection("Klipper")
+    for answer in ({}, {"result": {}}, {"result": "nonsens"}, {"result": {"webcams": []}},
+                   {"result": {"webcams": "nonsens"}}, {"result": {"webcams": [7]}},
+                   {"result": {"webcams": [webcam("uit", "http://uit.thuis/s.jpg",
+                                                  enabled=False)]}},
+                   {"result": {"webcams": [webcam("dicht", "http://dicht.thuis/s.jpg",
+                                                  enabled="false")]}},
+                   {"result": {"webcams": [{"name": "geen plaatje", "enabled": True}]}}):
+        klipper.answer(MOON_WEBCAMS, answer)
+        assert pl.snapshot_url(conn) is None, answer
+    klipper.refuse(MOON_WEBCAMS, 404)
+    assert pl.snapshot_url(conn) is None
+    assert pl.snapshot_url(pl.Connection("Thuis", "moonraker",
+                                         f"127.0.0.1:{free_port()}")) is None, "nothing answers"
+
+
+def test_prusalink_has_no_camera_to_ask(printer):
+    prusa = printer("prusalink", api_key="key")
+    assert pl.snapshot_url(prusa.connection("Prusa", api_key="key")) is None
+    assert prusa.requests == [], "PrusaLink has no camera API, so there is nothing to ask"
+
+
+def test_a_camera_picture_is_the_bytes_the_camera_sent(printer):
+    octo = printer("octoprint", api_key="secret")
+    octo.answer(OCTO_SETTINGS, octo_webcam(SNAP))
+    conn = octo.connection(api_key="secret")
+    url = pl.snapshot_url(conn)
+    assert url == octo.url + SNAP
+    octo.body(SNAP, JPEG)
+    assert pl.snapshot(conn, url) == JPEG
+    got = octo.last
+    assert (got.method, got.path) == ("GET", SNAP)
+    assert header(got, "X-Api-Key") == "secret", "the camera hangs behind OctoPrint"
+    assert header(got, "Accept").startswith("image/"), "a picture is asked, not an answer"
+    octo.body("/shot.png", PNG, "image/png")
+    assert pl.snapshot(conn, octo.url + "/shot.png") == PNG, "a PNG is as good as a JPEG"
+    assert pl.snapshot(conn, SNAP) == JPEG, "half an address is asked from the printer itself"
+
+
+def test_a_camera_on_another_machine_never_gets_the_key_of_the_printer(printer):
+    """OctoPrint may name a camera on another machine; that one gets the picture asked, but
+    the key of the printer stays with the printer."""
+    octo = printer("octoprint", api_key="secret")
+    cam = printer("octoprint")                       # another machine: another port
+    cam.body(SNAP, JPEG)
+    assert pl.snapshot(octo.connection(api_key="secret"), cam.url + SNAP) == JPEG
+    assert header(cam.last, "X-Api-Key") == "", "the key went to another machine"
+
+
+def test_a_camera_that_answers_a_web_page_says_so(printer):
+    octo = printer("octoprint")
+    for body in (HTML, b"nope", b""):
+        octo.body(SNAP, body)
+        with pytest.raises(pl.LinkError) as bad:
+            pl.snapshot(octo.connection(), octo.url + SNAP)
+        assert "picture" in str(bad.value) and octo.url in str(bad.value), body
+    octo.body(SNAP, JPEG[:1])
+    with pytest.raises(pl.LinkError):     # too little of a picture to know what it is
+        pl.snapshot(octo.connection(), octo.url + SNAP)
+
+
+def test_a_picture_bigger_than_five_megabytes_is_stopped(printer):
+    octo = printer("octoprint")
+    octo.body("/big", JPEG + b"0" * pl.MAX_PICTURE)
+    with pytest.raises(pl.LinkError) as bad:
+        pl.snapshot(octo.connection(), octo.url + "/big")
+    assert "5 MB" in str(bad.value)
+    whole = JPEG + b"0" * (pl.MAX_PICTURE - len(JPEG))
+    octo.body("/groot", whole)
+    assert pl.snapshot(octo.connection(), octo.url + "/groot") == whole, "exactly five is five"
+
+
+def test_a_camera_that_will_not_answer_is_said_the_way_check_says_it(printer):
+    octo = printer("octoprint", api_key="the right one")
+    octo.body(SNAP, JPEG)
+    with pytest.raises(pl.LinkError) as bad:
+        pl.snapshot(octo.connection(api_key="a wrong one"), octo.url + SNAP)
+    assert "API key" in str(bad.value)
+    assert "right one" not in str(bad.value) and "wrong one" not in str(bad.value)
+    with pytest.raises(pl.LinkError) as bad:
+        pl.snapshot(pl.Connection("Thuis", "octoprint", f"127.0.0.1:{free_port()}"), SNAP)
+    assert "Nothing answers at" in str(bad.value)
+    with pytest.raises(pl.LinkError) as bad:
+        pl.snapshot(pl.Connection("Octo", "toslink", octo.url), octo.url + SNAP)
+    assert "kind of printer" in str(bad.value)
+    with pytest.raises(pl.LinkError) as bad:
+        pl.snapshot(pl.Connection("Octo", "octoprint", "het printernetwerk"), SNAP)
+    assert "is not the address of a printer" in str(bad.value)
+
+
 # ------------------------------------------------------------------- what is sent
 
 
@@ -640,6 +860,7 @@ def win():
     w = MainWindow()
     yield w
     w.settings.printers = []
+    w.settings.printer_cameras_on = []
     w.settings.save()
     w.doc.dirty = False
     w.close()
@@ -967,3 +1188,293 @@ def test_the_window_follows_the_printers_under_preferences(printer, win):
     win.printer_status()                  # shown again: the rows follow what is there now
     assert panel.rows == [] and "Preferences > Printers" in panel.hint.text()
     panel.close()
+
+
+# ------------------------------------------------------------ the cameras in that window
+
+
+def shot(width=640, height=120) -> bytes:
+    """A picture such a camera sends: a PNG of these measurements, as the bytes it is."""
+    from PySide6.QtCore import QByteArray, QBuffer, QIODevice
+    from PySide6.QtGui import QColor, QPixmap
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication(sys.argv[:1])
+    picture = QPixmap(width, height)
+    picture.fill(QColor("forestgreen"))
+    data = QByteArray()
+    store = QBuffer(data)
+    store.open(QIODevice.WriteOnly)
+    assert picture.save(store, "PNG")
+    store.close()
+    return bytes(data)
+
+
+def asks(fake, path) -> list:
+    """The requests this fake printer got for that path, so far."""
+    return [got for got in fake.requests if got.path == path]
+
+
+def picture_of(row):
+    """The picture this row shows, or None when it shows no picture."""
+    picture = row.picture.pixmap()
+    return picture if picture is not None and not picture.isNull() else None
+
+
+def camera_panel(win, conns, on=()):
+    """The status window over these printers, watching the cameras of these names.
+
+    The window Volura keeps lives on from one test to the next, so a test says what it needs
+    every time again: which printers there are and which of their cameras are watched. What a
+    printer said about its camera is kept as long as that window lives, which is also why a
+    test names printers of its own: a new port is another printer to that window. `on=None`
+    leaves the remembered cameras alone, which is what a test that looks at remembering needs.
+    """
+    win.settings.printers = list(conns)
+    if on is not None:
+        win.settings.printer_cameras_on = list(on)
+    win.settings.save()
+    before = getattr(win, "_printer_status", None)
+    if before is not None and before.isVisible():
+        quiet(before)             # nothing of that window may answer the printers of this one
+        before.close()            # a window takes its printers anew when it comes back on screen
+    return opened(win)
+
+
+def looked(panel):
+    """Every asking where a printer's camera has a picture, come to an end."""
+    ended(list(panel._cam_jobs.values()), "the printer about its camera")
+
+
+def ended(jobs, what):
+    """Every asking in `jobs`, come to an end."""
+    for job in jobs:
+        assert job is not None, f"{what} asked for nothing"
+        assert job.wait(20000), f"{what} never came to an end: {job.error}"
+
+
+def ticked(panel):
+    """One asking of the whole window, come to an end: the status of every printer and the
+    picture of every watched camera.
+
+    A test calls this right after `panel.poll()`, while every row has its askings on its way.
+    The jobs are taken before anything is waited, because waiting hands over the outcome of
+    every job there is - also of the other rows - and then a job is gone before its turn."""
+    jobs = []
+    for row in panel.rows:
+        jobs.append(row.job)
+        if row.camera.isChecked():
+            jobs.append(row.cam_job)
+    ended(jobs, "the window")
+
+
+def quiet(panel):
+    """Every asking this window has on its way, come to an end: what a printer says about its
+    camera, the state of every printer and the picture of every watched camera."""
+    jobs = list(panel._cam_jobs.values())
+    jobs += [job for job in (row.job for row in panel.rows) if job is not None]
+    jobs += [job for job in (row.cam_job for row in panel.rows) if job is not None]
+    for job in jobs:
+        assert job.wait(20000), f"an asking of the window never came to an end: {job.error}"
+
+
+def closed(panel):
+    """Close this window with nothing of its own still on its way.
+
+    A job that is still running when its window goes, answers a printer that may be gone with
+    the test and says so to a window that is not there anymore; the noise of that lands in the
+    test that follows, which has nothing to do with it."""
+    quiet(panel)
+    panel.close()
+
+
+def cam_printer(printer, api_key="") -> FakePrinter:
+    """A fake printer with a camera: its settings say where the picture stands, and it is there.
+
+    What that camera really answers - a web page, nothing, a JPEG too big - is up to the test,
+    which is why the fake comes back. What the printer is doing is a print that runs, so the
+    row has something to say beside its picture."""
+    octo = printer("octoprint", api_key=api_key)
+    octo.answer(OCTO_SETTINGS, octo_webcam(SNAP))
+    octo.answer(OCTO_JOB, octo_job())
+    octo.answer(OCTO_PRINTER, {"temperature": {}})
+    octo.body(SNAP, shot())
+    return octo
+
+
+def test_the_camera_button_is_only_there_for_a_printer_that_has_one(printer, win):
+    octo = cam_printer(printer)
+    klipper = printer("moonraker")
+    klipper.answer(MOON_QUERY, moon_print())
+    klipper.answer(MOON_WEBCAMS, moon_webcams(webcam("uit", "http://uit.thuis/s.jpg",
+                                                     enabled=False)))
+    panel = camera_panel(win, [octo.connection("Octo"), klipper.connection("Klipper")])
+    try:
+        looked(panel)
+        watched, off = panel.rows
+        assert watched.camera.isVisible() and not watched.camera.isChecked()
+        assert "camera" in watched.camera.toolTip().lower()
+        assert not off.camera.isVisible(), "a webcam that is switched off is nothing to watch"
+        assert len(asks(octo, OCTO_SETTINGS)) == 1, "a printer is asked about its camera once"
+        assert asks(klipper, MOON_WEBCAMS), "the Klipper was asked, and said nothing to watch"
+    finally:
+        closed(panel)
+
+
+def test_a_watched_camera_puts_its_picture_under_the_row(printer, win):
+    from volura import printer_status as ps
+    octo = cam_printer(printer, api_key="secret")
+    panel = camera_panel(win, [octo.connection("Octo", api_key="secret")], on=("Octo",))
+    try:
+        looked(panel)
+        row = panel.rows[0]
+        assert row.camera.isChecked(), "a camera the window just learned of is watched at once"
+        first = row.cam_job
+        assert first is not None, "watching a camera asks for its picture at once"
+        panel.poll()                     # the asking of the printer comes along with it
+        assert row.cam_job is first, "a camera that is still answering is not asked again"
+        ticked(panel)
+        assert len(asks(octo, SNAP)) == 1, "one asking of a printer is one picture"
+        picture = picture_of(row)
+        assert picture is not None, "the row shows no picture"
+        assert (picture.width(), picture.height()) == (ps.CAMERA_WIDTH, 60), "the shape is kept"
+        assert row.picture.isVisible() and not row.cam_error.isVisible()
+        assert header(asks(octo, SNAP)[-1], "X-Api-Key") == "secret", "a camera hangs behind it"
+        panel.poll()
+        ticked(panel)
+        assert len(asks(octo, SNAP)) == 2, "a watched picture follows the asking of the printer"
+    finally:
+        closed(panel)
+
+
+def test_a_camera_that_answers_nothing_says_so_under_its_own_row(printer, win):
+    octo = cam_printer(printer)
+    octo.refuse(SNAP, 500)
+    panel = camera_panel(win, [octo.connection("Octo")], on=("Octo",))
+    try:
+        looked(panel)
+        row = panel.rows[0]
+        panel.poll()
+        ticked(panel)
+        assert "error 500" in row.cam_error.text() and octo.url in row.cam_error.text()
+        assert row.cam_error.isVisible() and row.cam_error.styleSheet().startswith("color:")
+        assert picture_of(row) is None and not row.picture.isVisible()
+        assert not row.error.text(), "the printer itself answers, only its camera does not"
+        assert row.state.text() == "Printing", "a wrong camera says no wrong printer"
+        octo.accept(SNAP)                          # the camera answers again
+        octo.body(SNAP, shot(200, 100))            # and the next asking brings the picture back
+        panel.poll()
+        ticked(panel)
+        assert not row.cam_error.text() and not row.cam_error.isVisible()
+        assert picture_of(row).width() == 200, "a picture that fits is not made bigger"
+    finally:
+        closed(panel)
+
+
+def test_bytes_the_camera_calls_a_picture_but_are_one_say_so(printer, win):
+    octo = cam_printer(printer)
+    octo.body(SNAP, JPEG)                    # the right beginning and nothing useable after it
+    panel = camera_panel(win, [octo.connection("Octo")], on=("Octo",))
+    try:
+        looked(panel)
+        row = panel.rows[0]
+        panel.poll()
+        ticked(panel)
+        assert row.cam_error.text() == "The camera sent nothing that is a picture."
+        assert row.cam_error.isVisible() and picture_of(row) is None
+        octo.body(SNAP, shot(320, 200))      # the camera comes right with the next asking
+        panel.poll()
+        ticked(panel)
+        assert picture_of(row) is not None, "a picture that does come is shown again"
+        assert not row.cam_error.isVisible()
+    finally:
+        closed(panel)
+
+
+def test_a_printer_that_said_nothing_about_its_camera_is_asked_again(printer, win):
+    octo = cam_printer(printer)
+    octo.refuse(OCTO_SETTINGS, 500)
+    panel = camera_panel(win, [octo.connection("Octo")], on=("Octo",))
+    try:
+        looked(panel)
+        row = panel.rows[0]
+        assert not row.camera.isVisible(), "a printer that will not say has nothing to watch yet"
+        assert row.cam_job is None, "a row does not watch a camera the printer never named"
+        octo.accept(OCTO_SETTINGS)                 # it answers again, so the next time asks again
+        quiet(panel)
+        panel.close()
+        panel.show()
+        panel.timer.stop()
+        looked(panel)
+        assert row.camera.isVisible(), "what a printer would not say once, is asked a second time"
+        assert len(asks(octo, OCTO_SETTINGS)) == 2
+    finally:
+        closed(panel)
+
+
+def test_toggling_the_camera_off_stops_asking_the_camera(printer, win):
+    octo = cam_printer(printer)
+    panel = camera_panel(win, [octo.connection("Octo")], on=("Octo",))
+    try:
+        looked(panel)
+        row = panel.rows[0]
+        panel.poll()
+        ticked(panel)
+        assert row.picture.isVisible() and win.settings.printer_cameras_on == ["Octo"]
+        row.camera.setChecked(False)
+        assert row.cam_job is None and picture_of(row) is None
+        assert not row.picture.isVisible() and not row.cam_error.text()
+        assert win.settings.printer_cameras_on == [], "off is remembered too"
+        went = len(asks(octo, SNAP))
+        panel.poll()
+        panel.poll()
+        ticked(panel)
+        assert len(asks(octo, SNAP)) == went, "a camera that is off is asked nothing at all"
+    finally:
+        closed(panel)
+
+
+def test_which_cameras_are_on_comes_back_next_time_the_window_opens(printer, win):
+    octo = cam_printer(printer)
+    conns = [octo.connection("Octo")]
+    panel = camera_panel(win, conns)
+    try:
+        looked(panel)
+        assert not panel.rows[0].camera.isChecked()
+        panel.rows[0].camera.setChecked(True)
+        assert win.settings.printer_cameras_on == ["Octo"]
+        assert type(win.settings)().printer_cameras_on == ["Octo"], "kept like any preference"
+        quiet(panel)
+        panel.close()
+        panel = camera_panel(win, [], on=None)   # printers gone; what was on is not said here
+        assert panel.rows == []
+        panel = camera_panel(win, conns, on=None)        # nothing said: the settings say it
+        row = panel.rows[0]
+        assert row.camera.isChecked(), "the window forgot which camera was on"
+        assert row.camera.isVisible(), "what it knows of that camera stayed known"
+        assert len(asks(octo, OCTO_SETTINGS)) == 1, "once per printer, not once per opening"
+    finally:
+        closed(panel)
+
+
+def test_a_window_that_is_out_of_sight_asks_nothing_of_a_camera(printer, win):
+    octo = cam_printer(printer)
+    panel = camera_panel(win, [octo.connection("Octo")], on=("Octo",))
+    try:
+        looked(panel)
+        panel.poll()
+        ticked(panel)
+        row = panel.rows[0]
+        assert row.picture.isVisible()
+        panel.close()                          # out of sight: nothing asks a printer anything
+        assert not panel.timer.isActive()
+        went = len(asks(octo, SNAP))
+        row.ask_picture()                      # the asking of a tick that never comes
+        assert row.cam_job is None, "off the screen a watched camera asks for nothing"
+        assert len(asks(octo, SNAP)) == went
+        panel.show()
+        panel.timer.stop()                     # back on the screen: the asking starts again
+        ticked(panel)
+        assert len(asks(octo, SNAP)) == went + 1, "a window that is back asks its cameras again"
+        assert len(asks(octo, OCTO_SETTINGS)) == 1, "what it knew of that camera stayed known"
+    finally:
+        closed(panel)

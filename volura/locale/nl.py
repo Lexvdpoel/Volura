@@ -3046,6 +3046,8 @@ TRANSLATIONS = {
     '{url} will not take this API key. Copy it again from the settings of the printer.': '{url} wil deze API-sleutel niet. Kopieer hem opnieuw uit de instellingen van de printer.',
     '{url} answered error {code}.': '{url} antwoordde met fout {code}.',
     '{url} has a certificate this computer does not trust. Is the address right?': '{url} heeft een certificaat dat deze computer niet vertrouwt. Klopt het adres?',
+    '{url} answers with nothing that is a picture to look at.': '{url} antwoordt met niets dat een foto is.',
+    '{url} sends a picture of more than {size} MB, which is too much for this window.': '{url} stuurt een foto van meer dan {size} MB; dat is te veel voor dit venster.',
     # Printer Status: Window > Printer Status (volura/printer_status.py)
     'Error': 'Fout',
     'Offline': 'Offline',
@@ -3058,6 +3060,9 @@ TRANSLATIONS = {
     'how long the print has run / how long it still needs': 'hoe lang de print loopt / hoe lang hij nog nodig heeft',
     'nozzle': 'nozzle',
     'bed': 'bed',
+    'Camera': 'Camera',
+    'Watch the camera of this printer': 'Kijken door de camera van deze printer',
+    'The camera sent nothing that is a picture.': 'De camera stuurde niets dat een foto is.',
     # Filament Spools: Window > Spools… and the print preview (volura/spools.py)
     '&Spools…': '&Spoelen…',
     'Spools': 'Spoelen',

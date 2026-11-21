@@ -6,6 +6,8 @@ OctoPrint, Moonraker (the API of Klipper) and PrusaLink on a Prusa printer. A
 `Connection` says which of them it is, where it stands and with which key it lets you
 in; the settings keep them (volura.app.Settings) and Preferences > Printers edits them.
 `status` asks what one of them is doing right now, which Window > Printer Status shows.
+`snapshot_url` says where the printer's camera keeps a still picture and `snapshot` asks
+that camera for one, which the same window can put beside the status of that printer.
 
 An API key is a password: it never stands in a message or in the log, only in the
 `X-Api-Key` header of the request. It is kept in the settings like every other
@@ -417,6 +419,167 @@ def status(conn, timeout=5) -> Status:
     if conn.kind == "moonraker":
         return _moonraker_status(conn, url, what, timeout)
     return _prusalink_status(conn, url, what, timeout)
+
+
+# ------------------------------------------------------------------ a picture from the camera
+
+#: the biggest picture a camera is asked for (bytes): more is nobody's status window
+MAX_PICTURE = 5 * 1024 * 1024
+#: how a JPEG and a PNG say what they are, at the very front of their bytes
+PICTURE_MAGIC = ((b"\xff\xd8", "jpeg"), (b"\x89PNG\r\n\x1a\n", "png"))
+#: how much of an answer has to be read to know which of those it is
+PICTURE_HEAD = max(len(magic) for magic, _ in PICTURE_MAGIC)
+
+
+def _picture_kind(data) -> str:
+    """What kind of picture the front of those bytes is: "jpeg", "png"; "" for anything else."""
+    for magic, name in PICTURE_MAGIC:
+        if data.startswith(magic):
+            return name
+    return ""
+
+
+def _text(value) -> str:
+    """A field of an answer as the text it is; "" when the printer put something else there."""
+    return str(value).strip() if isinstance(value, str) else ""
+
+
+def _first(value) -> dict:
+    """A piece of an answer that can also come as a list of them: the first of those."""
+    if isinstance(value, list):
+        value = value[0] if value else {}
+    return _object(value)
+
+
+def _absolute(base, url) -> str:
+    """What a printer says a picture stands at, as a whole address to ask.
+
+    A printer often names only "webcam/?action=snapshot": that picture comes from the
+    printer itself, also one that stands under a path of its own. `base` is the address of
+    that printer, made ready with `normalise_url`."""
+    import urllib.parse
+    text = _text(url)
+    if not text or re.match(r"[A-Za-z][A-Za-z0-9+.-]*://", text):
+        return text
+    return urllib.parse.urljoin(base.rstrip("/") + "/", text)
+
+
+def _camera_on(cam) -> bool:
+    """Whether a webcam of a Moonraker answer is switched on; one that does not say is on."""
+    return str(cam.get("enabled", True)).strip().lower() not in ("", "false", "0", "off", "no")
+
+
+def _webcams(answer) -> list:
+    """The webcams a Moonraker answer names, whether they stand under `result` or behind it."""
+    found = answer.get("webcams")
+    if found is None:
+        found = _object(answer.get("result")).get("webcams")
+    if isinstance(found, dict):                 # one webcam, not wrapped in a list
+        found = [found]
+    return [cam for cam in found if isinstance(cam, dict)] if isinstance(found, list) else []
+
+
+def snapshot_url(conn, timeout=5) -> str | None:
+    """Where the camera of `conn` has a still picture, or None when it has none to offer.
+
+    OctoPrint keeps the address of its webcam in its settings, under the `webcam` section;
+    a plugin that brings a camera of its own puts the same fields under `plugins` there, and
+    the newest OctoPrints hand out a list of webcams instead of one, so all of those shapes
+    are taken as they come. Moonraker lists every webcam it manages with the address of its
+    picture, and which of them are switched on; the first one that is on is the one to look
+    at. PrusaLink has no camera API of its own, so a Prusa printer never has a picture here.
+
+    Half an address is a picture from the printer itself, so `conn.url` goes before it.
+    Nothing answers, the printer will not say, or what it says is junk: all of that is no
+    camera and never an error for whoever asks - a window that lays out statuses then has
+    nothing to lay out.
+    """
+    where = ""
+    if conn.kind not in KINDS:
+        return None
+    what = server_name(conn.kind)
+    try:
+        url = _address(conn, normalise_url(conn.url))
+        if conn.kind == "octoprint":
+            saved = _json(_get(conn, url, "/api/settings", what, timeout))
+            for part in (saved.get("webcam"), _object(saved.get("plugins")).get("webcam")):
+                where = _text(_first(part).get("snapshotUrl"))
+                if where:
+                    break
+        elif conn.kind == "moonraker":
+            got = _json(_get(conn, url, "/server/webcams/list", what, timeout))
+            for cam in _webcams(got):
+                where = _text(cam.get("snapshot_url")) if _camera_on(cam) else ""
+                if where:
+                    break
+    except (LinkError, OSError, ValueError):        # nothing answers, or nothing to understand
+        return None
+    return _absolute(url, where) if where else None
+
+
+def _head(resp) -> bytes:
+    """The front of an answer, until there is enough of it to say which picture it is."""
+    got = b""
+    while len(got) < PICTURE_HEAD:
+        block = resp.read(PICTURE_HEAD - len(got))
+        if not block:
+            break
+        got += block
+    return got
+
+
+def _picture(resp, url) -> bytes:
+    """What a camera answered, as bytes: a JPEG or a PNG, and at most MAX_PICTURE of them.
+
+    The front is read first and looked at at once, so an answer that is a web page instead
+    of a picture is said before any of it is put together, and a camera that will not stop
+    sending is stopped before it fills the memory."""
+    got = _head(resp)
+    if not _picture_kind(got):
+        raise LinkError(tr("{url} answers with nothing that is a picture to look "
+                           "at.").format(url=url))
+    while True:
+        block = resp.read(CHUNK)
+        if not block:
+            return got
+        got += block
+        if len(got) > MAX_PICTURE:
+            raise LinkError(tr("{url} sends a picture of more than {size} MB, which is too "
+                               "much for this window.").format(
+                                   url=url, size=MAX_PICTURE // (1024 * 1024)))
+
+
+def snapshot(conn, url, timeout=5) -> bytes:
+    """A picture from the camera of `conn`, as the JPEG or PNG bytes the camera sent.
+
+    `url` is what `snapshot_url` said; half an address is asked from the printer itself.
+    The same headers go with the request as with every other call, because an OctoPrint that
+    wants a key wants that key of its camera too.
+
+    What comes back has to say it is a JPEG or a PNG at its front, so a proxy or a login
+    page that answers HTML instead of a picture is said as such; at most `MAX_PICTURE` bytes
+    are read, in pieces of `CHUNK`. What went wrong is the very `LinkError` `check` gives.
+    """
+    if conn.kind not in KINDS:
+        raise LinkError(tr("Say what kind of printer {name} is.").format(name=conn.name))
+    import urllib.request
+    what = server_name(conn.kind)
+    base = _address(conn, normalise_url(conn.url))        # first the printer, then its camera
+    where = _address(conn, _absolute(base, url))
+    head = _headers(conn, {"Accept": "image/jpeg, image/png"})
+    if not _same_host(base, where):
+        # a camera on another machine never gets the key of the printer
+        head.pop("X-Api-Key", None)
+    request = urllib.request.Request(where, method="GET", headers=head)
+    with _open(request, where, what, timeout) as resp:
+        return _picture(resp, where)
+
+
+def _same_host(a, b) -> bool:
+    """Whether two addresses are the same machine: scheme, host and port alike."""
+    import urllib.parse
+    one, two = urllib.parse.urlsplit(a), urllib.parse.urlsplit(b)
+    return (one.scheme.lower(), (one.hostname or "").lower(), one.port) ==         (two.scheme.lower(), (two.hostname or "").lower(), two.port)
 
 
 # ------------------------------------------------------------------ sending a file
