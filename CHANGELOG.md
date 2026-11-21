@@ -3,6 +3,12 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## Unreleased
+
+### New
+- **Printer camera**: *Window > Printer Status* has a camera button for every OctoPrint or
+  Klipper printer with a webcam; the picture refreshes with the status while the window is open.
+
 ## 0.2.71 — 2026-11-21
 
 ### New
