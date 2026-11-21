@@ -1489,6 +1489,13 @@ class Settings:
             conn = printer_link.from_json(line)
             if conn is not None:
                 self.printers.append(conn)
+        # which of those printers Window > Printer Status looks at through their camera
+        # (volura.printer_status): the name of every printer whose camera was on last time
+        cameras = self.q.value("printer_cameras_on", []) or []
+        if isinstance(cameras, str):
+            cameras = [cameras]
+        self.printer_cameras_on = [name for name in (str(one).strip() for one in cameras)
+                                   if name]
         # the filament spools on the shelf: one line of JSON each, like the printers above
         # (volura.spools). `spool_for_slot` says which of them every filament slot of the
         # print preview comes off; a slot with no spool is an empty string there.
@@ -1783,6 +1790,7 @@ class Settings:
         self.q.setValue("dogbone_tool_d", self.dogbone_tool_d)
         self.q.setValue("recent", self.recent[:8])
         self.q.setValue("printers", [printer_link.to_json(conn) for conn in self.printers])
+        self.q.setValue("printer_cameras_on", self.printer_cameras_on)
         self.q.setValue("spools", spools.to_lines(self.spools))
         self.q.setValue("spool_for_slot", spools.slot_ids(self.spool_for_slot))
         self.q.setValue("print_history", print_history.from_values(self.print_history))

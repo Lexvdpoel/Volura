@@ -11,18 +11,26 @@ come back yet is not asked a second time. The asking runs in the background
 (volura/background.py) and without a progress dialog, so a printer that is switched off
 costs a window that simply stays responsive; what it says wrong stands under its own
 line, muted, and the next asking tries again.
+
+A printer whose camera has a still picture to offer has a **Camera** button under its
+line, and turning that on puts the picture under the line too, asked with the same
+timer. Which of those buttons were on comes back next time the window opens
+(`printer_cameras_on` in the settings).
 """
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import (QFrame, QGridLayout, QLabel, QProgressBar, QScrollArea,
-                               QVBoxLayout, QWidget)
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import (QFrame, QGridLayout, QLabel, QPushButton, QProgressBar,
+                               QScrollArea, QVBoxLayout, QWidget)
 
 from . import background, printer_link, theme
 from .i18n import tr
 
 #: how often every printer is asked again (seconds)
 POLL_SECONDS = 5
+#: how wide at most a picture from a printer camera is shown (pixels); its height follows
+CAMERA_WIDTH = 320
 #: what stands where a printer said nothing
 NOTHING = "—"
 #: the colour of every state here: what prints is green, what went wrong is red
@@ -31,6 +39,11 @@ STATE_COLOUR = {"printing": "ok", "paused": "warn", "error": "error", "idle": "m
 #: what the window says when there is no printer to ask
 NO_PRINTERS = tr("There are no printers yet. Add one under Window > Preferences > Printers "
                  "and what it is doing shows up here.")
+
+
+def key_of(conn) -> tuple:
+    """What a printer's camera belongs to in this window: one printer, one camera."""
+    return (conn.name, conn.kind, printer_link.normalise_url(conn.url))
 
 
 def _degrees(value) -> str:
@@ -62,12 +75,19 @@ def _temps(status) -> str:
 
 
 class PrinterRow(QWidget):
-    """One printer on the list: its name, and what the asking in the background came back with."""
+    """One printer on the list: its name, and what the asking in the background came back with.
 
-    def __init__(self, parent, conn):
+    A printer whose camera has a picture to offer gets a **Camera** button under its line,
+    put there by the window as soon as it knows (`set_camera`). Turning that button on shows
+    the picture under the line and asks for a new one with every asking of the printer;
+    turning it off stops the camera and takes the picture away."""
+
+    def __init__(self, parent, conn, camera=False):
         super().__init__(parent)
         self.conn = conn
         self.job = None
+        self.cam = ""                       # where this printer's camera has a picture, if ever
+        self.cam_job = None                 # the picture on its way, so none is asked twice
         self.name = QLabel(conn.name)
         bold = self.name.font()
         bold.setBold(True)
@@ -88,6 +108,17 @@ class PrinterRow(QWidget):
         self.error.setWordWrap(True)
         self.error.setStyleSheet(f"color: {theme.color('muted')};")
         self.error.hide()
+        self.camera = QPushButton(tr("Camera"))
+        self.camera.setCheckable(True)
+        self.camera.setChecked(bool(camera))          # what the settings remembered
+        self.camera.setToolTip(tr("Watch the camera of this printer"))
+        self.camera.hide()                  # shown as soon as the window knows there is one
+        self.picture = QLabel()
+        self.picture.hide()
+        self.cam_error = QLabel()
+        self.cam_error.setWordWrap(True)
+        self.cam_error.setStyleSheet(f"color: {theme.color('muted')};")
+        self.cam_error.hide()
         lay = QGridLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self.name, 0, 0)
@@ -97,7 +128,11 @@ class PrinterRow(QWidget):
         lay.addWidget(self.times, 3, 0)
         lay.addWidget(self.temps, 3, 1)
         lay.addWidget(self.error, 4, 0, 1, 2)
+        lay.addWidget(self.camera, 5, 0)
+        lay.addWidget(self.picture, 6, 0, 1, 2)
+        lay.addWidget(self.cam_error, 7, 0, 1, 2)
         self._say_state("offline")               # nothing was asked yet, so nothing is known
+        self.camera.toggled.connect(self._toggled)   # only now: a restored button is no user
 
     # ------------------------------------------------------------------ the asking
     def ask(self):
@@ -117,9 +152,11 @@ class PrinterRow(QWidget):
 
     def stop(self):
         """What is on its way may come back to nothing: the row is out of use."""
-        if self.job is not None and not self.job.done:
-            self.job.cancel()
+        for job in (self.job, self.cam_job):
+            if job is not None and not job.done:
+                job.cancel()
         self.job = None
+        self.cam_job = None
 
     def answered(self, status):
         """What the printer says it is doing, on the row."""
@@ -152,6 +189,86 @@ class PrinterRow(QWidget):
         self.state.setText(printer_link.state_label(state))
         self.state.setStyleSheet(f"color: {theme.color(STATE_COLOUR.get(state, 'muted'))};")
 
+    # -------------------------------------------------------------------- the camera
+    def set_camera(self, url):
+        """What the window found out about the camera of this printer: the button follows.
+
+        A printer with nothing to ask has no button, and one that was being watched stops
+        being watched. A row that is already watching asks for its first picture at once, so
+        that picture does not wait for the next asking of the printer."""
+        self.cam = url or ""
+        self.camera.setVisible(bool(self.cam))
+        if not self.cam:
+            self.camera.setChecked(False)
+        elif self.camera.isChecked():
+            self.ask_picture()
+
+    def ask_picture(self):
+        """Ask the camera of this printer a picture; one that is on its way is not asked again.
+
+        Half of the cameras on a home network stand behind the printer they hang on, so this
+        asking carries the same key as every other asking of that printer."""
+        if not self.cam or not self.camera.isChecked() or not self.window().isVisible():
+            return                        # nothing to ask, not watched, or off the screen
+        if self.cam_job is not None and not self.cam_job.done:
+            return
+        conn, url = self.conn, self.cam
+
+        def work(report):
+            return printer_link.snapshot(conn, url)
+
+        self.cam_job = background.run(None, work, text=tr("Speaking to the printer…"),
+                                      can_cancel=False, show_dialog=False,
+                                      on_done=self.pictured, on_error=self.no_picture)
+
+    def pictured(self, data):
+        """What the camera saw, under the row; the next asking of the printer replaces it."""
+        if self.cam_job is None:
+            return                       # stopped while it was on its way: nothing to show
+        self.cam_job = None
+        picture = QPixmap()
+        picture.loadFromData(data)
+        if picture.isNull():             # the camera called it a picture and sent nonsense
+            self._camera_wrong(tr("The camera sent nothing that is a picture."))
+            return
+        if picture.width() > CAMERA_WIDTH:
+            picture = picture.scaledToWidth(CAMERA_WIDTH, Qt.SmoothTransformation)
+        self.cam_error.setText("")
+        self.cam_error.hide()
+        self.picture.setPixmap(picture)
+        self.picture.show()
+
+    def no_picture(self, exc):
+        """What went wrong with the picture stands under the row; the next asking tries again."""
+        if self.cam_job is None:
+            return
+        self.cam_job = None
+        self._camera_wrong(str(exc))
+
+    def _camera_wrong(self, text):
+        """What the camera got wrong, muted under the row like everything else that went wrong."""
+        self.picture.clear()
+        self.picture.hide()
+        self.cam_error.setText(text)
+        self.cam_error.show()
+
+    def _toggled(self, on):
+        """Watch the camera or not: the button says which of the two this row does."""
+        if on:
+            self.ask_picture()
+        else:
+            self._stop_camera()
+
+    def _stop_camera(self):
+        """Nothing is asked of the camera any more, and nothing of it is shown."""
+        if self.cam_job is not None and not self.cam_job.done:
+            self.cam_job.cancel()
+        self.cam_job = None
+        self.picture.clear()
+        self.picture.hide()
+        self.cam_error.setText("")
+        self.cam_error.hide()
+
 
 class PrinterStatusWindow(QWidget):
     """Window > Printer Status: a row per printer under Preferences, asked every five seconds.
@@ -166,6 +283,8 @@ class PrinterStatusWindow(QWidget):
         self.win = win
         self.conns = []
         self.rows = []
+        self._cam_urls = {}               # what every printer said about its camera, kept a while
+        self._cam_jobs = {}               # the printers that are answering that right now
         self.setWindowTitle(tr("Printer Status"))
         self.resize(560, 320)
         lay = QVBoxLayout(self)
@@ -199,27 +318,88 @@ class PrinterStatusWindow(QWidget):
                 row.deleteLater()
             self.rows = []
             for conn in conns:
-                row = PrinterRow(self, conn)
+                row = PrinterRow(self, conn, conn.name in self.watched_cameras())
+                row.camera.toggled.connect(self._remember_cameras)
                 self.rows.append(row)
                 self._lines.insertWidget(self._lines.count() - 1, row)
+                row.show()                # a widget that goes into a layout starts out hidden
+                if key_of(conn) in self._cam_urls:
+                    row.set_camera(self._cam_urls[key_of(conn)])
+            if self.isVisible():
+                self.look_cameras()       # the printers of Preferences may have brought one more
         self.hint.setText("" if conns else NO_PRINTERS)
 
+    def watched_cameras(self) -> list:
+        """The names of the printers whose camera was on when the window was last closed."""
+        return list(self.win.settings.printer_cameras_on)
+
     def poll(self):
-        """Ask every printer what it is doing; one that is still answering waits its turn."""
+        """Ask every printer what it is doing and, when it is watched, what its camera sees;
+        one that is still answering waits its turn."""
         for row in self.rows:
             row.ask()
+            row.ask_picture()
+
+    # ------------------------------------------------------------------------ cameras
+    def look_cameras(self):
+        """Ask every printer on the rows where its camera has a picture - each one only once.
+
+        What a printer said is kept for as long as this window lives, so the asking of the
+        printers never brings that question back and a printer that moves in and out of sight
+        is not asked again. A printer that has nothing to watch, or answered nothing at all,
+        is asked again the next time the window is on the screen."""
+        for row in self.rows:
+            key = key_of(row.conn)
+            if key not in self._cam_urls and key not in self._cam_jobs:
+                self._look_camera(row.conn)
+
+    def _look_camera(self, conn):
+        """Ask one printer where its camera has a picture; what it says belongs to the window."""
+        key = key_of(conn)
+
+        def work(report):
+            return printer_link.snapshot_url(conn)
+
+        def answered(url):
+            if self._cam_jobs.pop(key, None) is None:
+                return                    # stopped on its way: nothing is known of it
+            if url:
+                self._cam_urls[key] = url
+            else:                         # nothing to watch: the next time on screen asks again
+                self._cam_urls.pop(key, None)
+            for row in self.rows:
+                if key_of(row.conn) == key:
+                    row.set_camera(url)
+
+        def failed(exc):                  # nothing answered: the next time on screen asks again
+            self._cam_jobs.pop(key, None)
+
+        self._cam_jobs[key] = background.run(None, work, text=tr("Speaking to the printer…"),
+                                             can_cancel=False, show_dialog=False,
+                                             on_done=answered, on_error=failed)
+
+    def _remember_cameras(self, checked=False):
+        """Which cameras are being watched, named after their printer: back in the settings."""
+        self.win.settings.printer_cameras_on = [row.conn.name for row in self.rows
+                                                if row.camera.isChecked()]
+        self.win.settings.save()
 
     # --------------------------------------------------------------- on and off screen
     def showEvent(self, event):
         """Back on the screen: the rows follow Preferences and the asking starts again."""
         super().showEvent(event)
         self.reload()
+        self.look_cameras()
         self.poll()
         self.timer.start()
 
     def hideEvent(self, event):
         """Off the screen, closed or hidden: nothing asks a printer anything any more."""
         self.timer.stop()
+        for job in self._cam_jobs.values():
+            if not job.done:
+                job.cancel()
+        self._cam_jobs.clear()
         for row in self.rows:
             row.stop()
         super().hideEvent(event)
