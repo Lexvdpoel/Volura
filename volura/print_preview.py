@@ -12,9 +12,12 @@ move it; the wheel zooms towards the mouse and a double-click shows the whole pr
 3D switch the view; Only this layer hides the layers below. Play moves the nozzle through the layer
 at the speed of the real print times a factor and goes on to the next layer; the slider and the
 arrow keys pick a layer. Save G-code… writes the file, and Send to printer… hands it to
-OctoPrint, Klipper (Moonraker) or PrusaLink over the network (see volura/printer_link.py). What
-became of a print - saved, sent, started or marked as printed - goes to Window > Print History…
-(volura/print_history.py), where the G-code of a print that really ran can go to a printer again.
+OctoPrint, Klipper (Moonraker) or PrusaLink over the network (see volura/printer_link.py). Add to
+Queue puts the same G-code on the queue of Window > Print Queue… (volura/print_queue.py), where
+it waits for the first printer that is free - and starts on nothing before the user said that
+printer's bed is clear. What became of a print - saved, sent, started or marked as printed - goes
+to Window > Print History… (volura/print_history.py), where the G-code of a print that really ran
+can go to a printer again.
 
 Every print has its spool beside it: which roll on the shelf its filament comes off and whether
 that roll still holds enough for the print (Window > Spools…, volura.spools) - one row for a
@@ -36,10 +39,11 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
                                QPushButton, QSlider, QVBoxLayout)
 
-from . import background, errors, printer_link, print_history, spools, theme
+from . import (background, errors, printer_link, print_history, print_queue, spools, theme)
 from . import gcode_preview as gp
 from .camera import Camera
 from .i18n import tr, tr_noop
+from .panels import note
 from .settings import flag, qsettings
 from .viewcube import ViewCube
 
@@ -469,9 +473,71 @@ def send_to_printer(parent, printers, gcode_path: str, name: str, busy=None, on_
                           on_done=sent, on_error=failed, on_cancel=lambda: changed(False))
 
 
+class QueueDialog(QDialog):
+    """Add to Queue: which printer this G-code is meant for.
+
+    "Any printer" takes the first printer that is free and whose bed was said clear; a printer
+    of your own waits for that one printer and nothing else. Which printer a print waits for is
+    remembered with the queue itself (volura.print_queue), not with the next slice.
+    """
+
+    def __init__(self, parent, printers):
+        super().__init__(parent)
+        self.setWindowTitle(tr("Add to Queue"))
+        lay = QVBoxLayout(self)
+        form = QFormLayout()
+        self.printer = QComboBox()
+        self.printer.setToolTip(tr("The printers under Window > Preferences > Printers"))
+        self.printer.addItem(tr(print_queue.ANY_LABEL), print_queue.ANY)
+        for conn in printers:
+            self.printer.addItem(conn.name, conn.name)
+            self.printer.setItemData(self.printer.count() - 1,
+                                     printer_link.normalise_url(conn.url), Qt.ToolTipRole)
+        form.addRow(tr("Printer"), self.printer)
+        lay.addLayout(form)
+        lay.addWidget(note(tr("The print waits on the queue until a printer is free and you "
+                              "pressed Bed is clear for it.")))
+        bb = QDialogButtonBox(QDialogButtonBox.Cancel)
+        add = bb.addButton(tr("Add"), QDialogButtonBox.AcceptRole)
+        add.setDefault(True)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addWidget(bb)
+
+    def printer_name(self) -> str:
+        """The printer this print is meant for; "" for any printer that is free."""
+        return str(self.printer.currentData() or print_queue.ANY)
+
+
+def add_to_queue(parent, settings, printers, gcode_path: str, name: str,
+                 grams=0.0, minutes=0.0, on_added=None):
+    """Put the G-code at `gcode_path` on the print queue of `settings` (volura.print_queue).
+
+    Which printer the print is meant for is asked with the `QueueDialog` above: "Any printer" or
+    one of the printers under Window > Preferences > Printers. Nothing starts here - the queue
+    only starts something the user resumed, on a printer whose bed was said clear - and the
+    G-code is copied into the folder of the print history, because the file a preview works on
+    does not outlive the preview. Returns the item, or None when there is no printer to wait for
+    or the user chose nothing; `on_added(count)` says how many prints wait now.
+    """
+    if not printers:
+        return None
+    dlg = QueueDialog(parent, printers)
+    if dlg.exec() != QDialog.Accepted:
+        return None
+    item = print_queue.QueueItem(name=name, printer=dlg.printer_name(), grams=grams,
+                                 minutes=minutes)
+    item = print_queue.store(settings, item, source=gcode_path)
+    if on_added is not None:
+        waiting = print_queue.records(getattr(settings, "print_queue", None))
+        on_added(len(waiting))
+    return item
+
+
 class PrintPreviewDialog(QDialog):
-    """The G-code of a slice, layer by layer; `Save G-code…` hands it on (see `save_to`)
-    and `Send to printer…` sends it to a printer on the network (see `printer_link`).
+    """The G-code of a slice, layer by layer; `Save G-code…` hands it on (see `save_to`),
+    `Send to printer…` sends it to a printer on the network (see `printer_link`) and
+    `Add to Queue` lets it wait for the first printer that is free (see `add_to_queue`).
 
     `filaments` is what the print prints with, `(name, colour, mm, grams)` per filament
     (see `filament_color`): with more than one the view colours every line with its filament
@@ -575,6 +641,9 @@ class PrintPreviewDialog(QDialog):
         bb = QDialogButtonBox()
         self.save_button = bb.addButton(tr("Save G-code…"), QDialogButtonBox.AcceptRole)
         self.send_button = bb.addButton(tr("Send to printer…"), QDialogButtonBox.ActionRole)
+        self.queue_button = bb.addButton(tr("Add to Queue"), QDialogButtonBox.ActionRole)
+        self.queue_button.setToolTip(tr("Let this print wait on the queue for the first printer "
+                                        "that is free"))
         if self.row_count:
             self.mark = bb.addButton(tr("Mark as printed"), QDialogButtonBox.ActionRole)
             self.mark.setToolTip(tr("Take what this print used off the spools above, for a "
@@ -584,6 +653,7 @@ class PrintPreviewDialog(QDialog):
         bb.accepted.connect(self._save)
         bb.rejected.connect(self.reject)
         self.send_button.clicked.connect(self._send)
+        self.queue_button.clicked.connect(self._add_queue)
         self._show_send()
         self.taken_note = QLabel()
         self.taken_note.setEnabled(False)
@@ -854,11 +924,13 @@ class PrintPreviewDialog(QDialog):
 
     # ---- sending
     def _show_send(self):
-        """Send to printer… only works once there is a printer under Preferences."""
-        self.send_button.setEnabled(bool(self.printers))
-        self.send_button.setToolTip("" if self.printers else
-                                    tr("Add a printer under Window > Preferences > Printers, "
-                                       "then send the G-code straight from here."))
+        """Send to printer… and Add to Queue only work once there is a printer under
+        Preferences."""
+        for button in (self.send_button, self.queue_button):
+            button.setEnabled(bool(self.printers))
+            button.setToolTip("" if self.printers else
+                              tr("Add a printer under Window > Preferences > Printers, "
+                                 "then send the G-code straight from here."))
 
     def _send_name(self) -> str:
         """What the G-code is called on the printer: the name of the model, or "volura"."""
@@ -884,6 +956,19 @@ class PrintPreviewDialog(QDialog):
         self._job = send_to_printer(self, self.printers, self.gcode_path, self._send_name(),
                                     busy=lambda running: self.send_button.setEnabled(not running),
                                     on_sent=sent)
+
+    def _add_queue(self):
+        """Add to Queue: exactly the G-code of this preview waits for a free printer.
+
+        Nothing is sent here: the queue starts prints in Window > Print Queue…, and only on a
+        printer whose bed the user said is clear (volura.print_queue)."""
+        def added(count):
+            hint = getattr(self.win, "hint", None)
+            if hint is not None:
+                hint.setText(print_queue.added_text(count))
+
+        add_to_queue(self, self.settings, self.printers, self.gcode_path, self._print_name(),
+                     grams=self.grams, minutes=self.minutes, on_added=added)
 
     # ---- what became of this print (Window > Print History…)
     def _print_name(self) -> str:

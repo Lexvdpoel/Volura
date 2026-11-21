@@ -3037,6 +3037,7 @@ TRANSLATIONS = {
     'Start printing right away': 'Direct beginnen met printen',
     'Add a printer under Window > Preferences > Printers, then send the G-code straight from here.': 'Voeg een printer toe onder Venster > Voorkeuren > Printers en stuur de G-code vanaf hier meteen.',
     'Sending {file} to {printer}…': '{file} naar {printer} sturen…',
+    'Sending {file}…': '{file} versturen…',
     'Sent {file} to {printer}': '{file} naar {printer} gestuurd',
     'Sent {file} to {printer} and started printing': '{file} naar {printer} gestuurd en het printen begonnen',
     'Say what kind of printer {name} is.': 'Zeg wat voor soort printer {name} is.',
@@ -3177,4 +3178,54 @@ TRANSLATIONS = {
     'yourself stay.':
         'De printgeschiedenis wissen? De G-codes die Volura zelf bewaarde gaan eraf; de bestanden '
         'die jij zelf opsloeg blijven.',
+    # Print Queue: Window > Print Queue… and the queues of the preview and the history
+    # (volura/print_queue.py)
+    'Any printer': 'Iedere printer',
+    '{n} print waiting': '{n} print in de wachtrij',
+    '{n} prints waiting': '{n} prints in de wachtrij',
+    'Added to the queue ({n} waiting)': 'Toegevoegd aan de wachtrij (er wachten er {n})',
+    'Print Queue': 'Printwachtrij',
+    'Print &Queue…': 'Print&wachtrij…',
+    'The prints that wait for the first printer that is free':
+        'De prints die wachten op de eerste vrije printer',
+    'Bed is clear': 'Bed is leeg',
+    'Say that nothing of the last print is left on the bed of this printer; only this button '
+    'says it':
+        'Zeg dat er niets van de vorige print op het bed van deze printer ligt; alleen deze knop '
+        'zegt dat',
+    'Bed clear': 'Bed leeg',
+    'Bed is not clear': 'Bed niet leeg',
+    'Move Up': 'Omhoog',
+    'Let this print wait no longer than the one before it':
+        'Deze print niet langer laten wachten dan de print ervoor',
+    'Move Down': 'Omlaag',
+    'Let the print below this one go first': 'De print hieronder als eerste laten gaan',
+    'Take this print off the queue; the G-code Volura kept of it goes with it':
+        'Deze print van de wachtrij halen; de G-code die Volura ervan bewaarde gaat eraf',
+    'Start the queue, or let it stand still; it stands still from the first moment':
+        'De wachtrij starten of stilzetten; vanaf het eerste moment staat hij stil',
+    'The queue stands paused, so nothing is sent':
+        'De wachtrij staat stil, dus er wordt niets gestuurd',
+    'Take {name} off the print queue? The G-code Volura kept of it goes with it.':
+        '{name} van de printwachtrij halen? De G-code die Volura ervan bewaarde gaat eraf.',
+    'Volura only starts a print on a printer after you pressed Bed is clear for it, and takes '
+    'that word back as soon as it starts one there or the printer says it is printing or paused '
+    '- a printer that just finished still has its last print on the bed. Nothing is sent while '
+    'the queue stands paused. The queue works while this window is open, also when it stands '
+    'behind another window; closing this window stops it and puts it back paused.':
+        'Volura start een print op een printer pas nadat jij Bed is leeg voor die printer hebt '
+        'ingedrukt, en neemt dat woord meteen weer terug zodra hij er één op start of de printer '
+        'zegt te printen of gepauzeerd te zijn - een printer die net klaar is, heeft zijn vorige '
+        'print nog op het bed liggen. Er wordt niets gestuurd zolang de wachtrij stil staat. De '
+        'wachtrij werkt zolang dit venster open is, ook als het achter een ander venster staat; '
+        'sluit je dit venster, dan stopt hij en staat hij weer stil.',
+    # Add to Queue in the print preview and Window > Print History…
+    'Add to Queue': 'Aan de wachtrij toevoegen',
+    'Let this print wait on the queue for the first printer that is free':
+        'Deze print laten wachten op de eerste vrije printer',
+    'The print waits on the queue until a printer is free and you pressed Bed is clear for it.':
+        'De print staat op de wachtrij tot een printer vrij is en jij Bed is leeg ervoor hebt '
+        'ingedrukt.',
+    'Put this print on the print queue, so it goes to the first printer that is free':
+        'Deze print op de printwachtrij zetten, zodat hij naar de eerste vrije printer gaat',
 }

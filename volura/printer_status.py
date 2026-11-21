@@ -46,6 +46,23 @@ def key_of(conn) -> tuple:
     return (conn.name, conn.kind, printer_link.normalise_url(conn.url))
 
 
+def ask_status(conn, on_done, on_error):
+    """Ask one printer what it is doing right now, in the background and without a window of
+    its own.
+
+    A printer that is slow may not hold up the window it stands in, and the widget that asked
+    can be out of use before the answer comes; `on_done(status)` and `on_error(exc)` reach the
+    GUI thread. The job comes back, so the caller knows whether an asking is still on its way.
+    Window > Printer Status asks this way for every row, and so does Window > Print Queue…
+    (volura.print_queue_dialog)."""
+    def work(report):
+        return printer_link.status(conn)
+
+    return background.run(None, work, text=tr("Speaking to the printer…"),
+                          can_cancel=False, show_dialog=False,
+                          on_done=on_done, on_error=on_error)
+
+
 def _degrees(value) -> str:
     """A temperature as this window says it: whole degrees, a dash when it is not known."""
     return NOTHING if value is None else f"{value:.0f}"
@@ -139,16 +156,9 @@ class PrinterRow(QWidget):
         """Ask this printer what it is doing; one that is still answering is not asked again."""
         if self.job is not None and not self.job.done:
             return
-        conn = self.conn
-
-        def work(report):
-            return printer_link.status(conn)
-
         # no window of its own here: a printer that is slow may not hold up the window it
         # stands in, and a row can go away while its answer is still on its way (see `stop`)
-        self.job = background.run(None, work, text=tr("Speaking to the printer…"),
-                                  can_cancel=False, show_dialog=False,
-                                  on_done=self.answered, on_error=self.failed)
+        self.job = ask_status(self.conn, self.answered, self.failed)
 
     def stop(self):
         """What is on its way may come back to nothing: the row is out of use."""

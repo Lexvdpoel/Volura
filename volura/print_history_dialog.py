@@ -14,6 +14,8 @@ preview works on does not outlive it; a print of which that file is gone stands 
 nothing to print again. *Show File* opens the folder that holds it. *Remove* takes one print off
 the list and *Clear All* the whole list, with the G-codes Volura kept itself; what you saved
 yourself is never touched.
+*Add to Queue* puts the same G-code on the queue of Window > Print Queue… (volura.print_queue),
+where it waits for the first printer that is free and whose bed was said clear.
 """
 from __future__ import annotations
 
@@ -25,7 +27,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QHB
                                QHeaderView, QLabel, QMessageBox, QPushButton, QTableWidget,
                                QTableWidgetItem, QVBoxLayout)
 
-from . import print_history, print_preview, printer_link
+from . import print_history, print_preview, print_queue, printer_link
 from .i18n import tr
 from .panels import note
 
@@ -70,6 +72,10 @@ class PrintHistoryDialog(QDialog):
         self.b_again.setToolTip(tr("Send the G-code of this print to a printer, the way the "
                                    "print preview does"))
         self.b_again.clicked.connect(self._print_again)
+        self.b_queue = QPushButton(tr("Add to Queue"))
+        self.b_queue.setToolTip(tr("Put this print on the print queue, so it goes to the first "
+                                   "printer that is free"))
+        self.b_queue.clicked.connect(self._add_queue)
         self.b_show = QPushButton(tr("Show File"))
         self.b_show.setToolTip(tr("Open the folder that holds the G-code of this print"))
         self.b_show.clicked.connect(self._show_file)
@@ -80,7 +86,7 @@ class PrintHistoryDialog(QDialog):
         self.b_clear.setToolTip(tr("Take every print off the history, with the G-codes Volura "
                                    "kept of them"))
         self.b_clear.clicked.connect(self._clear_all)
-        for button in (self.b_again, self.b_show, self.b_remove, self.b_clear):
+        for button in (self.b_again, self.b_queue, self.b_show, self.b_remove, self.b_clear):
             side.addWidget(button)
         side.addStretch(1)
         row.addLayout(side)
@@ -150,10 +156,12 @@ class PrintHistoryDialog(QDialog):
         entry = self._chosen_entry()
         where = print_history.gcode_of(entry) if entry is not None else None
         self.b_again.setEnabled(bool(where) and bool(self.printers) and self._job is None)
+        self.b_queue.setEnabled(bool(where) and bool(self.printers))
         self.b_show.setEnabled(where is not None)
         self.b_remove.setEnabled(entry is not None)
         self.b_clear.setEnabled(bool(self.entries))
         self.b_again.setToolTip(self._wait_for(entry, where))
+        self.b_queue.setToolTip(self._wait_for_queue(entry, where))
 
     def _wait_for(self, entry, where) -> str:
         """What Print Again… is waiting for, so the button can say it: a chosen print, a
@@ -168,6 +176,21 @@ class PrintHistoryDialog(QDialog):
             return tr("Add a printer under Window > Preferences > Printers, then send the "
                       "G-code straight from here.")
         return tr("Send the G-code of this print to a printer, the way the print preview does")
+
+    def _wait_for_queue(self, entry, where) -> str:
+        """What Add to Queue is waiting for: the same as Print Again…, but here the print waits
+        for a printer instead of going to one right away."""
+        if entry is None:
+            return tr("Choose the print that has to go on the bed again")
+        if not entry.gcode:
+            return tr("This print has no G-code of its own")
+        if where is None:
+            return tr("The G-code is no longer there")
+        if not self.printers:
+            return tr("Add a printer under Window > Preferences > Printers, then send the "
+                      "G-code straight from here.")
+        return tr("Put this print on the print queue, so it goes to the first printer that "
+                  "is free")
 
     # ------------------------------------------------------------------ the buttons
     def _print_again(self):
@@ -189,6 +212,22 @@ class PrintHistoryDialog(QDialog):
         if not running:
             self._job = None
         self._show_buttons()
+
+    def _add_queue(self):
+        """Add to Queue: this print waits on the queue for the first printer that is free, with
+        the very G-code Volura kept of it (volura.print_queue)."""
+        entry = self._chosen_entry()
+        path = print_history.gcode_of(entry) if entry is not None else None
+        if entry is None or not path or not self.printers:
+            return
+
+        def added(count):
+            hint = getattr(self.win, "hint", None)
+            if hint is not None:
+                hint.setText(print_queue.added_text(count))
+
+        print_preview.add_to_queue(self, self.settings, self.printers, path, entry.name,
+                                   grams=entry.grams, minutes=entry.minutes, on_added=added)
 
     def _remember(self, was, printer: str, start: bool):
         """The print that went to the printer again stands in the history as a print of its

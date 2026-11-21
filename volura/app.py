@@ -33,7 +33,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar, snap_fit,
                nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
-               printer_link, print_history,
+               printer_link, print_history, print_queue,
                sheet3d, sheettools, slice_presets, svg,
                spacemouse, spool_adapter, spools, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers, workspaces)
@@ -1504,6 +1504,9 @@ class Settings:
         # every print Volura made, newest first (volura.print_history); Window > Print
         # History… shows them and sends the G-code of one of them to a printer again
         self.print_history = print_history.from_values(self.q.value("print_history", []) or [])
+        # the prints that wait for a free printer, in the order they wait
+        # (volura.print_queue); Window > Print Queue… shows them and starts them in turn
+        self.print_queue = print_queue.from_values(self.q.value("print_queue", []) or [])
 
     def _bool(self, key, default):
         v = self.q.value(key, default)
@@ -1794,6 +1797,7 @@ class Settings:
         self.q.setValue("spools", spools.to_lines(self.spools))
         self.q.setValue("spool_for_slot", spools.slot_ids(self.spool_for_slot))
         self.q.setValue("print_history", print_history.from_values(self.print_history))
+        self.q.setValue("print_queue", print_queue.from_values(self.print_queue))
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
 
@@ -1965,6 +1969,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self._busy = False          # a background job is reading the model: keep it still
         self._mill3d_dialog = None   # the 3D mill dialog, open beside the model
         self._printer_status = None   # what the printers on the network are doing
+        self._print_queue = None      # the prints that wait for a free printer
         self.tool_actions = {}
         self.sheet_tool_actions = {}
         self.resize(1400, 900)
@@ -2633,6 +2638,9 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                  lambda checked=False: self.print_history(), None, None, False,
                                  tr("What you printed and what it took, so a print that went "
                                     "well can go on the bed again"))
+        self.a_print_queue = A(tr("Print &Queue…"),
+                               lambda checked=False: self.print_queue(), None, None, False,
+                               tr("The prints that wait for the first printer that is free"))
         self.a_welcome = A(tr("&Welcome to Volura"), self.show_welcome)
         self.a_updates = A(tr("Check for &Updates…"), lambda checked=False: self.check_for_updates())
         self.a_help = A(tr("&Keyboard Shortcuts"), self.show_help, "F1")
@@ -3264,7 +3272,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         m = mb.addMenu(tr("&Window"))
         self.standard_menu = QMenu(tr("Default &Tray"), m)
         self.fill(m, (self.standard_menu, None, self.a_model_info, self.a_prefs, None,
-                      self.a_printer_status, self.a_spools, self.a_print_history))
+                      self.a_printer_status, self.a_print_queue, self.a_spools,
+                      self.a_print_history))
 
         m = mb.addMenu(tr("&Help"))
         self.fill(m, (self.a_welcome, self.a_help, None, self.a_updates, None, self.a_sponsor,
@@ -3888,6 +3897,29 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
     def refresh_printer_status(self):
         """Preferences > Printers changed the list: the status window takes the rows anew."""
         panel = getattr(self, "_printer_status", None)
+        if panel is not None:
+            panel.reload()
+
+    def print_queue(self):
+        """Window > Print Queue…: the prints that wait for a free printer, and the printers.
+
+        A print on the queue (volura.print_queue) goes to the first printer that is free, and
+        starts on nothing before the user said that printer's bed is clear - a printer that just
+        finished still has its last print on the bed. Modeless, and it keeps working while the
+        window is open; closing that window stops the queue.
+        """
+        from .print_queue_dialog import PrintQueueWindow
+        panel = getattr(self, "_print_queue", None)
+        if panel is None:
+            panel = self._print_queue = PrintQueueWindow(self)
+        panel.show()
+        panel.raise_()
+        panel.activateWindow()
+        return panel
+
+    def refresh_print_queue(self):
+        """Preferences > Printers changed the list: the queue takes its printers anew."""
+        panel = getattr(self, "_print_queue", None)
         if panel is not None:
             panel.reload()
 

@@ -609,6 +609,26 @@ gets for free.
     went to a printer Volura keeps the G-code itself, in a folder that leaves with the print, so
     those kept files never gather for ever; a file you saved yourself is never copied or taken
     away
+  - **Print Queue** (*Window > Print Queue…*): the prints you line up, so a line of prints runs
+    itself on the first printer that is free. *Add to Queue* stands in the print preview beside
+    *Send to printer…* and in *Window > Print History…* beside *Print Again…*, and asks there
+    which printer the print is meant for - *Any printer* takes the first one that is free - and
+    Volura keeps a copy of that G-code, because the file a preview works on does not last. The
+    list shows the prints in the order they are worked off, with the printer each waits for, what
+    it takes and how long it needs, and *Move Up*, *Move Down* and *Remove* change that line.
+    Under the list stand your printers with what they say they are doing, and every five seconds
+    Volura asks again and sends the next print when a printer can take it; one print at a time,
+    started right away, and written in *Print History* as a started print
+    - **nothing starts on a printer before you pressed *Bed is clear* for that printer**, because
+      a printer that just finished still has its last print on the bed and the next one would
+      crash the nozzle into it. That one button is all that says a bed is clear - a printer never
+      says it of itself - and Volura takes the word back as soon as it starts a print there or the
+      printer says it is printing or paused; a printer in *Error* or *Offline* is never used
+    - the queue also stands paused from the moment you open the window until you press *Resume*,
+      so a queue you left behind overnight sends nothing on its own; it keeps working while the
+      window exists, also when it stands behind another window, and closing it stops the queue and
+      puts it back paused. What did not reach the printer stays on the queue and the queue pauses,
+      so a wrong printer never eats the line behind it
   - A model in more colours prints in more colours: every colour goes to the extruder you point it
     at, starting on the filament the multicolour 3MF would have given it, faces painted with the
     Paint Bucket print as a skin of the depth you choose, and a prime tower or ooze shield keeps
@@ -920,6 +940,9 @@ volura/
                 Window > Spools…
   print_history.py  the prints you made and the G-codes Volura kept of them;
                 print_history_dialog.py is Window > Print History…
+  print_queue.py  the prints that wait for the first printer that is free, and the rule that
+                nothing starts on a printer whose bed was not said clear; print_queue_dialog.py
+                is Window > Print Queue…
   gcode_thumbnail.py  the picture of the print in the G-code, for the screen of the printer
 tests/          tests without a GUI (pytest); test_brep.py compares with results from SketchUp 2017
                 test_portability.py keeps Windows assumptions out of volura/
