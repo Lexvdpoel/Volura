@@ -866,6 +866,16 @@ class UiMixin:
         self.view.update()
         self.view.update_view_status()
 
+    def toggle_tight_fits(self, on):
+        """View > Face Style > Tight Fits: mark the faces that come closer to another part
+        than the clearance of the printer. The whole model is checked in the background (see
+        :meth:`Viewport._tight_mask_of`), so the colours appear a moment later on a big
+        model, and the clearance itself is the one of 3D Printing > Clearance Test."""
+        self.settings.show_tight_fits = bool(on)
+        self.settings.save()
+        self.view.update()
+        self.view.update_view_status()
+
     def toggle_section(self, on):
         """View > Section: cut the view open with a plane you can move (see SectionPanel).
 

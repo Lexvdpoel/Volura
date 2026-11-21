@@ -8,7 +8,7 @@ from PySide6.QtCore import QEvent, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QSurfaceFormat
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
-from . import background, errors, icons, ops, section, theme, thin_walls
+from . import background, clearance, errors, icons, ops, section, theme, thin_walls
 from .camera import Camera, horizon_line
 from .i18n import tr, trn
 from .inference import InferenceEngine
@@ -318,6 +318,9 @@ class Viewport(QOpenGLWidget):
         self._thin_cache = {}         # id(ents) -> (ents, version, wall, bool per triangle)
         self._thin_busy = {}          # id(ents) -> that same key while its cut is running
         self._thin_answers = {}       # id(ents) -> answers landed; see _thin_context
+        self._tight_answer = None     # (key, {id(ents): (ents, bool per triangle)}) of one check
+        self._tight_busy = None       # that same key while the check of the model is running
+        self._tight_landed = {}       # id(ents) -> answers landed; see _tight_context
         self._cap_cache = {}          # (id(ents), version, axis, pos) -> triangles of the cut
         self._cap_solids = {}         # id(ents) -> (ents, version, manifold) to cut in
         self._cap_busy = {}           # id(ents) -> that same key while its solid is being made
@@ -590,7 +593,8 @@ class Viewport(QOpenGLWidget):
     def _render_data(self, ents, gcolor):
         octx = self._overhang_ctx       # (bed_z, limit) while the overhang view is on, else None
         wctx = self._thin_context(ents)   # (wall, answers) while the thin wall view is on
-        key = (id(ents), ents.version, gcolor, octx, wctx)
+        fctx = self._tight_context(ents)   # (room, answers) while the tight fit view is on
+        key = (id(ents), ents.version, gcolor, octx, wctx, fctx)
         rc = self._rcache.get(id(ents))
         if rc is not None and rc["key"] == key and rc["ents"] is ents:
             return rc
@@ -602,7 +606,9 @@ class Viewport(QOpenGLWidget):
         T, fids = c["T"], c["tri_fid"]
         warn = theme.rgb("overhang") if octx else None
         thin = theme.rgb("thin") if wctx else None
+        tight = theme.rgb("tight") if fctx else None
         mask = self._thin_mask_of(ents) if wctx else None
+        fmask = self._tight_mask_of(ents) if fctx else None
 
         def faces(keep):
             """Vertex, normal and colour arrays of the faces selected by `keep`."""
@@ -616,6 +622,12 @@ class Viewport(QOpenGLWidget):
                               dtype=np.float32)
                 front[:, :3] = np.repeat(fc, 3, axis=0)
                 back[:, :3] = np.repeat(bc, 3, axis=0)
+                if tight is not None and fmask is not None:
+                    # the tight places go on under the thin walls and the overhangs: of two
+                    # troubles on one face the machine is the worse one to hear about
+                    vmask = np.repeat(fmask[keep], 3)
+                    front[vmask, :3] = tight
+                    back[vmask, :3] = tight
                 if thin is not None and mask is not None:
                     # the thin walls go on first: a face that both hangs over and is thin
                     # stays red, because support is the worse of the two problems
@@ -749,9 +761,18 @@ class Viewport(QOpenGLWidget):
         live = {id(e) for e in doc.all_ents()}
         for key in [k for k in self._rcache if k not in live]:
             _free_render_data(self._rcache.pop(key))
-        for table in (self._thin_cache, self._thin_busy, self._thin_answers):
+        for table in (self._thin_cache, self._thin_busy, self._thin_answers,
+                      self._tight_landed):
             for key in [k for k in table if k not in live]:
                 table.pop(key)
+        for key in (self._tight_answer[0] if self._tight_answer is not None else None,
+                    self._tight_busy):
+            # the tight fit check belongs to the whole model: a part that left the document
+            # makes its answer nothing, and a check on its way to it too
+            if key is not None and any(k not in live for k, _v in key[:-1]):
+                self._tight_answer = None
+                self._tight_busy = None
+                break
         for table in (self._cap_solids, self._cap_busy):
             for key in [k for k in table if k not in live]:
                 table.pop(key)
@@ -887,6 +908,137 @@ class Viewport(QOpenGLWidget):
         total = 0
         for e in [e for _, e, _ in self.doc.contexts()]:
             mask = self._thin_mask_of(e)
+            if mask is None or not mask.any():
+                continue
+            total += int(len(np.unique(self.engine.cache.get(e)["tri_fid"][mask])))
+        return total
+
+    # ------------------------------------------------------------- tight fits
+    def _tight_clearance(self):
+        """The room two parts have to keep between them, or None when the view has nothing
+        to ask about.
+
+        The room is the clearance of 3D Printing > Clearance Test, the same one the threads
+        and the hole tools use; a clearance of nothing says the printer lays nothing between
+        two parts, and under that distance there is nothing left to look for."""
+        if not getattr(self.settings, "show_tight_fits", False):
+            return None
+        room = getattr(self.settings, "screw_hole_clearance", 0.0)
+        return room if room > 0 else None
+
+    def _tight_context(self, ents):
+        """``(room, answers)`` the faces of `ents` are tinted with, or None when off; the
+        answers that landed belong in the key of its render cache, for the same reason as
+        with the thin walls (see :meth:`_thin_context`)."""
+        room = self._tight_clearance()
+        if room is None:
+            return None
+        return room, self._tight_landed.get(id(ents), 0)
+
+    def _tight_key(self, room):
+        """What one check of the whole model belongs to: every part of it at the version it
+        was measured at, and the room it was measured with.
+
+        A part is only tight in respect to the others, so one part that is edited asks for
+        the whole model again - the part it was close to may have moved away by now."""
+        return tuple((id(e), e.version) for _, e, _ in self.doc.contexts()) + (room,)
+
+    def _tight_mask_of(self, ents):
+        """The bool per triangle of `ents` whether it stands closer to another part than the
+        clearance, or None while that is not known yet.
+
+        One part tells nothing without the others, so the check is of the whole model at
+        once (see :meth:`_run_tight_job`) and every face is drawn as it always was until the
+        answer has landed. An answer belongs to one version of every part of the model and
+        to one clearance; a check of a model that has moved on since is never shown."""
+        room = self._tight_clearance()
+        if room is None:
+            return None
+        key = self._tight_key(room)
+        got = self._tight_answer
+        if got is not None and got[0] == key:
+            held = got[1].get(id(ents))
+            # the triangles of this version are counted the same way the answer was made;
+            # when the render cache says otherwise, the answer is not the one for this frame
+            if held is None or held[0] is not ents:
+                return None
+            mask = held[1]
+            return mask if len(mask) == len(self.engine.cache.get(ents)["tri_fid"]) else None
+        if self._tight_busy != key:
+            self._tight_busy = key
+            self._run_tight_job(key)
+        return None
+
+    def _run_tight_job(self, key):
+        """The check of every part against every other one off the GUI thread.
+
+        The parts are gathered here, on the GUI thread, because the window takes no input
+        while a job runs and the model cannot change under it; their solids are made in the
+        worker, which is what costs seconds on a big model. The answer is one mask per part,
+        in the order the parts stood; a check that is too late for the model it was made for
+        is thrown away, which is why a check too late for this frame costs nothing."""
+        room = key[-1]
+        # the centres of the triangles the view draws, in the coordinates the model is drawn
+        # in: a part can only be measured against the others where they really stand
+        parts = [(e, np.array(self.engine.cache.get(e)["T"].mean(axis=1), dtype=float))
+                 for _, e, _ in self.doc.contexts()]
+        checking = tr("Checking clearances…")
+
+        def work(report):
+            return clearance.tight_masks([(e.to_manifold(), points) for e, points in parts],
+                                         room)
+
+        def told():
+            """The bar showed what it was waiting for; now it shows the count, or - when
+            nothing is tight - the instruction of the tool again."""
+            if self._status_note == checking:
+                self._status_note = None
+            self._view_hint = ""            # so the count comes back even when it is the same
+            self.update_view_status()
+            self.refresh_status()
+            if self._status_shown == checking:
+                # nothing tight and a tool without an instruction: the wait is over all the same
+                self._status_shown = ""
+                self.status_changed.emit("")
+
+        def stored(masks):
+            if not background.alive(self) or self._tight_busy != key:
+                return                     # another file, another model, another clearance
+            by = {}
+            for (e, _), mask in zip(parts, masks):
+                by[id(e)] = (e, np.asarray(mask, dtype=bool))
+            if len(by) != len(parts):
+                # an answer without every part is no answer, and asking for the same broken
+                # check again next frame would only wait for it again
+                told()
+                return
+            self._tight_busy = None
+            for landed in by:
+                self._tight_landed[landed] = self._tight_landed.get(landed, 0) + 1
+            self._tight_answer = (key, by)
+            told()
+            self.update()
+
+        def failed(_exc):
+            # nothing to show: the faces stay as they are, and the next frame asks again
+            if self._tight_busy == key:
+                self._tight_busy = None
+                told()
+
+        background.run(self.window(), work, text=checking, can_cancel=False,
+                       show_dialog=False, on_done=stored, on_error=failed)
+        self.set_status(checking)
+
+    def _tight_faces(self):
+        """How many faces of the model stand closer to another part than the clearance; 0
+        when unknown. A face counts as soon as one of its triangles does, read off the
+        triangles the render cache holds (see :meth:`_thin_faces`); while a check still runs
+        its parts count as nothing, so the number can still rise before the view is done."""
+        if self._tight_clearance() is None:
+            return 0
+        total = 0
+        for e in [e for _, e, _ in self.doc.contexts()]:
+            mask = self._tight_mask_of(e)
             if mask is None or not mask.any():
                 continue
             total += int(len(np.unique(self.engine.cache.get(e)["tri_fid"][mask])))
@@ -1040,9 +1192,10 @@ class Viewport(QOpenGLWidget):
     def update_view_status(self):
         """The status bar hint of the face style views: what the colours in the model mean.
 
-        All of them in one line, the overhang count first and the place of the section plane
-        last. Off, or nothing to see: the hint goes away and the instruction of the current
-        tool comes back, so the bar never keeps a count that is no longer true."""
+        All of them in one line, the overhang count first, then the thin walls and the tight
+        places, and the place of the section plane last. Off, or nothing to see: the hint
+        goes away and the instruction of the current tool comes back, so the bar never keeps
+        a count that is no longer true."""
         parts = []
         info = self._overhang_faces()
         if info and info[1]:
@@ -1054,6 +1207,12 @@ class Viewport(QOpenGLWidget):
             parts.append(trn("Thin walls: {n} face under {mm} mm",
                              "Thin walls: {n} faces under {mm} mm", thin).format(
                 n=thin, mm=f"{self.settings.min_wall:g}"))
+        tight = self._tight_faces()
+        if tight:
+            parts.append(trn("Tight fits: {n} face closer than {mm} mm to another part",
+                             "Tight fits: {n} faces closer than {mm} mm to another part",
+                             tight).format(n=tight,
+                                           mm=f"{self.settings.screw_hole_clearance:g}"))
         cut = self.engine.section_cut()
         if cut is not None:
             # where the plane stands is otherwise invisible: the panel is often closed and the

@@ -1343,6 +1343,25 @@ volura</code></pre>
       <li>Waar een vlak zowel overhangt als dun is, wint de overhangkleur: support is het ergste van de twee problemen.</li>
       <li>Op een groot model loopt het zoeken op de achtergrond: het model houdt zijn eigen kleuren tot het antwoord er is, en het venster blijft gewoon in beeld.</li>
     </ul>
+    <h3 id="tight-fits"><span lang="en">Tight fit view</span><span lang="nl">Nauwe-passingweergave</span></h3>
+    <p lang="en">Colours every face that comes closer to another part of the model than the clearance your printer proved, so a lid in its box and a pin in its hole are found before the print comes off the bed as one brick.</p>
+    <p lang="nl">Kleurt elk vlak dat dichter bij een ander onderdeel van het model komt dan de speling die je printer heeft bewezen, zodat een deksel in zijn doos en een pen in zijn gat gevonden worden voordat de print als één blok van het bed komt.</p>
+    <p class="where" lang="en">Where: <b>View &gt; Face Style &gt; Tight Fits</b>; the clearance of <b>3D Printing &gt; Clearance Test</b></p>
+    <p class="where" lang="nl">Waar: <b>Beeld &gt; Vlakstijl &gt; Nauwe passingen</b>; de speling van <b>3D-printen &gt; Spelingstest</b></p>
+    <ul lang="en">
+      <li>A face is tight where it stands closer to another part than the clearance, where it touches that part and where it runs into it; a face that lies inside another part is the tightest of all, because there is no room left for any plastic.</li>
+      <li>The clearance is the one you measured with the <a href="#print">clearance test</a> - the same value the screw holes and the other print tools use, so the view brings no setting of its own.</li>
+      <li>The status bar counts the marked faces, together with the thin walls and the faces that need support when those views are on.</li>
+      <li>Where a face is thin as well as close the thin colour wins, and where it also hangs over the overhang colour wins: a nozzle that cannot lay plastic that thin and support that is not there are the worse troubles.</li>
+      <li>The check is of the whole model at once and runs in the background: the model keeps its own colours until the answer is there, and two parts that stand far apart cost nothing at all.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Een vlak is nauw waar het dichter bij een ander onderdeel staat dan de speling, waar het dat onderdeel raakt en waar het erin loopt; een vlak dat binnen een ander onderdeel ligt, is het nauwst van allemaal, want er is geen ruimte meer voor enig plastic.</li>
+      <li>De speling is die welke je met de <a href="#print">spelingstest</a> hebt opgemeten - dezelfde waarde die de schroefgaten en de andere printgereedschappen gebruiken, dus de weergave brengt geen eigen instelling mee.</li>
+      <li>De statusbalk telt de gemarkeerde vlakken, samen met de dunne wanden en de vlakken die support nodig hebben als die weergaven aan staan.</li>
+      <li>Waar een vlak ook dun is, wint de dunne kleur, en waar het ook overhangt wint de overhangkleur: een nozzle die dat dunne plastic niet kan neerleggen en support die er niet is, zijn de ergere problemen.</li>
+      <li>De controle is van het hele model tegelijk en loopt op de achtergrond: het model houdt zijn eigen kleuren tot het antwoord er is, en twee onderdelen die ver uit elkaar staan kosten helemaal niets.</li>
+    </ul>
     <h3><span lang="en">Orient for printing</span><span lang="nl">Oriënteren voor printen</span></h3>
     <p lang="en">Turns parts so that each one stands on the face that needs the least support, like the auto-orient of a slicer.</p>
     <p lang="nl">Draait onderdelen zodat elk op het vlak staat dat de minste support nodig heeft, zoals de auto-orient van een slicer.</p>
@@ -2198,14 +2217,14 @@ volura</code></pre>
     <p class="where" lang="en">Where: <b>View</b></p>
     <p class="where" lang="nl">Waar: <b>Beeld</b></p>
     <ul lang="en">
-      <li><b>Face Style</b>: Wireframe, Hidden Line, Shaded and Monochrome, plus <a href="#overhangs">Overhangs</a> and <a href="#thin-walls">Thin Walls</a>.</li>
+      <li><b>Face Style</b>: Wireframe, Hidden Line, Shaded and Monochrome, plus <a href="#overhangs">Overhangs</a>, <a href="#thin-walls">Thin Walls</a> and <a href="#tight-fits">Tight Fits</a>.</li>
       <li><b>Edge Style</b>: the profile edges and the back edges (<kbd>K</kbd>).</li>
       <li>X-ray (<kbd>Alt</kbd>+<kbd>X</kbd>), hidden geometry, guides, the axes and the grid of the print bed.</li>
       <li><a href="#section">Section</a>: a plane you slide through the model to look inside it.</li>
       <li>On the worksheet here you also switch the grid and the <a href="#laser">layers</a> of the worksheet.</li>
     </ul>
     <ul lang="nl">
-      <li><b>Vlakstijl</b>: draadmodel, verborgen lijnen, gearceerd en monochroom, plus <a href="#overhangs">Overhang</a> en <a href="#thin-walls">Dunne wanden</a>.</li>
+      <li><b>Vlakstijl</b>: draadmodel, verborgen lijnen, gearceerd en monochroom, plus <a href="#overhangs">Overhang</a>, <a href="#thin-walls">Dunne wanden</a> en <a href="#tight-fits">Nauwe passingen</a>.</li>
       <li><b>Randstijl</b>: de profielranden en de achterliggende randen (<kbd>K</kbd>).</li>
       <li>Röntgen (<kbd>Alt</kbd>+<kbd>X</kbd>), verborgen geometrie, hulplijnen, de assen en het raster van het printbed.</li>
       <li><a href="#section">Doorsnede</a>: een vlak dat je door het model schuift om erin te kijken.</li>

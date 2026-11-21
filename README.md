@@ -504,6 +504,13 @@ gets for free.
   where no circle of that diameter fits in the material any more, measured in all three directions,
   and the status bar counts the faces that are thin. The cut of the model runs in the background,
   so a big model stays on screen while it is searched
+- **Tight Fits view** (View > Face Style > Tight Fits): marks every face that comes closer to
+  another part than the clearance your printer proved (the one of *3D Printing > Clearance
+  Test*), so lids in their boxes, pins in their holes and hinges that have to move are easy to
+  find before the print bed is even heated; a face is tight where it stands within that clearance
+  of another part, where it touches it and where it runs into it, the status bar counts the faces
+  that are tight, and two parts that stand far apart cost the check nothing. The whole model is
+  checked in the background, so a big model stays on screen while it is searched
 - **Model Info** (Window) with the pages Units (length rounding and the number of decimals of the
   Measurements box), Statistics (groups, loose edges and faces, total volume) and Print Bed
 - **Filament** (3D Printing > Printer Setup > Print Bed): the material (PLA, PETG, ABS, ASA, TPU, Nylon
