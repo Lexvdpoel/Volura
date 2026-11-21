@@ -590,6 +590,15 @@ gets for free.
     them, warned beforehand when it does not. What a
     print used goes off those spools when the print starts on the printer, or from *Mark as
     printed* when you start the print yourself from an SD card or a USB stick
+  - **Print History** (*Window > Print History…*): every print you made, the newest first, with
+    the moment it was made, the model it was sliced from, the printer that took it, what became
+    of it and what it used in grams and hours of printing; under the list stands what really ran,
+    because a print that was only saved printed nothing. *Print Again…* hands the G-code of such a
+    print to a printer again the way the print preview does, so a good print goes back on the bed
+    without slicing it over, and *Show File* opens the folder that holds it. Of every print that
+    went to a printer Volura keeps the G-code itself, in a folder that leaves with the print, so
+    those kept files never gather for ever; a file you saved yourself is never copied or taken
+    away
   - A model in more colours prints in more colours: every colour goes to the extruder you point it
     at, starting on the filament the multicolour 3MF would have given it, faces painted with the
     Paint Bucket print as a skin of the depth you choose, and a prime tower or ooze shield keeps
@@ -897,6 +906,8 @@ volura/
   printer_status.py  what those printers are doing right now (Window > Printer Status)
   spools.py     the rolls of filament on the shelf and what is left on each; spools_dialog.py is
                 Window > Spools…
+  print_history.py  the prints you made and the G-codes Volura kept of them;
+                print_history_dialog.py is Window > Print History…
   gcode_thumbnail.py  the picture of the print in the G-code, for the screen of the printer
 tests/          tests without a GUI (pytest); test_brep.py compares with results from SketchUp 2017
                 test_portability.py keeps Windows assumptions out of volura/

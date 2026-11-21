@@ -1180,7 +1180,8 @@ class PrintMixin:
             x0 = -0.5 * bed[0] if g.get("machine_center_is_zero") else 0.0
             y0 = -0.5 * bed[1] if g.get("machine_center_is_zero") else 0.0
             dlg = PrintPreviewDialog(self, path, preview, (x0, y0, x0 + bed[0], y0 + bed[1]),
-                                     summary, ask, self._filaments(plan, result, preview, stacks))
+                                     summary, ask, self._filaments(plan, result, preview, stacks),
+                                     grams=result.grams, minutes=result.seconds / 60.0)
             dlg.exec()
             if dlg.sent:
                 self.hint.setText(dlg.sent)      # which printer it went to says more here

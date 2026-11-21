@@ -33,7 +33,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar, snap_fit,
                nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
-               printer_link,
+               printer_link, print_history,
                sheet3d, sheettools, slice_presets, svg,
                spacemouse, spool_adapter, spools, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers, workspaces)
@@ -1490,6 +1490,9 @@ class Settings:
         # print preview comes off; a slot with no spool is an empty string there.
         self.spools = spools.from_lines(self.q.value("spools", []) or [])
         self.spool_for_slot = spools.slot_ids(self.q.value("spool_for_slot", []))
+        # every print Volura made, newest first (volura.print_history); Window > Print
+        # History… shows them and sends the G-code of one of them to a printer again
+        self.print_history = print_history.from_values(self.q.value("print_history", []) or [])
 
     def _bool(self, key, default):
         v = self.q.value(key, default)
@@ -1777,6 +1780,7 @@ class Settings:
         self.q.setValue("printers", [printer_link.to_json(conn) for conn in self.printers])
         self.q.setValue("spools", spools.to_lines(self.spools))
         self.q.setValue("spool_for_slot", spools.slot_ids(self.spool_for_slot))
+        self.q.setValue("print_history", print_history.from_values(self.print_history))
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
 
@@ -2612,6 +2616,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           False,
                           tr("The filament on every spool on your shelf, so a print does not "
                              "run out halfway"))
+        self.a_print_history = A(tr("Print &History…"),
+                                 lambda checked=False: self.print_history(), None, None, False,
+                                 tr("What you printed and what it took, so a print that went "
+                                    "well can go on the bed again"))
         self.a_welcome = A(tr("&Welcome to Volura"), self.show_welcome)
         self.a_updates = A(tr("Check for &Updates…"), lambda checked=False: self.check_for_updates())
         self.a_help = A(tr("&Keyboard Shortcuts"), self.show_help, "F1")
@@ -3243,7 +3251,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         m = mb.addMenu(tr("&Window"))
         self.standard_menu = QMenu(tr("Default &Tray"), m)
         self.fill(m, (self.standard_menu, None, self.a_model_info, self.a_prefs, None,
-                      self.a_printer_status, self.a_spools))
+                      self.a_printer_status, self.a_spools, self.a_print_history))
 
         m = mb.addMenu(tr("&Help"))
         self.fill(m, (self.a_welcome, self.a_help, None, self.a_updates, None, self.a_sponsor,
@@ -3879,6 +3887,19 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         """
         from .spools_dialog import SpoolsDialog
         dlg = SpoolsDialog(self)
+        dlg.exec()
+        return dlg
+
+    def print_history(self):
+        """Window > Print History…: every print that was made, and one of them again.
+
+        The print preview writes what became of a print to the history
+        (volura.print_history); this list shows them newest first with what they took in
+        filament and time, and hands the G-code of one of them to a printer again - the same
+        flow the preview uses, so nothing has to be sliced over.
+        """
+        from .print_history_dialog import PrintHistoryDialog
+        dlg = PrintHistoryDialog(self)
         dlg.exec()
         return dlg
 
