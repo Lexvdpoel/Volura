@@ -2221,6 +2221,25 @@ volura</code></pre>
       <li>Een beeld dat niet komt, wordt gedempt onder de regel gezegd en de volgende vraag probeert het opnieuw; een camera die niets antwoordt, zegt niets verkeerds over de printer zelf, en een venster dat niet op het scherm staat, vraagt een camera ook niets.</li>
       <li>Het venster staat naast het model, dus je werkt gewoon door terwijl de print loopt, en er is er altijd maar één.</li>
     </ul>
+    <h3 id="bed-mesh"><span lang="en">Bed mesh</span><span lang="nl">Bedmesh</span></h3>
+    <p lang="en">How flat the bed of a Klipper printer is, point by point.</p>
+    <p lang="nl">Hoe vlak het bed van een Klipper-printer is, punt voor punt.</p>
+    <p class="where" lang="en">Where: <b>Window &gt; Bed Mesh…</b></p>
+    <p class="where" lang="nl">Waar: <b>Venster &gt; Bedmesh…</b></p>
+    <ul lang="en">
+      <li>Only Klipper (Moonraker) printers can answer a bed mesh, so only those stand in the box at the top; without one the window says what to add under <b>Window &gt; Preferences &gt; Printers</b> and asks nothing.</li>
+      <li>The bed is painted as a map seen from above: x to the right, y up, and the first row of the mesh at the front of the bed. Blue lies under 0, red stands above it and white is always 0, also when the whole bed sits on one side of zero.</li>
+      <li>The finer mesh that the printer interpolated paints the map, while the numbers in its cells come from the points the probe really touched. The bar underneath says which colour belongs to which height, and the line below says how far the highest and the lowest point lie apart, how big the probed grid is and which profile is loaded.</li>
+      <li>Volura asks the printer once when the window comes on the screen, and again when you press <b>Refresh</b> or choose another printer. A bed mesh does not change by itself, so nothing is asked while the window is only standing there; moving the mouse over the picture says which x, y and z stand under that place on the bed.</li>
+      <li>A printer that has no mesh loaded, or that answers something wrong, says so muted under the picture, and the picture of the last good answer stays where it was. The window sits beside the model, and there is always just one of it.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Alleen Klipper (Moonraker)-printers kunnen een bedmesh antwoord geven, dus alleen zij staan in de keuzelijst bovenaan; zonder zo'n printer zegt het venster wat je moet toevoegen bij <b>Venster &gt; Voorkeuren &gt; Printers</b> en vraagt het niets.</li>
+      <li>Het bed wordt geschilderd als een kaart van bovenaf: x naar rechts, y omhoog en de eerste rij van het mesh vooraan het bed. Blauw ligt onder 0, rood staat erboven en wit is altijd 0, ook als het hele bed aan één kant van nul ligt.</li>
+      <li>Het fijnere mesh dat de printer zelf maakte, schildert de kaart; de getallen in zijn vakjes komen van de punten die de voeler echt aanraakte. De balk eronder zegt welke kleur bij welke hoogte hoort, en de regel daaronder zegt hoeveel het hoogste en het laagste punt uit elkaar liggen, hoe groot het geprode raster is en welk profiel geladen is.</li>
+      <li>Volura vraagt de printer één keer als het venster op het scherm komt, en opnieuw als je op <b>Vernieuwen</b> drukt of een andere printer kiest. Een bedmesh verandert niet vanzelf, dus er wordt niets gevraagd zolang het venster er alleen maar staat; beweeg je muis over het beeld, dan zegt de regel onderaan welk x-, y- en z-punt op die plek van het bed staat.</li>
+      <li>Een printer die geen mesh geladen heeft, of die iets verkeerds antwoordt, zegt dat gedempt onder het beeld, en het beeld van het laatste goede antwoord blijft staan waar het stond. Het venster staat naast het model, en er is er altijd maar één van.</li>
+    </ul>
     <h3 id="spools"><span lang="en">Spools of filament</span><span lang="nl">Spoelen filament</span></h3>
     <p lang="en">What is still on every roll of filament, so you see beforehand whether a print has enough.</p>
     <p lang="nl">Wat er nog op elke rol filament zit, zodat je van tevoren ziet of een print genoeg heeft.</p>

@@ -591,6 +591,11 @@ gets for free.
         more. Which cameras you had on come back next time you open the window, and a window that
         is off the screen asks nothing of a camera either. A picture that does not come is said
         under the line and the next asking tries again
+    - **Bed Mesh** (*Window > Bed Mesh…*) paints the bed mesh of a Klipper (Moonraker) printer as
+      a heat map seen from above: blue under 0, white at 0, red above it, with the probed value in
+      each point and the printer's own name for the profile under the picture. The window asks the
+      printer once when it opens, and again only when you press *Refresh* or choose another
+      printer; moving the mouse over the map says which x, y and z stand under it
   - **Spools** (*Window > Spools…*): the rolls of filament on your shelf, each with its colour,
     its material, what a full spool holds and what is still on it. *Set left…* takes the weight
     of the empty spool off what your scale says, so what you keep is the filament alone. In the
@@ -936,6 +941,7 @@ volura/
                 their cameras a picture
   printer_status.py  what those printers are doing right now, and what their cameras see
                 (Window > Printer Status)
+  bed_mesh.py   the numbers and colours of a bed mesh; bed_mesh_dialog.py is Window > Bed Mesh…
   spools.py     the rolls of filament on the shelf and what is left on each; spools_dialog.py is
                 Window > Spools…
   print_history.py  the prints you made and the G-codes Volura kept of them;
