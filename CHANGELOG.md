@@ -3,12 +3,15 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## Unreleased
+## 0.2.68 — 2026-11-21
 
 ### New
 - **Section view**: *View > Section* cuts the 3D view open with a plane along X, Y or Z, so you
   can look at walls, holes and hollows inside a model. The cut surface is drawn solid; move or
   flip the plane in the Section panel. The model itself is not changed.
+- **Snap-fit clip** under *Draw > Parts > Mechanical*: a hook and its catch, printed side by side,
+  that click together without screws. Pick the material and the dialog shows how far the beam
+  bends against what PLA, PETG, ABS/ASA or Nylon can take, and how long the beam should be.
 
 ## 0.2.67 — 2026-11-20
 
