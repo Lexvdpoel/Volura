@@ -3,12 +3,15 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## Unreleased
+## 0.2.71 — 2026-11-21
 
 ### New
 - **Print history**: *Window > Print History…* lists what you printed, when, on which printer
   and with how much filament and time, with totals. *Print Again…* sends a print to a printer
   once more in one click.
+- **Tree support**: *File > Slice* has a support style next to the support choice. Tree grows
+  thin branches up to the overhangs: less plastic, fewer marks and easier to remove than normal
+  support, which stays the better choice under large flat overhangs.
 
 ## 0.2.70 — 2026-11-21
 
