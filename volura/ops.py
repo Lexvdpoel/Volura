@@ -1154,18 +1154,30 @@ class Part:
         self.color = color
         self.manifold = manifold
         self.problem = problem
+        #: CuraEngine settings this part wants on its own mesh, read from g.meta["mesh_settings"]
+        self.mesh_settings = {}
 
 
 def parts(doc: Document, only_selected=False):
-    """Printable parts: every visible group and every closed shell of loose geometry."""
+    """Printable parts: every visible group and every closed shell of loose geometry.
+
+    A group may carry per-mesh slicing settings in `g.meta["mesh_settings"]`; they are handed to the
+    part as `mesh_settings`, and the slice keeps only those a single mesh accepts (see
+    `slicer.per_mesh_settings`)."""
     groups = doc.selected_groups() if only_selected else doc.visible_groups()
     items = [(g.name, g.color, g.ents, list(g.ents.F)) for g in groups]
+    metas = [g.meta for g in groups]
     if not only_selected:
         for k, shell in enumerate(doc.root.shells(), 1):
             colors = Counter(doc.root.F[f].color for f in shell if doc.root.F[f].color)
             color = colors.most_common(1)[0][0] if colors else DEFAULT_COLOR
             items.append((tr("Loose geometry {k}").format(k=k), color, doc.root, shell))
-    return build_parts(items)
+            metas.append(None)
+    out = build_parts(items)
+    for part, meta in zip(out, metas):
+        got = (meta or {}).get("mesh_settings")
+        part.mesh_settings = dict(got) if isinstance(got, dict) else {}
+    return out
 
 
 def color_id(color):

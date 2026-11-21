@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,
                cable_chain, cable_clip, cable_comb, cable_winder, calibration_cube, card_holder,
                coaster, desk_hook, door_wedge, drawer_organizer, enclosure, fan_guard,
-               fileio, filament_clip, first_layer_test,
+               fileio, filament_clip, first_layer_test, flow_rate_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
                label_plate, lithophane, ops, paint_split, pegboard, pen_cup, phone_stand,
                plant_label, plant_pot, pressure_advance_test, screw_jar, snap_fit, soap_dish,
@@ -1174,7 +1174,9 @@ class PrintMixin:
                     mesh = man.to_mesh()
                     verts = np.asarray(mesh.vert_properties)[:, :3]
                     tris = np.asarray(mesh.tri_verts)
-                    meshes.append((verts, tris, extruder))
+                    # a part may slice with settings of its own (a pad of a flow rate test)
+                    own = slicer.per_mesh_settings(stacks, p.mesh_settings)
+                    meshes.append((verts, tris, extruder, own))
                     pictures.append((verts, tris, group[0][1]))
             if not meshes:
                 raise ValueError(tr("There is nothing to slice. Draw a face and use Push/Pull (P)."))
@@ -1187,8 +1189,8 @@ class PrintMixin:
                 slicer.set_print_temperature(stacks, print_temp)
             meshes, pictures = made_meshes(report)
             report(0.15, tr("Slicing…"))
-            lo = np.min([v.min(axis=0) for v, _t, _e in meshes], axis=0)
-            hi = np.max([v.max(axis=0) for v, _t, _e in meshes], axis=0)
+            lo = np.min([m[0].min(axis=0) for m in meshes], axis=0)
+            hi = np.max([m[0].max(axis=0) for m in meshes], axis=0)
             size = hi - lo
             if any(b > 0 and s > b + 1e-6 for s, b in zip(size, bed)):
                 raise ValueError(tr("The parts ({x:.0f} × {y:.0f} × {z:.0f} mm) do not fit the "
@@ -3924,6 +3926,104 @@ class PrintMixin:
             self.view.set_status(tr("Pressure advance test failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the pressure advance test…"),
+                       on_done=done, on_error=failed)
+    # ----------------------------------------------------------- flow rate test
+
+    def flow_rate_test_dialog(self):
+        """3D Printing > Flow Rate Test…: a row of pads, one per material flow, so the user reads
+        which flow gives this printer a smooth, closed top surface."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Flow Rate Test"))
+        form = QFormLayout(dlg)
+        lo, hi = flow_rate_test.FLOW_MIN, flow_rate_test.FLOW_MAX
+        start_sp = self._spin(lo, hi, self.settings.flow_rate_test_start, 1, " %", 2.5)
+        start_sp.setToolTip(tr("The flow of the first pad, the leanest one"))
+        end_sp = self._spin(lo, hi, self.settings.flow_rate_test_end, 1, " %", 2.5)
+        end_sp.setToolTip(tr("The flow of the last pad, the richest one"))
+        step_sp = self._spin(0.1, 25.0, self.settings.flow_rate_test_step, 1, " %", 2.5)
+        step_sp.setToolTip(tr("How much more every next pad prints"))
+        info = QLabel()
+        form.addRow(tr("Start"), start_sp)
+        form.addRow(tr("End"), end_sp)
+        form.addRow(tr("Step"), step_sp)
+        form.addRow("", info)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+
+        def show(*_):
+            try:
+                s = flow_rate_test.sizes(float(start_sp.value()), float(end_sp.value()),
+                                         float(step_sp.value()))
+            except ValueError as exc:
+                info.setText(str(exc))
+                return
+            wide, deep, _top = s["size"]
+            info.setText(tr("{n} pads: {low} to {high} % in {rows} row(s)\n"
+                            "Footprint: {width} × {depth} mm\n{read}")
+                         .format(n=s["pads"],
+                                 low=flow_rate_test.flow_text(s["flows"][0]),
+                                 high=flow_rate_test.flow_text(s["flows"][-1]),
+                                 rows=s["rows"], width=f"{wide:g}", depth=f"{deep:g}",
+                                 read=tr("Read the tops: pick the pad with a smooth, closed top "
+                                         "without ridges.")))
+
+        for sp in (start_sp, end_sp, step_sp):
+            sp.valueChanged.connect(show)
+        show()
+        if dlg.exec() != QDialog.Accepted:
+            return
+        start, end = float(start_sp.value()), float(end_sp.value())
+        step = float(step_sp.value())
+        try:
+            fl = flow_rate_test.flows(start, end, step)
+        except ValueError as exc:
+            QMessageBox.warning(self, tr("Flow Rate Test"), str(exc))
+            return
+        self.settings.flow_rate_test_start = start
+        self.settings.flow_rate_test_end = end
+        self.settings.flow_rate_test_step = step
+        self.settings.save()
+        self._apply_flow_rate_test(start, end, step, fl)
+
+    def _apply_flow_rate_test(self, start, end, step, fl=None):
+        doc = self.doc
+        bb = doc.model_bbox()
+        x0 = 0.0 if bb is None else float(bb[1][0]) + 10.0   # mm to the right of the model
+        fl = fl if fl is not None else flow_rate_test.flows(start, end, step)
+
+        def work(report):
+            # the numbers in the tops are the slow part of a set of pads with fonts, so it happens
+            # here and the window keeps responding
+            report(0.1, tr("Building the flow rate test…"))
+            pads = flow_rate_test.flow_rate_test(start=start, end=end, step=step)
+            for m in pads:
+                if m.status() != mf.Error.NoError or m.is_empty():
+                    raise ValueError(tr("the result is not a valid volume"))
+            # the group of pads is drawn centred on the origin: move it to the free spot on the bed
+            lo_x = min(float(np.asarray(m.bounding_box())[0]) for m in pads)
+            dx = x0 - lo_x
+            return [m.translate((dx, 0.0, 0.0)) for m in pads]
+
+        def done(result):
+            doc.checkpoint()                # one undo takes the whole row away again
+            names = [tr("Flow {flow} %").format(flow=flow_rate_test.flow_text(f)) for f in fl]
+            groups = []
+            for i, m in enumerate(result):
+                new = ops.group_from_manifold(doc, m, self.settings.current_color, names[i])
+                # every pad prints with its own flow: the slice reads it back from the part
+                new.meta = {"mesh_settings": {"material_flow": fl[i]}}
+                groups.append(new)
+            doc.set_selection([("g", g.id, g.id) for g in groups])
+            doc.notify()
+            self.view.set_status(tr("Print it and look at the tops: the pad with a smooth, closed "
+                                    "top without ridges is the flow to set."))
+
+        def failed(exc):
+            self.view.set_status(tr("Flow rate test failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the flow rate test…"),
                        on_done=done, on_error=failed)
     # --------------------------------------------------------- first layer test
 

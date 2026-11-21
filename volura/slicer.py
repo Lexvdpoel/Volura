@@ -11,6 +11,7 @@ where they stand relative to each other and their centre lands in the centre of 
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
@@ -21,6 +22,8 @@ import tempfile
 from dataclasses import dataclass, field
 
 import numpy as np
+
+_log = logging.getLogger(__name__)
 
 #: the name of the engine program
 ENGINE = "CuraEngine.exe" if sys.platform == "win32" else "CuraEngine"
@@ -157,12 +160,35 @@ def place_on_bed(meshes, settings) -> list:
     """The meshes moved so their common centre is the centre of the bed, the lowest on z = 0.
 
     CuraEngine adds half the bed to every coordinate unless the origin is in the middle of the bed,
-    so the coordinates it gets are relative to that middle.
+    so the coordinates it gets are relative to that middle. A mesh is ``(verts, tris, extruder)``
+    with, for a part that carries its own per-mesh settings, a fourth element that is kept as is.
     """
-    lo = np.min([np.asarray(v).min(axis=0) for v, _t, _e in meshes], axis=0)
-    hi = np.max([np.asarray(v).max(axis=0) for v, _t, _e in meshes], axis=0)
+    lo = np.min([np.asarray(m[0]).min(axis=0) for m in meshes], axis=0)
+    hi = np.max([np.asarray(m[0]).max(axis=0) for m in meshes], axis=0)
     shift = np.array([-0.5 * (lo[0] + hi[0]), -0.5 * (lo[1] + hi[1]), -lo[2]])
-    return [(np.asarray(v, dtype=float) + shift, t, e) for v, t, e in meshes]
+    return [(np.asarray(m[0], dtype=float) + shift, m[1], m[2], *m[3:]) for m in meshes]
+
+
+def per_mesh_settings(stacks, settings) -> dict:
+    """The part of a part's `settings` that CuraEngine accepts on a single mesh of the -r file.
+
+    A mesh may carry its own values for the settings its printer definition marks
+    `settable_per_mesh` - `material_flow` among them - and those go in the settings document next to
+    the mesh's `extruder_nr`. A key the definition does not mark so (a global-only or an extruder
+    setting), or one the definition does not know at all, cannot be honoured per mesh: it is dropped
+    with a warning rather than refused, because a setting the engine ignores is no reason to stop a
+    print. Values are made JSON-safe the way every setting in that document is."""
+    out = {}
+    if not settings:
+        return out
+    definition = stacks.printer.definition.settings
+    for key, value in settings.items():
+        props = definition.get(key)
+        if props and props.get("settable_per_mesh"):
+            out[key] = _json_value(value)
+        else:
+            _log.warning("not a per-mesh setting, ignored for this part: %s", key)
+    return out
 
 
 def resolved_settings(stacks) -> dict:
@@ -310,8 +336,8 @@ def orca_gcode_for(stacks, meshes, glob: dict):
             return float(stack.get(key))
         except (TypeError, ValueError):
             return default
-    lo = np.min([np.asarray(v).min(axis=0) for v, _t, _e in meshes], axis=0)
-    hi = np.max([np.asarray(v).max(axis=0) for v, _t, _e in meshes], axis=0)
+    lo = np.min([np.asarray(m[0]).min(axis=0) for m in meshes], axis=0)
+    hi = np.max([np.asarray(m[0]).max(axis=0) for m in meshes], axis=0)
     if not glob.get("machine_center_is_zero"):
         half = np.array([0.5 * float(glob.get("machine_width", 0)),
                          0.5 * float(glob.get("machine_depth", 0)), 0.0])
@@ -346,6 +372,11 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
     `stacks` is the `cura_profiles.Stacks` of the printer, nozzle, material and quality to slice
     with. `on_progress(fraction)` is called while CuraEngine works. A RuntimeError says why a slice
     failed.
+
+    A mesh may carry a fourth element: a dict of CuraEngine settings for that one mesh, as
+    `per_mesh_settings` kept only the `settable_per_mesh` ones of them; they go in the settings
+    document next to the mesh's `extruder_nr`, so a single pad of a flow rate test prints with its
+    own `material_flow` while the rest of the bed keeps the global value.
     """
     engine = engine or find_engine()
     if not engine:
@@ -357,7 +388,8 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
     offset = stacks.printer.definition.metadata.get("orca_offset")
     if offset and any(offset):
         # the middle of what this printer can print is not the middle of Cura's bed
-        meshes = [(v + np.array([offset[0], offset[1], 0.0]), t, e) for v, t, e in meshes]
+        meshes = [(m[0] + np.array([offset[0], offset[1], 0.0]), m[1], m[2], *m[3:])
+                  for m in meshes]
     gcode = orca_gcode_for(stacks, meshes, doc["global"])
     if gcode is not None:
         start, end = gcode
@@ -367,10 +399,10 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
         doc["global"]["material_bed_temp_prepend"] = not codes & {"M140", "M190"}
         doc["global"]["material_print_temp_prepend"] = not codes & {"M104", "M109"}
     with tempfile.TemporaryDirectory(prefix="volura-slice-") as tmp:
-        for i, (v, t, e) in enumerate(meshes):
+        for i, m in enumerate(meshes):
             name = f"part{i}.stl"
-            write_stl(os.path.join(tmp, name), v, t)
-            doc[name] = {"extruder_nr": int(e)}
+            write_stl(os.path.join(tmp, name), m[0], m[1])
+            doc[name] = {"extruder_nr": int(m[2]), **(m[3] if len(m) > 3 and m[3] else {})}
         settings_path = os.path.join(tmp, "settings.json")
         with open(settings_path, "w", encoding="utf-8") as fh:
             json.dump(doc, fh)

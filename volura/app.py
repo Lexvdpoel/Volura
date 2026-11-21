@@ -473,6 +473,21 @@ class Settings:
             self.first_layer_test_margin = 15.0
         self.first_layer_test_margin = max(5.0, min(50.0, self.first_layer_test_margin))
         try:
+            self.flow_rate_test_start = float(self.q.value("flow_rate_test_start", 90.0))
+        except (TypeError, ValueError):
+            self.flow_rate_test_start = 90.0
+        self.flow_rate_test_start = max(50.0, min(150.0, self.flow_rate_test_start))
+        try:
+            self.flow_rate_test_end = float(self.q.value("flow_rate_test_end", 110.0))
+        except (TypeError, ValueError):
+            self.flow_rate_test_end = 110.0
+        self.flow_rate_test_end = max(50.0, min(150.0, self.flow_rate_test_end))
+        try:
+            self.flow_rate_test_step = float(self.q.value("flow_rate_test_step", 2.5))
+        except (TypeError, ValueError):
+            self.flow_rate_test_step = 2.5
+        self.flow_rate_test_step = max(0.1, min(25.0, self.flow_rate_test_step))
+        try:
             self.hinge_slit = float(self.q.value("hinge_slit", 15.0))
         except (TypeError, ValueError):
             self.hinge_slit = 15.0
@@ -1627,6 +1642,9 @@ class Settings:
         self.q.setValue("first_layer_test_size", self.first_layer_test_size)
         self.q.setValue("first_layer_test_height", self.first_layer_test_height)
         self.q.setValue("first_layer_test_margin", self.first_layer_test_margin)
+        self.q.setValue("flow_rate_test_start", self.flow_rate_test_start)
+        self.q.setValue("flow_rate_test_end", self.flow_rate_test_end)
+        self.q.setValue("flow_rate_test_step", self.flow_rate_test_step)
         self.q.setValue("hinge_slit", self.hinge_slit)
         self.q.setValue("hinge_gap", self.hinge_gap)
         self.q.setValue("hinge_pitch", self.hinge_pitch)
@@ -2661,6 +2679,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                          tr("A hollow tower whose segments print with a rising "
                                             "pressure advance value: print it and read which value "
                                             "gives sharp corners"))
+        self.a_flow_rate_test = A(tr("Flow Rate Test…"),
+                                  lambda checked=False: self.flow_rate_test_dialog(), None, None,
+                                  False,
+                                  tr("A row of pads, one per material flow: print it and see which "
+                                     "flow gives a smooth, closed top surface"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -3322,7 +3345,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                       self.a_elephant, self.a_mouse_ears, None,
                       self.a_clearance_test, self.a_overhang_test, self.a_calibration_cube,
                       self.a_bridge_test, self.a_stringing_test, self.a_first_layer_test,
-                      self.a_temperature_tower, self.a_pressure_advance_test))
+                      self.a_temperature_tower, self.a_pressure_advance_test,
+                      self.a_flow_rate_test))
 
         # ---- Laser and Mill: what only matters for the machine
         m = mb.addMenu(tr("&Laser and Mill"))

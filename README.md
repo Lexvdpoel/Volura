@@ -208,6 +208,12 @@ gets for free.
   ADVANCE=…`, `M900 K…` or `M572 D0 S…` at the layer that reaches every segment, the lowest value
   already at the first layer; the changes apply to the whole bed. Print it and read the corners: the
   lowest segment whose corners are sharp and not bulging is the value to set in your printer
+- **Flow Rate Test** (3D Printing): a row of square pads, 30 × 30 mm and 3 mm tall, that each print
+  with their own flow - by default nine pads from 90 to 110 % in steps of 2.5 %, or in two rows when
+  a single row would grow too wide for the bed. Every pad carries its flow engraved in its top
+  surface, and the flow goes to the slicer as a setting of that one pad. Print it and look at the
+  tops: too little flow leaves gaps and low lines that never close, too much leaves ridges and
+  blobs, and the pad with a smooth, closed top without ridges is the flow to set
 - **Ready-made parts** (Draw > Parts): the parts below stand in four submenus - **Mechanical**,
   **Cables**, **Storage** and **Home and Desk** - and each submenu is in alphabetical order, so
   the part you are after is a short click away
