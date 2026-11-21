@@ -232,6 +232,14 @@ gets for free.
   with the play you enter, so the hinge turns as soon as it is off the bed and there is nothing to
   screw or to glue. The pin ends and the holes end in a chamfer, so nothing needs support, and the
   number of barrels is odd, so the pin cannot walk out
+- **Snap-Fit Clip** (Draw > Parts): a printable hook and catch that click into each other after
+  they come off the printer: a plate with a beam that springs sideways and ends in a barb, and
+  an upright wall on a foot to glue or screw down with a slot just as wide as the beam — the
+  barb pushes the beam aside to get through, springs out past it and hooks behind the wall. The
+  dialog weighs every click against the bending strain that the chosen material takes, from PLA
+  and PETG to Nylon and TPU, and says how long the beam has to be at least — shorter beams
+  never reach behind the wall. Releasable leans the retaining face over so you can open the
+  clip again; the beam prints standing on its edge, bending inside its own layers
 - **Battery Holder** (Draw > Parts): a printable block that keeps one to eight round cells
   side by side, of the cell you choose: AA, AAA, 18650, 21700 or CR123A. Every cell lies in a
   cradle that is open at the top, with the play you enter all round it, so the cell lies in

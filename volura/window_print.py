@@ -31,9 +31,9 @@ from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, brack
                coaster, desk_hook, door_wedge, drawer_organizer, enclosure, fan_guard,
                fileio, filament_clip, first_layer_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
-               label_plate, lithophane, ops, paint_split, pegboard, pen_cup, phone_stand, plant_label,
-               plant_pot, screw_jar, soap_dish, slicer, spool_adapter, standoff, storage_bin,
-               stringing_test, text3d,
+               label_plate, lithophane, ops, paint_split, pegboard, pen_cup, phone_stand,
+               plant_label, plant_pot, screw_jar, snap_fit, soap_dish, slicer, spool_adapter,
+               standoff, storage_bin, stringing_test, text3d,
                theme, threads, tie_mount, wall_hook)
 from . import gcode_preview, gcode_thumbnail
 from .print_preview import FILAMENT_STYLE, PrintPreviewDialog
@@ -51,7 +51,8 @@ from .part_dialogs import (BagClipDialog, BatteryHolderDialog, BinRackDialog,
                            HingeDialog, HoseAdapterDialog, KnobDialog, LabelPlateDialog,
                            LithophaneDialog, PegboardDialog, PenCupDialog, PhoneStandDialog,
                            PlantLabelDialog, PlantPotDialog, ProjectBoxDialog, ScrewJarDialog,
-                           SoapDishDialog, SpoolAdapterDialog, StandoffDialog, StorageBinDialog,
+                           SnapFitDialog, SoapDishDialog, SpoolAdapterDialog, StandoffDialog,
+                           StorageBinDialog,
                            Text3DDialog, TieMountDialog, WallHookDialog)
 
 
@@ -623,6 +624,66 @@ class PrintMixin:
             self.view.set_status(tr("Print-in-place hinge failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the hinge…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ snap-fit clip
+    def snap_fit_dialog(self):
+        """Draw > Parts > Mechanical > Snap-Fit Clip…: a hook and a catch that click together."""
+        dlg = SnapFitDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.snap_material = str(options["material"])
+        self.settings.snap_length = float(options["L"])
+        self.settings.snap_thickness = float(options["t"])
+        self.settings.snap_width = float(options["w"])
+        self.settings.snap_undercut = float(options["undercut"])
+        self.settings.snap_releasable = bool(options["releasable"])
+        self.settings.save()
+        made = self.make_snap_fit_model(options)
+        self.setFocus()
+        return made
+
+    def make_snap_fit_model(self, options):
+        """The snap-fit clip as a printed part: one undo step, on the bed next to the model.
+
+        The slot in the catch is a boolean and the beam is a slender profile, so the clip is
+        built in the background, like the cable clips, and the window keeps responding. It stands
+        on the bed in the middle of the free bed, or on the free place 10 mm to the right of what
+        is already in the model, so a second clip does not land in the first one. The room on the
+        slot is the clearance of the screw holes, the one this printer already proved.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("material", "L", "t", "w", "undercut", "releasable")}
+        size["clearance"] = self.settings.screw_hole_clearance
+        material, length = str(options["material"]), float(options["L"])
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the snap-fit clip…"))
+            m = snap_fit.snap_fit_clip(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the clip away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Snap-fit clip"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Snap-fit clip added: hook of {l} mm for {mat}.")
+                                 .format(l=f"{length:g}", mat=material))
+
+        def failed(exc):
+            self.view.set_status(tr("Snap-fit clip failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the snap-fit clip…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ battery holder

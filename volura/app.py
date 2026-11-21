@@ -31,7 +31,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                dxf, enclosure, errors, fan_guard, filament_clip,
                fileio, gcode, gcode_mill, gcode_thumbnail, gears, gridfinity, grommet,
                hex_key_holder, hinge, hose_adapter, i18n, joints,
-               keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar,
+               keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar, snap_fit,
                nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
                printer_link,
                sheet3d, sheettools, slice_presets, svg,
@@ -189,8 +189,8 @@ PANELS = (PANEL_INFO, PANEL_COLORS, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT
 # shortcut paths and the tests of tests/test_parts_menu.py follow from the table.
 PART_CATEGORIES = (
     (tr_noop("&Mechanical"), ("a_bracket", "a_grommet", "a_fan_guard", "a_filament_clip",
-                              "a_hose_adapter", "a_knob", "a_print_hinge", "a_spool_adapter",
-                              "a_spur_gear_3d", "a_standoff")),
+                              "a_hose_adapter", "a_knob", "a_print_hinge", "a_snap_fit",
+                              "a_spool_adapter", "a_spur_gear_3d", "a_standoff")),
     (tr_noop("&Cables"), ("a_cable_chain", "a_cable_clip", "a_cable_comb", "a_cable_winder",
                           "a_tie_mount")),
     (tr_noop("&Storage"), ("a_battery_holder", "a_bin_rack", "a_bit_holder",
@@ -776,6 +776,33 @@ class Settings:
         except (TypeError, ValueError):
             self.hinge_pin_d = 3.0
         self.hinge_pin_d = max(hinge.PIN_MIN, min(hinge.PIN_MAX, self.hinge_pin_d))
+        self.snap_material = str(self.q.value("snap_material", "PLA"))
+        if self.snap_material not in snap_fit.MATERIALS:
+            self.snap_material = "PLA"
+        try:
+            self.snap_length = float(self.q.value("snap_length", 15.0))
+        except (TypeError, ValueError):
+            self.snap_length = 15.0
+        self.snap_length = max(snap_fit.LENGTH_MIN, min(snap_fit.LENGTH_MAX, self.snap_length))
+        try:
+            self.snap_thickness = float(self.q.value("snap_thickness", 1.6))
+        except (TypeError, ValueError):
+            self.snap_thickness = 1.6
+        self.snap_thickness = max(snap_fit.THICKNESS_MIN,
+                                  min(snap_fit.THICKNESS_MAX, self.snap_thickness))
+        try:
+            self.snap_width = float(self.q.value("snap_width", 8.0))
+        except (TypeError, ValueError):
+            self.snap_width = 8.0
+        self.snap_width = max(snap_fit.WIDTH_MIN, min(snap_fit.WIDTH_MAX, self.snap_width))
+        try:
+            self.snap_undercut = float(self.q.value("snap_undercut", 1.0))
+        except (TypeError, ValueError):
+            self.snap_undercut = 1.0
+        self.snap_undercut = max(snap_fit.UNDERCUT_MIN,
+                                 min(snap_fit.UNDERCUT_MAX, self.snap_undercut,
+                                     snap_fit.UNDERCUT_MAX_OF_T * self.snap_thickness))
+        self.snap_releasable = self._bool("snap_releasable", False)
         self.battery_cell = str(self.q.value("battery_cell", "AA"))
         if self.battery_cell not in battery_holder.CELLS:
             self.battery_cell = "AA"
@@ -1600,6 +1627,9 @@ class Settings:
         self.q.setValue("hinge_knuckles", self.hinge_knuckles)
         self.q.setValue("hinge_clearance", self.hinge_clearance)
         self.q.setValue("hinge_pin_d", self.hinge_pin_d)
+        for key in ("snap_material", "snap_length", "snap_thickness", "snap_width",
+                    "snap_undercut", "snap_releasable"):
+            self.q.setValue(key, getattr(self, key))
         self.q.setValue("battery_cell", self.battery_cell)
         self.q.setValue("battery_count", self.battery_count)
         self.q.setValue("battery_wall", self.battery_wall)
@@ -2768,6 +2798,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                    "on the bed, joined by a row of knuckles around a pin, so it "
                                    "prints as one piece and turns as soon as it comes off the "
                                    "printer"))
+        # ---- snap-fit clip
+        self.a_snap_fit = A(tr("Snap-Fit Clip…"),
+                            lambda checked=False: self.snap_fit_dialog(), None, None, False,
+                            tr("Add a printable snap-fit clip to the model: a hook with a "
+                               "barbed beam that springs through the window of its catch and "
+                               "holds, printed lying on its side so the beam bends inside its "
+                               "own layers, with the strain of the click checked against the "
+                               "material"))
         # ---- battery holder
         self.a_battery_holder = A(tr("Battery Holder…"),
                                   lambda checked=False: self.battery_holder_dialog(), None,

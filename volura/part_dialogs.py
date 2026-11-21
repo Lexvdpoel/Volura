@@ -1,9 +1,9 @@
 """The dialogs of the printable parts: the gear, the box and the small hardware.
 
 The spur gear, the project box, the knob, the standoff, the label plate, the 3D text, the cable
-clip, the print-in-place hinge, the battery holder, the storage bin and its wall rack. Each one
-starts at the values of Settings and remembers the new ones; the actions that open them and the models they
-build live in `volura/app.py`.
+clip, the print-in-place hinge, the snap-fit clip, the battery holder, the storage bin and its
+wall rack. Each one starts at the values of Settings and remembers the new ones; the actions that
+open them and the models they build live in `volura/app.py`.
 """
 from __future__ import annotations
 
@@ -19,8 +19,9 @@ from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_ch
                cable_comb, cable_winder, card_holder, coaster, desk_hook, door_wedge,
                drawer_organizer, enclosure, fan_guard, filament_clip, fonts, gears, gridfinity,
                grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
-               pegboard, pen_cup, phone_stand, plant_label, plant_pot, screw_jar, soap_dish,
-               spool_adapter, standoff, storage_bin, text3d, threads, tie_mount, wall_hook)
+               pegboard, pen_cup, phone_stand, plant_label, plant_pot, screw_jar, snap_fit,
+               soap_dish, spool_adapter, standoff, storage_bin, text3d, theme, threads,
+               tie_mount, wall_hook)
 from .i18n import tr
 
 
@@ -666,6 +667,126 @@ class HingeDialog(QDialog):
                 "knuckles": int(self.knuckles.value()),
                 "clearance": round(self.clearance.value(), 6),
                 "pin_d": round(self.pin_d.value(), 6)}
+
+
+class SnapFitDialog(QDialog):
+    """The "Snap-Fit Clip…" dialog: a hook and a catch that click together after printing.
+
+    A click is a bend that has to spring back, so the dialog starts with the beam: how long it
+    is and how thick. The length is what saves it — the same barb on a beam twice as long
+    strains only a quarter as much — and the material says how much bending strain the beam may
+    take before it takes permanent damage. The width is the width of the beam and of the plate
+    under it, and the undercut is how far the barb sticks out: deeper holds harder but bends
+    the beam further, and no beam of these materials springs further than one and a half times
+    its own thickness. Under the fields stands the strain of the click in percent, against the
+    limit of the material; a clip above that limit is allowed — the user may know better — but
+    the label then says in the warning colour that the clip will probably break, and how long
+    the beam has to be to stay within the limit. The hook also only catches when its retaining
+    face comes past the wall, and the slope of the lead-in eats millimetres off the beam for
+    every millimetre of undercut; when too little beam is left to reach, the label says so in
+    the same colour. The values come from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Snap-Fit Clip"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.material = QComboBox()
+        for name in snap_fit.MATERIALS:
+            self.material.addItem(name, name)
+        self.material.setCurrentIndex(max(0, self.material.findData(s.snap_material)))
+        self.material.setToolTip(tr("How much bending strain your filament takes before it "
+                                    "takes permanent damage"))
+        self.length = spin(snap_fit.LENGTH_MIN, snap_fit.LENGTH_MAX, s.snap_length)
+        self.length.setToolTip(tr("How long the beam is: a longer beam bends the same barb "
+                                  "with less strain"))
+        self.thickness = spin(snap_fit.THICKNESS_MIN, snap_fit.THICKNESS_MAX, s.snap_thickness,
+                              0.1)
+        self.thickness.setToolTip(tr("How thick the beam is: a thicker beam is stiffer and "
+                                     "strains more at the same barb"))
+        self.width = spin(snap_fit.WIDTH_MIN, snap_fit.WIDTH_MAX, s.snap_width)
+        self.width.setToolTip(tr("The width of the beam and of the plate under it"))
+        self.undercut = spin(snap_fit.UNDERCUT_MIN, min(snap_fit.UNDERCUT_MAX,
+                                                        snap_fit.UNDERCUT_MAX_OF_T
+                                                        * s.snap_thickness),
+                             s.snap_undercut, 0.1)
+        self.undercut.setToolTip(tr("How far the barb sticks out: at most {of} times the beam "
+                                    "thickness, or the beam does not spring back").format(
+                                        of=f"{snap_fit.UNDERCUT_MAX_OF_T:g}"))
+        self.releasable = QCheckBox(tr("Releasable"))
+        self.releasable.setChecked(bool(s.snap_releasable))
+        self.releasable.setToolTip(tr("Lean the retaining face of the barb over, so the hook "
+                                      "can be pulled out of the catch instead of holding"))
+        self.info = QLabel()
+        lay.addRow(tr("Material"), self.material)
+        lay.addRow(tr("Beam length"), self.length)
+        lay.addRow(tr("Beam thickness"), self.thickness)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Undercut"), self.undercut)
+        lay.addRow("", self.releasable)
+        lay.addRow(self.info)
+        for w in (self.length, self.thickness, self.width, self.undercut):
+            w.valueChanged.connect(self._check)
+        self.thickness.valueChanged.connect(self._keep_undercut)
+        self.material.currentIndexChanged.connect(self._check)
+        self.releasable.toggled.connect(self._check)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._check()
+
+    def _keep_undercut(self, *_):
+        """An undercut deeper than 1.5 times the beam thickness does not spring back."""
+        self.undercut.setMaximum(min(snap_fit.UNDERCUT_MAX,
+                                     snap_fit.UNDERCUT_MAX_OF_T * self.thickness.value()))
+
+    def _check(self, *_):
+        """How far the click strains the beam, against the limit of the chosen material."""
+        name = str(self.material.currentData())
+        lim = snap_fit.MATERIALS[name]
+        eps = 100.0 * snap_fit.strain(self.thickness.value(), self.undercut.value(),
+                                      self.length.value())
+        if lim is None:
+            self.info.setStyleSheet("")
+            self.info.setText(tr("<i>Bending strain {eps:.1f} %; {mat} may bend freely</i>")
+                              .format(eps=eps, mat=name))
+        elif eps <= 100.0 * lim:
+            self.info.setStyleSheet("")
+            self.info.setText(tr("<i>Bending strain {eps:.1f} %; {mat} takes at most "
+                                 "{lim:.1f} %</i>").format(eps=eps, mat=name, lim=100.0 * lim))
+        else:
+            need = snap_fit.shortest_beam(self.thickness.value(), self.undercut.value(), name)
+            self.info.setStyleSheet(f"color: {theme.color('warn')};")
+            self.info.setText(tr("Bending strain {eps:.1f} %, but {mat} takes at most "
+                                 "{lim:.1f} %: this clip probably breaks when it clicks. Make "
+                                 "the beam at least {mm} mm long.")
+                              .format(eps=eps, mat=name, lim=100.0 * lim, mm=f"{need:.1f}"))
+        reach = snap_fit.min_length(self.undercut.value())
+        if self.length.value() < reach - 1e-9:
+            self.info.setStyleSheet(f"color: {theme.color('warn')};")
+            self.info.setText(self.info.text() + " " + tr(
+                "A barb of {u:g} mm needs a beam of at least {l} mm to reach behind the wall "
+                "of the catch").format(u=self.undercut.value(), l=f"{reach:.1f}"))
+
+    def options(self) -> dict:
+        return {"material": str(self.material.currentData()),
+                "L": round(self.length.value(), 6),
+                "t": round(self.thickness.value(), 6),
+                "w": round(self.width.value(), 6),
+                "undercut": round(self.undercut.value(), 6),
+                "releasable": self.releasable.isChecked()}
 
 
 class BatteryHolderDialog(QDialog):

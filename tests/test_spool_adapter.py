@@ -357,7 +357,7 @@ def test_the_dialog_builds_an_adapter_and_remembers_it(monkeypatch, tmp_path):
             60.0, 20.0, 6.0, 10.0, False, 6)
         labels = [a.text().replace("&", "").replace("…", "")
                   for a in w.flat_actions(w.parts_category("Mechanical"))]
-        assert labels.index("Spool Adapter") == labels.index("Print-in-Place Hinge") + 1
+        assert labels.index("Spool Adapter") == labels.index("Snap-Fit Clip") + 1
     finally:
         w.settings.spool_adapter_hub, w.settings.spool_adapter_depth = 53.0, 12.0
         w.settings.spool_adapter_lip, w.settings.spool_adapter_rod = 4.0, 8.0

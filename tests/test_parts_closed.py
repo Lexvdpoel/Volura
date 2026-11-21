@@ -33,7 +33,8 @@ from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, bri
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
                     pegboard, pen_cup,
                     phone_stand, plant_label,
-                    plant_pot, screw_jar, soap_dish, spool_adapter, standoff, storage_bin,
+                    plant_pot, screw_jar, snap_fit, soap_dish, spool_adapter, standoff,
+                    storage_bin,
                     stringing_test,
                     text3d, tie_mount, wall_hook)
 from volura import ops  # noqa: E402
@@ -181,6 +182,12 @@ CASES = [
                                          clearance=0.1, pin_d=1.5)]),
     ("hinge large", lambda: [hinge.hinge(length=200.0, width=50.0, thickness=6.0, knuckles=9,
                                          clearance=0.8, pin_d=10.0)]),
+
+    ("snap-fit clip default", lambda: [snap_fit.snap_fit_clip()]),
+    ("snap-fit clip releasable nylon", lambda: [snap_fit.snap_fit_clip(
+        material="Nylon", L=8.0, t=2.0, w=10.0, undercut=1.5, releasable=True)]),
+    ("snap-fit clip large", lambda: [snap_fit.snap_fit_clip(
+        material="PETG", L=60.0, t=5.0, w=30.0, undercut=3.0, clearance=1.0)]),
 
     ("battery holder default", lambda: [battery_holder.battery_holder()]),
     ("battery holder one AAA", lambda: [battery_holder.battery_holder(
