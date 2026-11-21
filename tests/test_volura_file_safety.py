@@ -56,6 +56,7 @@ def compare_groups(g1, g2, tol=1e-6):
     assert g1.color == g2.color, f"Group color mismatch: {g1.color} vs {g2.color}"
     assert g1.visible == g2.visible, f"Group visible mismatch: {g1.visible} vs {g2.visible}"
     assert g1.locked == g2.locked, f"Group locked mismatch: {g1.locked} vs {g2.locked}"
+    assert g1.meta == g2.meta, f"Group meta mismatch: {g1.meta} vs {g2.meta}"
     return compare_entities(g1.ents, g2.ents, tol)
 
 
@@ -233,6 +234,18 @@ def test_large_document_save_load_preserves_volumes(tmp_path):
         vol1 = g1.ents.to_manifold().volume()
         vol2 = g2.ents.to_manifold().volume()
         assert vol1 == pytest.approx(vol2, rel=1e-6), f"Volume {g1.id} mismatch: {vol1} vs {vol2}"
+
+
+def test_save_and_load_preserves_group_meta(tmp_path):
+    """A group that remembers something - like the temperature steps of a tower - keeps them."""
+    doc = Document()
+    g = ops.group_from_manifold(doc, mf.Manifold.cube((10, 10, 10)), "#f2f2f2", "Tower")
+    g.meta = {"temperature_steps": [[1.0, 220], [11.0, 215], [21.0, 210]]}
+    path = str(tmp_path / "meta.volura")
+    fileio.save_document(doc, path)
+    doc2 = Document()
+    fileio.load_document(doc2, path)
+    assert doc2.group(g.id).meta == {"temperature_steps": [[1.0, 220], [11.0, 215], [21.0, 210]]}
 
 
 def test_corrupted_file_gives_error(tmp_path):

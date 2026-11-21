@@ -416,6 +416,24 @@ class Settings:
             self.stringing_test_diameter = 6.0
         self.stringing_test_diameter = max(3.0, min(12.0, self.stringing_test_diameter))
         self.stringing_test_cone = self._bool("stringing_test_cone", True)
+        self.temperature_tower_preset = str(self.q.value("temperature_tower_preset", "PLA"))
+        if self.temperature_tower_preset not in ("PLA", "PETG", "ABS", "ASA", "TPU"):
+            self.temperature_tower_preset = "PLA"
+        try:
+            self.temperature_tower_start = float(self.q.value("temperature_tower_start", 220.0))
+        except (TypeError, ValueError):
+            self.temperature_tower_start = 220.0
+        self.temperature_tower_start = max(150.0, min(300.0, self.temperature_tower_start))
+        try:
+            self.temperature_tower_end = float(self.q.value("temperature_tower_end", 190.0))
+        except (TypeError, ValueError):
+            self.temperature_tower_end = 190.0
+        self.temperature_tower_end = max(150.0, min(300.0, self.temperature_tower_end))
+        try:
+            self.temperature_tower_step = float(self.q.value("temperature_tower_step", 5.0))
+        except (TypeError, ValueError):
+            self.temperature_tower_step = 5.0
+        self.temperature_tower_step = max(1.0, min(15.0, self.temperature_tower_step))
         try:
             self.first_layer_test_size = float(self.q.value("first_layer_test_size", 30.0))
         except (TypeError, ValueError):
@@ -1574,6 +1592,10 @@ class Settings:
         self.q.setValue("stringing_test_height", self.stringing_test_height)
         self.q.setValue("stringing_test_diameter", self.stringing_test_diameter)
         self.q.setValue("stringing_test_cone", self.stringing_test_cone)
+        self.q.setValue("temperature_tower_preset", self.temperature_tower_preset)
+        self.q.setValue("temperature_tower_start", self.temperature_tower_start)
+        self.q.setValue("temperature_tower_end", self.temperature_tower_end)
+        self.q.setValue("temperature_tower_step", self.temperature_tower_step)
         self.q.setValue("first_layer_test_size", self.first_layer_test_size)
         self.q.setValue("first_layer_test_height", self.first_layer_test_height)
         self.q.setValue("first_layer_test_margin", self.first_layer_test_margin)
@@ -2600,6 +2622,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                     "first_layer_test", False,
                                     tr("Thin squares in the corners and the middle of the bed: "
                                        "print them and see whether your bed is level"))
+        self.a_temperature_tower = A(tr("Temperature Tower…"),
+                                     lambda checked=False: self.temperature_tower_dialog(), None,
+                                     "temperature_tower", False,
+                                     tr("A stack of segments, one per nozzle temperature: print it "
+                                        "and see how your printer behaves at every temperature"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -3260,7 +3287,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                       self.a_cutplane, self.a_cut_join, None,
                       self.a_elephant, self.a_mouse_ears, None,
                       self.a_clearance_test, self.a_overhang_test, self.a_calibration_cube,
-                      self.a_bridge_test, self.a_stringing_test, self.a_first_layer_test))
+                      self.a_bridge_test, self.a_stringing_test, self.a_first_layer_test,
+                      self.a_temperature_tower))
 
         # ---- Laser and Mill: what only matters for the machine
         m = mb.addMenu(tr("&Laser and Mill"))

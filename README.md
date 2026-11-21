@@ -193,6 +193,12 @@ gets for free.
   four corners and the middle of the bed: print them and see whether your bed is level and the
   first layer is squashed right everywhere, because a square that peels off or drags says which
   place on the bed is off
+- **Temperature Tower** (3D Printing): a stack of segments, one per nozzle temperature, hottest at
+  the bottom so the first layers stick: pick a material preset (PLA, PETG, ABS, ASA, TPU) or your
+  own start, end and step. Each segment carries a 45° overhang, a small bridge and its temperature
+  stood on the front, and the printer changes the nozzle temperature at every segment - the tower
+  keeps that plan on itself, so slicing it asks for `M104` at the right heights; the temperature
+  changes apply to the whole bed, also when other parts stand next to the tower
 - **Ready-made parts** (Draw > Parts): the parts below stand in four submenus - **Mechanical**,
   **Cables**, **Storage** and **Home and Desk** - and each submenu is in alphabetical order, so
   the part you are after is a short click away

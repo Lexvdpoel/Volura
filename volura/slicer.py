@@ -225,6 +225,33 @@ def layer_heights(text: str) -> list:
     return [row for row in out if row[1] is not None]
 
 
+def with_commands(text: str, commands) -> str:
+    """The G-code with every command at the start of the first layer at or above its height in mm.
+
+    `commands` is an iterable of ``(height in mm, command line)``. A change by height is something
+    the printer does halfway, so it is asked for at a layer boundary, where the nozzle has just
+    moved up. Several commands that belong to one layer are all written, in the order they came,
+    while the same command twice in one layer is asked for only once; a height above the print asks
+    for nothing.
+    """
+    lines = text.splitlines(keepends=True)
+    layers = layer_heights(text)
+    where: dict = {}
+    for h, command in commands:
+        hit = next((k for k, z in layers if z >= float(h) - 1e-6), None)
+        if hit is None:
+            continue
+        made = where.setdefault(hit, [])
+        if command not in made:
+            made.append(command)
+    if not where:
+        return text
+    break_line = "\r\n" if "\r\n" in text else "\n"
+    for k in sorted(where, reverse=True):
+        lines[k + 1:k + 1] = [c + break_line for c in where[k]]
+    return "".join(lines)
+
+
 def with_filament_changes(text: str, heights, command=FILAMENT_CHANGE) -> str:
     """The G-code with `command` at the start of the first layer at or above every height in mm.
 
@@ -232,30 +259,38 @@ def with_filament_changes(text: str, heights, command=FILAMENT_CHANGE) -> str:
     layer boundary, where the nozzle has just moved up. Two heights that land in one layer ask
     for it once; a height above the print asks for nothing.
     """
-    lines = text.splitlines(keepends=True)
-    layers = layer_heights(text)
-    where = set()
-    for h in heights:
-        hit = next((k for k, z in layers if z >= float(h) - 1e-6), None)
-        if hit is not None:
-            where.add(hit)
-    if not where:
-        return text
-    break_line = "\r\n" if "\r\n" in text else "\n"
-    for k in sorted(where, reverse=True):
-        lines.insert(k + 1, command + break_line)
-    return "".join(lines)
+    return with_commands(text, [(h, command) for h in heights])
 
 
-def insert_filament_changes(path, heights, command=FILAMENT_CHANGE) -> None:
-    """Put `command` at those heights in the G-code file at `path`, overwriting it."""
+def insert_commands(path, commands) -> None:
+    """Put those ``(height mm, command)`` pairs into the G-code file at `path`, overwriting it."""
     with open(path, encoding="utf-8", errors="replace") as fh:
         text = fh.read()
-    changed = with_filament_changes(text, heights, command)
+    changed = with_commands(text, commands)
     if changed == text:
         return
     with open(path, "w", encoding="utf-8", newline="") as fh:
         fh.write(changed)
+
+
+def insert_filament_changes(path, heights, command=FILAMENT_CHANGE) -> None:
+    """Put `command` at those heights in the G-code file at `path`, overwriting it."""
+    insert_commands(path, [(h, command) for h in heights])
+
+
+def set_print_temperature(stacks, temp) -> None:
+    """Set `temp` as the print temperature the print starts at, as a user value on `stacks`.
+
+    The value goes on the top layer of the global stack and of every extruder - the same place a
+    change in the slice dialog goes - and the caches are cleared so the engine reads the new
+    temperature. A temperature tower needs this for its bottom segment, so the first layers print
+    at its temperature before any `M104` comes along.
+    """
+    for stack in [stacks.glob] + list(stacks.extruders):
+        if stack.layers:
+            stack.layers[0]["material_print_temperature"] = float(temp)
+        stack.cache.clear()
+        stack.raw_cache.clear()
 
 
 def orca_gcode_for(stacks, meshes, glob: dict):

@@ -263,6 +263,13 @@ SVG = {
                         f'<rect x="4.6" y="14.4" width="4" height="4" fill="#f2c230" {S(w=1.1)}/>'
                         f'<rect x="15.4" y="14.4" width="4" height="4" fill="#f2c230" {S(w=1.1)}/>'
                         f'<rect x="10" y="10" width="4" height="4" fill="#f2c230" {S(w=1.1)}/>',
+    # temperature tower: a stack of segments on a base, hot at the bottom and cool on top
+    "temperature_tower": f'<rect x="6" y="20" width="12" height="2" rx="0.6" fill="#cfe0f5" {S()}/>'
+                         f'<path d="M11 4.5 L13 4.5 L12 2.5 Z" fill="#2f6fd6" {S(w=1.1)}/>'
+                         f'<rect x="9" y="4.5" width="6" height="3" rx="0.5" fill="#2f6fd6" {S(w=1.1)}/>'
+                         f'<rect x="8.4" y="7.5" width="7.2" height="4" rx="0.5" fill="#5fa0e0" {S(w=1.1)}/>'
+                         f'<rect x="8.4" y="11.5" width="7.2" height="4" fill="#f2c230" {S(w=1.1)}/>'
+                         f'<rect x="8.4" y="15.5" width="7.2" height="4.5" fill="#d23b3b" {S(w=1.1)}/>',
     # vent pattern: a plate with a field of round holes
     "vent": f'<rect x="2.5" y="4" width="19" height="16" rx="1" fill="#eef2f7" {S()}/>'
             f'<circle cx="7" cy="9" r="1.7" fill="#fff" stroke="#d23b3b" stroke-width="1.2"/>'

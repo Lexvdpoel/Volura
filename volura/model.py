@@ -19,6 +19,8 @@ it is made again when the outline of its panel changes.
 """
 from __future__ import annotations
 
+import copy
+
 import numpy as np
 from PySide6.QtCore import QObject, Signal
 
@@ -47,13 +49,14 @@ LOCKED_MSG = tr("This group is locked.")
 
 
 class Group:
-    def __init__(self, gid, name, color, ents, visible=True, locked=False):
+    def __init__(self, gid, name, color, ents, visible=True, locked=False, meta=None):
         self.id = gid
         self.name = name
         self.color = color
         self.ents = ents
         self.visible = visible
         self.locked = locked      # Edit > Lock: cannot be moved, painted or edited
+        self.meta = meta or {}    # what the part remembers about itself, e.g. its temperature steps
 
     def bbox(self):
         return self.ents.bbox()
@@ -191,7 +194,8 @@ class Document(QObject):
     # ------------------------------------------------------------ undo
     def _state(self):
         return (self.root.state(),
-                [(g.id, g.name, g.color, g.visible, g.locked, g.ents.state()) for g in self.groups],
+                [(g.id, g.name, g.color, g.visible, g.locked, g.ents.state(),
+                  copy.deepcopy(g.meta)) for g in self.groups],
                 [g.state() for g in self.guides],
                 [list(m) for m in self.materials], self.active, self.next_gid, self.group_counter,
                 self.next_guide_id, self.sheet.copy(), [l.to_dict() for l in self.links],
@@ -203,13 +207,14 @@ class Document(QObject):
         self.root.load_state(root)
         old = {g.id: g for g in self.groups}        # undo keeps the Group objects you have
         self.groups = []
-        for i, n, c, v, lk, s in groups:
+        for i, n, c, v, lk, s, mt in groups:
             g = old.pop(i, None)
             if g is None:
-                g = Group(i, n, c, Entities.from_state(s), v, lk)
+                g = Group(i, n, c, Entities.from_state(s), v, lk, copy.deepcopy(mt))
             else:
                 g.name, g.color, g.visible, g.locked = n, c, v, lk
                 g.ents.load_state(s)
+                g.meta = copy.deepcopy(mt)
             self.groups.append(g)
         self.guides = [Guide.from_state(s) for s in guides]
         self.materials = [list(m) for m in mats]

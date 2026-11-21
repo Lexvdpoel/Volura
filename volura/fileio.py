@@ -85,7 +85,8 @@ def save_document(doc: Document, path):
         "materials": doc.materials, "next_gid": doc.next_gid, "group_counter": doc.group_counter,
         "root": _ents_to_json(doc.root),
         "groups": [{"id": g.id, "name": g.name, "color": g.color, "visible": g.visible,
-                    "locked": g.locked, "ents": _ents_to_json(g.ents)} for g in doc.groups],
+                    "locked": g.locked, "ents": _ents_to_json(g.ents),
+                    "meta": g.meta} for g in doc.groups],
         "guides": [{"id": g.id, "p": [round(float(c), 9) for c in g.point],
                     "d": None if g.direction is None else [round(float(c), 9) for c in g.direction]}
                    for g in doc.guides],
@@ -111,7 +112,8 @@ def load_document(doc: Document, path):
             doc.root = _ents_from_json(data["root"])
             for gd in data["groups"]:
                 doc.groups.append(Group(gd["id"], gd["name"], gd["color"], _ents_from_json(gd["ents"]),
-                                        gd.get("visible", True), gd.get("locked", False)))
+                                        gd.get("visible", True), gd.get("locked", False),
+                                        gd.get("meta") or {}))
             doc.next_gid = data.get("next_gid", 1 + max([0] + [g.id for g in doc.groups]))
             doc.group_counter = data.get("group_counter", len(doc.groups) + 1)
             for gd in data.get("guides", []):      # files from before the guides have no guides

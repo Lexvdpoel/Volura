@@ -33,7 +33,7 @@ from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, brack
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
                label_plate, lithophane, ops, paint_split, pegboard, pen_cup, phone_stand,
                plant_label, plant_pot, screw_jar, snap_fit, soap_dish, slicer, spool_adapter,
-               standoff, storage_bin, stringing_test, text3d,
+               standoff, storage_bin, stringing_test, temperature_tower, text3d,
                theme, threads, tie_mount, wall_hook)
 from . import gcode_preview, gcode_thumbnail
 from .print_preview import FILAMENT_STYLE, PrintPreviewDialog
@@ -1068,12 +1068,32 @@ class PrintMixin:
             for key, value in choice.items():
                 setattr(self.settings, "slice_" + key, value)
             self.settings.save()
-            self._slice_async(dlg.stacks(), part_list, engine, dlg.printer.name, dlg.multicolor())
+            self._slice_async(dlg.stacks(), part_list, engine, dlg.printer.name,
+                              dlg.multicolor(), self._bed_temperature_steps(only))
 
         background.run(self, prepare, text=reading, on_done=prepared,
                        on_error=self._export_failed)
 
-    def _slice_async(self, stacks, part_list, engine, printer_name="", plan=None):
+    def _bed_temperature_steps(self, only) -> tuple | None:
+        """``(print_temperature, [(z_from, temperature), ...])`` of the towers on the bed.
+
+        A part made by Temperature Tower carries its plan in `g.meta`. The hottest first
+        temperature becomes the print temperature of the slice and every other one is asked for
+        with `M104` at its height; the change is asked for by height, so a tower that stands next
+        to other parts changes the temperature for the whole bed. None when nothing on the bed
+        carries a plan.
+        """
+        groups = self.doc.selected_groups() if only else self.doc.visible_groups()
+        plans = [g.meta.get("temperature_steps") for g in groups
+                 if g.meta.get("temperature_steps")]
+        if not plans:
+            return None
+        print_temp = max(int(p[0][1]) for p in plans)
+        changes = [(float(z), int(t)) for p in plans for z, t in p[1:]]
+        return print_temp, changes
+
+    def _slice_async(self, stacks, part_list, engine, printer_name="", plan=None,
+                     temp_steps=None):
         """Slice `part_list` with `stacks` in the background, then show the print preview.
 
         The G-code goes to a temporary file first; the preview reads it back layer by layer
@@ -1136,6 +1156,9 @@ class PrintMixin:
             return meshes, pictures
 
         def work(report):
+            if temp_steps:
+                # the first segment's temperature is the temperature the print starts at
+                slicer.set_print_temperature(stacks, temp_steps[0])
             meshes, pictures = made_meshes(report)
             report(0.15, tr("Slicing…"))
             lo = np.min([v.min(axis=0) for v, _t, _e in meshes], axis=0)
@@ -1151,6 +1174,9 @@ class PrintMixin:
                                                                        tr("Slicing…")))
             if plan.changes:
                 slicer.insert_filament_changes(path, plan.changes, plan.command)
+            if temp_steps:
+                # every segment past the first asks for its temperature at the layer that reaches it
+                slicer.insert_commands(path, [(z, f"M104 S{t}") for z, t in temp_steps[1]])
             if sizes:
                 report(0.87, tr("Drawing the thumbnail…"))
                 gcode_thumbnail.insert(path, [gcode_thumbnail.block(
@@ -3628,6 +3654,108 @@ class PrintMixin:
             self.view.set_status(tr("Stringing test failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the stringing test…"),
+                       on_done=done, on_error=failed)
+    # --------------------------------------------------------- temperature tower
+
+    def temperature_tower_dialog(self):
+        """3D Printing > Temperature Tower…: a stack of segments, one per nozzle temperature, so
+        the user sees how this printer behaves at every temperature."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Temperature Tower"))
+        form = QFormLayout(dlg)
+        preset_cb = QComboBox()
+        preset_cb.addItems(sorted(temperature_tower.PRESETS))
+        preset_cb.setCurrentText(self.settings.temperature_tower_preset)
+        preset_cb.setToolTip(tr("A material that is known to print well over a range of "
+                                "temperatures; choosing one fills in the temperatures below"))
+        start_sp = self._spin(150.0, 300.0, self.settings.temperature_tower_start, 0, " °C", 5.0)
+        start_sp.setToolTip(tr("The temperature of the bottom segment, the hottest one, printed "
+                               "first so the first layers stick"))
+        end_sp = self._spin(150.0, 300.0, self.settings.temperature_tower_end, 0, " °C", 5.0)
+        end_sp.setToolTip(tr("The temperature of the top segment, the coolest one"))
+        step_sp = self._spin(1.0, 15.0, self.settings.temperature_tower_step, 0, " °C", 1.0)
+        step_sp.setToolTip(tr("How many degrees cooler every next segment is"))
+        info = QLabel()
+        form.addRow(tr("Material"), preset_cb)
+        form.addRow(tr("Start"), start_sp)
+        form.addRow(tr("End"), end_sp)
+        form.addRow(tr("Step"), step_sp)
+        form.addRow("", info)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+
+        def fill(*_):
+            lo, hi, d = temperature_tower.PRESETS[preset_cb.currentText()]
+            start_sp.setValue(lo)
+            end_sp.setValue(hi)
+            step_sp.setValue(d)
+
+        def show(*_):
+            try:
+                s = temperature_tower.sizes(float(start_sp.value()), float(end_sp.value()),
+                                            float(step_sp.value()))
+            except ValueError as exc:
+                info.setText(str(exc))
+                return
+            _w, _d, top = s["size"]
+            info.setText(tr("{n} segments: {temps}\nOutside size: {height} mm tall\n{bed}")
+                         .format(n=s["segments"],
+                                 temps="  ".join(str(t) for t in s["temps"]),
+                                 height=f"{top:g}",
+                                 bed=tr("The temperature changes apply to the whole bed.")))
+
+        preset_cb.currentTextChanged.connect(fill)
+        for sp in (start_sp, end_sp, step_sp):
+            sp.valueChanged.connect(show)
+        show()
+        if dlg.exec() != QDialog.Accepted:
+            return
+        start, end = float(start_sp.value()), float(end_sp.value())
+        step = float(step_sp.value())
+        try:
+            plan = temperature_tower.steps(start, end, step)
+        except ValueError as exc:
+            QMessageBox.warning(self, tr("Temperature Tower"), str(exc))
+            return
+        self.settings.temperature_tower_preset = preset_cb.currentText()
+        self.settings.temperature_tower_start = start
+        self.settings.temperature_tower_end = end
+        self.settings.temperature_tower_step = step
+        self.settings.save()
+        self._apply_temperature_tower(start, end, step, plan)
+
+    def _apply_temperature_tower(self, start, end, step, plan):
+        doc = self.doc
+        bb = doc.model_bbox()
+        x0 = 0.0 if bb is None else float(bb[1][0]) + 10.0   # mm to the right of the model
+
+        def work(report):
+            # the numbers on the segments are the slow part of a tower with fonts, so it happens
+            # here and the window keeps responding
+            report(0.1, tr("Building the temperature tower…"))
+            tower = temperature_tower.temperature_tower(start=start, end=end, step=step)
+            if tower.status() != mf.Error.NoError or tower.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            # the tower is drawn centred on the origin: move it to the free spot on the bed
+            dx = x0 - float(np.asarray(tower.bounding_box())[0])
+            return tower.translate((dx, 0.0, 0.0))
+
+        def done(result):
+            doc.checkpoint()                # one undo takes the tower away again
+            new = ops.group_from_manifold(doc, result, self.settings.current_color,
+                                          tr("Temperature tower"))
+            new.meta = {"temperature_steps": plan}   # the slice reads this to change temperature
+            doc.set_selection([("g", new.id, new.id)])
+            doc.notify()
+            self.view.set_status(tr("Print it: the printer changes temperature at every segment, "
+                                    "and the number on each one says what it was printed at."))
+
+        def failed(exc):
+            self.view.set_status(tr("Temperature tower failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the temperature tower…"),
                        on_done=done, on_error=failed)
     # --------------------------------------------------------- first layer test
 

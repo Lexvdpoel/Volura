@@ -1578,6 +1578,26 @@ volura</code></pre>
     <p class="note" lang="en">The five squares stay exactly where they lie on the bed, as one undo step.</p>
     <p class="note" lang="nl">De vijf vierkantjes blijven precies waar ze op het bed liggen, als één stap om ongedaan te maken.</p>
 
+    <h3><span lang="en">Temperature tower</span><span lang="nl">Temperatuurtoren</span></h3>
+    <p lang="en">One nozzle temperature is rarely the best one for a printer; this test print runs a whole range of them in a single print, so you read which temperature this filament likes best on this machine.</p>
+    <p lang="nl">Eén nozzletemperatuur is zelden de beste voor een printer; deze testprint doorloopt een heel bereik in één print, zodat je afleest welke temperatuur dit filament op deze machine het lekkerst vindt.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Temperature Tower…</b></p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Temperatuurtoren…</b></p>
+    <ul lang="en">
+      <li>A tower of stacked segments of 10 mm, each printed at its own temperature, hottest at the bottom so the first layers stick and the tower does not come off the bed.</li>
+      <li>Every segment carries a 45° overhang on one side, the lowest one a small bridge of 10 mm, the column ends in a thin cone, and the temperature of every band stands raised on the front, so you can tell the bands apart while you read the print.</li>
+      <li>Pick a material preset - PLA 220 to 190, PETG 250 to 220, ABS and ASA 260 to 230, TPU 235 to 210 °C - or your own start, end and step. A step above 0, at least two and at most twelve segments, and an end that differs from the start.</li>
+      <li>The tower keeps its plan of temperatures on itself, so when you slice it the first temperature becomes the print temperature and the printer is asked for every next one with <code>M104</code> at the layer that reaches it.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Een toren van gestapelde segmenten van 10 mm, elk op een eigen temperatuur geprint, het heetst onderaan zodat de eerste lagen plakken en de toren niet van het bed komt.</li>
+      <li>Elk segment heeft een 45°-overhang aan één kant, het onderste een bruggetje van 10 mm, de kolom eindigt in een dunne kegel, en de temperatuur van elke band staat op de voorkant opgehoogd, zodat je de banden uit elkaar houdt terwijl je de print afleest.</li>
+      <li>Kies een materiaal-voorbeeld - PLA 220 naar 190, PETG 250 naar 220, ABS en ASA 260 naar 230, TPU 235 naar 210 °C - of je eigen start, einde en stap. Een stap boven 0, minstens twee en hoogstens twaalf segmenten, en een einde dat van de start verschilt.</li>
+      <li>De toren bewaart zijn temperatuurschema op zichzelf, zodat bij het slicen de eerste temperatuur de printtemperatuur wordt en de printer om elke volgende wordt gevraagd met <code>M104</code> op de laag die eraan toe is.</li>
+    </ul>
+    <p class="note" lang="en">The temperature changes apply to the whole bed, so also to other parts that stand next to the tower; the tower comes onto the bed as one undo step.</p>
+    <p class="note" lang="nl">De temperatuurwijzigingen gelden voor het hele bed, dus ook voor andere onderdelen naast de toren; de toren komt als één stap om ongedaan te maken op het bed.</p>
+
     <!-- ===================================================== import -->
     <h2 id="import"><span lang="en">Importing 3D models</span><span lang="nl">3D-modellen importeren</span></h2>
     <h3><span lang="en">Importing a model</span><span lang="nl">Een model importeren</span></h3>
