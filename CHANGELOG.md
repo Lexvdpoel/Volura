@@ -3,6 +3,12 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## Unreleased
+
+### New
+- **Bed mesh view**: *Window > Bed Mesh…* shows the bed mesh of a Klipper printer as a coloured
+  map seen from above, with the probed heights, how flat the bed is, and the point under the mouse.
+
 ## 0.2.72 — 2026-11-21
 
 ### New
