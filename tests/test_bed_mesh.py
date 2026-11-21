@@ -360,10 +360,13 @@ def opened(win, *conns):
 
 
 def ink_of(image, view, row, col) -> tuple:
-    """The colour the picture shows in the middle of this cell of the map."""
+    """The colour the picture shows in this cell of the map, beside the number written in its
+    middle: where the letters fall differs per platform and per font."""
     cell = view.rect_of(row, col)
     scale = image.width() / max(1, view.width())
-    got = image.pixelColor(int(cell.center().x() * scale), int(cell.center().y() * scale))
+    x = cell.left() + 0.15 * cell.width()
+    y = cell.top() + 0.15 * cell.height()
+    got = image.pixelColor(int(x * scale), int(y * scale))
     return (got.red(), got.green(), got.blue())
 
 
