@@ -32,9 +32,9 @@ from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, brack
                fileio, filament_clip, first_layer_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
                label_plate, lithophane, ops, paint_split, pegboard, pen_cup, phone_stand,
-               plant_label, plant_pot, screw_jar, snap_fit, soap_dish, slicer, spool_adapter,
-               standoff, storage_bin, stringing_test, temperature_tower, text3d,
-               theme, threads, tie_mount, wall_hook)
+               plant_label, plant_pot, pressure_advance_test, screw_jar, snap_fit, soap_dish,
+               slicer, spool_adapter, standoff, storage_bin, stringing_test, temperature_tower,
+               text3d, theme, threads, tie_mount, wall_hook)
 from . import gcode_preview, gcode_thumbnail
 from .print_preview import FILAMENT_STYLE, PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
@@ -1069,7 +1069,7 @@ class PrintMixin:
                 setattr(self.settings, "slice_" + key, value)
             self.settings.save()
             self._slice_async(dlg.stacks(), part_list, engine, dlg.printer.name,
-                              dlg.multicolor(), self._bed_temperature_steps(only))
+                              dlg.multicolor(), self._bed_height_commands(only))
 
         background.run(self, prepare, text=reading, on_done=prepared,
                        on_error=self._export_failed)
@@ -1081,7 +1081,7 @@ class PrintMixin:
         temperature becomes the print temperature of the slice and every other one is asked for
         with `M104` at its height; the change is asked for by height, so a tower that stands next
         to other parts changes the temperature for the whole bed. None when nothing on the bed
-        carries a plan.
+        carries a temperature plan.
         """
         groups = self.doc.selected_groups() if only else self.doc.visible_groups()
         plans = [g.meta.get("temperature_steps") for g in groups
@@ -1092,8 +1092,31 @@ class PrintMixin:
         changes = [(float(z), int(t)) for p in plans for z, t in p[1:]]
         return print_temp, changes
 
+    def _bed_height_commands(self, only) -> tuple | None:
+        """``(print temperature or None, [(z_from mm, command line), ...])`` of the tests on the bed.
+
+        A Temperature Tower carries its plan as temperatures and a Pressure Advance Test as finished
+        command lines in `g.meta["height_commands"]`; both come together here, so a bed that carries
+        both asks for every temperature and every pressure advance value at the layer that reaches it.
+        The temperatures are asked for by height and so are the commands, which means they hold for
+        the whole bed, also when other parts stand next to a test. None when nothing on the bed
+        carries a plan.
+        """
+        temp = self._bed_temperature_steps(only)
+        changes = [(z, f"M104 S{t}") for z, t in temp[1]] if temp else []
+        groups = self.doc.selected_groups() if only else self.doc.visible_groups()
+        for g in groups:
+            for one in (g.meta.get("height_commands") or []):
+                try:
+                    changes.append((float(one[0]), str(one[1])))
+                except (KeyError, IndexError, TypeError, ValueError):
+                    continue          # a meta of a hand-written file that is no command
+        if temp is None and not changes:
+            return None
+        return (temp[0] if temp else None), sorted(changes, key=lambda one: one[0])
+
     def _slice_async(self, stacks, part_list, engine, printer_name="", plan=None,
-                     temp_steps=None):
+                     height_commands=None):
         """Slice `part_list` with `stacks` in the background, then show the print preview.
 
         The G-code goes to a temporary file first; the preview reads it back layer by layer
@@ -1103,6 +1126,8 @@ class PrintMixin:
 
         `plan` is the `slice_dialog.Multicolor` of the dialog: which extruder prints which
         colour, how deep the painted faces go and where the printer changes its filament.
+        `height_commands` is what `_bed_height_commands` found on the parts: the temperature the
+        print starts at and the commands the tests on the bed ask for, each with its height.
         """
         from . import slice_dialog as sd
         plan = plan or sd.Multicolor()
@@ -1156,9 +1181,10 @@ class PrintMixin:
             return meshes, pictures
 
         def work(report):
-            if temp_steps:
+            print_temp, by_height = height_commands or (None, [])
+            if print_temp is not None:
                 # the first segment's temperature is the temperature the print starts at
-                slicer.set_print_temperature(stacks, temp_steps[0])
+                slicer.set_print_temperature(stacks, print_temp)
             meshes, pictures = made_meshes(report)
             report(0.15, tr("Slicing…"))
             lo = np.min([v.min(axis=0) for v, _t, _e in meshes], axis=0)
@@ -1174,9 +1200,9 @@ class PrintMixin:
                                                                        tr("Slicing…")))
             if plan.changes:
                 slicer.insert_filament_changes(path, plan.changes, plan.command)
-            if temp_steps:
-                # every segment past the first asks for its temperature at the layer that reaches it
-                slicer.insert_commands(path, [(z, f"M104 S{t}") for z, t in temp_steps[1]])
+            if by_height:
+                # every change asks for its command at the first layer at or above its height
+                slicer.insert_commands(path, by_height)
             if sizes:
                 report(0.87, tr("Drawing the thumbnail…"))
                 gcode_thumbnail.insert(path, [gcode_thumbnail.block(
@@ -3756,6 +3782,148 @@ class PrintMixin:
             self.view.set_status(tr("Temperature tower failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the temperature tower…"),
+                       on_done=done, on_error=failed)
+    # ------------------------------------------------------ pressure advance test
+
+    def pressure_advance_test_dialog(self):
+        """3D Printing > Pressure Advance Test…: a hollow tower whose segments print with a rising
+        pressure advance value, so the user reads which value gives this printer sharp corners."""
+        firm = pressure_advance_test.FIRMWARES
+        presets = pressure_advance_test.PRESETS
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Pressure Advance Test"))
+        form = QFormLayout(dlg)
+        firmware_cb = QComboBox()
+        for name in firm:
+            firmware_cb.addItem(pressure_advance_test.firmware_label(name), name)
+        firmware_cb.setToolTip(tr("The firmware your printer runs: every firmware sets the pressure "
+                                  "advance with another command"))
+        want = self.settings.pressure_advance_firmware
+        if want not in firm:
+            # nothing chosen yet: a Klipper printer on the network says Klipper, anything else Marlin
+            want = pressure_advance_test.default_firmware(self.settings.printers)
+        firmware_cb.setCurrentIndex(list(firm).index(want))
+        preset_cb = QComboBox()
+        for name in presets:
+            preset_cb.addItem(pressure_advance_test.preset_label(name), name)
+        preset_cb.setToolTip(tr("The firmware of the printer and how far its extruder stands from "
+                                "the nozzle; choosing one fills in the values below"))
+        saved = self.settings.pressure_advance_preset
+        preset_cb.setCurrentIndex(list(presets)
+                                  .index(saved if saved in presets
+                                         else pressure_advance_test.default_preset(want)))
+        lo, hi = pressure_advance_test.VALUE_MIN, pressure_advance_test.VALUE_MAX
+        start_sp = self._spin(lo, hi, self.settings.pressure_advance_start, 4, "", 0.005)
+        start_sp.setToolTip(tr("The pressure advance value of the bottom segment, the value the "
+                               "print starts with"))
+        end_sp = self._spin(lo, hi, self.settings.pressure_advance_end, 4, "", 0.005)
+        end_sp.setToolTip(tr("The value the walk stops at: the top segment prints the last value "
+                             "that stays under it"))
+        step_sp = self._spin(pressure_advance_test.STEP_MIN, pressure_advance_test.STEP_MAX,
+                             self.settings.pressure_advance_step, 4, "", 0.005)
+        step_sp.setToolTip(tr("How much higher every next segment prints"))
+        info = QLabel()
+        form.addRow(tr("Firmware"), firmware_cb)
+        form.addRow(tr("Preset"), preset_cb)
+        form.addRow(tr("Start"), start_sp)
+        form.addRow(tr("End"), end_sp)
+        form.addRow(tr("Step"), step_sp)
+        form.addRow("", info)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+
+        def pick(*_):
+            fw, low, high, d = presets[preset_cb.currentData()]
+            firmware_cb.blockSignals(True)      # the preset names its firmware, not the other way
+            firmware_cb.setCurrentIndex(list(firm).index(fw))
+            firmware_cb.blockSignals(False)
+            start_sp.setValue(low)
+            end_sp.setValue(high)
+            step_sp.setValue(d)
+
+        def pick_firmware(*_):
+            preset_cb.blockSignals(True)
+            preset_cb.setCurrentIndex(list(presets)
+                                      .index(pressure_advance_test.default_preset(
+                                          firmware_cb.currentData())))
+            preset_cb.blockSignals(False)
+            pick()
+
+        def show(*_):
+            try:
+                s = pressure_advance_test.sizes(float(start_sp.value()), float(end_sp.value()),
+                                                float(step_sp.value()))
+            except ValueError as exc:
+                info.setText(str(exc))
+                return
+            low, high = s["values"][0], s["values"][-1]
+            wide, _d, top = s["size"]
+            info.setText(tr("{n} segments: {low} to {high}\nOutside size: {width} × {height} mm\n"
+                            "{read}")
+                         .format(n=s["segments"],
+                                 low=pressure_advance_test.value_text(low),
+                                 high=pressure_advance_test.value_text(high),
+                                 width=f"{wide:g}", height=f"{top:g}",
+                                 read=tr("Read the corners: the printer changes value at every "
+                                         "segment, on the whole bed.")))
+
+        preset_cb.currentIndexChanged.connect(pick)
+        firmware_cb.currentIndexChanged.connect(pick_firmware)
+        for sp in (start_sp, end_sp, step_sp):
+            sp.valueChanged.connect(show)
+        show()
+        if dlg.exec() != QDialog.Accepted:
+            return
+        firmware, preset = firmware_cb.currentData(), preset_cb.currentData()
+        start, end = float(start_sp.value()), float(end_sp.value())
+        step = float(step_sp.value())
+        try:
+            plan = pressure_advance_test.steps(start, end, step)
+        except ValueError as exc:
+            QMessageBox.warning(self, tr("Pressure Advance Test"), str(exc))
+            return
+        self.settings.pressure_advance_firmware = firmware
+        self.settings.pressure_advance_preset = preset
+        self.settings.pressure_advance_start = start
+        self.settings.pressure_advance_end = end
+        self.settings.pressure_advance_step = step
+        self.settings.save()
+        self._apply_pressure_advance_test(firmware, start, end, step, plan)
+
+    def _apply_pressure_advance_test(self, firmware, start, end, step, plan):
+        doc = self.doc
+        bb = doc.model_bbox()
+        x0 = 0.0 if bb is None else float(bb[1][0]) + 10.0   # mm to the right of the model
+
+        def work(report):
+            # the numbers in the walls are the slow part of a tower with fonts, so it happens here
+            # and the window keeps responding
+            report(0.1, tr("Building the pressure advance test…"))
+            tower = pressure_advance_test.pressure_advance_test(start=start, end=end, step=step)
+            if tower.status() != mf.Error.NoError or tower.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            # the tower is drawn centred on the origin: move it to the free spot on the bed
+            dx = x0 - float(np.asarray(tower.bounding_box())[0])
+            return tower.translate((dx, 0.0, 0.0))
+
+        def done(result):
+            doc.checkpoint()                # one undo takes the tower away again
+            new = ops.group_from_manifold(doc, result, self.settings.current_color,
+                                          tr("Pressure advance test"))
+            # the commands of the firmware go on the tower itself: the slice writes them
+            new.meta = {"height_commands": pressure_advance_test.commands(firmware, plan)}
+            doc.set_selection([("g", new.id, new.id)])
+            doc.notify()
+            self.view.set_status(tr("Print it and read the corners: the lowest segment whose "
+                                    "corners are sharp and not bulging is the value to set in your "
+                                    "printer."))
+
+        def failed(exc):
+            self.view.set_status(tr("Pressure advance test failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the pressure advance test…"),
                        on_done=done, on_error=failed)
     # --------------------------------------------------------- first layer test
 

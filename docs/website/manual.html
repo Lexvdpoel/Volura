@@ -1598,6 +1598,28 @@ volura</code></pre>
     <p class="note" lang="en">The temperature changes apply to the whole bed, so also to other parts that stand next to the tower; the tower comes onto the bed as one undo step.</p>
     <p class="note" lang="nl">De temperatuurwijzigingen gelden voor het hele bed, dus ook voor andere onderdelen naast de toren; de toren komt als één stap om ongedaan te maken op het bed.</p>
 
+    <h3><span lang="en">Pressure advance test</span><span lang="nl">Pressure-advancetest</span></h3>
+    <p lang="en">How hard a printer has to push the filament before the pressure in the nozzle catches up in a corner is different for every machine; this test print walks a whole range of values in a single print.</p>
+    <p lang="nl">Hoe hard een printer het filament moet duwen voordat de druk in de nozzle een hoek bijhaalt, verschilt per machine; deze testprint loopt een heel bereik aan waarden af in één print.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Pressure Advance Test…</b></p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Pressure-advancetest…</b></p>
+    <ul lang="en">
+      <li>A hollow square tower of 60 × 60 mm with sharp corners, walls of two lines of the nozzle and a floor of 1 mm, and no top: the corners are all there is to look at, and the print is quick and uses little filament.</li>
+      <li>Every segment of 5 mm prints with a higher value than the one under it and carries that value engraved in the middle of its own front wall, so you know which band you are reading.</li>
+      <li>Pick the firmware your printer runs - Klipper, Marlin or RepRapFirmware - and a preset for its extruder, direct drive or bowden, or your own start, end and step; a step above 0, at least two and at most twenty segments, and an end that differs from the start.</li>
+      <li>The tower keeps its commands on itself, so when you slice it the printer is asked for <code>SET_PRESSURE_ADVANCE ADVANCE=…</code>, <code>M900 K…</code> or <code>M572 D0 S…</code> at the layer that reaches every segment; the value of the lowest segment goes in at the first layer too, because the printer may sit on another value.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Een holle vierkante toren van 60 × 60 mm met scherpe hoeken, muren van twee lijnen van de nozzle en een vloer van 1 mm, zonder bovenkant: de hoeken zijn alles waar je naar kijkt, en de print is snel en kost weinig filament.</li>
+      <li>Elk segment van 5 mm print met een hogere waarde dan het segment eronder en draagt die waarde gegraveerd in het midden van zijn eigen voorkant, dus je weet welke band je leest.</li>
+      <li>Kies de firmware die je printer draait - Klipper, Marlin of RepRapFirmware - en een voorinstelling voor zijn extruder, direct aangedreven of bowden, of je eigen start, einde en stap; een stap boven 0, minstens twee en hoogstens twintig segmenten, en een einde dat van de start verschilt.</li>
+      <li>De toren bewaart zijn commands op zichzelf, zodat bij het slicen de printer om <code>SET_PRESSURE_ADVANCE ADVANCE=…</code>, <code>M900 K…</code> of <code>M572 D0 S…</code> wordt gevraagd op de laag die elk segment bereikt; de waarde van het laagste segment gaat ook op de eerste laag in, want de printer staat misschien op een andere waarde.</li>
+    </ul>
+    <p class="note" lang="en">Print it and read the corners: pick the lowest segment whose corners are sharp and not bulging, then set that value in your printer's configuration.</p>
+    <p class="note" lang="nl">Print hem en lees de hoeken af: kies het laagste segment waarvan de hoeken scherp zijn en niet bollen, en zet die waarde dan in de configuratie van je printer.</p>
+    <p class="note" lang="en">The changes apply to the whole bed, so also to other parts that stand next to the tower; the tower comes onto the bed as one undo step.</p>
+    <p class="note" lang="nl">De wijzigingen gelden voor het hele bed, dus ook voor andere onderdelen naast de toren; de toren komt als één stap om ongedaan te maken op het bed.</p>
+
     <!-- ===================================================== import -->
     <h2 id="import"><span lang="en">Importing 3D models</span><span lang="nl">3D-modellen importeren</span></h2>
     <h3><span lang="en">Importing a model</span><span lang="nl">Een model importeren</span></h3>

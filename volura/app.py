@@ -434,6 +434,29 @@ class Settings:
         except (TypeError, ValueError):
             self.temperature_tower_step = 5.0
         self.temperature_tower_step = max(1.0, min(15.0, self.temperature_tower_step))
+        # an empty firmware or preset says the dialog picks one: a Klipper printer on the network
+        # says Klipper, anything else the direct drive preset of that firmware (pressure_advance_test)
+        saved = str(self.q.value("pressure_advance_firmware", "") or "")
+        self.pressure_advance_firmware = saved if saved in ("klipper", "marlin", "rrf") else ""
+        saved = str(self.q.value("pressure_advance_preset", "") or "")
+        self.pressure_advance_preset = saved if saved in ("klipper_direct", "klipper_bowden",
+                                                         "marlin_direct", "marlin_bowden",
+                                                         "rrf") else ""
+        try:
+            self.pressure_advance_start = float(self.q.value("pressure_advance_start", 0.0))
+        except (TypeError, ValueError):
+            self.pressure_advance_start = 0.0
+        self.pressure_advance_start = max(0.0, min(5.0, self.pressure_advance_start))
+        try:
+            self.pressure_advance_end = float(self.q.value("pressure_advance_end", 0.1))
+        except (TypeError, ValueError):
+            self.pressure_advance_end = 0.1
+        self.pressure_advance_end = max(0.0, min(5.0, self.pressure_advance_end))
+        try:
+            self.pressure_advance_step = float(self.q.value("pressure_advance_step", 0.005))
+        except (TypeError, ValueError):
+            self.pressure_advance_step = 0.005
+        self.pressure_advance_step = max(0.001, min(1.0, self.pressure_advance_step))
         try:
             self.first_layer_test_size = float(self.q.value("first_layer_test_size", 30.0))
         except (TypeError, ValueError):
@@ -1596,6 +1619,11 @@ class Settings:
         self.q.setValue("temperature_tower_start", self.temperature_tower_start)
         self.q.setValue("temperature_tower_end", self.temperature_tower_end)
         self.q.setValue("temperature_tower_step", self.temperature_tower_step)
+        self.q.setValue("pressure_advance_firmware", self.pressure_advance_firmware)
+        self.q.setValue("pressure_advance_preset", self.pressure_advance_preset)
+        self.q.setValue("pressure_advance_start", self.pressure_advance_start)
+        self.q.setValue("pressure_advance_end", self.pressure_advance_end)
+        self.q.setValue("pressure_advance_step", self.pressure_advance_step)
         self.q.setValue("first_layer_test_size", self.first_layer_test_size)
         self.q.setValue("first_layer_test_height", self.first_layer_test_height)
         self.q.setValue("first_layer_test_margin", self.first_layer_test_margin)
@@ -2627,6 +2655,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                      "temperature_tower", False,
                                      tr("A stack of segments, one per nozzle temperature: print it "
                                         "and see how your printer behaves at every temperature"))
+        self.a_pressure_advance_test = A(tr("Pressure Advance Test…"),
+                                         lambda checked=False: self.pressure_advance_test_dialog(),
+                                         None, "pressure_advance_test", False,
+                                         tr("A hollow tower whose segments print with a rising "
+                                            "pressure advance value: print it and read which value "
+                                            "gives sharp corners"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -3288,7 +3322,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                       self.a_elephant, self.a_mouse_ears, None,
                       self.a_clearance_test, self.a_overhang_test, self.a_calibration_cube,
                       self.a_bridge_test, self.a_stringing_test, self.a_first_layer_test,
-                      self.a_temperature_tower))
+                      self.a_temperature_tower, self.a_pressure_advance_test))
 
         # ---- Laser and Mill: what only matters for the machine
         m = mb.addMenu(tr("&Laser and Mill"))

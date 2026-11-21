@@ -199,6 +199,15 @@ gets for free.
   stood on the front, and the printer changes the nozzle temperature at every segment - the tower
   keeps that plan on itself, so slicing it asks for `M104` at the right heights; the temperature
   changes apply to the whole bed, also when other parts stand next to the tower
+- **Pressure Advance Test** (3D Printing): a hollow square tower with sharp corners whose segments
+  print with a rising pressure advance value: pick the firmware your printer runs (Klipper, Marlin,
+  RepRapFirmware) and a preset for its extruder - direct drive or bowden - or your own start, end and
+  step. The box is 60 × 60 mm with walls of two lines of the nozzle, hollow above a 1 mm floor and
+  without a top, so nothing hides those corners, and every segment carries its value engraved in the
+  front wall. The tower keeps its commands on itself, so slicing it writes `SET_PRESSURE_ADVANCE
+  ADVANCE=…`, `M900 K…` or `M572 D0 S…` at the layer that reaches every segment, the lowest value
+  already at the first layer; the changes apply to the whole bed. Print it and read the corners: the
+  lowest segment whose corners are sharp and not bulging is the value to set in your printer
 - **Ready-made parts** (Draw > Parts): the parts below stand in four submenus - **Mechanical**,
   **Cables**, **Storage** and **Home and Desk** - and each submenu is in alphabetical order, so
   the part you are after is a short click away
