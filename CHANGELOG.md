@@ -3,11 +3,14 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## Unreleased
+## 0.2.72 — 2026-11-21
 
 ### New
 - **Printer camera**: *Window > Printer Status* has a camera button for every OctoPrint or
   Klipper printer with a webcam; the picture refreshes with the status while the window is open.
+- **Print queue**: *Window > Print Queue…* lines up prints (add them from the print preview or
+  the print history) and sends each to the first free printer. For safety Volura only starts a
+  print on a printer after you pressed *Bed is clear* for it, and the queue starts paused.
 
 ## 0.2.71 — 2026-11-21
 
