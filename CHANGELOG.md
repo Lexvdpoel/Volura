@@ -3,6 +3,12 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## Unreleased
+
+### New
+- **Text along an arc** in *Draw > 3D Text*: one line of text on the outside of an arc, reading
+  over the top like on a round lid, or on the inside like a ring, each letter turned to the arc.
+
 ## 0.2.77 — 2026-11-22
 
 ### New
