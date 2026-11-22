@@ -624,16 +624,18 @@ def test_one_printer_is_not_asked_twice_at_once(win, watch, monkeypatch):
     held.let_go.set()
     asked(watch)
     watch.poll()                                # answered: the next asking may go
+    asked(watch)                                # the fake counts an asking when its thread runs
     assert held.asks_of("Octo") == 2
-    asked(watch)
 
 
 def test_the_watching_asks_every_printer_under_preferences(win, watch):
     switch_on(win, watch, OCTO, PRUSA)
     look(watch)
-    assert watch.says.asks == ["Octo", "Prusa"]
+    # the askings run side by side on threads, so the order they reach the fake in is free
+    assert sorted(watch.says.asks) == ["Octo", "Prusa"]
     look(watch)
-    assert watch.says.asks == ["Octo", "Prusa", "Octo", "Prusa"], "a printer was asked twice"
+    twice = "a printer was asked twice"
+    assert sorted(watch.says.asks) == ["Octo", "Octo", "Prusa", "Prusa"], twice
 
 
 def test_the_status_window_on_the_screen_shares_its_answers(win, watch):
