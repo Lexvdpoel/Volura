@@ -58,6 +58,9 @@ class QueuePrinterRow(QWidget):
         self.job = None                       # the asking on its way, so none is asked twice
         self.seen = "offline"                 # what the printer last said it was doing
         self.bed_clear = False                # the word of the user, never of the printer
+        # what the last sending of a print to this printer said; an answer about the state of
+        # the printer that comes in after it does not wipe it away
+        self.upload_note = ""
         self.name = QLabel(conn.name)
         bold = self.name.font()
         bold.setBold(True)
@@ -109,8 +112,7 @@ class QueuePrinterRow(QWidget):
         self.job = None
         self._say_state(status.state)
         self.set_bed(print_queue.keep_clear(status.state, self.bed_clear))
-        self.error.setText("")
-        self.error.hide()
+        self.show_error(self.upload_note)
 
     def failed(self, exc):
         """What went wrong stands under the row; the next asking tries again."""
@@ -401,7 +403,8 @@ class PrintQueueWindow(QWidget):
         # the word about this bed goes the moment the file goes, not once it has arrived: an
         # upload that fails halfway may still have started the print on the printer
         row.set_bed(False)
-        row.show_error(tr("Sending {file}…").format(file=name))
+        row.upload_note = tr("Sending {file}…").format(file=name)
+        row.show_error(row.upload_note)
 
         def work(report):
             printer_link.upload(conn, path, name, start=True,
@@ -438,6 +441,7 @@ class PrintQueueWindow(QWidget):
         # still on its way; the print itself has nothing to do with the row it went out on
         if background.alive(row):
             row.set_bed(False)
+            row.upload_note = ""
             row.show_error("")
         if background.alive(self):
             self._reload(self._chosen())
@@ -448,7 +452,8 @@ class PrintQueueWindow(QWidget):
         self._job = None
         going, self._going = self._going, None
         if going is not None and background.alive(going[1]):
-            going[1].show_error(str(exc))
+            going[1].upload_note = str(exc)
+            going[1].show_error(going[1].upload_note)
         if background.alive(self):
             self._set_paused(True)
 

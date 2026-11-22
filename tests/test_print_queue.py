@@ -701,6 +701,12 @@ def test_a_failing_upload_keeps_the_print_and_pauses_the_queue(win, tmp_path, co
             "the print stays on the queue"
         assert panel.table.rowCount() == 2
         assert "nothing answers" in panel.rows[0].error.text()
+        # an answer about the state of that printer that comes in after the failed upload - an
+        # asking that was already on its way - leaves the reason under the row standing
+        row = panel.rows[0]
+        row.job = object()
+        row.answered(printer_link.Status(state="idle"))
+        assert "nothing answers" in row.error.text(), "a late answer wiped what went wrong"
         assert panel.paused and panel.pause.text() == "Resume", \
             "a printer that is wrong may not eat the line behind it"
         assert panel.line.text() == "The queue stands paused, so nothing is sent"
