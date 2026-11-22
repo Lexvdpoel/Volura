@@ -222,6 +222,14 @@ gets for free.
   with a single line and asks for its flows as `M220 S…` speed factors, which the slice works out
   with the layer height and line width it prints with. Print it and read the wall: the highest
   segment whose wall stays smooth and full is the volumetric flow this printer can melt
+- **Retraction Test** (3D Printing): two thin towers 4 mm round, 50 mm apart between their centres on
+  a 1 mm base, whose bands of 5 mm each travel with a longer retraction - presets for a direct drive
+  (0.5-3 mm) and a bowden (2-7 mm), or your own start, end and step. A notch at every band boundary
+  and the first and last length raised on a tab at the foot let you count the walk; the towers keep
+  the plan on the part, and the slice rewrites CuraEngine's own retraction moves band by band - in
+  absolute as well as relative extrusion, while moves that lay plastic, a `G92 E0` and a firmware
+  that retracts with `G10`/`G11` stay right. Print it and count the bands by the notches: the lowest
+  band whose travels stay clean is the retraction this printer wants
 - **Slice Settings of one part** (Entity Info): switch a setting on and that part alone slices with
   the value you give it - the infill percentage and its pattern, the wall lines, the top and bottom
   layers and the flow - while the rest of the bed keeps what the print uses. What a value works out

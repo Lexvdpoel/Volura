@@ -426,6 +426,184 @@ def insert_filament_changes(path, heights, command=FILAMENT_CHANGE) -> None:
     insert_commands(path, [(h, command) for h in heights])
 
 
+#: the words of a move line, the way `gcode_preview` reads them too
+_WORD = re.compile(r"([A-Z])\s*(-?\d*\.?\d+)")
+#: the E word of a move line, so it can be written again with another number
+_E_WORD = re.compile(r"(?<![A-Za-z])E\s*-?\d*\.?\d+", re.IGNORECASE)
+#: a file that lets its firmware retract: G10 pulls the filament back and G11 pushes it back, and
+#: neither of them carries a length Volura can change
+_FIRMWARE_RETRACTION = re.compile(r"^\s*G1[01]\b", re.M)
+#: the moves that lay a line or travel, and the codes that say what is absolute and what is not
+_MOVES = ("G0", "G1", "G00", "G01")
+
+
+def _retraction_bands(bands) -> list:
+    """The bands of a retraction test as ``[(z_from, z_to, length)]``, in the order they came.
+
+    A band is asked for by height and not by part, so every test on the bed hands over its bands and
+    they are kept in the order they came; where two of them cover one height, the first wins. An
+    entry that is no band of three numbers is left out with a warning, like a meta of a
+    hand-written file that carries no plan.
+    """
+    out = []
+    for one in (bands or []):
+        try:
+            z_from, z_to, length = (float(v) for v in one)
+        except (TypeError, ValueError):
+            _log.warning("not a band of a retraction test, ignored: %s", one)
+            continue
+        if (math.isfinite(z_from) and math.isfinite(z_to) and math.isfinite(length)
+                and z_to > z_from):
+            out.append((z_from, z_to, length))
+        else:
+            _log.warning("not a band of a retraction test, ignored: %s", one)
+    return out
+
+
+def _band_length(z, bands):
+    """The retraction length of the band that stands at `z`, or None when no band covers it.
+
+    A band runs from its `z_from` up to but not including its `z_to`; the tolerance keeps a layer
+    that lands a hair under a boundary in the band above, where the rounding of a change by height
+    also puts it."""
+    for z_from, z_to, length in bands:
+        if z_from - 1e-6 <= z < z_to - 1e-6:
+            return length
+    return None
+
+
+def _number_text(value) -> str:
+    """A number the way a G-code word holds it: five decimals at most, no noise of the addition
+    behind it and never a `-0`."""
+    v = round(float(value), 5) + 0.0
+    text = f"{v:.5f}".rstrip("0").rstrip(".")
+    return "0" if text in ("", "-0") else text
+
+
+def _with_e(line: str, value: float) -> str:
+    """The line with its E word written again as `value`; everything else, the comment included,
+    stays exactly as it was."""
+    body = line.rstrip("\r\n")
+    eol = line[len(body):]
+    cut = body.find(";")
+    code = body[:cut] if cut >= 0 else body
+    note = body[cut:] if cut >= 0 else ""
+    made, n = _E_WORD.subn(lambda _m: f"E{_number_text(value)}", code, count=1)
+    if not n:
+        return line
+    return made + note + eol
+
+
+def rewrite_retractions(text: str, bands) -> str:
+    """The G-code with, in every layer of a band, the retractions of the length of that band.
+
+    `bands` is ``[(z_from mm, z_to mm, length mm), ...]``, the plan of a retraction test. CuraEngine
+    writes no command for a retraction but a move that only turns the extruder: an E that goes down
+    with no X and no Y in it, followed by the E that goes back up again once the nozzle has reached
+    where it wants to lay plastic. So a band gets its length by rewriting those two moves: every
+    retraction in the layers of the band becomes `length` millimetres, and the prime that answers it
+    the same length back, so the filament stands exactly where it stood and only the travel is
+    printed with another length. Nothing else is touched; the plastic a print lays down stays
+    exactly as much as it was.
+
+    `G1 E-0.8` and `G1 E486.1304` say the same thing in two languages, and both are handled. With
+    absolute extrusion (M82, what CuraEngine does by default) an E names a position, so from the
+    first changed length every E that follows carries the difference with it - and a `G92 E0`, which
+    starts the count of filament again, brings the writing back to what the file said. With relative
+    extrusion (M83) an E is already a difference, so only the retraction and its prime are rewritten.
+
+    Only the moves of a layer are asked for: CuraEngine writes `;LAYER:` before one and
+    `;TIME_ELAPSED:` after it, and between those two the nozzle prints; the filament the start code
+    pushes out and the retraction of the end code are left to the printer. A G-code that carries no
+    `;LAYER:` comments is filtered on its height alone. A file whose firmware retracts itself with
+    `G10` and `G11` holds no length to change, so it comes back as it stood with a note in the log.
+    """
+    made = _retraction_bands(bands)
+    if not made:
+        return text
+    if _FIRMWARE_RETRACTION.search(text):
+        _log.warning("this G-code retracts with G10 and G11, which carry no length to change: the "
+                     "retraction test prints with the retraction of the profile")
+        return text
+    has_layers = ";LAYER:" in text
+    lines = text.splitlines(keepends=True)
+    pos = 0.0                    # mm of filament behind the nozzle, as the printer reads this file
+    shift = 0.0                  # mm added to every E word that follows, so the position stays right
+    z = 0.0                      # mm high the nozzle stands
+    abs_pos = abs_e = True       # G90/G91 for x, y and z; M82/M83 for the filament
+    inside = not has_layers      # are the moves here part of a layer?
+    want = None                  # the length of the retraction that has not come back yet
+    changed = False
+    for k, line in enumerate(lines):
+        body = line.rstrip("\r\n")
+        cut = body.find(";")
+        code = body[:cut] if cut >= 0 else body
+        if not code.strip():
+            if body.startswith(";LAYER:"):
+                inside = True
+            elif body.startswith(";TIME_ELAPSED:"):
+                inside = False
+            continue
+        head = code.split(None, 1)[0].upper()
+        if head in _MOVES:
+            rest = code[len(head):].upper()
+            if "E" not in rest and "Z" not in rest:
+                continue                    # a move that neither turns the extruder nor climbs
+            words = {key: float(v) for key, v in _WORD.findall(rest)}
+            if "Z" in words:
+                z = words["Z"] if abs_pos else z + words["Z"]
+            if "E" not in words:
+                continue
+            value = words["E"]
+            delta = value + shift - pos if abs_e else value
+            only_filament = not ("X" in words or "Y" in words)
+            length = _band_length(z, made) if only_filament and inside else None
+            new = None                                  # what this E has to say about the filament
+            if delta < -1e-9 and length is not None:
+                new, want = -length, length             # the retraction of a layer of its band
+            elif delta > 1e-9 and only_filament and want is not None:
+                new, want = want, None                  # and the prime that answers it
+            if abs_e:
+                shift += 0.0 if new is None else new - delta
+                word = value + shift
+                pos = word
+            else:
+                word = value if new is None else new
+                pos += word
+            if abs(word - value) > 1e-9:
+                lines[k] = _with_e(line, word)
+                changed = True
+        elif head == "G90":
+            abs_pos = True
+        elif head == "G91":
+            abs_pos = False
+        elif head == "M82":
+            abs_e = True
+        elif head == "M83":
+            abs_e = False
+        elif head == "G92":
+            words = {key: float(v) for key, v in _WORD.findall(code[len(head):].upper())}
+            if "Z" in words:
+                z = words["Z"]
+            if "E" in words:
+                # the printer starts counting filament again, so the difference the rewrite built up
+                # is nothing more than the length of the retraction that is still behind the nozzle
+                shift = 0.0
+                pos = words["E"]
+    return "".join(lines) if changed else text
+
+
+def insert_retractions(path, bands) -> None:
+    """Rewrite the retractions of the G-code file at `path` per band, overwriting it."""
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    changed = rewrite_retractions(text, bands)
+    if changed == text:
+        return
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(changed)
+
+
 def set_print_temperature(stacks, temp) -> None:
     """Set `temp` as the print temperature the print starts at, as a user value on `stacks`.
 

@@ -1660,6 +1660,26 @@ volura</code></pre>
     <p class="note" lang="en">Print it and read the wall: too little melt makes the lines thin, glassy or underextruded from some rib upward, and the highest segment whose wall stays smooth and full is the flow this printer can melt; like the other tests, the tube comes onto the bed as one undo step.</p>
     <p class="note" lang="nl">Print hem en lees de muur af: te weinig smelt maakt de lijnen dun, glazig of ondergeëxtrudeerd vanaf een zekere ribbel, en het hoogste segment waarvan de muur glad en vol blijft, is de doorstroom die deze printer kan smelten; zoals de andere tests komt de buis als één stap om ongedaan te maken op het bed.</p>
 
+    <h3><span lang="en">Retraction test</span><span lang="nl">Retractietest</span></h3>
+    <p lang="en">Whether a printer strings or grinds is often a hair's width of retraction: too little leaves hairs between two towers, too much pulls the filament back so far that the next line comes thin; this test print walks a whole range of retraction lengths in one print.</p>
+    <p lang="nl">Of een printer touwtjes trekt of juist knelt, is vaak een haar retractie: te weinig laat haartjes tussen de torens staan, te veel trekt het filament zo ver terug dat de volgende lijn dun wordt; deze testprint loopt een heel bereik aan retractielengtes af in één print.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Retraction Test…</b></p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Retractietest…</b></p>
+    <ul lang="en">
+      <li>Two towers of 4 mm stand 50 mm apart between their centres on a base of 1 mm, and nothing connects them above the base, so the nozzle crosses open air on every layer of the towers and retracts as it does.</li>
+      <li>The height is cut into bands of 5 mm, one retraction length per band, with a notch all round one tower at every boundary; the lengths of the first and the last band stand raised on a tab at the foot of the base.</li>
+      <li>Pick a preset - direct drive 0.5 to 3 mm or bowden 2 to 7 mm - or your own start, end and step; a step above 0, at least two and at most fifteen bands, and lengths between 0.1 and 10 mm.</li>
+      <li>The towers keep the plan of lengths on themselves; after CuraEngine has written its G-code, the slice gives every retraction in a band the length of that band and the prime that answers it the same length back, in absolute as well as relative extrusion, so the plastic the test lays stays exactly what it was.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Twee torens van 4 mm staan 50 mm uit elkaar tussen hun middens op een bodem van 1 mm, en boven die bodem verbindt niets ze, dus de nozzle overbrugt op elke laag van de torens open lucht en trekt daarbij terug.</li>
+      <li>De hoogte is in banden van 5 mm geknipt, één retractielengte per band, met een inkeping rond één toren op elke grens; de lengtes van de eerste en de laatste band staan verhoogd op een flap aan de voet van de bodem.</li>
+      <li>Kies een voorinstelling - direct drive 0,5 tot 3 mm of bowden 2 tot 7 mm - of je eigen start, einde en stap; een stap boven 0, minstens twee en hoogstens vijftien banden, en lengtes tussen 0,1 en 10 mm.</li>
+      <li>De torens houden het plan met de lengtes op zichzelf; nadat CuraEngine zijn G-code heeft geschreven, geeft de slice elke retractie in een band de lengte van die band en de prime die erop volgt dezelfde lengte terug, zowel bij absolute als bij relatieve extrusie, zodat het plastic dat de test legt precies hetzelfde blijft.</li>
+    </ul>
+    <p class="note" lang="en">Print it and count the bands by the notches: the lowest band whose travels stay clean is the retraction this printer wants; like the other tests by height, the bands apply to the whole bed and the test comes onto the bed as one undo step.</p>
+    <p class="note" lang="nl">Print hem en tel de banden aan de inkepingen: de laagste band waarvan de ritten schoon blijft, is de retractie die deze printer nodig heeft; zoals de andere tests op hoogte gelden de banden voor het hele bed en komt de test als één stap om ongedaan te maken op het bed.</p>
+
     <h3><span lang="en">Slice settings of one part</span><span lang="nl">Snij-instellingen van één onderdeel</span></h3>
     <p lang="en">Usually the whole bed slices with the settings of the slice dialog; here a single part gets values of its own.</p>
     <p lang="nl">Normaal slicet het hele bed met de instellingen uit de slice-dialoog; hier krijgt één onderdeel eigen waarden.</p>

@@ -32,7 +32,8 @@ from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, brack
                fileio, filament_clip, first_layer_test, flow_rate_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
                label_plate, lithophane, max_speed_test, ops, paint_split, pegboard, pen_cup,
-               phone_stand, plant_label, plant_pot, pressure_advance_test, screw_jar, snap_fit,
+               phone_stand, plant_label, plant_pot, pressure_advance_test, retraction_test,
+               screw_jar, snap_fit,
                soap_dish, slicer, spool_adapter, standoff, storage_bin, stringing_test,
                temperature_tower, text3d, theme, threads, tie_mount, wall_hook)
 from . import gcode_preview, gcode_thumbnail
@@ -1077,7 +1078,8 @@ class PrintMixin:
                 self.setFocus()
                 return
             self._slice_async(dlg.stacks(), part_list, engine, dlg.printer.name,
-                              dlg.multicolor(), height_commands)
+                              dlg.multicolor(), height_commands,
+                              self._bed_retraction_bands(only))
 
         background.run(self, prepare, text=reading, on_done=prepared,
                        on_error=self._export_failed)
@@ -1153,8 +1155,32 @@ class PrintMixin:
             return None
         return (temp[0] if temp else None), sorted(changes, key=lambda one: one[0])
 
+    def _bed_retraction_bands(self, only) -> list:
+        """``[(z_from mm, z_to mm, length mm), ...]`` of the retraction tests on the bed.
+
+        A part made by Retraction Test carries its plan of lengths in `g.meta["retraction_bands"]`.
+        A retraction is no command the printer can be told halfway, but a length CuraEngine hides in
+        the extrusion moves around a travel, so these lengths are not written into the G-code as
+        lines; the slice rewrites the moves it finds with them, band by band, after the engine is
+        done. Like every change by height they ask for by height, so a test that stands next to other
+        parts changes the retraction of the whole bed - which is what the dialog says. An entry that
+        is no band of three numbers is left out, like a meta of a hand-written file that carries no
+        plan; where two tests cover one height, the plan of the first part on the bed wins, because
+        `slicer.rewrite_retractions` takes the first band that covers a height. Empty when nothing on
+        the bed carries a plan.
+        """
+        groups = self.doc.selected_groups() if only else self.doc.visible_groups()
+        out = []
+        for g in groups:
+            for one in (g.meta.get("retraction_bands") or []):
+                try:
+                    out.append((float(one[0]), float(one[1]), float(one[2])))
+                except (IndexError, KeyError, TypeError, ValueError):
+                    continue          # a meta of a hand-written file that is no band
+        return sorted(out, key=lambda one: one[0])
+
     def _slice_async(self, stacks, part_list, engine, printer_name="", plan=None,
-                     height_commands=None):
+                     height_commands=None, retraction_bands=None):
         """Slice `part_list` with `stacks` in the background, then show the print preview.
 
         The G-code goes to a temporary file first; the preview reads it back layer by layer
@@ -1166,6 +1192,8 @@ class PrintMixin:
         colour, how deep the painted faces go and where the printer changes its filament.
         `height_commands` is what `_bed_height_commands` found on the parts: the temperature the
         print starts at and the commands the tests on the bed ask for, each with its height.
+        `retraction_bands` is what `_bed_retraction_bands` found: the lengths the retraction tests on
+        the bed travel with, per band, which only the finished G-code can carry.
         """
         from . import slice_dialog as sd
         plan = plan or sd.Multicolor()
@@ -1247,6 +1275,11 @@ class PrintMixin:
             if by_height:
                 # every change asks for its command at the first layer at or above its height
                 slicer.insert_commands(path, by_height)
+            if retraction_bands:
+                # a retraction is no command but a length CuraEngine hides in the extrusion moves
+                # around a travel, so the bands only go in once the engine has written the file
+                report(0.86, tr("Writing the retractions per band…"))
+                slicer.insert_retractions(path, retraction_bands)
             if sizes:
                 report(0.87, tr("Drawing the thumbnail…"))
                 gcode_thumbnail.insert(path, [gcode_thumbnail.block(
@@ -4230,6 +4263,126 @@ class PrintMixin:
             self.view.set_status(tr("Max speed test failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the max speed test…"),
+                       on_done=done, on_error=failed)
+    # ---------------------------------------------------------- retraction test
+
+    def retraction_test_dialog(self):
+        """3D Printing > Retraction Test…: two thin towers whose bands each travel with a longer
+        retraction, so the user sees which retraction keeps this printer's travels clean."""
+        presets = retraction_test.PRESETS
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Retraction Test"))
+        form = QFormLayout(dlg)
+        preset_cb = QComboBox()
+        for name in presets:
+            preset_cb.addItem(retraction_test.preset_label(name), name)
+        preset_cb.setToolTip(tr("How far the extruder of this printer stands from the nozzle: a "
+                                "bowden one has a long tube to pull the filament through; choosing "
+                                "one fills in the lengths below"))
+        saved = self.settings.retraction_test_preset
+        preset_cb.setCurrentIndex(list(presets)
+                                  .index(saved if saved in presets
+                                         else retraction_test.default_preset()))
+        lo, hi = retraction_test.LENGTH_MIN, retraction_test.LENGTH_MAX
+        start_sp = self._spin(lo, hi, self.settings.retraction_test_start, 2, " mm", 0.5)
+        start_sp.setToolTip(tr("How far the filament comes back in the lowest band, the shortest "
+                               "retraction of the test"))
+        end_sp = self._spin(lo, hi, self.settings.retraction_test_end, 2, " mm", 0.5)
+        end_sp.setToolTip(tr("The length the walk stops at: the top band travels with the last "
+                             "length that stays under it"))
+        step_sp = self._spin(retraction_test.STEP_MIN, retraction_test.STEP_MAX,
+                             self.settings.retraction_test_step, 2, " mm", 0.5)
+        step_sp.setToolTip(tr("How many millimetres longer every next band retracts"))
+        info = QLabel()
+        form.addRow(tr("Preset"), preset_cb)
+        form.addRow(tr("Start"), start_sp)
+        form.addRow(tr("End"), end_sp)
+        form.addRow(tr("Step"), step_sp)
+        form.addRow("", info)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+
+        def pick(*_):
+            low, high, d = presets[preset_cb.currentData()]
+            start_sp.setValue(low)
+            end_sp.setValue(high)
+            step_sp.setValue(d)
+
+        def show(*_):
+            try:
+                s = retraction_test.sizes(float(start_sp.value()), float(end_sp.value()),
+                                          float(step_sp.value()))
+            except ValueError as exc:
+                info.setText(str(exc))
+                return
+            low, high = s["lengths"][0], s["lengths"][-1]
+            wide, deep, top = s["size"]
+            info.setText(tr("{n} bands: {low} to {high} mm\nOutside size: {length} × {depth} × "
+                            "{height} mm\n{read}")
+                         .format(n=s["bands"],
+                                 low=retraction_test.length_text(low),
+                                 high=retraction_test.length_text(high),
+                                 length=f"{wide:g}", depth=f"{deep:g}", height=f"{top:g}",
+                                 read=tr("The retractions change at every band and hold for the "
+                                         "whole bed.")))
+
+        preset_cb.currentIndexChanged.connect(pick)
+        for sp in (start_sp, end_sp, step_sp):
+            sp.valueChanged.connect(show)
+        show()
+        if dlg.exec() != QDialog.Accepted:
+            return
+        preset = preset_cb.currentData()
+        start, end = float(start_sp.value()), float(end_sp.value())
+        step = float(step_sp.value())
+        try:
+            # the plan of bands goes on the test itself; the slice rewrites its own G-code with it
+            plan = retraction_test.bands(start, end, step)
+        except ValueError as exc:
+            QMessageBox.warning(self, tr("Retraction Test"), str(exc))
+            return
+        self.settings.retraction_test_preset = preset
+        self.settings.retraction_test_start = start
+        self.settings.retraction_test_end = end
+        self.settings.retraction_test_step = step
+        self.settings.save()
+        self._apply_retraction_test(start, end, step, plan)
+
+    def _apply_retraction_test(self, start, end, step, plan):
+        doc = self.doc
+        bb = doc.model_bbox()
+        x0 = 0.0 if bb is None else float(bb[1][0]) + 10.0   # mm to the right of the model
+
+        def work(report):
+            # two towers, a notch at every boundary and the numbers on the tab are a row of
+            # booleans, so it happens here and the window keeps responding
+            report(0.1, tr("Building the retraction test…"))
+            towers = retraction_test.retraction_test(start=start, end=end, step=step)
+            if towers.status() != mf.Error.NoError or towers.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            # the test is drawn centred on the origin: move it to the free spot on the bed
+            dx = x0 - float(np.asarray(towers.bounding_box())[0])
+            return towers.translate((dx, 0.0, 0.0))
+
+        def done(result):
+            doc.checkpoint()                # one undo takes the towers away again
+            new = ops.group_from_manifold(doc, result, self.settings.current_color,
+                                          tr("Retraction test"))
+            # the plan of lengths goes on the test itself; CuraEngine keeps the retraction of the
+            # profile and the slice writes these lengths into the G-code it is done with
+            new.meta = {"retraction_bands": plan}
+            doc.set_selection([("g", new.id, new.id)])
+            doc.notify()
+            self.view.set_status(tr("Print it and count the bands by the notches: the lowest band "
+                                    "whose travels stay clean is the retraction this printer "
+                                    "wants."))
+
+        def failed(exc):
+            self.view.set_status(tr("Retraction test failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the retraction test…"),
                        on_done=done, on_error=failed)
     # --------------------------------------------------------- first layer test
 
