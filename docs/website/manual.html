@@ -1640,6 +1640,26 @@ volura</code></pre>
     <p class="note" lang="en">Print it and read the tops: too little flow leaves gaps and low lines that never close, too much leaves ridges and blobs, and the pad with a smooth, closed top without ridges is the flow to set; the row comes onto the bed as one undo step.</p>
     <p class="note" lang="nl">Print hem en lees de bovenkanten af: te weinig doorstroom laat gaten en lage lijnen die nooit sluiten, te veel laat richels en bulten, en het pad met een gladde, gesloten bovenkant zonder richels is de doorstroom die je instelt; de rij komt als één stap om ongedaan te maken op het bed.</p>
 
+    <h3><span lang="en">Max speed test</span><span lang="nl">Maxsnelheidstest</span></h3>
+    <p lang="en">How much plastic a hotend can melt per second shows itself in speed: print the same wall ever faster and from some segment the lines turn thin, glassy or short of material; this test print walks a whole range of volumetric flows in a single print.</p>
+    <p lang="nl">Hoeveel plastic een hotend per seconde smelt, zie je aan de snelheid: print dezelfde muur steeds sneller en vanaf een zeker segment worden de lijnen dun, glazig of te kort aan materiaal; deze testprint loopt een heel bereik aan doorstromen af in één print.</p>
+    <p class="where" lang="en">Where: <b>3D Printing &gt; Max Speed Test…</b></p>
+    <p class="where" lang="nl">Waar: <b>3D-printen &gt; Maxsnelheidstest…</b></p>
+    <ul lang="en">
+      <li>A single-walled tube of 40 mm across, one line of the nozzle thick and open at the top, in segments of 5 mm; every segment prints with a higher volumetric flow than the one under it, so the wall tells you where the hotend cannot keep up.</li>
+      <li>A rib stands on the wall at every boundary between two segments, so you can count the segments with your fingers, and the flows of the first and last segment stand engraved in a tab at the foot.</li>
+      <li>Pick a preset - standard hotend 5 to 20 mm³/s or high flow 10 to 40 mm³/s - or your own start, end and step; a step above 0, at least two and at most twenty segments, and no segment whose speed would pass 500 mm/s at the layer height and line width you print with.</li>
+      <li>The tube makes its own wall print at a fixed base speed of 100 mm/s with a single line and nothing inside; the slice turns every flow into a speed factor <code>M220 S…</code> with its own layer height and line width and writes it at the layer that reaches the segment, the lowest flow already at the first layer.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Een buis met één muur van 40 mm doorsnee, een lijn van de nozzle dik en open bovenop, in segmenten van 5 mm; elk segment print met een hogere doorstroom dan het segment eronder, dus de muur vertelt je waar de hotend het niet meer bijhoudt.</li>
+      <li>Op elke grens tussen twee segmenten staat een ribbel op de muur, dus je telt de segmenten met je vingers, en de doorstromen van het eerste en het laatste segment staan gegraveerd in een flap aan de voet.</li>
+      <li>Kies een voorinstelling - standaard hotend 5 tot 20 mm³/s of high flow 10 tot 40 mm³/s - of je eigen start, einde en stap; een stap boven 0, minstens twee en hoogstens twintig segmenten, en geen segment waarvan de snelheid boven 500 mm/s komt bij de laaghoogte en lijnbreedte waarmee je print.</li>
+      <li>De buis zorgt dat zijn muur met een vaste basesnelheid van 100 mm/s met één lijn en niets binnenin print; de slice maakt van elke doorstroom een snelheidsfactor <code>M220 S…</code> met zijn eigen laaghoogte en lijnbreedte en schrijft die op de laag die het segment bereikt, de laagste doorstroom al op de eerste laag.</li>
+    </ul>
+    <p class="note" lang="en">Print it and read the wall: too little melt makes the lines thin, glassy or underextruded from some rib upward, and the highest segment whose wall stays smooth and full is the flow this printer can melt; like the other tests, the tube comes onto the bed as one undo step.</p>
+    <p class="note" lang="nl">Print hem en lees de muur af: te weinig smelt maakt de lijnen dun, glazig of ondergeëxtrudeerd vanaf een zekere ribbel, en het hoogste segment waarvan de muur glad en vol blijft, is de doorstroom die deze printer kan smelten; zoals de andere tests komt de buis als één stap om ongedaan te maken op het bed.</p>
+
     <h3><span lang="en">Slice settings of one part</span><span lang="nl">Snij-instellingen van één onderdeel</span></h3>
     <p lang="en">Usually the whole bed slices with the settings of the slice dialog; here a single part gets values of its own.</p>
     <p lang="nl">Normaal slicet het hele bed met de instellingen uit de slice-dialoog; hier krijgt één onderdeel eigen waarden.</p>

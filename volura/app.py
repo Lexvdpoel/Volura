@@ -487,6 +487,24 @@ class Settings:
         except (TypeError, ValueError):
             self.flow_rate_test_step = 2.5
         self.flow_rate_test_step = max(0.1, min(25.0, self.flow_rate_test_step))
+        # an empty preset says the dialog picks one: the first preset (max_speed_test)
+        saved = str(self.q.value("max_speed_test_preset", "") or "")
+        self.max_speed_test_preset = saved if saved in ("standard_hotend", "high_flow") else ""
+        try:
+            self.max_speed_test_start = float(self.q.value("max_speed_test_start", 5.0))
+        except (TypeError, ValueError):
+            self.max_speed_test_start = 5.0
+        self.max_speed_test_start = max(1.0, min(60.0, self.max_speed_test_start))
+        try:
+            self.max_speed_test_end = float(self.q.value("max_speed_test_end", 25.0))
+        except (TypeError, ValueError):
+            self.max_speed_test_end = 25.0
+        self.max_speed_test_end = max(1.0, min(60.0, self.max_speed_test_end))
+        try:
+            self.max_speed_test_step = float(self.q.value("max_speed_test_step", 2.5))
+        except (TypeError, ValueError):
+            self.max_speed_test_step = 2.5
+        self.max_speed_test_step = max(0.1, min(30.0, self.max_speed_test_step))
         try:
             self.hinge_slit = float(self.q.value("hinge_slit", 15.0))
         except (TypeError, ValueError):
@@ -1645,6 +1663,10 @@ class Settings:
         self.q.setValue("flow_rate_test_start", self.flow_rate_test_start)
         self.q.setValue("flow_rate_test_end", self.flow_rate_test_end)
         self.q.setValue("flow_rate_test_step", self.flow_rate_test_step)
+        self.q.setValue("max_speed_test_preset", self.max_speed_test_preset)
+        self.q.setValue("max_speed_test_start", self.max_speed_test_start)
+        self.q.setValue("max_speed_test_end", self.max_speed_test_end)
+        self.q.setValue("max_speed_test_step", self.max_speed_test_step)
         self.q.setValue("hinge_slit", self.hinge_slit)
         self.q.setValue("hinge_gap", self.hinge_gap)
         self.q.setValue("hinge_pitch", self.hinge_pitch)
@@ -2684,6 +2706,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                   False,
                                   tr("A row of pads, one per material flow: print it and see which "
                                      "flow gives a smooth, closed top surface"))
+        self.a_max_speed_test = A(tr("Max Speed Test…"),
+                                  lambda checked=False: self.max_speed_test_dialog(), None,
+                                  "max_speed_test", False,
+                                  tr("A single-walled tube whose segments print at a rising "
+                                     "volumetric flow: print it and read the flow where your "
+                                     "hotend runs out of melt"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -3346,7 +3374,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                       self.a_clearance_test, self.a_overhang_test, self.a_calibration_cube,
                       self.a_bridge_test, self.a_stringing_test, self.a_first_layer_test,
                       self.a_temperature_tower, self.a_pressure_advance_test,
-                      self.a_flow_rate_test))
+                      self.a_flow_rate_test, self.a_max_speed_test))
 
         # ---- Laser and Mill: what only matters for the machine
         m = mb.addMenu(tr("&Laser and Mill"))
