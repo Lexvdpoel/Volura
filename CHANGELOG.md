@@ -3,6 +3,17 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.75 — 2026-11-22
+
+### New
+- **Slice settings per part**: in *Entity Info* one selected part can have its own infill
+  density and pattern, number of walls, top and bottom layers and flow; the rest of the bed keeps
+  the settings of *File > Slice*. The Outliner marks such parts.
+
+### Fixed
+- The **flow rate test** of 0.2.74 printed every pad with the same flow: CuraEngine never got
+  the settings of a single part. It does now, so each pad really prints with its own flow.
+
 ## 0.2.74 — 2026-11-22
 
 ### New
