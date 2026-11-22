@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from . import cura_profiles
+
 _log = logging.getLogger(__name__)
 
 #: the name of the engine program
@@ -169,25 +171,145 @@ def place_on_bed(meshes, settings) -> list:
     return [(np.asarray(m[0], dtype=float) + shift, m[1], m[2], *m[3:]) for m in meshes]
 
 
+def _formula_names(text) -> set:
+    """The settings a formula of a printer definition reads: the names in `=line_width * 2`."""
+    try:
+        return set(cura_profiles.Formula(str(text)).code.co_names)
+    except (AttributeError, TypeError, ValueError, SyntaxError):
+        return set()           # a formula that does not compile reads nothing
+
+
+def worked_out_from(definition, keys) -> set:
+    """Every setting of `definition` whose value is worked out from one of `keys`.
+
+    A setting's value in a definition is often a formula over other settings, and that formula can
+    read a setting that is itself worked out from one of `keys`, so this walks the formulas until
+    nothing new turns up; a formula that reads itself does not make it turn forever."""
+    needs = {k: _formula_names(p["value"]) for k, p in definition.items()
+             if isinstance(p.get("value"), str)}
+    found, todo = set(), list(keys)
+    while todo:
+        want = todo.pop()
+        for key, names in needs.items():
+            if key not in found and want in names:
+                found.add(key)
+                todo.append(key)
+    return found
+
+
+def _mesh_stack(stacks, settings):
+    """The global stack of `stacks` with a part's own values on top of the layers it works out from.
+
+    It is a `cura_profiles.Stack` of the same definition and the same layers - your own values, the
+    quality - with the part's values as the topmost layer, so every formula is worked out exactly
+    as it is for the whole print and only the part's values change the outcome. A setting that comes
+    from an extruder or a `resolve` still comes from there: those values are the print's."""
+    return cura_profiles.Stack(stacks, [dict(settings), *stacks.glob.layers],
+                               stacks.printer.definition.settings, None)
+
+
+def derived_mesh_settings(stacks, settings, keys) -> dict:
+    """What a part's own values work out to for the settings CuraEngine only reads the result of.
+
+    Cura works the formulas of a printer definition out in its interface and hands CuraEngine the
+    results, so CuraEngine spaces the infill by `infill_line_distance` and does not know
+    `infill_sparse_density` at all. A part that overrides the density therefore has to hand over the
+    line distance that follows from it too - and the overlap, the pocket size of the cross patterns
+    and the top and bottom layers with it - or the engine lays the infill of the whole print. Which
+    settings follow from which is what `worked_out_from` reads from the definition, so this keeps
+    working for a printer whose definitions derive more than these.
+
+    Only a value that comes out different from the print's own is handed over, so a part that
+    overrides nothing that matters sends nothing extra."""
+    definition = stacks.printer.definition.settings
+    want = sorted(k for k in worked_out_from(definition, keys)
+                  if (definition.get(k) or {}).get("settable_per_mesh"))
+    if not want:
+        return {}
+    glob = _mesh_stack(stacks, settings)
+    whole = stacks.global_settings()
+    out = {}
+    for key in want:
+        value, print_value = glob.get(key), whole.get(key)
+        if (value is not None and _fits_the_setting(value, definition.get(key))
+                and _is_different(value, print_value)):
+            out[key] = _json_value(value)
+    return out
+
+
+def _is_different(value, print_value) -> bool:
+    """Whether what a part works out is something else than what the print as a whole uses.
+
+    Two formulas that come out the same but in another order can differ by a rounding error, so
+    numbers only count as different when they are apart by more than a thousandth of a
+    micrometre."""
+    if (isinstance(value, (int, float)) and isinstance(print_value, (int, float))
+            and not isinstance(value, bool) and not isinstance(print_value, bool)):
+        return not math.isclose(float(value), float(print_value), rel_tol=1e-9, abs_tol=1e-6)
+    return _json_value(value) != _json_value(print_value)
+
+
+def _is_setting_value(value) -> bool:
+    """Whether a value can travel to CuraEngine at all.
+
+    A setting of one mesh travels as text on the command line, so a number has to be a real number
+    - the engine turns text into a number and makes nothing of `nan` - and nothing deeper than a
+    list of numbers and words can be handed over."""
+    if isinstance(value, (bool, str)):
+        return True
+    if isinstance(value, (int, float)):
+        return math.isfinite(float(value))
+    if isinstance(value, (list, tuple)):
+        return all(_is_setting_value(one) for one in value)
+    return False
+
+
+def _fits_the_setting(value, props) -> bool:
+    """Whether a part's value is what this setting holds, by the type its definition gives it: a
+    number for a measure or a count, True or False for a switch, a word for a pattern, and for the
+    settings that hold a list or an extruder anything that can be handed over at all.
+
+    CuraEngine turns the text it is given into what the setting wants, so a value of another kind
+    ends the whole slice with an engine error; a value that does not fit its setting is dropped like
+    a key that cannot be per-mesh, because one wrong value in a file is no reason to print nothing."""
+    kind = (props or {}).get("type") or ""
+    number = isinstance(value, (int, float)) and not isinstance(value, bool)
+    if kind in ("float", "int"):
+        return number and math.isfinite(float(value))
+    if kind == "bool":
+        return isinstance(value, bool)
+    if kind in ("enum", "str"):
+        return isinstance(value, str) and value != ""
+    return _is_setting_value(value)
+
+
 def per_mesh_settings(stacks, settings) -> dict:
-    """The part of a part's `settings` that CuraEngine accepts on a single mesh of the -r file.
+    """The part of a part's `settings` that CuraEngine accepts for a single mesh.
 
     A mesh may carry its own values for the settings its printer definition marks
-    `settable_per_mesh` - `material_flow` among them - and those go in the settings document next to
-    the mesh's `extruder_nr`. A key the definition does not mark so (a global-only or an extruder
-    setting), or one the definition does not know at all, cannot be honoured per mesh: it is dropped
-    with a warning rather than refused, because a setting the engine ignores is no reason to stop a
-    print. Values are made JSON-safe the way every setting in that document is."""
+    `settable_per_mesh` - `infill_sparse_density` and `material_flow` among them - and those go to
+    the engine as settings of that one mesh. A key the definition does not mark so (a global-only or
+    an extruder setting), or one the definition does not know at all, cannot be honoured per mesh: it
+    is dropped with a warning rather than refused, because a setting the engine ignores is no reason
+    to stop a print - which is also what happens to a value that does not fit its setting, a `nan` or
+    a word where a measure belongs. Values are made JSON-safe the way every setting is.
+
+    The values that follow from these - the line distance a density works out to - are added by
+    `derived_mesh_settings`, because CuraEngine reads results instead of working formulas out."""
     out = {}
     if not settings:
         return out
     definition = stacks.printer.definition.settings
     for key, value in settings.items():
         props = definition.get(key)
-        if props and props.get("settable_per_mesh"):
-            out[key] = _json_value(value)
-        else:
+        value = _json_value(value)
+        if not props or not props.get("settable_per_mesh"):
             _log.warning("not a per-mesh setting, ignored for this part: %s", key)
+        elif not _fits_the_setting(value, props):
+            _log.warning("not a value CuraEngine can read for %s, ignored for this part", key)
+        else:
+            out[key] = value
+    out.update(derived_mesh_settings(stacks, out, list(out)))
     return out
 
 
@@ -366,6 +488,19 @@ def orca_gcode_for(stacks, meshes, glob: dict):
         raise RuntimeError(f"the start G-code of this printer cannot be worked out: {e}") from None
 
 
+def command_value(value) -> str:
+    """A setting value the way CuraEngine's `-s` wants it, as one word.
+
+    The engine reads every value as text and turns it into what its call site wants, so a list
+    becomes `[a,b]` - the same text the resolved-settings file holds - and a bool one of the words
+    it compares against."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return "[" + ",".join(command_value(v) for v in value) + "]"
+    return str(value)
+
+
 def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progress=None) -> SliceResult:
     """Slice `meshes` - a list of (verts, tris, extruder_nr) in bed millimetres - to `out_path`.
 
@@ -374,9 +509,11 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
     failed.
 
     A mesh may carry a fourth element: a dict of CuraEngine settings for that one mesh, as
-    `per_mesh_settings` kept only the `settable_per_mesh` ones of them; they go in the settings
-    document next to the mesh's `extruder_nr`, so a single pad of a flow rate test prints with its
-    own `material_flow` while the rest of the bed keeps the global value.
+    `per_mesh_settings` kept only the `settable_per_mesh` ones of them. Those follow the mesh's own
+    file on the command line, which is where CuraEngine takes a setting for that mesh alone, so a
+    single pad of a flow rate test prints with its own `material_flow` while the rest of the bed
+    keeps the global value. A mesh that asks for nothing is loaded from the settings document
+    instead, so a bed of a thousand plain parts stays one short command.
     """
     engine = engine or find_engine()
     if not engine:
@@ -400,17 +537,37 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
         doc["global"]["material_print_temp_prepend"] = not codes & {"M104", "M109"}
     with tempfile.TemporaryDirectory(prefix="volura-slice-") as tmp:
         for i, m in enumerate(meshes):
-            name = f"part{i}.stl"
-            write_stl(os.path.join(tmp, name), m[0], m[1])
-            doc[name] = {"extruder_nr": int(m[2]), **(m[3] if len(m) > 3 and m[3] else {})}
+            write_stl(os.path.join(tmp, f"part{i}.stl"), m[0], m[1])
+        own = [m[3] if len(m) > 3 and m[3] else {} for m in meshes]
+        # a part that wants settings of its own is named on the command line, which is where
+        # CuraEngine takes a setting for one mesh alone; the model keys of the document load every
+        # part that asks for nothing, so a bed of a thousand plain parts is still a short command
+        for i, settings in enumerate(own):
+            if not settings:
+                doc[f"part{i}.stl"] = {"extruder_nr": int(meshes[i][2])}
         settings_path = os.path.join(tmp, "settings.json")
         with open(settings_path, "w", encoding="utf-8") as fh:
             json.dump(doc, fh)
-        cmd = engine_command(engine) + ["slice", "-p", "-r", settings_path, "-o", out_path]
+        # right behind the mesh its own -s settings, which beat the values of the whole print for
+        # that mesh; the parts are named from the working folder of the engine, so a long row of
+        # parts with settings of their own is still one command of a length Windows accepts
+        cmd = engine_command(engine) + ["slice", "-p", "-r", settings_path,
+                                        "-o", os.path.abspath(out_path)]
+        for i, settings in enumerate(own):
+            if not settings:
+                continue
+            cmd += ["-e" + str(int(meshes[i][2])), "-l", f"part{i}.stl"]
+            for key, value in settings.items():
+                cmd += ["-s", f"{key}={command_value(value)}"]
+        # Windows hands a program its arguments as one string of at most 32767 characters, and the
+        # settings of a part are worth a line of those; ask before the engine chokes on it silently
+        if sum(len(one) + 1 for one in cmd) > 30000:
+            raise RuntimeError("too many parts slice with settings of their own: take some of them "
+                               "back in Entity Info, or slice the model in pieces")
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                                 encoding="utf-8", errors="replace", creationflags=flags,
-                                env=engine_environment(engine))
+                                cwd=tmp, env=engine_environment(engine))
         log = []
         for line in proc.stdout:
             log.append(line)

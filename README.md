@@ -214,6 +214,13 @@ gets for free.
   surface, and the flow goes to the slicer as a setting of that one pad. Print it and look at the
   tops: too little flow leaves gaps and low lines that never close, too much leaves ridges and
   blobs, and the pad with a smooth, closed top without ridges is the flow to set
+- **Slice Settings of one part** (Entity Info): switch a setting on and that part alone slices with
+  the value you give it - the infill percentage and its pattern, the wall lines, the top and bottom
+  layers and the flow - while the rest of the bed keeps what the print uses. What a value works out
+  to goes to the engine along with it, so a part with 0 % infill really holds nothing inside. The
+  Outliner puts a gear behind every part that carries settings of its own, they stand on the part so
+  they travel through a saved file, and the summary of a slice says how many parts sliced on their
+  own
 - **Ready-made parts** (Draw > Parts): the parts below stand in four submenus - **Mechanical**,
   **Cables**, **Storage** and **Home and Desk** - and each submenu is in alphabetical order, so
   the part you are after is a short click away

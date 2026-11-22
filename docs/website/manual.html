@@ -1640,6 +1640,26 @@ volura</code></pre>
     <p class="note" lang="en">Print it and read the tops: too little flow leaves gaps and low lines that never close, too much leaves ridges and blobs, and the pad with a smooth, closed top without ridges is the flow to set; the row comes onto the bed as one undo step.</p>
     <p class="note" lang="nl">Print hem en lees de bovenkanten af: te weinig doorstroom laat gaten en lage lijnen die nooit sluiten, te veel laat richels en bulten, en het pad met een gladde, gesloten bovenkant zonder richels is de doorstroom die je instelt; de rij komt als één stap om ongedaan te maken op het bed.</p>
 
+    <h3><span lang="en">Slice settings of one part</span><span lang="nl">Snij-instellingen van één onderdeel</span></h3>
+    <p lang="en">Usually the whole bed slices with the settings of the slice dialog; here a single part gets values of its own.</p>
+    <p lang="nl">Normaal slicet het hele bed met de instellingen uit de slice-dialoog; hier krijgt één onderdeel eigen waarden.</p>
+    <p class="where" lang="en">Where: select a group and open <b>Slice Settings</b> in <b>Entity Info</b>; the <b>Outliner</b> shows a gear behind a part that has any</p>
+    <p class="where" lang="nl">Waar: kies een groep en open <b>Snij-instellingen</b> bij <b>Entity Info</b>; de <b>Outliner</b> zet een tandwiel achter de naam van een onderdeel dat er welke heeft</p>
+    <ul lang="en">
+      <li>Six settings a printer can vary from part to part: the percentage <b>infill</b> and its <b>pattern</b>, the number of <b>wall lines</b>, the <b>top</b> and <b>bottom layers</b> and the <b>flow</b>.</li>
+      <li>Switch one on and that part alone slices with the value you give it; switched off it takes what the print uses. Each row is one step to undo.</li>
+      <li>What a value works out to goes along with it: CuraEngine spaces the infill by the line distance a density works out to, so a part with 0 % infill really holds nothing inside.</li>
+      <li>The settings stand on the part itself, so they travel with it through a saved file, the <b>Outliner</b> marks the parts that carry any, and the summary of a slice says how many sliced with settings of their own.</li>
+    </ul>
+    <ul lang="nl">
+      <li>Zes instellingen die een printer per onderdeel kan verschillen: het percentage <b>vulling</b> en het <b>vulpatroon</b>, het aantal <b>muurlijnen</b>, de <b>boven</b>- en <b>onderlagen</b> en de <b>doorstroom</b>.</li>
+      <li>Zet er één aan en alleen dát onderdeel slicet met de waarde die je geeft; uit neemt het wat de print gebruikt. Elke rij is één stap om ongedaan te maken.</li>
+      <li>Wat een waarde oplevert, gaat erbij staan: CuraEngine zet de vulling uiteen met de lijnafstand die uit een percentage rolt, dus een onderdeel met 0 % vulling heeft binnen echt niets.</li>
+      <li>De instellingen staan op het onderdeel zelf, dus ze reizen mee door een opgeslagen bestand, de <b>Outliner</b> merkt de onderdelen die er welke hebben, en de samenvatting van een slice zegt hoeveel er met eigen instellingen sliceten.</li>
+    </ul>
+    <p class="note" lang="en">A Flow Rate Test writes these settings for its pads itself; setting them by hand is how one thick part prints solid while the light part beside it goes at 10 % infill.</p>
+    <p class="note" lang="nl">Een flowratetest schrijft deze instellingen zelf voor zijn paden; ze zelf zetten is hoe één dik onderdeel massief print terwijl het lichte ernaast het met 10 % vulling doet.</p>
+
     <!-- ===================================================== import -->
     <h2 id="import"><span lang="en">Importing 3D models</span><span lang="nl">3D-modellen importeren</span></h2>
     <h3><span lang="en">Importing a model</span><span lang="nl">Een model importeren</span></h3>
