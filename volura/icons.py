@@ -279,6 +279,16 @@ SVG = {
                              f'stroke-width="1.2" stroke-linecap="round"/>'
                              f'<path d="M3.4 20.6 L3.4 4.4 L5.4 6.6" {N} stroke="#5fa0e0" '
                              f'stroke-width="1.3" stroke-linecap="round"/>',
+    # max speed test: a single-walled tube with a rib at every boundary and a tab at its foot
+    "max_speed_test": f'<rect x="7.5" y="3" width="8" height="17.5" rx="4" fill="#eef2f7" {S()}/>'
+                      f'<rect x="9.7" y="5.2" width="3.6" height="13.1" rx="1.8" fill="#fff" '
+                      f'{S(w=1.1)}/>'
+                      f'<path d="M15.5 6.9 h2.2 M15.5 10.7 h2.2 M15.5 14.5 h2.2" '
+                      f'stroke="#2f6fd6" stroke-width="1.4" stroke-linecap="round"/>'
+                      f'<rect x="15.3" y="17.6" width="4.9" height="2.9" rx="0.8" fill="#f2c230" '
+                      f'{S(w=1.1)}/>'
+                      f'<path d="M3.4 20.6 L3.4 4.4 L5.4 6.6" {N} stroke="#5fa0e0" '
+                      f'stroke-width="1.3" stroke-linecap="round"/>',
     # vent pattern: a plate with a field of round holes
     "vent": f'<rect x="2.5" y="4" width="19" height="16" rx="1" fill="#eef2f7" {S()}/>'
             f'<circle cx="7" cy="9" r="1.7" fill="#fff" stroke="#d23b3b" stroke-width="1.2"/>'

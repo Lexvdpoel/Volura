@@ -31,10 +31,10 @@ from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, brack
                coaster, desk_hook, door_wedge, drawer_organizer, enclosure, fan_guard,
                fileio, filament_clip, first_layer_test, flow_rate_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
-               label_plate, lithophane, ops, paint_split, pegboard, pen_cup, phone_stand,
-               plant_label, plant_pot, pressure_advance_test, screw_jar, snap_fit, soap_dish,
-               slicer, spool_adapter, standoff, storage_bin, stringing_test, temperature_tower,
-               text3d, theme, threads, tie_mount, wall_hook)
+               label_plate, lithophane, max_speed_test, ops, paint_split, pegboard, pen_cup,
+               phone_stand, plant_label, plant_pot, pressure_advance_test, screw_jar, snap_fit,
+               soap_dish, slicer, spool_adapter, standoff, storage_bin, stringing_test,
+               temperature_tower, text3d, theme, threads, tie_mount, wall_hook)
 from . import gcode_preview, gcode_thumbnail
 from .print_preview import FILAMENT_STYLE, PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
@@ -1068,8 +1068,16 @@ class PrintMixin:
             for key, value in choice.items():
                 setattr(self.settings, "slice_" + key, value)
             self.settings.save()
+            try:
+                # the max speed test turns its flows into percents with these stacks, and a plan
+                # that would run past the speed limit at this slice is refused before it starts
+                height_commands = self._bed_height_commands(only, dlg.stacks())
+            except ValueError as exc:
+                QMessageBox.warning(self, tr("Slice"), str(exc))
+                self.setFocus()
+                return
             self._slice_async(dlg.stacks(), part_list, engine, dlg.printer.name,
-                              dlg.multicolor(), self._bed_height_commands(only))
+                              dlg.multicolor(), height_commands)
 
         background.run(self, prepare, text=reading, on_done=prepared,
                        on_error=self._export_failed)
@@ -1092,25 +1100,55 @@ class PrintMixin:
         changes = [(float(z), int(t)) for p in plans for z, t in p[1:]]
         return print_temp, changes
 
-    def _bed_height_commands(self, only) -> tuple | None:
+    def _slice_layer_and_width(self, stacks) -> tuple:
+        """The layer height and line width (in mm) that `stacks` will slice with.
+
+        A Max Speed Test works its percents out with these: a volumetric flow needs another speed
+        on thick layers than on thin ones, and only the stacks of the print say what the wall will
+        be. When no stacks are there yet - or they cannot work the measures out - the values the
+        test assumes are used, the same the dialog previews with."""
+        defaults = (max_speed_test.DEFAULT_LAYER_HEIGHT, max_speed_test.DEFAULT_LINE_WIDTH)
+        if stacks is None:
+            return defaults
+        try:
+            made = stacks.global_settings()
+            return (float(made.get("layer_height")), float(made.get("line_width")))
+        except (AttributeError, TypeError, ValueError):
+            return defaults
+
+    def _bed_height_commands(self, only, stacks=None) -> tuple | None:
         """``(print temperature or None, [(z_from mm, command line), ...])`` of the tests on the bed.
 
         A Temperature Tower carries its plan as temperatures and a Pressure Advance Test as finished
         command lines in `g.meta["height_commands"]`; both come together here, so a bed that carries
         both asks for every temperature and every pressure advance value at the layer that reaches it.
-        The temperatures are asked for by height and so are the commands, which means they hold for
-        the whole bed, also when other parts stand next to a test. None when nothing on the bed
-        carries a plan.
+        A Max Speed Test carries its plan as volumetric flows in `g.meta["speed_steps"]`: those only
+        become `M220` lines here, because what percent a flow is worth depends on the layer height
+        and line width `stacks` slice with - which is why this is asked for at slice time and not
+        saved finished on the part. The temperatures are asked for by height and so are the commands,
+        which means they hold for the whole bed, also when other parts stand next to a test. None
+        when nothing on the bed carries a plan.
         """
         temp = self._bed_temperature_steps(only)
         changes = [(z, f"M104 S{t}") for z, t in temp[1]] if temp else []
         groups = self.doc.selected_groups() if only else self.doc.visible_groups()
+        flows = []
         for g in groups:
             for one in (g.meta.get("height_commands") or []):
                 try:
                     changes.append((float(one[0]), str(one[1])))
                 except (KeyError, IndexError, TypeError, ValueError):
                     continue          # a meta of a hand-written file that is no command
+            for one in (g.meta.get("speed_steps") or []):
+                try:
+                    flows.append((float(one[0]), float(one[1])))
+                except (KeyError, IndexError, TypeError, ValueError):
+                    continue          # a meta of a hand-written file that is no flow
+        if flows:
+            # the percent of every flow at the speed the wall will really be laid at; a plan that
+            # would pass the speed limit raises here, and the caller says it to the user
+            changes += [tuple(one) for one in
+                        max_speed_test.commands(flows, *self._slice_layer_and_width(stacks))]
         if temp is None and not changes:
             return None
         return (temp[0] if temp else None), sorted(changes, key=lambda one: one[0])
@@ -4033,6 +4071,165 @@ class PrintMixin:
             self.view.set_status(tr("Flow rate test failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the flow rate test…"),
+                       on_done=done, on_error=failed)
+    # ----------------------------------------------------------- max speed test
+
+    def _preview_layer_and_width(self) -> tuple:
+        """The layer height and line width shown in the max speed test preview: the ones the
+        printer of the last slice uses, when its profiles are at hand.
+
+        Reading those profiles the first time takes minutes and the dialog must not wait for that,
+        so when they are not loaded yet - or nothing was sliced before, or what stands in Settings
+        names no printer any more - the preview falls back on the measures the test assumes, which
+        is also what the dialog says on its summary line.
+        """
+        from . import slice_dialog as sd
+        defaults = (max_speed_test.DEFAULT_LAYER_HEIGHT, max_speed_test.DEFAULT_LINE_WIDTH)
+        resources = slicer.find_resources()
+        if not resources or not sd.is_loaded(resources):
+            return defaults
+        try:
+            p = sd.library(resources).printer(str(getattr(self.settings, "slice_printer", "")
+                                                  or ""))
+            want = str(getattr(self.settings, "slice_variant", "") or "")
+            variant = next((v for v in p.variants if v.name == want), p.default_variant())
+            mid = str(getattr(self.settings, "slice_material", "") or "")
+            material = next((m for m in p.materials(variant) if m.id == mid),
+                            p.default_material(variant))
+            quality = (str(getattr(self.settings, "slice_quality", "") or "")
+                       or p.default_quality(variant, material))
+            stacks = p.stacks(variant, material, quality, {})
+        except (KeyError, IndexError, TypeError, ValueError, AttributeError):
+            return defaults       # what Settings remembers is not a printer to build stacks on
+        return self._slice_layer_and_width(stacks)
+
+    def max_speed_test_dialog(self):
+        """3D Printing > Max Speed Test…: a single-walled tube whose segments print at a rising
+        volumetric flow, so the user sees which flow this hotend still melts cleanly."""
+        presets = max_speed_test.PRESETS
+        # the preview converts the flows with the layer height and line width of the print; the
+        # slice itself does it again with the stacks it is about to print with
+        layer, width = self._preview_layer_and_width()
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("Max Speed Test"))
+        form = QFormLayout(dlg)
+        preset_cb = QComboBox()
+        for name in presets:
+            preset_cb.addItem(max_speed_test.preset_label(name), name)
+        preset_cb.setToolTip(tr("A hotend that is known to melt a certain amount of plastic per "
+                                "second; choosing one fills in the flows below"))
+        saved = self.settings.max_speed_test_preset
+        preset_cb.setCurrentIndex(list(presets)
+                                  .index(saved if saved in presets
+                                         else max_speed_test.default_preset()))
+        lo, hi = max_speed_test.FLOW_MIN, max_speed_test.FLOW_MAX
+        start_sp = self._spin(lo, hi, self.settings.max_speed_test_start, 1, " mm³/s", 2.5)
+        start_sp.setToolTip(tr("The volumetric flow of the bottom segment, the leanest one"))
+        end_sp = self._spin(lo, hi, self.settings.max_speed_test_end, 1, " mm³/s", 2.5)
+        end_sp.setToolTip(tr("The flow the walk stops at: the top segment prints the last flow "
+                             "that stays under it"))
+        step_sp = self._spin(max_speed_test.STEP_MIN, max_speed_test.STEP_MAX,
+                             self.settings.max_speed_test_step, 1, " mm³/s", 2.5)
+        step_sp.setToolTip(tr("How many mm³/s higher every next segment prints"))
+        info = QLabel()
+        form.addRow(tr("Preset"), preset_cb)
+        form.addRow(tr("Start"), start_sp)
+        form.addRow(tr("End"), end_sp)
+        form.addRow(tr("Step"), step_sp)
+        form.addRow("", info)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+
+        def pick(*_):
+            low, high, d = presets[preset_cb.currentData()]
+            start_sp.setValue(low)
+            end_sp.setValue(high)
+            step_sp.setValue(d)
+
+        def show(*_):
+            try:
+                s = max_speed_test.sizes(float(start_sp.value()), float(end_sp.value()),
+                                         float(step_sp.value()))
+                spouts = max_speed_test.speeds(s["flows"], layer, width)
+            except ValueError as exc:
+                info.setText(str(exc))
+                return
+            lines = [tr("Segment {n}: {flow} mm³/s = {speed} mm/s")
+                     .format(n=i + 1, flow=max_speed_test.flow_text(f), speed=f"{sp:.0f}")
+                     for i, (f, sp) in enumerate(zip(s["flows"], spouts))]
+            wide, deep, top = s["size"]
+            info.setText("\n".join(lines)
+                         + "\n"
+                         + tr("Outside size: {length} × {depth} × {height} mm")
+                         .format(length=f"{wide:g}", depth=f"{deep:g}", height=f"{top:g}")
+                         + "\n"
+                         + tr("Speeds are for {layer} mm layers and {width} mm lines")
+                         .format(layer=f"{layer:g}", width=f"{width:g}")
+                         + "\n"
+                         + tr("Read the wall: the printer speeds up at every segment, on the "
+                              "whole bed."))
+
+        preset_cb.currentIndexChanged.connect(pick)
+        for sp in (start_sp, end_sp, step_sp):
+            sp.valueChanged.connect(show)
+        show()
+        if dlg.exec() != QDialog.Accepted:
+            return
+        preset = preset_cb.currentData()
+        start, end = float(start_sp.value()), float(end_sp.value())
+        step = float(step_sp.value())
+        try:
+            plan = max_speed_test.steps(start, end, step)
+            # the same speed limit the summary checks now is checked again at slice time, with
+            # the stacks the print really uses; here it saves a pointless print
+            max_speed_test.percents([f for _z, f in plan], layer, width)
+        except ValueError as exc:
+            QMessageBox.warning(self, tr("Max Speed Test"), str(exc))
+            return
+        self.settings.max_speed_test_preset = preset
+        self.settings.max_speed_test_start = start
+        self.settings.max_speed_test_end = end
+        self.settings.max_speed_test_step = step
+        self.settings.save()
+        self._apply_max_speed_test(start, end, step, plan)
+
+    def _apply_max_speed_test(self, start, end, step, plan):
+        doc = self.doc
+        bb = doc.model_bbox()
+        x0 = 0.0 if bb is None else float(bb[1][0]) + 10.0   # mm to the right of the model
+
+        def work(report):
+            # the numbers engraved in the tab are the slow part of a tower with fonts, so it
+            # happens here and the window keeps responding
+            report(0.1, tr("Building the max speed test…"))
+            tube = max_speed_test.max_speed_test(start=start, end=end, step=step)
+            if tube.status() != mf.Error.NoError or tube.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            # the tube is drawn centred on the origin: move it to the free spot on the bed
+            dx = x0 - float(np.asarray(tube.bounding_box())[0])
+            return tube.translate((dx, 0.0, 0.0))
+
+        def done(result):
+            doc.checkpoint()                # one undo takes the tower away again
+            new = ops.group_from_manifold(doc, result, self.settings.current_color,
+                                          tr("Max speed test"))
+            # the plan of flows goes on the tower itself - the slice turns it into M220 lines
+            # with its own stacks - and so do the settings that print it as a single-walled vase
+            # at the base speed, so the percents of M220 have a known 100 % to stand on
+            new.meta = {"speed_steps": plan,
+                        "mesh_settings": max_speed_test.mesh_settings()}
+            doc.set_selection([("g", new.id, new.id)])
+            doc.notify()
+            self.view.set_status(tr("Print it and count the segments by the ribs: the highest "
+                                    "segment whose wall stays smooth and full is the flow this "
+                                    "printer can melt."))
+
+        def failed(exc):
+            self.view.set_status(tr("Max speed test failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the max speed test…"),
                        on_done=done, on_error=failed)
     # --------------------------------------------------------- first layer test
 

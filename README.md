@@ -214,6 +214,14 @@ gets for free.
   surface, and the flow goes to the slicer as a setting of that one pad. Print it and look at the
   tops: too little flow leaves gaps and low lines that never close, too much leaves ridges and
   blobs, and the pad with a smooth, closed top without ridges is the flow to set
+- **Max Speed Test** (3D Printing): a single-walled tube 40 mm across and open at the top, in which
+  every segment of 5 mm prints with a higher volumetric flow - presets for a standard hotend
+  (5-20 mm³/s) and a high-flow one (10-40), or your own start, end and step. A rib stands on the
+  wall at every segment boundary so you can count the segments, and the first and last flow stand
+  engraved in a tab at the foot. The tube makes its wall print at a fixed base speed of 100 mm/s
+  with a single line and asks for its flows as `M220 S…` speed factors, which the slice works out
+  with the layer height and line width it prints with. Print it and read the wall: the highest
+  segment whose wall stays smooth and full is the volumetric flow this printer can melt
 - **Slice Settings of one part** (Entity Info): switch a setting on and that part alone slices with
   the value you give it - the infill percentage and its pattern, the wall lines, the top and bottom
   layers and the flow - while the rest of the bed keeps what the print uses. What a value works out
