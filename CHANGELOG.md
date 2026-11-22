@@ -3,12 +3,15 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## Unreleased
+## 0.2.77 — 2026-11-22
 
 ### New
 - **Retraction test** under *Tools > Print Tools*: two thin towers in bands, each band printed
   with a longer retraction (0.5 to 3 mm for direct drive, 2 to 7 mm for Bowden). Pick the
   shortest retraction without strings between the towers.
+- **Calibrate Filament** under *Tools > Print Tools*: a wizard that walks one filament through the
+  temperature, flow, pressure advance, retraction and max speed tests and remembers what you found.
+  *File > Slice* then prints that printer and filament with your numbers (untick to leave them out).
 
 ## 0.2.76 — 2026-11-22
 
