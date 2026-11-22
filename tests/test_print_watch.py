@@ -8,6 +8,7 @@ due while it is busy (see the `opened` helper of tests/test_printer_link.py).
 import os
 import sys
 import threading
+import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -329,7 +330,19 @@ def asked(watch, ms=20000):
     jobs = list(watch.asking.values()) + list(watch.given_up)
     for job in [job for job in jobs if not job.done]:
         assert job.wait(ms), f"asking the printer never came to an end: {job.error}"
-    QCoreApplication.processEvents()      # the last answer, so the watching took it in
+    # the answer of a job is handed over by the event loop, and on a busy machine that can take
+    # more than one round of it: wait until every job says it is done and its answer is taken in
+    settle(lambda: all(job.done for job in jobs), ms)
+
+
+def settle(ready, ms=20000):
+    """Spin the event loop until `ready()` holds, then once more for what it set off."""
+    deadline = time.monotonic() + ms / 1000.0
+    while not ready() and time.monotonic() < deadline:
+        QCoreApplication.processEvents()
+        time.sleep(0.005)
+    assert ready(), "the event loop never handed the answer over"
+    QCoreApplication.processEvents()
 
 
 def answered(panel, ms=20000):
@@ -337,7 +350,8 @@ def answered(panel, ms=20000):
     for row in panel.rows:
         if row.job is not None:
             assert row.job.wait(ms), f"the window never got an answer: {row.job.error}"
-    QCoreApplication.processEvents()
+    # a row lets go of its job when it took the answer in, which the event loop hands over
+    settle(lambda: all(row.job is None for row in panel.rows), ms)
 
 
 def close(panel):
