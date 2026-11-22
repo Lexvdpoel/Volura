@@ -34,7 +34,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar, snap_fit,
                nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
-               printer_link, print_history, print_queue,
+               printer_link, print_history, print_queue, print_watch,
                sheet3d, sheettools, slice_presets, svg,
                spacemouse, spool_adapter, spools, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers, workspaces)
@@ -1595,6 +1595,9 @@ class Settings:
             conn = printer_link.from_json(line)
             if conn is not None:
                 self.printers.append(conn)
+        # a word on the desktop when a print is done, stops or waits (volura.print_watch);
+        # without a word of its own, a printer that is set up also gets those messages
+        self.print_notifications = self._bool("print_notifications", bool(self.printers))
         # which of those printers Window > Printer Status looks at through their camera
         # (volura.printer_status): the name of every printer whose camera was on last time
         cameras = self.q.value("printer_cameras_on", []) or []
@@ -1927,6 +1930,7 @@ class Settings:
         self.q.setValue("dogbone_tool_d", self.dogbone_tool_d)
         self.q.setValue("recent", self.recent[:8])
         self.q.setValue("printers", [printer_link.to_json(conn) for conn in self.printers])
+        self.q.setValue("print_notifications", self.print_notifications)
         self.q.setValue("printer_cameras_on", self.printer_cameras_on)
         self.q.setValue("spools", spools.to_lines(self.spools))
         self.q.setValue("spool_for_slot", spools.slot_ids(self.spool_for_slot))
@@ -2150,6 +2154,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.autosave_timer.setInterval(AUTOSAVE_INTERVAL_MS)
         self.autosave_timer.timeout.connect(self.autosave)
         self.autosave_timer.start()
+        self.print_watch = print_watch.PrintWatcher(self)   # what the printers do comes to the
+                                                            # desktop, also without a window
 
     # ------------------------------------------------------------ autosave
     def autosave(self):
@@ -5715,6 +5721,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             e.ignore()
             return
         self.autosave_timer.stop()
+        self.print_watch.stop()     # nothing asks the printers any more, and the icon goes too
         self.spacemouse.stop()
         for name in ("_laser_controller", "_cnc_controller"):
             controller = getattr(self, name, None)

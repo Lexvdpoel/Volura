@@ -3465,4 +3465,25 @@ TRANSLATIONS = {
         'ingedrukt.',
     'Put this print on the print queue, so it goes to the first printer that is free':
         'Deze print op de printwachtrij zetten, zodat hij naar de eerste vrije printer gaat',
+    # A word on the desktop when a print ends: the switch under Preferences > Printers and the
+    # messages themselves (volura/print_watch.py)
+    'Tell me when a print finishes, stops or waits':
+        'Meld het als een print klaar is, stopt of wacht',
+    'A message on your desktop when a printer is done, stopped with an error or stands waiting '
+    'for you; Volura asks every printer every thirty seconds, also when Window > Printer Status '
+    'is closed':
+        'Een bericht op je bureaublad als een printer klaar is, met een fout stopt of op je '
+        'wacht; Volura vraagt elke printer elke dertig seconden, ook als Venster > Printerstatus '
+        'gesloten is',
+    '{printer}: {file} is done': '{printer}: {file} is klaar',
+    '{printer}: {file} is done in {time}': '{printer}: {file} is klaar na {time}',
+    '{printer} is done': '{printer} is klaar',
+    '{printer} is done in {time}': '{printer} is klaar na {time}',
+    '{printer} stopped': '{printer} is gestopt',
+    '{printer} stopped: {file}': '{printer} is gestopt: {file}',
+    '{printer} stopped: {file}: {error}': '{printer} is gestopt: {file}: {error}',
+    '{printer} stopped: {error}': '{printer} is gestopt: {error}',
+    '{printer} is waiting': '{printer} wacht',
+    '{printer} is waiting: {file} paused': '{printer} wacht: {file} staat stil',
+    '{printer} no longer answers': '{printer} antwoordt niet meer',
 }

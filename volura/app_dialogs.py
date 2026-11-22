@@ -603,6 +603,13 @@ class PreferencesDialog(PageDialog):
         self.p_answer.setWordWrap(True)
         under.addWidget(self.p_answer, 1)
         lay.addLayout(under)
+        self.p_notify = QCheckBox(tr("Tell me when a print finishes, stops or waits"))
+        self.p_notify.setChecked(self.win.settings.print_notifications)
+        self.p_notify.setToolTip(tr("A message on your desktop when a printer is done, stopped "
+                                    "with an error or stands waiting for you; Volura asks every "
+                                    "printer every thirty seconds, also when Window > Printer "
+                                    "Status is closed"))
+        lay.addWidget(self.p_notify)
         lay.addWidget(note(tr("OctoPrint, Klipper (Moonraker) and PrusaLink take their G-code "
                               "over the network; add one of them here and the print preview can "
                               "send a slice straight to it with Send to printer…. A printer is "
@@ -715,6 +722,7 @@ class PreferencesDialog(PageDialog):
         s.min_wall = self.min_wall.value()
         s.spacemouse_speed = self.sm_speed.value() / self.SPEED_STEPS
         s.printers = [conn for conn in self.printers if conn.name and conn.url]
+        s.print_notifications = self.p_notify.isChecked()
         sm_changed = s.spacemouse != self.sm_on.isChecked()
         s.spacemouse = self.sm_on.isChecked()
         theme_changed = s.theme != self.theme.currentData()
@@ -736,6 +744,7 @@ class PreferencesDialog(PageDialog):
         self.win.refresh_printer_status()   # the printers of this page may have changed
         self.win.refresh_bed_mesh()         # and so did the Klipper printers with a bed mesh
         self.win.refresh_print_queue()      # and so did the printers the queue can use
+        self.win.print_watch.follow()       # and so did the watching for the desktop messages
         self.win.view.tools["circle"].segments = s.circle_segments
         self.win.view.update()
         self.win.sheet_view.update()      # the line width also changes the worksheet

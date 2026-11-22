@@ -55,6 +55,10 @@ def pytest_sessionstart(session):
     global _saved
     q = _settings()
     _saved = {key: q.value(key) for key in q.allKeys()}
+    # a window watches the printers under Preferences for a word on the desktop when a print ends
+    # (volura.print_watch); the printers of a test are made-up addresses, so nothing is watched
+    q.setValue("print_notifications", False)
+    q.sync()
 
 
 def pytest_sessionfinish(session, exitstatus):

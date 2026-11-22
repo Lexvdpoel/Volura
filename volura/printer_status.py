@@ -12,6 +12,10 @@ come back yet is not asked a second time. The asking runs in the background
 costs a window that simply stays responsive; what it says wrong stands under its own
 line, muted, and the next asking tries again.
 
+What every row last showed stands on that row (`PrinterRow.status`), so the desktop
+messages of `volura/print_watch.py` - which watch the same printers also when this window
+is closed - can take those answers instead of asking every printer a second time.
+
 A printer whose camera has a still picture to offer has a **Camera** button under its
 line, and turning that on puts the picture under the line too, asked with the same
 timer. Which of those buttons were on comes back next time the window opens
@@ -103,6 +107,8 @@ class PrinterRow(QWidget):
         super().__init__(parent)
         self.conn = conn
         self.job = None
+        self.status = None                  # what the printer last said it is doing, so the
+                                            # desktop watching can share it (print_watch)
         self.cam = ""                       # where this printer's camera has a picture, if ever
         self.cam_job = None                 # the picture on its way, so none is asked twice
         self.name = QLabel(conn.name)
@@ -173,6 +179,7 @@ class PrinterRow(QWidget):
         if self.job is None:
             return                       # stopped while it was on its way: nothing to show
         self.job = None
+        self.status = status
         self._say_state(status.state)
         self.error.setText("")
         self.error.hide()
@@ -186,6 +193,7 @@ class PrinterRow(QWidget):
         if self.job is None:
             return
         self.job = None
+        self.status = printer_link.Status("offline")
         self._say_state("offline")
         self.file.setText(NOTHING)
         self.bar.setValue(0)

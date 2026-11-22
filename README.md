@@ -641,6 +641,17 @@ gets for free.
       wrong, which file it has, how far the print got, how long it has run and still needs, and how
       hot the nozzle and the bed are; every printer is asked again every five seconds while the
       window is open
+      - while the printers are watched like this, Volura also says a word **on the desktop** when a
+        print there ends, stops half way, waits for you (a filament change) or a printer you were
+        printing on stops answering — even when the window is closed. The message comes from the
+        system tray, names the printer, its file and how long the print took, and clicking it (or
+        the icon) opens *Window > Printer Status*. Every printer under Preferences is asked again
+        every thirty seconds; a status window that is on the screen is listened to instead of
+        asked a second time. A desktop without a tray, or with one that shows no messages, gets
+        the same words in the bar at the bottom of the window; the icon stays in either case,
+        because clicking it still leads to the window. *Tell me when a print finishes, stops or
+        waits* under *Window > Preferences > Printers* switches this off; it stands there from
+        the first moment a printer is set up
       - a printer whose camera has a still picture to give has a **Camera** button under its line
         — OctoPrint and Klipper (Moonraker) say where that picture stands, PrusaLink has no camera
         of its own. Turn it on and the picture appears under the line, at most 320 pixels wide and
@@ -998,6 +1009,8 @@ volura/
                 their cameras a picture
   printer_status.py  what those printers are doing right now, and what their cameras see
                 (Window > Printer Status)
+  print_watch.py  the word on the desktop when a print on one of those printers ends, stops
+                half way or waits for you, and when a printer stops answering
   bed_mesh.py   the numbers and colours of a bed mesh; bed_mesh_dialog.py is Window > Bed Mesh…
   spools.py     the rolls of filament on the shelf and what is left on each; spools_dialog.py is
                 Window > Spools…
