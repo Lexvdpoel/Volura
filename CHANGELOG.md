@@ -3,11 +3,14 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## Unreleased
+## 0.2.78 — 2026-11-22
 
 ### New
 - **Text along an arc** in *Draw > 3D Text*: one line of text on the outside of an arc, reading
   over the top like on a round lid, or on the inside like a ring, each letter turned to the arc.
+- **A message when a print is done**: Volura tells you on your desktop when a printer finishes a
+  print, stops with an error, waits (for example for a filament change) or stops answering. Turn it
+  on or off under *Window > Preferences > Printers*.
 
 ## 0.2.77 — 2026-11-22
 
