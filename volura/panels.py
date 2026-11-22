@@ -19,8 +19,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QColorDialog, QComb
                                QTableWidgetItem, QToolButton, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
 
-from . import background, laser_image, ops, section, theme
-from .i18n import tr, trn
+from . import background, laser_image, ops, section, theme, tray
+from .i18n import tr, tr_noop, trn
 from .icons import icon
 from .model import ROOT
 from .vector2d import (CORNER_LABELS, CORNER_STYLES, DEFAULT_IMAGE_INTERVAL, LASER_OPS,
@@ -243,6 +243,58 @@ class MaterialsPanel(QWidget):
 # imported scan) in the background, so selecting it does not freeze the window.
 PART_INFO_BACKGROUND_FACES = 5000
 
+#: behind the name of a part that slices with settings of its own, in the Outliner and in the
+#: header of the section that holds those settings in Entity Info
+OWN_MARKER = " ⚙"
+
+#: The slice settings a single part can have on its own, in the order Entity Info shows them: the
+#: CuraEngine key, the label of the row, and for a number the field with its range, its step, its
+#: decimals, its suffix and what the row starts with when you switch it on and the part has no
+#: value of its own yet. That last one is either a number or the setting the slice dialog last used
+#: for the whole print, with the fallback the part gets when that was never filled in; four layers
+#: is the 0.8 mm skin a plain print has of a 0.2 mm layer.
+PART_SLICE_SETTINGS = (
+    {"key": "infill_sparse_density", "label": tr_noop("Infill"),
+     "spin": (0.0, 100.0, 1.0, 0), "suffix": " %", "start": ("slice_infill", 20.0)},
+    {"key": "infill_pattern", "label": tr_noop("Infill pattern")},
+    {"key": "wall_line_count", "label": tr_noop("Wall lines"),
+     "spin": (0.0, 100.0, 1.0, 0), "start": ("slice_walls", 2.0)},
+    {"key": "top_layers", "label": tr_noop("Top layers"),
+     "spin": (0.0, 1000.0, 1.0, 0), "start": 4.0},
+    {"key": "bottom_layers", "label": tr_noop("Bottom layers"),
+     "spin": (0.0, 1000.0, 1.0, 0), "start": 4.0},
+    {"key": "material_flow", "label": tr_noop("Flow"),
+     "spin": (10.0, 400.0, 0.5, 1), "suffix": " %", "start": 100.0},
+)
+
+
+def own_slice_settings(g) -> dict:
+    """The slice settings the group `g` carries on its own, as `ops.parts` hands them to the slice.
+
+    Kept in `g.meta["mesh_settings"]` under their CuraEngine key; anything in there that this panel
+    does not show - the flow a flow rate test wrote, a setting an imported file brought along -
+    simply stays."""
+    got = g.meta.get("mesh_settings") if isinstance(g.meta, dict) else None
+    return dict(got) if isinstance(got, dict) else {}
+
+
+def own_slice_value(field):
+    """The value of one field of the Slice Settings section, the way CuraEngine wants it: a count
+    is a whole number, a pattern is the name of the pattern, the rest is a number."""
+    if isinstance(field, QComboBox):
+        return field.currentData()
+    return int(round(field.value())) if field.decimals() == 0 else float(field.value())
+
+
+def outliner_text(name, own) -> str:
+    """The name of a part in the Outliner: with a gear behind it when it slices on its own."""
+    return name + (OWN_MARKER if own else "")
+
+
+def outliner_name(text) -> str:
+    """The name of a part from the text the Outliner shows it with, gear and all."""
+    return text[:-len(OWN_MARKER)] if text.endswith(OWN_MARKER) else text
+
 
 class EntityInfoPanel(QWidget):
     def __init__(self, win):
@@ -252,6 +304,7 @@ class EntityInfoPanel(QWidget):
         self.lay.setContentsMargins(6, 6, 6, 6)
         self.lay.addStretch(1)
         self.body = None
+        self._slice_open = False      # the Slice Settings section stays as the user left it
         self._part_cache = {}           # id(ents) -> (ents, version, (name, color), summary)
         self._part_pending = set()      # (id(ents), version, (name, color)) being checked
 
@@ -417,8 +470,100 @@ class EntityInfoPanel(QWidget):
         summary = self._summary(g)
         if summary is None:
             form.addRow(tr("Printable"), QLabel(tr("Calculating…")))
+        else:
+            self._part_rows(form, summary)
+        self._slice_section(form, g)
+
+    def _slice_section(self, form, g):
+        """The collapsible Slice Settings section: the settings this part slices with on its own.
+
+        A row is a check box with a CuraEngine setting behind it: off, the part takes what the print
+        uses; on, this part alone gets the value of the field. `g.meta["mesh_settings"]` keeps them
+        under their CuraEngine key, which is what the slice hands to CuraEngine for that one mesh
+        (see `slicer.per_mesh_settings`), so a flow rate test writes the same rows it reads.
+        """
+        got = own_slice_settings(g)
+        body = QWidget()
+        rows = QFormLayout(body)
+        rows.setContentsMargins(14, 4, 0, 4)
+        rows.setSpacing(4)
+        tip = tr("Off: this part slices with the settings of the print. On: this part alone.")
+        for spec in PART_SLICE_SETTINGS:
+            key = spec["key"]
+            check = QCheckBox(tr(spec["label"]))
+            field = self._slice_field(spec, got.get(key), self.win.settings)
+            check.setChecked(key in got)         # before the signals are connected
+            check.setToolTip(tip)
+            field.setEnabled(check.isChecked())
+            check.toggled.connect(lambda on, f=field: f.setEnabled(on))
+            check.toggled.connect(lambda on, k=key, f=field: self._own_setting(g, k, on, f))
+            if isinstance(field, QComboBox):
+                field.currentIndexChanged.connect(
+                    lambda _i, k=key, c=check, f=field: self._own_setting(g, k, c.isChecked(), f))
+            else:
+                field.editingFinished.connect(
+                    lambda k=key, c=check, f=field: self._own_setting(g, k, c.isChecked(), f))
+            rows.addRow(check, field)
+        rows.addRow(note(tr("A part that has none of these slices with the settings of the print; "
+                            "here a single part gets values of its own.")))
+        head = tray.TraySection(tr("Slice Settings") + (OWN_MARKER if got else ""),
+                                body, self._slice_open)
+        head.header.setStyleSheet(tray.header_style())
+        head.toggled.connect(self._slice_shown)
+        form.addRow(head)
+
+    def _slice_shown(self, _title, is_open):
+        """The section is remembered open or closed across the refreshes of the panel."""
+        self._slice_open = is_open
+
+    def _slice_field(self, spec, value, settings):
+        """The field of one slice setting: a choice for a pattern, a number for the rest, with the
+        value of the part or what the row starts with when the part has none."""
+        if "spin" not in spec:
+            from . import slice_dialog as sd        # the dialog builds on this module
+            field = QComboBox()
+            for label, kind in sd.INFILL_PATTERNS[1:]:     # the profile's own is no value here
+                field.addItem(tr(label), kind)
+            field.setCurrentIndex(max(0, field.findData(value)))
+            return field
+        lo, hi, step, decimals = spec["spin"]
+        field = QDoubleSpinBox()
+        field.setRange(lo, hi)
+        field.setSingleStep(step)
+        field.setDecimals(decimals)
+        field.setSuffix(spec.get("suffix", ""))
+        start = spec["start"]
+        start = start if not isinstance(start, tuple) \
+            else (getattr(settings, start[0], 0) or start[1])
+        try:
+            field.setValue(float(start if value is None else value))
+        except (TypeError, ValueError):
+            field.setValue(float(start))     # a file can hold anything under a key
+        return field
+
+    def _own_setting(self, g, key, on, field):
+        """Write one row of the Slice Settings section: on it holds the value of the field, off the
+        setting is gone again. A part that ends up with nothing leaves no empty dict behind, so the
+        Outliner and the slice see it as a part that never had a setting."""
+        doc = self.win.doc
+        group = doc.group(g.id)
+        if group is None:                 # the part is gone; the panel refreshes anyway
             return
-        self._part_rows(form, summary)
+        was = own_slice_settings(group)
+        now = dict(was)
+        if on:
+            now[key] = own_slice_value(field)
+        else:
+            now.pop(key, None)
+        if now == was:
+            return
+
+        def change(group=group, keep=now):
+            if keep:
+                group.meta["mesh_settings"] = keep
+            else:
+                group.meta.pop("mesh_settings", None)
+        self._apply(change)
 
     def _summary(self, g):
         """``(volume, surface, problem)`` of the group `g`, from the cache or checked now.
@@ -549,10 +694,13 @@ class OutlinerPanel(QWidget):
         self.list.clear()
         sel = {i for k, _, i in doc.selection if k == "g"}
         for g in doc.groups:
-            it = QListWidgetItem(swatch(g.color), g.name)
+            own = own_slice_settings(g)
+            it = QListWidgetItem(swatch(g.color), outliner_text(g.name, bool(own)))
             it.setData(Qt.UserRole, g.id)
             it.setFlags(it.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsEditable)
             it.setCheckState(Qt.Checked if g.visible else Qt.Unchecked)
+            if own:
+                it.setToolTip(tr("Slices with settings of its own"))
             self.list.addItem(it)
             it.setSelected(g.id in sel)
         if doc.root.F or doc.root.E:
@@ -585,10 +733,11 @@ class OutlinerPanel(QWidget):
         if g is None:
             return
         vis = it.checkState() == Qt.Checked
-        if vis != g.visible or it.text() != g.name:
+        name = outliner_name(it.text())         # the gear behind it is not part of the name
+        if vis != g.visible or name != g.name:
             doc.checkpoint()
             g.visible = vis
-            g.name = it.text() or g.name
+            g.name = name or g.name
             QTimer.singleShot(0, doc.notify)
 
 

@@ -1143,9 +1143,11 @@ class PrintMixin:
             """One mesh per extruder: a part in one colour, or its painted skins and the rest.
 
             The second list is what the thumbnail on the printer's screen is drawn from: the same
-            meshes, each in the colour of the part that prints with it.
+            meshes, each in the colour of the part that prints with it. The number says how many
+            parts carry slice settings of their own, which is what the summary of the print tells.
             """
             meshes, pictures = [], []
+            own_parts = 0                  # how many of them slice with settings of their own
             parts = [p for p in part_list if p.manifold is not None]
             for i, p in enumerate(parts):
                 report(0.05 + 0.1 * i / max(1, len(parts)), tr("Colouring the parts…"))
@@ -1167,6 +1169,10 @@ class PrintMixin:
                 per = {}                   # the pieces of one extruder print as one volume
                 for man, color in pieces:
                     per.setdefault(plan.extruder(color), []).append((man, color))
+                # a part may slice with settings of its own (a pad of a flow rate test); every
+                # mesh made of it gets them, so it prints with them all over
+                part_settings = slicer.per_mesh_settings(stacks, p.mesh_settings)
+                own_parts += 1 if part_settings else 0
                 for extruder, group in per.items():
                     mans = [man for man, _color in group]
                     man = (mans[0] if len(mans) == 1
@@ -1174,20 +1180,18 @@ class PrintMixin:
                     mesh = man.to_mesh()
                     verts = np.asarray(mesh.vert_properties)[:, :3]
                     tris = np.asarray(mesh.tri_verts)
-                    # a part may slice with settings of its own (a pad of a flow rate test)
-                    own = slicer.per_mesh_settings(stacks, p.mesh_settings)
-                    meshes.append((verts, tris, extruder, own))
+                    meshes.append((verts, tris, extruder, part_settings))
                     pictures.append((verts, tris, group[0][1]))
             if not meshes:
                 raise ValueError(tr("There is nothing to slice. Draw a face and use Push/Pull (P)."))
-            return meshes, pictures
+            return meshes, pictures, own_parts
 
         def work(report):
             print_temp, by_height = height_commands or (None, [])
             if print_temp is not None:
                 # the first segment's temperature is the temperature the print starts at
                 slicer.set_print_temperature(stacks, print_temp)
-            meshes, pictures = made_meshes(report)
+            meshes, pictures, own_parts = made_meshes(report)
             report(0.15, tr("Slicing…"))
             lo = np.min([m[0].min(axis=0) for m in meshes], axis=0)
             hi = np.max([m[0].max(axis=0) for m in meshes], axis=0)
@@ -1212,16 +1216,21 @@ class PrintMixin:
             report(0.9, tr("Reading the G-code…"))
             filament = (float(stacks.extruders[0].get("material_diameter") or 1.75)
                         if stacks.extruders else 1.75)
-            return result, gcode_preview.read_gcode(path, filament)
+            return result, gcode_preview.read_gcode(path, filament), own_parts
 
         def done(made):
-            result, preview = made
+            result, preview, own_parts = made
             hours, rest = divmod(int(round(result.seconds)), 3600)
             cost = result.grams / 1000.0 * self.settings.filament_price
             summary = tr("{printer}: {h} h {m:02d} min, {g:.0f} g filament ({l:.2f} m, "
                          "≈ {cost:.2f}), {n} layers").format(
                 printer=printer_name, h=hours, m=rest // 60, g=result.grams,
                 l=sum(result.filament_m), cost=cost, n=len(preview.layers))
+            if own_parts:
+                # a pad that prints with another flow than the rest has to say so in the summary
+                summary += ", " + trn("{n} part slices with settings of its own",
+                                      "{n} parts slice with settings of their own",
+                                      own_parts).format(n=own_parts)
 
             def ask():
                 target, _ = QFileDialog.getSaveFileName(self, tr("Save G-code"),

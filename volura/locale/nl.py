@@ -2294,6 +2294,19 @@ TRANSLATIONS = {
     '{printer}: {h} h {m:02d} min, {g:.0f} g filament ({l:.2f} m, ≈ {cost:.2f}), {n} layers': '{printer}: {h} u {m:02d} min, {g:.0f} g filament ({l:.2f} m, ≈ {cost:.2f}), {n} lagen',
     'Sliced: {summary}: {path}': 'Gesliced: {summary}: {path}',
     'Sliced, not saved: {summary}': 'Gesliced, niet opgeslagen: {summary}',
+    '{n} part slices with settings of its own': '{n} onderdeel slicet met eigen instellingen',
+    '{n} parts slice with settings of their own': '{n} onderdelen slicen met eigen instellingen',
+    'Slice Settings': 'Snij-instellingen',
+    'Slices with settings of its own': 'Slicet met eigen instellingen',
+    'Wall lines': 'Muurlijnen',
+    'Top layers': 'Bovenlagen',
+    'Flow': 'Doorstroom',
+    'Off: this part slices with the settings of the print. On: this part alone.':
+        'Uit: dit onderdeel slicet met de instellingen van de print. Aan: alleen dit onderdeel.',
+    'A part that has none of these slices with the settings of the print; here a single part gets '
+    'values of its own.':
+        'Een onderdeel zonder deze instellingen slicet met die van de print; hier krijgt één '
+        'onderdeel eigen waarden.',
     'Reading the printer profiles… The first time this can take a few minutes.': 'Printerprofielen inlezen… De eerste keer kan dit enkele minuten duren.',
     'Reading the colours of the model…': 'Kleuren van het model inlezen…',
     'Colouring the parts…': 'Onderdelen kleuren…',
