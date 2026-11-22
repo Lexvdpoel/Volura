@@ -801,6 +801,16 @@ class Settings:
         self.text3d_align = str(self.q.value("text3d_align", "left"))
         if self.text3d_align not in text3d.ALIGNMENTS:
             self.text3d_align = "left"
+        self.text3d_path = str(self.q.value("text3d_path", "straight"))
+        if self.text3d_path not in text3d.PATHS:
+            self.text3d_path = "straight"
+        try:
+            self.text3d_radius = float(self.q.value("text3d_radius", text3d.RADIUS_START))
+        except (TypeError, ValueError):
+            self.text3d_radius = text3d.RADIUS_START
+        self.text3d_radius = max(text3d.RADIUS_MIN,
+                                 min(text3d.RADIUS_MAX, self.text3d_radius))
+        self.text3d_inside = self._bool("text3d_inside", False)
         try:
             self.clip_cable_d = float(self.q.value("clip_cable_d", 6.0))
         except (TypeError, ValueError):
@@ -1758,6 +1768,9 @@ class Settings:
         self.q.setValue("text3d_depth", self.text3d_depth)
         self.q.setValue("text3d_bold", self.text3d_bold)
         self.q.setValue("text3d_align", self.text3d_align)
+        self.q.setValue("text3d_path", self.text3d_path)
+        self.q.setValue("text3d_radius", self.text3d_radius)
+        self.q.setValue("text3d_inside", self.text3d_inside)
         self.q.setValue("clip_cable_d", self.clip_cable_d)
         self.q.setValue("clip_width", self.clip_width)
         self.q.setValue("clip_wall", self.clip_wall)

@@ -273,7 +273,11 @@ gets for free.
   up to four lines of text, raised on the plate or engraved into it, on a plate with rounded
   corners and, if you like, a hole for a ring or a screw
 - **3D Text** (Draw): a part made of letters: your text in any font of your computer, several
-  lines, as thick as you like, standing on the bed with the holes of o, a and 8 in it
+  lines, as thick as you like, standing on the bed with the holes of o, a and 8 in it. On an
+  **arc** the letters follow a circle of the radius you enter, each letter turned to that circle:
+  on the outside they read clockwise over the top, the way a name stands on the lid of a round
+  box, and on the inside they turn round with their feet outward and read counter clockwise under
+  the bottom, the way text stands in a ring
 - **Cable Clip** (Draw > Parts): a printable clip that keeps a cable, a hose or a bundle
   where it belongs: a ring of the cable diameter with a mouth narrower than the cable, so you push
   the cable in and it stays, on a foot you screw to a wall or under a desk. The clip prints lying

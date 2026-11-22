@@ -9,6 +9,11 @@ worksheet works the same everywhere.
 `text_loops()` turns a text into its outlines: closed loops in millimetres with
 Y up, the baseline at y = 0 and the outer boundary counter clockwise, so the
 holes of o, a and e come along as negative loops.
+
+`letter_loops()` gives those outlines one letter at a time, together with the
+room every letter takes (its advance width), which is what placing letters along
+an arc needs: the arc knows where every letter stands, not where the whole text
+ends.
 """
 from __future__ import annotations
 
@@ -107,24 +112,22 @@ def has_fonts() -> bool:
     return bool(ensure_fonts())
 
 
-def text_loops(text, family=None, height=10.0, bold=False) -> list[np.ndarray]:
-    """The outlines of `text` in millimetres: cap height `height`, Y up.
-
-    One loop per outer boundary or hole; the outer boundary runs counter clockwise,
-    holes clockwise (the same convention as `vector2d.regions`). Empty when the text
-    or the font yields nothing.
-    """
-    from PySide6.QtGui import QFont, QFontMetricsF, QPainterPath
-    text = str(text or "")
-    if not text.strip() or float(height) <= 0.0:
-        return []
+def _text_font(family, bold, height):
+    """The font to draw text with, and the scale that makes a capital `height` millimetres."""
+    from PySide6.QtGui import QFont, QFontMetricsF
     font = QFont(family or default_family())
     font.setPixelSize(200)
     font.setBold(bool(bold))
-    path = QPainterPath()
-    path.addText(0, 0, font, text)
     cap = QFontMetricsF(font).capHeight() or 140.0
-    s = float(height) / float(cap)
+    return font, float(height) / float(cap)
+
+
+def _polygons(path, s) -> list[np.ndarray]:
+    """The pieces of a `QPainterPath` in millimetres at the scale `s`, Y up.
+
+    The point that closes a piece is dropped, and a piece of fewer than three points is left
+    out, because nothing is bounded by it.
+    """
     raw = []
     for poly in path.toSubpathPolygons():
         pts = np.array([[pt.x() * s, -pt.y() * s] for pt in poly], dtype=float)
@@ -132,18 +135,67 @@ def text_loops(text, family=None, height=10.0, bold=False) -> list[np.ndarray]:
             pts = pts[:-1]
         if len(pts) >= 3:
             raw.append(np.ascontiguousarray(pts))
+    return raw
+
+
+def _loops_of(raw) -> list[np.ndarray]:
+    """The boundaries of `raw` filled with the non-zero rule, so the holes come back as negative
+    loops, and the pieces that bound nothing dropped. Everything is turned the same way round: the
+    outer boundaries counter clockwise. Empty when `raw` bounds nothing at all.
+    """
     if not raw:
         return []
     cs = mf.CrossSection(raw, mf.FillRule.NonZero)
     loops = [np.asarray(q, dtype=float) for q in cs.to_polygons()]
     loops = [L for L in loops if len(L) >= 3 and abs(_area(L)) > 1e-9]
-    if not loops:
+    if loops and sum(_area(L) for L in loops) < 0.0:   # all reversed: flip them
+        loops = [np.ascontiguousarray(L[::-1].copy(), dtype=float) for L in loops]
+    return loops
+
+
+def text_loops(text, family=None, height=10.0, bold=False) -> list[np.ndarray]:
+    """The outlines of `text` in millimetres: cap height `height`, Y up.
+
+    One loop per outer boundary or hole; the outer boundary runs counter clockwise,
+    holes clockwise (the same convention as `vector2d.regions`). Empty when the text
+    or the font yields nothing.
+    """
+    from PySide6.QtGui import QPainterPath
+    text = str(text or "")
+    if not text.strip() or float(height) <= 0.0:
         return []
-    allp = np.concatenate(loops)
-    x0 = float(allp[:, 0].min())
-    out = [np.ascontiguousarray(L - np.array([x0, 0.0]), dtype=float) for L in loops]
-    if sum(_area(L) for L in out) < 0.0:        # all reversed: flip the whole text
-        out = [np.ascontiguousarray(L[::-1].copy(), dtype=float) for L in out]
+    font, s = _text_font(family, bold, height)
+    path = QPainterPath()
+    path.addText(0, 0, font, text)
+    out = _loops_of(_polygons(path, s))
+    if not out:
+        return []
+    x0 = float(np.concatenate(out)[:, 0].min())
+    return [np.ascontiguousarray(L - np.array([x0, 0.0]), dtype=float) for L in out]
+
+
+def letter_loops(text, family=None, height=10.0,
+                 bold=False) -> list[tuple[list[np.ndarray], float]]:
+    """The letters of `text` one at a time: the outlines of every letter and the room it takes.
+
+    One entry for every character of `text`, in the order they are read: the closed loops of
+    that letter and its advance width, how far the pen moves on. The loops stand on the baseline
+    (y = 0) with the origin of the letter in x = 0, where the pen stood, and follow the same
+    convention as `text_loops`: outer boundary counter clockwise, holes clockwise. A character
+    that draws nothing, a space, has no loops and still takes room. That room is what decides how
+    far the next letter goes, so it is what text along an arc counts.
+    """
+    from PySide6.QtGui import QFontMetricsF, QPainterPath
+    text = str(text or "")
+    if not text or float(height) <= 0.0:
+        return []
+    font, s = _text_font(family, bold, height)
+    met = QFontMetricsF(font)
+    out = []
+    for ch in text:
+        path = QPainterPath()
+        path.addText(0, 0, font, ch)
+        out.append((_loops_of(_polygons(path, s)), max(0.0, float(met.horizontalAdvance(ch)) * s)))
     return out
 
 

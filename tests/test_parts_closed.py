@@ -403,6 +403,9 @@ CASES = [
     ("3D text small", lambda: letters("A", height=2.0, depth=0.4)),
     ("3D text bold centred two lines", lambda: letters(
         "VOLURA\n3D", height=40.0, depth=8.0, bold=True, align="centre")),
+    ("3D text on an arc", lambda: letters("Volura", path="arc", radius=60.0)),
+    ("3D text on the inside of an arc", lambda: letters(
+        "Round lid", height=6.0, depth=2.0, path="arc", radius=25.0, inside=True)),
 
     ("spur gear default", lambda: gear(12)),
     ("spur gear with bore", lambda: gear(20, module=1.5, thickness=6.0, bore=8.0)),
