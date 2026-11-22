@@ -642,10 +642,12 @@ def test_the_status_window_on_the_screen_shares_its_answers(win, watch):
     """Window > Printer Status asks every printer every five seconds anyway; while it is on the
     screen the watching takes what its rows show instead of asking a second time."""
     switch_on(win, watch)
+    # the printer prints before the window opens: the window asks at once when it is shown,
+    # on a thread of its own, and that asking may not read the fake before it says so
+    watch.says.say("Octo", "printing", progress=0.4)
     panel = win.printer_status()
     panel.timer.stop()
     try:
-        watch.says.say("Octo", "printing", progress=0.4)
         answered(panel)                         # what showing that window already asked
         before = watch.says.asks_of("Octo")
         watch.poll()
