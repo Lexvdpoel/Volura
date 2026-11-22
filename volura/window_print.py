@@ -461,6 +461,9 @@ class PrintMixin:
         self.settings.text3d_depth = float(options["depth"])
         self.settings.text3d_bold = bool(options["bold"])
         self.settings.text3d_align = str(options["align"])
+        self.settings.text3d_path = str(options["path"])
+        self.settings.text3d_radius = float(options["radius"])
+        self.settings.text3d_inside = bool(options["inside"])
         self.settings.save()
         made = self.make_text3d_model(options)
         self.setFocus()
@@ -473,11 +476,17 @@ class PrintMixin:
         is built in the background, like the label plate, and the window keeps responding. It
         stands on the bed in the middle of the free bed, or on the free place 10 mm to the right
         of what is already in the model, so a second text does not land in the first one. The
-        group is named after the first line of the text, because that is what the user typed.
+        group is named after the first line of the text, because that is what the user typed. An
+        arc is placed the same way: its letters are as far from the middle of the bed as the
+        middle of the arc is, so a round text stands where the round lid it belongs to stands.
         """
         self.set_mode("3d")
         doc = self.doc
         size = {k: options[k] for k in ("text", "family", "height", "depth", "bold", "align")}
+        # an arc is a choice a caller from before the arc does not name, so it starts as a line
+        size["path"] = str(options.get("path", "straight"))
+        size["radius"] = float(options.get("radius", text3d.RADIUS_START))
+        size["inside"] = bool(options.get("inside", False))
         name = str(options["text"]).split("\n")[0].strip() or tr("3D Text")
         bb = doc.model_bbox()
         bx, by, _bz = self.settings.bed_size

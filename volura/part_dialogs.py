@@ -471,6 +471,14 @@ class Text3DDialog(QDialog):
     less quickly. The alignment says how the lines of several lines stand under each other; the
     whole block is centred, because that is where a part is placed. The values come from Settings
     and are remembered, the text too.
+
+    The **path** is the line the letters follow: a straight one, or a circle the letters stand on.
+    On an arc the radius is that circle and the choice between the outside and the inside says
+    which way the letters wear their feet: outside reads clockwise over the top, the way a name
+    stands on the lid of a round box, inside reads counter clockwise under the bottom, the way text
+    stands in a ring. An arc takes one line of text, so while the text has more, the text field
+    stays red and OK waits; the alignment is about lines under each other, so an arc does not need
+    it and the row disappears.
     """
 
     def __init__(self, win):
@@ -503,22 +511,61 @@ class Text3DDialog(QDialog):
         self.bold = QCheckBox(tr("Bold"))
         self.bold.setChecked(bool(s.text3d_bold))
         self.bold.setToolTip(tr("Thicker strokes, which read from further away and wear less"))
+        self.path = QComboBox()
+        for label, key in ((tr("Straight"), "straight"), (tr("Arc"), "arc")):
+            self.path.addItem(label, key)
+        self.path.setCurrentIndex(max(0, self.path.findData(s.text3d_path)))
+        self.path.setToolTip(tr("Whether the letters stand on a line or follow a circle"))
+        self.radius = spin(text3d.RADIUS_MIN, text3d.RADIUS_MAX, s.text3d_radius, 1.0)
+        self.radius.setToolTip(tr("The radius of the circle the letters stand on with their "
+                                  "baseline"))
+        self.inside = QCheckBox(tr("Text on the inside of the arc"))
+        self.inside.setChecked(bool(s.text3d_inside))
+        self.inside.setToolTip(tr("The letters wear their feet outward and read counter clockwise "
+                                  "under the bottom, the way text stands in a ring; on the outside "
+                                  "they stand on the circle and read clockwise over the top"))
         self.align = QComboBox()
         for label, key in ((tr("Left"), "left"), (tr("Centre"), "centre"),
                            (tr("Right"), "right")):
             self.align.addItem(label, key)
         self.align.setCurrentIndex(max(0, self.align.findData(s.text3d_align)))
         self.align.setToolTip(tr("How the lines stand under each other"))
+        self.info = QLabel()
+        self.info.setWordWrap(True)
         lay.addRow(tr("Text"), self.text)
         lay.addRow(tr("Font"), self.family)
         lay.addRow(tr("Text height"), self.height)
         lay.addRow(tr("Depth"), self.depth)
         lay.addRow("", self.bold)
+        lay.addRow(tr("Path"), self.path)
+        lay.addRow(tr("Arc radius"), self.radius)
+        lay.addRow("", self.inside)
         lay.addRow(tr("Alignment"), self.align)
-        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        bb.accepted.connect(self.accept)
-        bb.rejected.connect(self.reject)
-        lay.addRow(bb)
+        lay.addRow("", self.info)
+        self.text.textChanged.connect(self._check)
+        self.path.currentIndexChanged.connect(self._check)
+        self.bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.bb.accepted.connect(self.accept)
+        self.bb.rejected.connect(self.reject)
+        lay.addRow(self.bb)
+        self._check()
+
+    def _check(self, *_):
+        """Which fields an arc needs, and whether this text fits on an arc at all."""
+        arc = str(self.path.currentData()) == "arc"
+        for w in (self.radius, self.inside):      # an arc brings its own fields
+            self.layout().setRowVisible(w, arc)
+        self.layout().setRowVisible(self.align, not arc)   # lines under each other: not an arc
+        if arc and text3d.arc_lines(self.text.toPlainText()) > 1:
+            self.text.setStyleSheet(f"border: 1px solid {theme.color('invalid')};")
+            self.info.setStyleSheet(f"color: {theme.color('warn')};")
+            self.info.setText(tr("An arc takes one line of text"))
+            self.bb.button(QDialogButtonBox.Ok).setEnabled(False)
+            return
+        self.text.setStyleSheet("")
+        self.info.setStyleSheet("")
+        self.info.setText("")
+        self.bb.button(QDialogButtonBox.Ok).setEnabled(True)
 
     def options(self) -> dict:
         return {"text": self.text.toPlainText(),
@@ -526,7 +573,10 @@ class Text3DDialog(QDialog):
                 "height": round(self.height.value(), 6),
                 "depth": round(self.depth.value(), 6),
                 "bold": bool(self.bold.isChecked()),
-                "align": str(self.align.currentData())}
+                "align": str(self.align.currentData()),
+                "path": str(self.path.currentData()),
+                "radius": round(self.radius.value(), 6),
+                "inside": bool(self.inside.isChecked())}
 
 
 class CableClipDialog(QDialog):
