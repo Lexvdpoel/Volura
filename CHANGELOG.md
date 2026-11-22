@@ -3,7 +3,10 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
-## 0.2.78 — 2026-11-22
+## 0.2.79 — 2026-11-22
+
+The build of 0.2.78 stopped on two of its own tests that were too quick for a busy build
+machine, so 0.2.78 was never released; this is what it would have brought.
 
 ### New
 - **Text along an arc** in *Draw > 3D Text*: one line of text on the outside of an arc, reading
