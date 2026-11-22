@@ -3,6 +3,17 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.76 — 2026-11-22
+
+### New
+- **Max speed test** under *Tools > Print Tools*: a single-walled cylinder that prints faster
+  every segment, from 5 to 25 mm³/s by default (or 10 to 40 for a high-flow hotend). Where the wall
+  turns rough or thin, your hotend has reached its limit.
+
+### Fixed
+- **Print queue**: when sending a print failed, the reason under the printer could disappear
+  again as soon as the printer answered its next status question.
+
 ## 0.2.75 — 2026-11-22
 
 ### New
