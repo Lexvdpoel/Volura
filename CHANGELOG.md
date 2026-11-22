@@ -3,6 +3,13 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## Unreleased
+
+### New
+- **Retraction test** under *Tools > Print Tools*: two thin towers in bands, each band printed
+  with a longer retraction (0.5 to 3 mm for direct drive, 2 to 7 mm for Bowden). Pick the
+  shortest retraction without strings between the towers.
+
 ## 0.2.76 — 2026-11-22
 
 ### New
