@@ -230,6 +230,15 @@ gets for free.
   absolute as well as relative extrusion, while moves that lay plastic, a `G92 E0` and a firmware
   that retracts with `G10`/`G11` stay right. Print it and count the bands by the notches: the lowest
   band whose travels stay clean is the retraction this printer wants
+- **Calibrate Filament** (3D Printing): one walk through the five tests above for one printer and one
+  filament - the temperature tower, the flow pads, the pressure advance tower, the retraction towers
+  and the max-flow tube. Each page puts its own test on the free spot of the bed as one undo step,
+  says what to look for, and keeps the number you read off it; a test you skip is left out of the
+  result. A second walk starts from what was kept, so filling in a number you missed leaves the other
+  four alone. File > Slice shows what was found and prints with it when **Use my calibration** is on:
+  the temperature, flow and retraction go into the profile's settings, a maximum flow lowers every
+  print speed that would ask too much of the hotend, and the pressure advance goes into the first
+  layer as the command of its firmware
 - **Slice Settings of one part** (Entity Info): switch a setting on and that part alone slices with
   the value you give it - the infill percentage and its pattern, the wall lines, the top and bottom
   layers and the flow - while the rest of the bed keeps what the print uses. What a value works out

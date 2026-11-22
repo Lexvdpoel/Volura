@@ -2777,6 +2777,92 @@ TRANSLATIONS = {
     'Print it and count the bands by the notches: the lowest band whose travels stay clean is the retraction this printer wants.': 'Print hem en tel de banden aan de inkepingen: de laagste band waarvan de ritten schoon blijft, is de retractie die deze printer nodig heeft.',
     'Retraction test failed: {error}': 'Retractietest mislukt: {error}',
     'Writing the retractions per band…': 'De retracties per band schrijven…',
+    'Calibrate Filament…': 'Filament kalibreren…',
+    'Calibrate Filament': 'Filament kalibreren',
+    'The five calibration prints of one filament on one printer, walked in order: what you read off '
+    'them is what File > Slice prints with afterwards':
+        'De vijf kalibratieprints van één filament op één printer, netjes op volgorde: wat je ervan '
+        'afleest, daar print Bestand > Slice daarna mee',
+    'Printer and filament': 'Printer en filament',
+    'Every number you find here belongs to this printer and this filament: another printer wants '
+    'another temperature, another filament another flow.':
+        'Elk getal dat je hier vindt hoort bij deze printer en dit filament: een andere printer wil '
+        'een andere temperatuur, een ander filament een andere doorstroom.',
+    'Calibrated: {found}': 'Gekalibreerd: {found}',
+    'Calibration': 'Kalibratie',
+    'Use my calibration': 'Mijn kalibratie gebruiken',
+    'Print with the temperature, flow and retraction that were found for this printer and this '
+    'filament, and at a speed the hotend can still melt':
+        'Print met de temperatuur, de doorstroom en de retractie die voor deze printer en dit filament '
+        'gevonden zijn, en op een snelheid die het hotend nog kan smelten',
+    'Nozzle Temperature': 'Nozzletemperatuur',
+    'The temperature tower is a stack of segments, and every segment prints at another temperature.':
+        'De temperatuurtoren is een stapel segmenten, en elk segment print op een eigen temperatuur.',
+    'The coolest segment whose tops are smooth, whose bridges hang straight and whose corners come '
+    'out clean was printed at the temperature to keep.':
+        'Het koelste segment met gladde toppen, rechte bruggen en nette hoeken is op de temperatuur '
+        'geprint die je wilt houden.',
+    'Best temperature': 'Beste temperatuur',
+    'Material Flow': 'Materiaaldoorstroom',
+    'The flow rate test is a row of pads, and every pad prints at another flow.':
+        'De flowratetest is een rij paden, en elk pad print met een eigen doorstroom.',
+    'Best flow': 'Beste doorstroom',
+    'Pressure Advance': 'Pressure advance',
+    'The pressure advance test is a hollow tower, and every segment prints with another pressure '
+    'advance value.':
+        'De pressure-advancetest is een holle toren, en elk segment print met een eigen pressure '
+        'advance-waarde.',
+    'Best value': 'Beste waarde',
+    'Retraction': 'Retractie',
+    'The retraction test is two thin towers, and every band above them travels with a longer '
+    'retraction.':
+        'De retractietest is twee dunne torens, en elke band erboven overbrugt met een langere '
+        'retractie.',
+    'The band whose towers are free of strings and whose tops stay clean travelled with the '
+    'retraction to keep.':
+        'De band waarvan de torens vrij zijn van sliertjes en waarvan de toppen schoon blijven, '
+        'overbrugde met de retractie die je wilt houden.',
+    'Best length': 'Beste lengte',
+    'Max Flow': 'Maximale doorstroom',
+    'The max speed test is a tube, and every segment of it melts more plastic per second than the '
+    'one below.':
+        'De maxsnelheidstest is een buis, en elk segment ervan smelt meer plastic per seconde dan het '
+        'segment eronder.',
+    'Highest flow': 'Hoogste doorstroom',
+    'Put the test on the bed': 'Zet de test op het bed',
+    'The test lands on the free spot of the bed, right of the model, as one undo step':
+        'De test komt op de vrije plek van het bed, rechts van het model, en is in één stap weer '
+        'ongedaan te maken',
+    'Skip this test': 'Sla deze test over',
+    'Nothing is remembered of this test, so nothing of it is applied when you slice':
+        'Van deze test wordt niets onthouden, dus er wordt bij het slicen ook niets van toegepast',
+    'The tower prints {start} to {end} °C in steps of {step}.':
+        'De toren print van {start} tot {end} °C in stappen van {step}.',
+    'The pads print {start} to {end} % in steps of {step}.':
+        'De paden printen van {start} tot {end} % in stappen van {step}.',
+    'The tower prints {start} to {end} with {firmware}, in steps of {step}.':
+        'De toren print van {start} tot {end} met {firmware}, in stappen van {step}.',
+    'The towers travel with {start} to {end} mm in steps of {step}.':
+        'De torens overbruggen met {start} tot {end} mm in stappen van {step}.',
+    'The tube prints {start} to {end} mm³/s in steps of {step}.':
+        'De buis print van {start} tot {end} mm³/s in stappen van {step}.',
+    'What you found': 'Wat je gevonden hebt',
+    'File > Slice prints with these numbers from now on, for this printer and this filament; untick '
+    'Use my calibration there for one print without them.':
+        'Bestand > Slice print vanaf nu met deze getallen, voor deze printer en dit filament; zet daar '
+        '"Mijn kalibratie gebruiken" uit voor één print zonder die getallen.',
+    '{name}: {value}': '{name}: {value}',
+    'Skipped: {names}': 'Overgeslagen: {names}',
+    'Nothing was found, so nothing will be saved.': 'Er is niets gevonden, dus er wordt niets opgeslagen.',
+    'Choose the printer and the filament first.': 'Kies eerst de printer en het filament.',
+    'Calibration saved for {printer} with {material}: {found}':
+        'Kalibratie opgeslagen voor {printer} met {material}: {found}',
+    '{temp} °C': '{temp} °C',
+    'flow {flow} %': 'flow {flow} %',
+    'retraction {length} mm': 'retractie {length} mm',
+    'PA {value}': 'PA {value}',
+    'max {flow} mm³/s': 'max {flow} mm³/s',
+    'speed lowered to {speed} mm/s': 'snelheid verlaagd naar {speed} mm/s',
     'Idle': 'Inactief',
     'Cutting': 'Snijden',
     'Paused': 'Gepauzeerd',

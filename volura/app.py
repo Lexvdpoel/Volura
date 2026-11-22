@@ -26,7 +26,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_holder, boxgen, bracket,
-               cable_chain, cable_clip, cable_comb, cable_winder, cam, card_holder, coaster,
+               cable_chain, cable_clip, cable_comb, cable_winder, calibrations, cam, card_holder,
+               coaster,
                desk_hook, door_wedge, drawer_organizer,
                dxf, enclosure, errors, fan_guard, filament_clip,
                fileio, gcode, gcode_mill, gcode_thumbnail, gears, gridfinity, grommet,
@@ -1131,6 +1132,9 @@ class Settings:
             setattr(self, key, str(self.q.value(key, "") or ""))
         if not self.slice_printer:
             self.slice_printer = "creality_ender3"
+        # whether File > Slice prints with the numbers of 3D Printing > Calibrate Filament… for this
+        # printer and filament: the tick in that dialog says so, and is remembered like the rest
+        self.slice_calibration = self._bool("slice_calibration", True)
         try:
             self.slice_infill = max(0, min(100, int(float(self.q.value("slice_infill", 20)))))
         except (TypeError, ValueError):
@@ -1599,6 +1603,10 @@ class Settings:
         # the prints that wait for a free printer, in the order they wait
         # (volura.print_queue); Window > Print Queue… shows them and starts them in turn
         self.print_queue = print_queue.from_values(self.q.value("print_queue", []) or [])
+        # what the five calibration prints taught about every filament on every printer, one line
+        # of JSON each, keyed by printer and filament (volura.calibrations). 3D Printing > Calibrate
+        # Filament… fills these in, and File > Slice prints a filament with the numbers found for it
+        self.calibrations = calibrations.from_lines(self.q.value("calibrations", []) or [])
 
     def _bool(self, key, default):
         v = self.q.value(key, default)
@@ -1816,6 +1824,7 @@ class Settings:
                     "slice_change_command",
                     "slice_adaptive", "slice_ironing", "slice_fuzzy", "slice_fuzz",
                     "slice_walls", "slice_seam", "slice_vase", "slice_thumbnail",
+                    "slice_calibration",
                     "slice_preset"):
             self.q.setValue(key, getattr(self, key))
         self.q.setValue("slice_presets", slice_presets.to_lines(self.slice_presets))
@@ -1910,6 +1919,7 @@ class Settings:
         self.q.setValue("spool_for_slot", spools.slot_ids(self.spool_for_slot))
         self.q.setValue("print_history", print_history.from_values(self.print_history))
         self.q.setValue("print_queue", print_queue.from_values(self.print_queue))
+        self.q.setValue("calibrations", calibrations.to_lines(self.calibrations))
         self.q.sync()   # now on disk, so the next Settings (or the next start) reads these
 
 
@@ -2740,6 +2750,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                    tr("Two thin towers whose bands each travel with a longer "
                                       "retraction: print it and read which retraction keeps your "
                                       "printer's travels clean"))
+        self.a_calibrate_filament = A(tr("Calibrate Filament…"),
+                                      lambda checked=False: self.calibrate_filament_dialog(),
+                                      None, None, False,
+                                      tr("The five calibration prints of one filament on one "
+                                         "printer, walked in order: what you read off them is what "
+                                         "File > Slice prints with afterwards"))
 
         self.a_cutplane = self.tool_act(tr("Cut"), "cutplane", None, "cutplane")
         self.a_cut_join = A(tr("Cut and Join..."), lambda checked=False: self.cut_join_dialog(),
@@ -3402,7 +3418,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                       self.a_clearance_test, self.a_overhang_test, self.a_calibration_cube,
                       self.a_bridge_test, self.a_stringing_test, self.a_first_layer_test,
                       self.a_temperature_tower, self.a_pressure_advance_test,
-                      self.a_flow_rate_test, self.a_max_speed_test, self.a_retraction_test))
+                      self.a_flow_rate_test, self.a_max_speed_test, self.a_retraction_test,
+                      None, self.a_calibrate_filament))
 
         # ---- Laser and Mill: what only matters for the machine
         m = mb.addMenu(tr("&Laser and Mill"))

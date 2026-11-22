@@ -9,6 +9,12 @@ that prints one wall spiralling up, besides the thumbnail for the printer's scre
 comes from the profile. The choice is remembered in Settings, and a choice you come back to is
 saved under a name above the Maker row (see `volura.slice_presets`).
 
+What 3D Printing > Calibrate Filament… found for this printer and this filament shows itself in a
+line under Quality (see `volura.calibration_wizard` and `volura.calibrations`), with a tick to print
+with those numbers or without them. They fill in what this dialog leaves to the profile - what is
+chosen here wins - and the highest flow that was found lowers the print speeds of the stacks to what
+the hotend can melt.
+
 Below that sits what the print does with the colors of the model (see `volura.paint_split` and
 `volura.fileio`): which filament prints which color, how deep the skins of painted faces go,
 whether a printer with one nozzle has a filament changer in front of it and at which heights a
@@ -25,7 +31,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
                                QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QWidget)
 
-from . import __version__, cura_profiles, gcode_thumbnail, slice_presets, slicer
+from . import (__version__, calibrations, cura_profiles, gcode_thumbnail, slice_presets,
+               slicer)
 from .i18n import tr, tr_noop
 from .panels import swatch
 
@@ -225,6 +232,7 @@ class SliceDialog(QDialog):
         self.parts = max(1, int(parts))
         self.went_3mf = False
         self._boxes = []                        # the extruder box of every row of the table
+        self._capped = {}                       # the speeds a calibration's maximum flow lowered
         s = win.settings
         self.settings = s
         self.setWindowTitle(tr("Slice"))
@@ -249,6 +257,15 @@ class SliceDialog(QDialog):
         self.brand = QComboBox()
         self.material = QComboBox()
         self.quality = QComboBox()
+        # what Calibrate Filament… found for this printer and this filament; the line names the
+        # numbers and the tick says whether to print with them (volura.calibration_wizard)
+        self.calibration_line = QLabel()
+        self.calibration_line.setWordWrap(True)
+        self.use_calibration = QCheckBox(tr("Use my calibration"))
+        self.use_calibration.setToolTip(tr("Print with the temperature, flow and retraction that "
+                                           "were found for this printer and this filament, and at a "
+                                           "speed the hotend can still melt"))
+        self.use_calibration.setChecked(bool(getattr(s, "slice_calibration", True)))
         self.infill = QSpinBox()
         self.infill.setRange(0, 100)
         self.infill.setSuffix(" %")
@@ -395,6 +412,8 @@ class SliceDialog(QDialog):
         lay.addRow(tr("Filament brand"), self.brand)
         lay.addRow(tr("Material"), self.material)
         lay.addRow(tr("Quality"), self.quality)
+        lay.addRow(tr("Calibration"), self.calibration_line)
+        lay.addRow("", self.use_calibration)
         lay.addRow(tr("Infill"), self.infill)
         lay.addRow(tr("Infill pattern"), self.pattern)
         lay.addRow(tr("Support"), self.support_row)
@@ -432,6 +451,7 @@ class SliceDialog(QDialog):
         self.brand.currentIndexChanged.connect(self._brand_changed)
         self.material.currentIndexChanged.connect(self._material_changed)
         self.quality.currentIndexChanged.connect(self._show_info)
+        self.use_calibration.toggled.connect(self._show_info)
         self.changer.toggled.connect(self._changer_changed)
         self.filaments.valueChanged.connect(self._changer_changed)
         self.fuzzy.toggled.connect(self._fuzzy_changed)
@@ -759,9 +779,11 @@ class SliceDialog(QDialog):
         mode on top of it."""
         note = "\n".join(part for part in (self.preset_note, self._vase_note()) if part)
         if self.printer is None:
+            self._show_calibration()
             self.info.setText(note)
             return
         st = self.stacks()
+        self._show_calibration()    # after the stacks: they know what the flow did to the speeds
         g = st.glob
         height = float(g.get("machine_height") or 0)
         if height > 0:
@@ -772,6 +794,76 @@ class SliceDialog(QDialog):
             h=float(g.get("machine_height") or 0),
             f=float(st.extruders[0].get("material_diameter") or 0) if st.extruders else 0)
         self.info.setText(f"{note}\n{text}" if note else text)
+
+    # ---- what Calibrate Filament… found for this printer and filament
+    def _saved_calibration(self):
+        """What 3D Printing > Calibrate Filament… kept for the printer and the filament that stand
+        in these combo boxes; None when there is nothing kept for them, or when the choice is not
+        complete yet."""
+        return calibrations.find(getattr(self.settings, "calibrations", None),
+                                 self.printer.id if self.printer else "",
+                                 str(self.material.currentData() or ""))
+
+    def calibration(self):
+        """The numbers to print with: what was found for this printer and this filament, but only
+        when Use my calibration is ticked. None is what a slice without a calibration looks like, and
+        nothing that was found is then asked of the profile."""
+        made = self._saved_calibration()
+        return made if made and self.use_calibration.isChecked() else None
+
+    def _show_calibration(self):
+        """The line that names what was found for this printer and filament - with what a maximum
+        flow did to the print speeds, when the calibration is used - and the tick that says whether
+        to print with them; a filament that was never calibrated shows neither of them."""
+        made = self._saved_calibration()
+        found = calibrations.text_of(made)
+        lowered = calibrations.lowered_text(self._capped) if self.calibration() else ""
+        if lowered:
+            found = f"{found}, {lowered}"
+        line = tr("Calibrated: {found}").format(found=found) if made else ""
+        self.calibration_line.setText(line)
+        self._form.setRowVisible(self.calibration_line, bool(made))
+        self._form.setRowVisible(self.use_calibration, bool(made))
+
+    def calibration_command(self):
+        """``(0.0, command line)`` that sets the calibrated pressure advance from the first layer on,
+        written the way the firmware of the calibration sets it, or None when there is no pressure
+        advance to set.
+
+        A pressure advance is no setting CuraEngine knows, so it does not travel with the stacks; the
+        window hands this line to the slice together with the commands of the tests on the bed
+        (volura.window_print), where it becomes a line of the G-code just above the first layer."""
+        line = calibrations.advance_command(self.calibration())
+        return (0.0, line) if line else None
+
+    def _cap_speeds(self, st) -> None:
+        """The speeds that lay plastic in `st` brought down to what the hotend of the calibration
+        melts: a line of this layer height and this width cannot be laid faster than so many cubic
+        millimetres per second.
+
+        Every stack keeps its own speeds - a printer may well print one extruder faster than another -
+        and only the speeds above the cap are written down, over the profile the same way a choice in
+        this dialog does. A speed that already stays under the cap is left alone, so a calibration
+        lowers a print and never speeds it up; the caches go with the new values, so the engine reads
+        them. What the stacks came down to is kept in `_capped`, which is what the line above the tick
+        has to say about it: one number, the lowest speed the flow allows."""
+        self._capped = {}
+        made = self.calibration()
+        if not made or "max_flow" not in made:
+            return
+        for stack in [st.glob] + list(st.extruders):
+            if not stack.layers:
+                continue
+            lowered = calibrations.speed_cap(
+                made["max_flow"], stack.get("layer_height"), stack.get("line_width"),
+                {key: stack.get(key) for key in calibrations.SPEED_KEYS})
+            if not lowered:
+                continue
+            for key, value in lowered.items():
+                self._capped[key] = min(value, self._capped.get(key, value))
+            stack.layers[0].update(lowered)
+            stack.cache.clear()
+            stack.raw_cache.clear()
 
     # ---- the colors of the model
     def extruder_count(self) -> int:
@@ -959,7 +1051,9 @@ class SliceDialog(QDialog):
         if seam:
             values["z_seam_type"] = seam
             values.update(extra)
-        return values
+        # what Calibrate Filament… found fills in what this dialog leaves to the profile: a
+        # temperature, flow or retraction chosen here wins over the calibration (calibrations.fill_in)
+        return calibrations.fill_in(values, self.calibration())
 
     def choice(self) -> dict:
         """What to remember: the printer and what was chosen for it."""
@@ -977,6 +1071,10 @@ class SliceDialog(QDialog):
                 "change_command": self.change_cmd.text().strip(),
                 "adaptive": self.adaptive.isChecked(), "ironing": self.ironing.isChecked(),
                 "fuzzy": self.fuzzy.isChecked(), "fuzz": self.fuzz.value(),
+                # whether to print with the calibration: the window saves this as slice_calibration,
+                # and the dialog of the next slice starts with it again (slice_presets leaves it out,
+                # because a preset is about the printer and the print, not about the numbers found)
+                "calibration": self.use_calibration.isChecked(),
                 "walls": self.walls.value(),
                 "seam": SEAMS[self.seam.currentIndex()][1], "vase": self.vase.isChecked(),
                 "thumbnail": gcode_thumbnail.THUMBNAILS[self.thumbnail.currentIndex()][1]}
@@ -990,4 +1088,5 @@ class SliceDialog(QDialog):
         g = st.glob
         st.glob.layers[0].update(self.multicolor().values(
             float(g.get("machine_width") or 0.0), float(g.get("machine_depth") or 0.0)))
+        self._cap_speeds(st)
         return st

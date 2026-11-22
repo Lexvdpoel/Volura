@@ -1071,8 +1071,10 @@ class PrintMixin:
             self.settings.save()
             try:
                 # the max speed test turns its flows into percents with these stacks, and a plan
-                # that would run past the speed limit at this slice is refused before it starts
-                height_commands = self._bed_height_commands(only, dlg.stacks())
+                # that would run past the speed limit at this slice is refused before it starts; a
+                # calibration is one command for the first layer, set by the chosen firmware
+                height_commands = self._bed_height_commands(only, dlg.stacks(),
+                                                            dlg.calibration_command())
             except ValueError as exc:
                 QMessageBox.warning(self, tr("Slice"), str(exc))
                 self.setFocus()
@@ -1118,7 +1120,7 @@ class PrintMixin:
         except (AttributeError, TypeError, ValueError):
             return defaults
 
-    def _bed_height_commands(self, only, stacks=None) -> tuple | None:
+    def _bed_height_commands(self, only, stacks=None, calibration=None) -> tuple | None:
         """``(print temperature or None, [(z_from mm, command line), ...])`` of the tests on the bed.
 
         A Temperature Tower carries its plan as temperatures and a Pressure Advance Test as finished
@@ -1130,7 +1132,12 @@ class PrintMixin:
         saved finished on the part. The temperatures are asked for by height and so are the commands,
         which means they hold for the whole bed, also when other parts stand next to a test. None
         when nothing on the bed carries a plan.
-        """
+
+        A calibration that File > Slice is printing with (volura.calibration_wizard) comes in as
+        `calibration`, one command line for the first layer: it goes in front of the commands of the
+        tests, because at one and the same height the last line in the G-code is the one the printer
+        ends up with, and a Pressure Advance Test standing on the bed sets its own values from that
+        height on."""
         temp = self._bed_temperature_steps(only)
         changes = [(z, f"M104 S{t}") for z, t in temp[1]] if temp else []
         groups = self.doc.selected_groups() if only else self.doc.visible_groups()
@@ -1151,9 +1158,16 @@ class PrintMixin:
             # would pass the speed limit raises here, and the caller says it to the user
             changes += [tuple(one) for one in
                         max_speed_test.commands(flows, *self._slice_layer_and_width(stacks))]
-        if temp is None and not changes:
+        head = []
+        if calibration is not None and not isinstance(calibration, (str, bytes)):
+            try:
+                height, line = tuple(calibration)
+                head = [(float(height), str(line))]
+            except (TypeError, ValueError):
+                head = []               # no height and no command: nothing to ask of the first layer
+        if temp is None and not changes and not head:
             return None
-        return (temp[0] if temp else None), sorted(changes, key=lambda one: one[0])
+        return (temp[0] if temp else None), sorted(head + changes, key=lambda one: one[0])
 
     def _bed_retraction_bands(self, only) -> list:
         """``[(z_from mm, z_to mm, length mm), ...]`` of the retraction tests on the bed.
@@ -4384,6 +4398,38 @@ class PrintMixin:
 
         background.run(self, work, text=tr("Building the retraction test…"),
                        on_done=done, on_error=failed)
+    # -------------------------------------------------------- calibrate filament
+
+    def calibrate_filament_dialog(self):
+        """3D Printing > Calibrate Filament…: the five calibration prints of one filament on one
+        printer, walked in order, so what the user read off them can be kept for that printer and
+        filament and File > Slice prints with them afterwards (volura.calibration_wizard)."""
+        from . import calibration_wizard, slice_dialog as sd
+        resources = slicer.find_resources()
+        if not resources:
+            QMessageBox.information(self, tr("Calibrate Filament"), tr(
+                "The slicer is not part of this copy of Volura. The downloads on the releases "
+                "page include it."))
+            return
+        # the wizard asks which printer and which filament the numbers are for, and those come from
+        # the profiles; reading them the first time takes a while, so it happens off the window
+        reading = (tr("Preparing…") if sd.is_loaded(resources) else
+                   tr("Reading the printer profiles… The first time this can take a few minutes."))
+
+        def prepare(report):
+            report(0.0, reading)
+            return sd.library(resources)
+
+        def prepared(result):
+            dlg = calibration_wizard.CalibrationWizard(self, result)
+            if dlg.exec() == QDialog.Accepted:
+                dlg.save()              # what the pages hold goes under this printer and filament
+            self.setFocus()
+
+        def failed(exc):
+            QMessageBox.warning(self, tr("Calibrate Filament"), str(exc))
+
+        background.run(self, prepare, text=reading, on_done=prepared, on_error=failed)
     # --------------------------------------------------------- first layer test
 
     def first_layer_test_dialog(self):
