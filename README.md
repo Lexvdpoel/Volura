@@ -1059,7 +1059,7 @@ released is thanked here and next to that change in the [changelog](CHANGELOG.md
 
 - [@TCOPC](https://github.com/TCOPC): the Fusion keys and mouse scheme ([#1](https://github.com/Lexvdpoel/Volura/issues/1))
 - [@ABB-JC-E](https://github.com/ABB-JC-E): export to STEP ([#2](https://github.com/Lexvdpoel/Volura/issues/2))
-- [@el-rayo-ex](https://github.com/el-rayo-ex): the Windows Defender report that led to SHA-256 checksums for every release, the privacy statement and the application for code signing ([discussion #3](https://github.com/Lexvdpoel/Volura/discussions/3))
+- [@el-rayo-ex](https://github.com/el-rayo-ex): the Windows Defender report that led to SHA-256 checksums for every release, the privacy statement and the application for code signing ([discussion #4](https://github.com/Lexvdpoel/Volura/discussions/4))
 
 Code that you contribute through a pull request puts you in GitHub's list of contributors as well.
 
