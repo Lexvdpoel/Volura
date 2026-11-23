@@ -1058,13 +1058,28 @@ class PrintMixin:
             lib = sd.library(resources)
             report(0.6, tr("Reading the colours of the model…"))
             part_list = ops.parts(self.doc, only_selected=only)
-            return lib, part_list, fileio.model_colors(part_list, self.doc.materials)
+            return (lib, part_list, ops.role_parts(self.doc, only_selected=only),
+                    fileio.model_colors(part_list, self.doc.materials))
 
         def prepared(result):
-            lib, part_list, colors = result
+            lib, part_list, role_list, colors = result
             part_list = self._validated_parts(part_list)
             if part_list is None:
                 return
+            # a support volume that is no closed volume blocks nothing and becomes no support, so it
+            # is said before the slice instead of quietly doing nothing in the corner of the bed
+            broken = [p.name for p in role_list if p.manifold is None]
+            if broken:
+                text = trn("This support volume is no closed volume:\n\n{volumes}\n\nIt blocks no "
+                           "support and becomes no support of its own. Slice without it?",
+                           "These support volumes are no closed volumes:\n\n{volumes}\n\nThey block "
+                           "no support and become no support of their own. Slice without them?",
+                           len(broken)).format(volumes="\n".join(f"• {n}" for n in broken))
+                if QMessageBox.question(self, tr("Slice"), text,
+                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.No) \
+                        != QMessageBox.Yes:
+                    self.setFocus()
+                    return
             dlg = sd.SliceDialog(self, lib, colors, len(part_list))
             if dlg.exec() != QDialog.Accepted:
                 self.setFocus()
@@ -1090,7 +1105,7 @@ class PrintMixin:
                 return
             self._slice_async(dlg.stacks(), part_list, engine, dlg.printer.name,
                               dlg.multicolor(), height_commands,
-                              self._bed_retraction_bands(only))
+                              self._bed_retraction_bands(only), role_list)
 
         background.run(self, prepare, text=reading, on_done=prepared,
                        on_error=self._export_failed)
@@ -1203,7 +1218,7 @@ class PrintMixin:
         return sorted(out, key=lambda one: one[0])
 
     def _slice_async(self, stacks, part_list, engine, printer_name="", plan=None,
-                     height_commands=None, retraction_bands=None):
+                     height_commands=None, retraction_bands=None, role_list=None):
         """Slice `part_list` with `stacks` in the background, then show the print preview.
 
         The G-code goes to a temporary file first; the preview reads it back layer by layer
@@ -1217,6 +1232,9 @@ class PrintMixin:
         print starts at and the commands the tests on the bed ask for, each with its height.
         `retraction_bands` is what `_bed_retraction_bands` found: the lengths the retraction tests on
         the bed travel with, per band, which only the finished G-code can carry.
+        `role_list` is what `ops.role_parts` found: the support blockers and enforcers of the model.
+        They slice with the settings of their role and with nothing else: they lay no plastic, so
+        they are in neither the picture on the printer's screen nor the measure of the print.
         """
         from . import slice_dialog as sd
         plan = plan or sd.Multicolor()
@@ -1234,8 +1252,10 @@ class PrintMixin:
             The second list is what the thumbnail on the printer's screen is drawn from: the same
             meshes, each in the colour of the part that prints with it. The number says how many
             parts carry slice settings of their own, which is what the summary of the print tells.
+            The last list holds the support volumes of the model: they slice with the settings of
+            their role, lay no plastic of their own and are therefore in neither of the first two.
             """
-            meshes, pictures = [], []
+            meshes, pictures, volumes = [], [], []
             own_parts = 0                  # how many of them slice with settings of their own
             parts = [p for p in part_list if p.manifold is not None]
             for i, p in enumerate(parts):
@@ -1273,15 +1293,25 @@ class PrintMixin:
                     pictures.append((verts, tris, group[0][1]))
             if not meshes:
                 raise ValueError(tr("There is nothing to slice. Draw a face and use Push/Pull (P)."))
-            return meshes, pictures, own_parts
+            for p in (role_list or []):
+                if p.manifold is None:
+                    continue               # `prepared` told you what is wrong with this volume
+                mesh = p.manifold.to_mesh()
+                # a support volume lays nothing, so the filament of its colour has nothing to say
+                volumes.append((np.asarray(mesh.vert_properties)[:, :3],
+                                np.asarray(mesh.tri_verts), 0,
+                                slicer.per_mesh_settings(stacks, p.mesh_settings)))
+            return meshes, pictures, own_parts, volumes
 
         def work(report):
             print_temp, by_height = height_commands or (None, [])
             if print_temp is not None:
                 # the first segment's temperature is the temperature the print starts at
                 slicer.set_print_temperature(stacks, print_temp)
-            meshes, pictures, own_parts = made_meshes(report)
+            meshes, pictures, own_parts, volumes = made_meshes(report)
             report(0.15, tr("Slicing…"))
+            # what has to fit the build volume is the print: a support volume may hang over the
+            # edge, it only has to be where the support of the print is
             lo = np.min([m[0].min(axis=0) for m in meshes], axis=0)
             hi = np.max([m[0].max(axis=0) for m in meshes], axis=0)
             size = hi - lo
@@ -1290,7 +1320,7 @@ class PrintMixin:
                                     "build volume of {w:.0f} × {d:.0f} × {h:.0f} mm")
                                  .format(x=size[0], y=size[1], z=size[2], w=bed[0], d=bed[1],
                                          h=bed[2]))
-            result = slicer.slice_meshes(stacks, meshes, path, engine,
+            result = slicer.slice_meshes(stacks, meshes, path, engine, helpers=volumes,
                                          on_progress=lambda f: report(0.15 + 0.7 * f,
                                                                        tr("Slicing…")))
             if plan.changes:
@@ -2993,6 +3023,43 @@ class PrintMixin:
         self.settings.mouse_ear_height = height
         self.settings.save()
         self._run_mouse_ears(gids, diameter, height)
+
+    # ------------------------------------------------------------ support volumes
+
+    def add_support_blocker(self):
+        """3D Printing > Add Support Blocker: a volume the support of the print may not enter."""
+        self._add_support_volume(ops.ROLE_BLOCKER)
+
+    def add_support_enforcer(self):
+        """3D Printing > Add Support Enforcer: a volume that becomes support, also when the print
+        has support switched off."""
+        self._add_support_volume(ops.ROLE_ENFORCER)
+
+    def _add_support_volume(self, role):
+        """The cube both support commands put in the model: `ops.SUPPORT_VOLUME_MM` millimetres
+        wide, against the first selected face - or standing on the middle of the bed when no face is
+        selected - as one group with that role, selected so Move and Scale have something to grab at
+        once. One undo step takes the whole volume back out of the model."""
+        size = ops.SUPPORT_VOLUME_MM
+        at = ops.support_volume_center(self.doc, size)
+        if at is None:
+            bx, by, _bz = self.settings.bed_size
+            at = (bx / 2, by / 2, size / 2)
+        man = ops.primitive("box", size, size, size).translate(
+            tuple(float(c) - size / 2 for c in at))
+        self.doc.checkpoint()
+        name = tr(ops.ROLE_LABELS[role])
+        g = ops.group_from_manifold(self.doc, man, self.settings.current_color,
+                                    f"{name} {self.doc.group_counter}")
+        self.doc.group_counter += 1
+        ops.set_group_role(g, role)
+        self.doc.active = ROOT
+        self.doc.set_selection([("g", g.id, g.id)])
+        self.doc.notify()
+        self.set_tool("move")
+        self.hint.setText(tr("{role} added. Move or scale it onto the place you mean.").format(
+            role=name))
+
     # ------------------------------------------------------------ orient for printing
 
     def split_parts(self):

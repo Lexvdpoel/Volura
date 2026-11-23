@@ -124,6 +124,8 @@ MENUS = [
         ("Cut", None),
         ("Cut and Join", None),
         "---",
+        ("Add Support Blocker", None),       # Volura
+        ("Add Support Enforcer", None),      # Volura
         ("Elephant Foot Chamfer", None),
         ("Mouse Ears", None),
         "---",

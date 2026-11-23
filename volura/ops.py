@@ -1148,23 +1148,66 @@ def primitive(kind, a, b=0.0, c=0.0, segments=64):
 
 # ------------------------------------------------------------- printing
 
+#: what a group can be in a print: a part that prints, a volume that support may not enter
+#: (CuraEngine's `anti_overhang_mesh`) or a volume that becomes support (its `support_mesh`).
+#: The role of a group lives in `g.meta["role"]`; a group that says nothing prints.
+ROLE_PART, ROLE_BLOCKER, ROLE_ENFORCER = "part", "blocker", "enforcer"
+#: the roles in the order Entity Info shows them
+ROLES = (ROLE_PART, ROLE_BLOCKER, ROLE_ENFORCER)
+ROLE_LABELS = {ROLE_PART: tr_noop("Part"), ROLE_BLOCKER: tr_noop("Support blocker"),
+               ROLE_ENFORCER: tr_noop("Support enforcer")}
+#: the settings every mesh of another role brings with it on CuraEngine's command line. Neither is
+#: printed, and an enforcer works without `support_enable`: CuraEngine sees a support mesh in the
+#: scene and builds support from that one volume alone
+ROLE_SETTINGS = {ROLE_BLOCKER: {"anti_overhang_mesh": True},
+                 ROLE_ENFORCER: {"support_mesh": True, "support_mesh_drop_down": True}}
+
+
+def group_role(g) -> str:
+    """The role the group `g` takes in a print, one of `ROLES`.
+
+    Read from `g.meta["role"]`. A group that carries nothing is a printed part, and so is anything
+    else that stands under that key: printing what you were shown is the safe thing to assume."""
+    got = g.meta.get("role") if isinstance(g.meta, dict) else None
+    return got if got in ROLES else ROLE_PART
+
+
+def set_group_role(g, role) -> None:
+    """The role of `g`, so that `group_role` reads it back. A printed part keeps no `role` key, so
+    a model of nothing but parts says nothing about roles."""
+    if role in ROLES and role != ROLE_PART:
+        g.meta["role"] = role
+    elif isinstance(g.meta, dict):
+        g.meta.pop("role", None)
+
+
+def own_mesh_settings(meta) -> dict:
+    """The per-mesh slice settings a group meta carries, empty when it carries none."""
+    got = (meta or {}).get("mesh_settings") if isinstance(meta, dict) else None
+    return dict(got) if isinstance(got, dict) else {}
+
+
 class Part:
     def __init__(self, name, color, manifold=None, problem=None):
         self.name = name
         self.color = color
         self.manifold = manifold
         self.problem = problem
+        #: what this part is in the print: see `ROLES`; loose geometry and a plain group print
+        self.role = ROLE_PART
         #: CuraEngine settings this part wants on its own mesh, read from g.meta["mesh_settings"]
         self.mesh_settings = {}
 
 
 def parts(doc: Document, only_selected=False):
-    """Printable parts: every visible group and every closed shell of loose geometry.
+    """Printed parts: every visible group that prints and every closed shell of loose geometry.
 
     A group may carry per-mesh slicing settings in `g.meta["mesh_settings"]`; they are handed to the
     part as `mesh_settings`, and the slice keeps only those a single mesh accepts (see
-    `slicer.per_mesh_settings`)."""
-    groups = doc.selected_groups() if only_selected else doc.visible_groups()
+    `slicer.per_mesh_settings`). A group with another role in the print - a support blocker or
+    enforcer - is no part and is left out here; `role_parts` gives those."""
+    groups = [g for g in (doc.selected_groups() if only_selected else doc.visible_groups())
+              if group_role(g) == ROLE_PART]
     items = [(g.name, g.color, g.ents, list(g.ents.F)) for g in groups]
     metas = [g.meta for g in groups]
     if not only_selected:
@@ -1175,9 +1218,49 @@ def parts(doc: Document, only_selected=False):
             metas.append(None)
     out = build_parts(items)
     for part, meta in zip(out, metas):
-        got = (meta or {}).get("mesh_settings")
-        part.mesh_settings = dict(got) if isinstance(got, dict) else {}
+        part.mesh_settings = own_mesh_settings(meta)
     return out
+
+
+def role_parts(doc: Document, only_selected=False):
+    """The support blockers and enforcers of the model, as `parts` gives its parts.
+
+    Every one of them carries the settings of its role on its own mesh, above what the group itself
+    asks for (see `ROLE_SETTINGS`), and slices with those: a blocker is a volume the support of the
+    print may not enter and an enforcer is a volume that becomes support. Neither is ever exported
+    or counted as a part, so a print that hangs over a blocker gets no support there and one under
+    an enforcer gets it even when support is off in File > Slice."""
+    groups = [g for g in (doc.selected_groups() if only_selected else doc.visible_groups())
+              if group_role(g) != ROLE_PART]
+    out = build_parts([(g.name, g.color, g.ents, list(g.ents.F)) for g in groups])
+    for part, g in zip(out, groups):
+        part.role = group_role(g)
+        part.mesh_settings = {**own_mesh_settings(g.meta), **ROLE_SETTINGS[part.role]}
+    return out
+
+
+#: the cube that 3D Printing > Add Support Blocker and Add Support Enforcer put in the model, in
+#: millimetres: big enough to grab with Move and Scale, small enough to stand on one arm of a part
+SUPPORT_VOLUME_MM = 20.0
+
+
+def support_volume_center(doc: Document, size=SUPPORT_VOLUME_MM):
+    """Where the middle of a new support volume goes: outside the middle of the first selected
+    face, half a cube away from it, so the volume stands against the part instead of in it. The
+    middle of a face is its centre of area, which is where you would put a cube on it. None when the
+    selection holds no face; the caller then takes the middle of the bed."""
+    for kind, ctx, i in doc.selection:
+        ents = doc.ents(ctx) if kind == "f" else None
+        if ents is None or i not in ents.F:
+            continue
+        tri, _ = ents.face_triangles(i)
+        area = np.linalg.norm(np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]), axis=1)
+        if area.sum() > 0:
+            mid = (tri.mean(axis=1) * area[:, None]).sum(axis=0) / area.sum()
+        else:
+            mid = np.mean(np.concatenate(ents.face_points(i)), axis=0)
+        return mid + np.asarray(ents.F[i].normal, dtype=float) * (0.5 * size)
+    return None
 
 
 def color_id(color):

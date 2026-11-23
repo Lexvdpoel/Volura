@@ -2786,6 +2786,16 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_chamfer = self.tool_act(
             tr("Chamfer"), "chamfer", None, "chamfer",
             tr("Click edges and type a distance: a bevel along the edge"))
+        self.a_support_blocker = A(tr("Add Support Blocker"),
+                                   lambda checked=False: self.add_support_blocker(), None, None,
+                                   False,
+                                   tr("A cube that keeps the support of the print out of the space "
+                                      "it hangs over; the slicer never prints it"))
+        self.a_support_enforcer = A(tr("Add Support Enforcer"),
+                                    lambda checked=False: self.add_support_enforcer(), None, None,
+                                    False,
+                                    tr("A cube that becomes support where it touches a part, even "
+                                       "when the print has support switched off"))
         self.a_elephant = A(tr("Elephant Foot Chamfer…"),
                             lambda checked=False: self.elephant_foot_chamfer(), None, None, False,
                             tr("A small chamfer along the bottom edges, so the first printed "
@@ -3433,6 +3443,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.fill(m, (self.a_print_setup, self.a_check, None,
                       self.a_orient_print, self.a_drop, self.a_center, self.a_arrange, None,
                       self.a_cutplane, self.a_cut_join, None,
+                      self.a_support_blocker, self.a_support_enforcer,
                       self.a_elephant, self.a_mouse_ears, None,
                       self.a_clearance_test, self.a_overhang_test, self.a_calibration_cube,
                       self.a_bridge_test, self.a_stringing_test, self.a_first_layer_test,

@@ -27,6 +27,10 @@ HIDDEN_EDGE_COLOR = (0.45, 0.45, 0.55, 0.85)
 PROBLEM_COLOR = (0.86, 0.06, 0.06, 1.0)   # the problems of Print Check
 FRONT = (1.0, 1.0, 1.0)                # the front of a face is white, like SketchUp
 BACK = (0.64, 0.70, 0.78)              # the back of a face is blue grey
+# the two support volumes of 3D Printing: always in the colour of their role and see-through, so a
+# volume in the model is never mistaken for a part of it (the colours live in theme.py)
+ROLE_COLORS = {ops.ROLE_BLOCKER: "blocker", ops.ROLE_ENFORCER: "enforcer"}
+ROLE_ALPHA = 0.35                      # as translucent as the hidden faces of the model
 
 # The SketchUp background: a light blue grey sky that fades to almost white at the
 # horizon, and a grey ground below it. In the dark theme a muted grey, in the high
@@ -72,6 +76,15 @@ def hex_rgb(h):
 def edge_color() -> tuple:
     """The color of the edges between the faces: white in the high contrast theme."""
     return (*theme.rgb("edge"), 1)
+
+
+def _role_of(g):
+    """The role a group takes in the print, or None when it is a printed part.
+
+    A support blocker or enforcer is drawn in the see-through colour of its role and is no part of
+    the print: its faces are never counted among its overhangs, thin walls or tight fits."""
+    role = ops.group_role(g) if g is not None else None
+    return role if role in ROLE_COLORS else None
 
 
 def _tint(col, on):
@@ -590,11 +603,13 @@ class Viewport(QOpenGLWidget):
             self.draw_lines([a, b], (c[0], c[1], c[2], 0.6), 1.2, stipple=True)
 
     # ------------------------------------------------------------- model
-    def _render_data(self, ents, gcolor):
-        octx = self._overhang_ctx       # (bed_z, limit) while the overhang view is on, else None
-        wctx = self._thin_context(ents)   # (wall, answers) while the thin wall view is on
-        fctx = self._tight_context(ents)   # (room, answers) while the tight fit view is on
-        key = (id(ents), ents.version, gcolor, octx, wctx, fctx)
+    def _render_data(self, ents, gcolor, role=None):
+        # a support volume is drawn as what it is: the overhang, thin wall and tight fit colours
+        # belong to the print, and this volume is no part of it
+        octx = None if role else self._overhang_ctx   # (bed_z, limit) while the overhang view is on
+        wctx = None if role else self._thin_context(ents)   # (wall, answers) thin wall view on
+        fctx = None if role else self._tight_context(ents)  # (room, answers) tight fit view on
+        key = (id(ents), ents.version, gcolor, role, octx, wctx, fctx)
         rc = self._rcache.get(id(ents))
         if rc is not None and rc["key"] == key and rc["ents"] is ents:
             return rc
@@ -602,6 +617,7 @@ class Viewport(QOpenGLWidget):
             _free_render_data(rc)         # another version: the old buffers are no longer drawn
         c = self.engine.cache.get(ents)
         base = hex_rgb(gcolor) if gcolor else FRONT
+        role_rgb = theme.rgb(ROLE_COLORS[role]) if role else None
         colors = {f: face.color for f, face in ents.F.items()}
         T, fids = c["T"], c["tri_fid"]
         warn = theme.rgb("overhang") if octx else None
@@ -622,6 +638,11 @@ class Viewport(QOpenGLWidget):
                               dtype=np.float32)
                 front[:, :3] = np.repeat(fc, 3, axis=0)
                 back[:, :3] = np.repeat(bc, 3, axis=0)
+                if role_rgb is not None:
+                    # both sides of every face in the colour of the role: the volume hangs in the
+                    # model as a red or green shape, whatever way it is turned
+                    front[:, :3] = role_rgb
+                    back[:, :3] = role_rgb
                 if tight is not None and fmask is not None:
                     # the tight places go on under the thin walls and the overhangs: of two
                     # troubles on one face the machine is the worse one to hear about
@@ -681,7 +702,8 @@ class Viewport(QOpenGLWidget):
             mats = [None]
             if ctx in moving:
                 mats = [pt[1]] + ([None] if pt[2] else [])
-            yield ctx, ents, g, self._render_data(ents, g.color if g else None), mats
+            yield ctx, ents, g, self._render_data(ents, g.color if g else None,
+                                                  _role_of(g)), mats
 
     def _draw_model(self):
         doc = self.doc
@@ -715,8 +737,9 @@ class Viewport(QOpenGLWidget):
                     self._draw_faces(rc["hidden"], alpha=0.35, tint=selected, style=style)
                     if len(rc["hedges"]):
                         self.draw_lines(rc["hedges"], HIDDEN_EDGE_COLOR, 1.2, stipple=True, buf=hedges)
-                self._draw_faces(rc, alpha=0.3 if faded else (0.5 if xray else 1.0), tint=selected,
-                                 style=style)
+                self._draw_faces(rc, alpha=(ROLE_ALPHA if _role_of(g)
+                                            else (0.3 if faded else (0.5 if xray else 1.0))),
+                                 tint=selected, style=style)
                 if show_edges and len(rc["edges"]):
                     if faded:
                         col = (0.6, 0.6, 0.6, 1)
@@ -783,28 +806,28 @@ class Viewport(QOpenGLWidget):
     def _overhang_faces(self):
         """``(bed_z, faces that need support)`` of the model, cached until it or the limit changes.
 
-        The bed is the lowest z of all visible geometry; a face is counted when its outward
-        normal hangs over further than the limit (see :func:`ops.overhang_mask`). The count is
-        per face, read off the triangle normals the render cache already holds, so nothing is
-        triangulated twice and no frame pays for it twice."""
+        The bed is the lowest z of all visible geometry that prints; a face is counted when its
+        outward normal hangs over further than the limit (see :func:`ops.overhang_mask`). The count
+        is per face, read off the triangle normals the render cache already holds, so nothing is
+        triangulated twice and no frame pays for it twice. A support volume is in neither: it is no
+        part, and it hangs where the support is wanted instead of where the print stands."""
         if not getattr(self.settings, "show_overhangs", False):
             return None
         limit = getattr(self.settings, "overhang_limit", 45)
-        ents_list = [e for _, e, _ in self.doc.contexts()]
+        ents_list = [e for _, e, g in self.doc.contexts() if _role_of(g) is None]
         key = tuple((id(e), e.version) for e in ents_list) + (limit,)
         if self._overhang_cache is not None and self._overhang_cache[0] == key:
             return self._overhang_cache[1]
-        box = self.doc.model_bbox()
-        if box is None:
+        tris = [(e, T) for e, T in ((e, self.engine.cache.get(e)["T"]) for e in ents_list)
+                if len(T)]
+        if not tris:
             self._overhang_cache = (key, (0.0, 0))
             return self._overhang_cache[1]
-        bed_z = float(box[0][2])
+        bed_z = min(float(T[:, 2].min()) for _e, T in tris)
         total = 0
-        for e in ents_list:
+        for e, T in tris:
             c = self.engine.cache.get(e)
-            if not len(c["T"]):
-                continue
-            over = ops.overhang_mask(c["tri_nrm"], c["T"].mean(axis=1)[:, 2], bed_z, limit)
+            over = ops.overhang_mask(c["tri_nrm"], T.mean(axis=1)[:, 2], bed_z, limit)
             total += int(len(np.unique(c["tri_fid"][over])))
         self._overhang_cache = (key, (bed_z, total))
         return self._overhang_cache[1]
@@ -906,7 +929,7 @@ class Viewport(QOpenGLWidget):
         if not getattr(self.settings, "show_thin_walls", False):
             return 0
         total = 0
-        for e in [e for _, e, _ in self.doc.contexts()]:
+        for e in [e for _, e, g in self.doc.contexts() if _role_of(g) is None]:
             mask = self._thin_mask_of(e)
             if mask is None or not mask.any():
                 continue
@@ -940,8 +963,10 @@ class Viewport(QOpenGLWidget):
         was measured at, and the room it was measured with.
 
         A part is only tight in respect to the others, so one part that is edited asks for
-        the whole model again - the part it was close to may have moved away by now."""
-        return tuple((id(e), e.version) for _, e, _ in self.doc.contexts()) + (room,)
+        the whole model again - the part it was close to may have moved away by now. A support
+        volume is not one of the parts: it is made to touch them."""
+        return tuple((id(e), e.version)
+                     for _c, e, g in self.doc.contexts() if _role_of(g) is None) + (room,)
 
     def _tight_mask_of(self, ents):
         """The bool per triangle of `ents` whether it stands closer to another part than the
@@ -981,7 +1006,7 @@ class Viewport(QOpenGLWidget):
         # the centres of the triangles the view draws, in the coordinates the model is drawn
         # in: a part can only be measured against the others where they really stand
         parts = [(e, np.array(self.engine.cache.get(e)["T"].mean(axis=1), dtype=float))
-                 for _, e, _ in self.doc.contexts()]
+                 for _c, e, g in self.doc.contexts() if _role_of(g) is None]
         checking = tr("Checking clearances…")
 
         def work(report):
@@ -1037,7 +1062,7 @@ class Viewport(QOpenGLWidget):
         if self._tight_clearance() is None:
             return 0
         total = 0
-        for e in [e for _, e, _ in self.doc.contexts()]:
+        for e in [e for _, e, g in self.doc.contexts() if _role_of(g) is None]:
             mask = self._tight_mask_of(e)
             if mask is None or not mask.any():
                 continue

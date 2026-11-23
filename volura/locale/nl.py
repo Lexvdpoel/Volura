@@ -2262,6 +2262,30 @@ TRANSLATIONS = {
     'Nozzle': 'Nozzle',
     'Quality': 'Kwaliteit',
     'Support': 'Support',
+    'Support blocker': 'Supportblokkade',
+    'Support enforcer': 'Supportmaker',
+    'Add Support Blocker': 'Supportblokkade toevoegen',
+    'Add Support Enforcer': 'Supportmaker toevoegen',
+    'A cube that keeps the support of the print out of the space it hangs over; the slicer never prints it':
+        'Een blok dat de support van de print buiten de ruimte houdt waar het over hangt; de slicer print het nooit',
+    'A cube that becomes support where it touches a part, even when the print has support switched off':
+        'Een blok dat support wordt waar het een onderdeel raakt, zelfs als de print support uit heeft',
+    'Role': 'Rol',
+    '<b>Group ({role})</b>': '<b>Groep ({role})</b>',
+    'Part: this group prints. Support blocker: the support of the print may not come in this volume. '
+    'Support enforcer: this volume becomes support, also when the print has support switched off.':
+        'Onderdeel: deze groep print. Supportblokkade: de support van de print mag dit volume niet in. '
+        'Supportmaker: dit volume wordt support, ook als de print support uit heeft.',
+    '{role} added. Move or scale it onto the place you mean.':
+        '{role} toegevoegd. Verplaats of schaalf hem naar de plek die je bedoelt.',
+    'This support volume is no closed volume:\n\n{volumes}\n\nIt blocks no support and becomes no '
+    'support of its own. Slice without it?':
+        'Dit supportvolume is geen gesloten volume:\n\n{volumes}\n\nHet blokkeert geen support en '
+        'wordt ook geen support van zichzelf. Toch zonder het slicen?',
+    'These support volumes are no closed volumes:\n\n{volumes}\n\nThey block no support and become '
+    'no support of their own. Slice without them?':
+        'Deze supportvolumes zijn geen gesloten volumes:\n\n{volumes}\n\nZe blokkeren geen support '
+        'en worden ook geen support van zichzelf. Toch zonder ze slicen?',
     'Bed adhesion': 'Hechting aan het bed',
     'How full the inside of the print is': 'Hoe vol de binnenkant van de print is',
     'Touching the bed': 'Op het bed',

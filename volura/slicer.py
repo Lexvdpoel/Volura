@@ -158,17 +158,22 @@ def write_stl(path, verts, tris):
         fh.write(rec.tobytes())
 
 
-def place_on_bed(meshes, settings) -> list:
+def place_on_bed(meshes, settings, also=()) -> list:
     """The meshes moved so their common centre is the centre of the bed, the lowest on z = 0.
 
     CuraEngine adds half the bed to every coordinate unless the origin is in the middle of the bed,
     so the coordinates it gets are relative to that middle. A mesh is ``(verts, tris, extruder)``
     with, for a part that carries its own per-mesh settings, a fourth element that is kept as is.
-    """
+
+    `also` holds the meshes that travel with the print but are no part of it: a support blocker or
+    enforcer. They get the same move but do not help to determine it, because where the print stands
+    on the bed is what its parts say - also when such a volume stands further out than any of them.
+    The answer is `meshes` and then `also`, both moved."""
     lo = np.min([np.asarray(m[0]).min(axis=0) for m in meshes], axis=0)
     hi = np.max([np.asarray(m[0]).max(axis=0) for m in meshes], axis=0)
     shift = np.array([-0.5 * (lo[0] + hi[0]), -0.5 * (lo[1] + hi[1]), -lo[2]])
-    return [(np.asarray(m[0], dtype=float) + shift, m[1], m[2], *m[3:]) for m in meshes]
+    return [(np.asarray(m[0], dtype=float) + shift, m[1], m[2], *m[3:])
+            for m in (*meshes, *also)]
 
 
 def _formula_names(text) -> set:
@@ -679,7 +684,8 @@ def command_value(value) -> str:
     return str(value)
 
 
-def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progress=None) -> SliceResult:
+def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progress=None,
+                 helpers=None) -> SliceResult:
     """Slice `meshes` - a list of (verts, tris, extruder_nr) in bed millimetres - to `out_path`.
 
     `stacks` is the `cura_profiles.Stacks` of the printer, nozzle, material and quality to slice
@@ -692,20 +698,27 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
     single pad of a flow rate test prints with its own `material_flow` while the rest of the bed
     keeps the global value. A mesh that asks for nothing is loaded from the settings document
     instead, so a bed of a thousand plain parts stays one short command.
+
+    `helpers` holds the same kind of meshes that are no part of the print: the support blockers and
+    enforcers of the model, which carry the settings of their role. CuraEngine builds them into the
+    support of the print instead of into the print itself; they travel with the print across the bed
+    and say nothing about where it stands.
     """
     engine = engine or find_engine()
     if not engine:
         raise RuntimeError("CuraEngine was not found")
     if not meshes:
         raise RuntimeError("there is nothing to slice")
+    helpers = list(helpers or ())
     doc = resolved_settings(stacks)
-    meshes = place_on_bed(meshes, doc["global"])
+    printed = len(meshes)            # the first `printed` of the placed meshes are the parts
+    meshes = place_on_bed(meshes, doc["global"], helpers)
     offset = stacks.printer.definition.metadata.get("orca_offset")
     if offset and any(offset):
         # the middle of what this printer can print is not the middle of Cura's bed
         meshes = [(m[0] + np.array([offset[0], offset[1], 0.0]), m[1], m[2], *m[3:])
                   for m in meshes]
-    gcode = orca_gcode_for(stacks, meshes, doc["global"])
+    gcode = orca_gcode_for(stacks, meshes[:printed], doc["global"])
     if gcode is not None:
         start, end = gcode
         doc["global"]["machine_start_gcode"], doc["global"]["machine_end_gcode"] = start, end

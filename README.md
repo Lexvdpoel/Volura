@@ -547,6 +547,16 @@ gets for free.
   a classic trick for ABS and ASA and for large flat parts; a corner is sharp when its angle is at
   most 100°, so a box gets an ear on each corner and a cylinder gets none, and the discs are cut off
   after printing
+- **Support Blocker and Support Enforcer** (3D Printing): two volumes that tell the support of
+  the print what to do, where no slicer setting can reach. *Add Support Blocker* and *Add Support
+  Enforcer* put a cube of 20 mm in the model - against the face you selected, or standing on the
+  middle of the bed when you selected nothing - and Move and Scale bring it where you mean it; the
+  Role row of Entity Info says and changes what a group is. A blocker is a volume the support may
+  not enter (CuraEngine's `anti_overhang_mesh`) and an enforcer is a volume that becomes support,
+  also when the print has support switched off (`support_mesh` and `support_mesh_drop_down`). The
+  3D view draws them see-through red and green, they travel in the .volura file with the role of
+  the group, and they are no part: an export as STL, OBJ, STEP or 3MF holds only the parts, and
+  Print Check, the print time and the overhang, thin wall and tight fit views make nothing of them
 - **Orient for Printing** (3D Printing): turn the selected groups, or all visible ones, so
   that each stands on the face that needs the least support, like the auto-orient of a slicer; the
   flat sides of the convex hull are tried at the overhang limit, the largest face wins a tie, a part

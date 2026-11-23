@@ -414,7 +414,9 @@ class EntityInfoPanel(QWidget):
 
     def _group_form(self, form, g):
         doc = self.win.doc
-        form.addRow(QLabel(tr("<b>Group (printable part)</b>")))
+        role = ops.group_role(g)             # junk in a file reads as a printed part
+        form.addRow(QLabel(tr("<b>Group (printable part)</b>") if role == ops.ROLE_PART else
+                           tr("<b>Group ({role})</b>").format(role=tr(ops.ROLE_LABELS[role]))))
         name = QLineEdit(g.name)
 
         def rename():
@@ -439,6 +441,22 @@ class EntityInfoPanel(QWidget):
                 self._apply(lambda: setattr(doc.group(g.id), "color", c))
         combo.currentIndexChanged.connect(recolor)
         form.addRow(tr("Filament"), combo)
+        # what the group is in the print; a support volume is no part: the slicer only looks at the
+        # settings of its role (see `ops.ROLE_SETTINGS`) and exports nothing of it
+        roles = QComboBox()
+        for value in ops.ROLES:
+            roles.addItem(tr(ops.ROLE_LABELS[value]), value)
+        roles.setCurrentIndex(max(0, roles.findData(role)))
+        roles.setToolTip(tr("Part: this group prints. Support blocker: the support of the print may "
+                            "not come in this volume. Support enforcer: this volume becomes support, "
+                            "also when the print has support switched off."))
+
+        def retype(i):
+            group, value = doc.group(g.id), roles.itemData(i)
+            if group is not None and value and value != ops.group_role(group):
+                self._apply(lambda: ops.set_group_role(group, value))
+        roles.currentIndexChanged.connect(retype)
+        form.addRow(tr("Role"), roles)
         bb = g.bbox()
         if bb is None:
             return
