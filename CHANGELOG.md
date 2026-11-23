@@ -512,11 +512,11 @@ what they would have brought.
 - **Export to STEP** (File > Export > CAD Model (STEP)): the parts as solids for Fusion,
   FreeCAD, SolidWorks or Onshape, with real flat faces: a box is six faces and a hole is a hole
   in its face, not a fan of triangles. Every part is its own named body; a hollow part keeps its
-  hollow. (GitHub #2)
+  hollow. (GitHub #2, suggested by @ABB-JC-E)
 - **Fusion keys and mouse** (Window > Preferences > General > Keyboard and mouse): next to the
   SketchUp keys there is now a Fusion scheme, with Push/Pull on E and Q, Offset on O, Fillet on F,
   the Tape Measure on I, Zoom Extents also on F6, and the middle mouse button panning (with Shift
-  it orbits). Shortcuts you changed yourself stay as they are. (GitHub #1)
+  it orbits). Shortcuts you changed yourself stay as they are. (GitHub #1, suggested by @TCOPC)
 - **Hose adapter** (Draw > Parts): a reducer between two hoses or a hose and a fitting, with
   barbs, that prints upright without support.
 - **Fan guard** (Draw > Parts): a grille for a square fan of 40 to 140 mm with the screw holes

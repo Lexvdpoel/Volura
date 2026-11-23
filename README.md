@@ -1052,6 +1052,17 @@ Want to help with code, translations or documentation? Read [CONTRIBUTING.md](CO
 the [Code of Conduct](CODE_OF_CONDUCT.md). [ACCESSIBILITY.md](ACCESSIBILITY.md) says what Volura offers for
 keyboard, sight and other needs, what does not work well yet, and how to report a barrier.
 
+### Thanks
+
+Volura is built together with its users. Everyone whose idea or report led to a change that was
+released is thanked here and next to that change in the [changelog](CHANGELOG.md):
+
+- [@TCOPC](https://github.com/TCOPC): the Fusion keys and mouse scheme ([#1](https://github.com/Lexvdpoel/Volura/issues/1))
+- [@ABB-JC-E](https://github.com/ABB-JC-E): export to STEP ([#2](https://github.com/Lexvdpoel/Volura/issues/2))
+- [@el-rayo-ex](https://github.com/el-rayo-ex): the Windows Defender report that led to SHA-256 checksums for every release, the privacy statement and the application for code signing ([discussion #3](https://github.com/Lexvdpoel/Volura/discussions/3))
+
+Code that you contribute through a pull request puts you in GitHub's list of contributors as well.
+
 ## License
 
 MIT, see [LICENSE](LICENSE). © 2026 L. van der Poel.
