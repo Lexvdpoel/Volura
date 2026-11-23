@@ -896,10 +896,13 @@ python packaging/build.py
 | Linux | `dist/Volura/Volura` + `volura.desktop` and `install.sh` | `dist/Volura-linux-x86_64.tar.gz` |
 
 `build.py` makes the Windows installer with [Inno Setup 6](https://jrsoftware.org/isinfo.php) when it
-is installed (`packaging/windows/volura.iss`). PyInstaller cannot cross-compile: build on the
-platform you are building for. The GitHub Actions workflow in `.github/workflows/build.yml` builds
-and tests both platforms automatically (Python 3.12, tests with `QT_QPA_PLATFORM=offscreen`) and
-attaches the installer, the zip and the tar.gz to a release for a `v*` tag.
+is installed (`packaging/windows/volura.iss`). It also writes the version information of
+`Volura.exe` and of that installer (product name, version and publisher, as Right-click >
+Properties > Details shows them and the antivirus reputation systems look at them) from the
+version in `volura/__init__.py`. PyInstaller cannot cross-compile: build on the platform you are
+building for. The GitHub Actions workflow in `.github/workflows/build.yml` builds and tests both
+platforms automatically (Python 3.12, tests with `QT_QPA_PLATFORM=offscreen`) and attaches the
+installer, the zip and the tar.gz to a release for a `v*` tag.
 
 Releasing a new version: raise `__version__` in `volura/__init__.py`, add a `## x.y.z — date` section
 to `CHANGELOG.md` (the release notes are taken from it), commit, and push a tag with the

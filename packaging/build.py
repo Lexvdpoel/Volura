@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -29,6 +30,9 @@ ASSETS = ROOT / "assets"
 LINUX_DIR = ROOT / "packaging" / "linux"
 LINUX_EXTRA = ("volura.desktop", "install.sh")
 INSTALLER = ROOT / "packaging" / "windows" / "volura.iss"
+#: the copyright of Volura.exe and of the installer, as shown under Properties > Details;
+#: packaging/windows/volura.iss repeats it, tests/test_packaging_version.py checks they agree
+LEGAL_COPYRIGHT = "(c) 2026 L. van der Poel, MIT License"
 
 SYSTEMS = {"win32": "windows", "linux": "linux", "darwin": "macos"}
 ARCHES = {"amd64": "x86_64", "x64": "x86_64", "x86_64": "x86_64", "i386": "x86",
@@ -51,11 +55,83 @@ def icon(system):
     return path if path is not None and path.is_file() else None
 
 
+def version_numbers(text):
+    """(0, 2, 79, 0) from "0.2.79"; the leading numbers of "0.2.80.dev1" or "1.0rc1", padded with 0."""
+    numbers = []
+    for part in text.split("."):
+        digits = re.match(r"\d+", part)
+        if digits is None:
+            break
+        numbers.append(int(digits.group()))
+    return tuple((numbers + [0, 0, 0, 0])[:4])
+
+
+def version_info_text(version):
+    """The version information of Volura.exe: the product name, version and publisher that
+    Properties > Details shows and that antivirus and code-signing services look at.
+
+    The text format of PyInstaller's --version-file; only Windows has such a resource in its
+    executables, so the Linux and macOS builds do not use this.
+    """
+    vers = version_numbers(version)
+    fields = [("CompanyName", "Volura"),
+              ("FileDescription", "Volura"),
+              ("FileVersion", version),
+              ("InternalName", "Volura"),
+              ("LegalCopyright", LEGAL_COPYRIGHT),
+              ("OriginalFilename", "Volura.exe"),
+              ("ProductName", "Volura"),
+              ("ProductVersion", version)]
+    structs = ",\n        ".join(f"StringStruct({key!r}, {value!r})" for key, value in fields)
+    return f"""# UTF-8
+#
+# The version information of Volura.exe, written by packaging/build.py from the version in
+# volura/__init__.py for PyInstaller's --version-file.
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers={vers!r},
+    prodvers={vers!r},
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable(
+        '040904B0',
+        [
+        {structs}
+        ]
+      )
+    ]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)
+"""
+
+
+def win32_version_file(system):
+    """build/volura_version_info.txt for PyInstaller's --version-file; the other systems give
+    None, since only a Windows executable carries version information."""
+    if system != "windows":
+        return None
+    path = ROOT / "build" / "volura_version_info.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(version_info_text(version()), encoding="utf-8")
+    return path
+
+
 def pyinstaller(system):
     cmd = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed"]
     ic = icon(system)
     if ic is not None:
         cmd += ["--icon", str(ic)]
+    vf = win32_version_file(system)
+    if vf is not None:
+        cmd += ["--version-file", str(vf)]
     cmd += [
         "--name", "Volura",
         "--add-data", f"{ASSETS / 'volura.png'}{os.pathsep}assets",

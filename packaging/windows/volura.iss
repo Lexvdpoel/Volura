@@ -45,6 +45,10 @@ RestartApplications=no
 ChangesAssociations=yes
 VersionInfoVersion={#AppVersion}
 VersionInfoProductName={#AppName}
+; the same version information that packaging/build.py puts into Volura.exe itself
+VersionInfoCompany={#AppName}
+VersionInfoDescription={#AppName}
+VersionInfoCopyright=(c) 2026 L. van der Poel, MIT License
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
