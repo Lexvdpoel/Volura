@@ -3,6 +3,17 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.81 — 2026-11-24
+
+### New
+- **Cookie Cutter** (*Draw > Parts > Home and Desk*): turn shapes from the worksheet, an SVG or DXF
+  drawing or text into a cookie or clay cutter, with a sharp cutting edge and a grip flange it
+  prints on. It can also stamp the lines inside the outline into the dough.
+
+### Fixed
+- **2D worksheet**: the cursor position no longer covers the 3D | 2D switch at the bottom right,
+  so you can click it again to go back to the 3D model.
+
 ## 0.2.80 — 2026-11-24
 
 ### New
