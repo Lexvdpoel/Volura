@@ -72,6 +72,10 @@ SVG = {
     "text3d": f'<path d="M8 19 L14.5 4 L21 19 M10.9 13.5 L18.1 13.5" {N} stroke="#8fa6c3" '
               f'stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'
               f'<path d="M3 21 L9.5 6 L16 21 M6.4 15.5 L13.6 15.5" {N} {S(w=2.2)}/>',
+    # text on a face: a letter standing on the top face of a part, so it belongs to that part
+    "face_text": f'<path d="M3 14 L10 10.5 L21 13.5 L14 18 Z" fill="#e8eef7" {S()}/>'
+                 f'<path d="M8.4 15.4 L12.2 7.4 L16 16 M9.9 13.4 L14.9 14.6" {N} stroke="#8fa6c3" '
+                 f'stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/>',
     "pushpull": f'<path d="M4 13 L12 17 L20 13 L20 18 L12 22 L4 18 Z" fill="#b8c9de" {S()}/>'
                 f'<path d="M4 13 L12 9 L20 13 L12 17 Z" fill="#e8eef7" {S()}/>'
                 f'<path d="M12 13 L12 2 M8.5 5.5 L12 2 L15.5 5.5" {N} stroke="#d23b3b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',

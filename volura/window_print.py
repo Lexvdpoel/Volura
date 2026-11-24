@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 
 from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,
                cable_chain, cable_clip, cable_comb, cable_winder, calibration_cube, card_holder,
-               coaster, desk_hook, door_wedge, drawer_organizer, enclosure, fan_guard,
+               coaster, desk_hook, door_wedge, drawer_organizer, enclosure, face_text, fan_guard,
                fileio, filament_clip, first_layer_test, flow_rate_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
                label_plate, lithophane, max_speed_test, ops, paint_split, pegboard, pen_cup,
@@ -47,7 +47,8 @@ from .part_dialogs import (BagClipDialog, BatteryHolderDialog, BinRackDialog,
                            BitHolderDialog, BracketDialog,
                            CableChainDialog, CableClipDialog, CableCombDialog, CableWinderDialog,
                            CardHolderDialog, CoasterDialog, DeskHookDialog, DoorWedgeDialog,
-                           DrawerOrganizerDialog, FanGuardDialog, FilamentClipDialog,
+                           DrawerOrganizerDialog, FaceTextDialog, FanGuardDialog,
+                           FilamentClipDialog,
                            GridfinityDialog, GrommetDialog, HexKeyHolderDialog,
                            HingeDialog, HoseAdapterDialog, KnobDialog, LabelPlateDialog,
                            LithophaneDialog, PegboardDialog, PenCupDialog, PhoneStandDialog,
@@ -513,6 +514,97 @@ class PrintMixin:
 
         background.run(self, work, text=tr("Building the 3D text…"), on_done=done,
                        on_error=failed)
+
+    # ------------------------------------------------------------ text or logo on a face
+    def _face_text_face(self):
+        """(group, fid) of the one flat face that is selected, or None.
+
+        The shape goes on a face of a printed part, so exactly one face of one group has to be
+        selected: the middle of that face and its reading direction are where the shape lands.
+        Loose geometry has no part to carry it, and several faces would not say which one was
+        meant. A face that is not flat is left out too: a shape cannot stand on a face that is not
+        a plane, and a cylinder is a wall of facets, each of them tilted a little.
+        """
+        doc = self.doc
+        faces = [(ctx, i) for k, ctx, i in doc.selection if k == "f"]
+        if len(faces) != 1:
+            return None
+        ctx, fid = faces[0]
+        g, ents = doc.group(ctx), doc.ents(ctx)
+        if g is None or ents is None or fid not in ents.F:
+            return None
+        return (g, fid) if face_text.flat(ents, fid) else None
+
+    def face_text_dialog(self):
+        """Tools > Modify > Text or Logo on Face…: letters or a drawing raised or engraved on the
+        flat face that is selected on a part."""
+        face = self._face_text_face()
+        if face is None:
+            self.view.set_status(tr("First select one flat face of a part."))
+            return None
+        g, fid = face
+        if g.locked:
+            self.warn_locked()
+            return None
+        dlg = FaceTextDialog(self, g, fid)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        spec = dlg.spec()
+        self.settings.face_text_source = spec.source
+        self.settings.face_text_mode = spec.mode
+        self.settings.face_text_file = spec.file
+        self.settings.face_text_width = spec.width
+        self.settings.face_text_relief = spec.relief
+        self.settings.face_text_rotation = spec.rotation
+        self.settings.face_text_offset_x = spec.offset_x
+        self.settings.face_text_offset_y = spec.offset_y
+        # what every part wears is the color of that part, so only a real choice is remembered
+        self.settings.face_text_color = (
+            "" if spec.color.lower() == str(g.color or "").lower() else spec.color)
+        self.settings.text3d_text = str(spec.text).strip()
+        self.settings.text3d_family = str(spec.family)
+        self.settings.text3d_height = spec.height
+        self.settings.text3d_bold = spec.bold
+        self.settings.save()
+        made = self._apply_face_text(g, fid, spec)
+        self.setFocus()
+        return made
+
+    def _apply_face_text(self, g, fid, spec):
+        """The new geometry of `g`, with the shape of `spec` on the face `fid`: one undo step.
+
+        The part is a closed volume that is grown or cut, and letters are hundreds of contours, so
+        this is work for the background like the screw hole does, and the window keeps responding.
+        The name, the color and what the part remembers stay with it; the group is selected again
+        afterwards, because the shape belongs to it now, and the faces of a raised shape wear the
+        color that was picked for them while the faces of the part keep the color they had. A part
+        that is not a closed volume, an
+        engraving deeper than the part is thick under the face and a shape that would leave nothing
+        of the part are refused here, in the words of the core, in the status bar.
+        """
+        doc = self.doc
+        raised = spec.mode != "engraved"
+
+        def work(report):
+            report(0.1, tr("Building the shape…"))
+            return face_text.change(g, fid, spec)
+
+        def done(ents):
+            doc.checkpoint()                # one undo takes the shape away again
+            g.ents = ents
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(
+                tr("The shape is raised on {name}.").format(name=g.name) if raised
+                else tr("The shape is engraved in {name}.").format(name=g.name))
+
+        def failed(exc):
+            self.view.set_status(tr("Text or logo on face failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the shape…"), on_done=done,
+                       on_error=failed)
+        return g
 
     # ------------------------------------------------------------ cable clip
     def cable_clip_dialog(self):

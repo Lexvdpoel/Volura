@@ -1197,6 +1197,39 @@ volura</code></pre>
     </ul>
     <p class="note" lang="en">What you chose last is remembered, and one undo takes the hole out again.</p>
     <p class="note" lang="nl">Wat je het laatst koos wordt onthouden en met één keer ongedaan maken is het gat weer weg.</p>
+    <h3><span lang="en">Text or logo on a face</span><span lang="nl">Tekst of logo op een vlak</span></h3>
+    <p lang="en">Puts letters or a drawing on one flat face of a part: standing up as a relief, or engraved as deep into the part.</p>
+    <p lang="nl">Zet letters of een tekening op één vlak van een onderdeel: opgaand als reliëf, of net zo diep in het onderdeel gegraveerd.</p>
+    <p class="where" lang="en">Where: <b>Tools &gt; Modify &gt; Text or Logo on Face…</b></p>
+    <p class="where" lang="nl">Waar: <b>Gereedschap &gt; Aanpassen &gt; Tekst of logo op vlak…</b></p>
+    <ul lang="en">
+      <li><b>Select one flat face of a part</b> first; the dialog says so when it sees a whole part, two faces or a face that is bent.</li>
+      <li><b>Text</b> takes the letters of <i>3D text</i>: your text in any font of your computer, several lines, bold when you like it that way.</li>
+      <li><b>Drawing (SVG or DXF)</b> is scaled to the <b>Width</b> you type; the height scales along with it and the holes in the drawing stay holes, so the o of a logo keeps its middle.</li>
+      <li>The shape goes into the <b>middle of the face</b> and reads the way that face reads: along x on a lid, along the long edge of a wall, and always upright and never mirrored.</li>
+      <li><b>Rotation</b> turns the shape in the face, <b>Offset along</b> and <b>Offset up</b> slide it over the face; nothing of it moves through the part.</li>
+      <li><b>Raised</b> stands the shape <b>Relief</b> millimetres over the face and makes the part that much bigger; <b>Engraved</b> cuts it <b>Depth</b> millimetres into the part and leaves the outside where it was.</li>
+      <li>While you type, what you are about to make is drawn in the model as a ghost: light blue for a relief, another colour for a pocket.</li>
+      <li>The dialog tells you when the shape hangs over the edge of the face, but does not forbid it; the part is cut and joined where the shape goes.</li>
+      <li>Refused is an engraving deeper than the part is thick under that face, because a pocket above a hole through the part has nothing under it, and a shape that would eat the whole part.</li>
+      <li><b>Colour</b> is the filament colour the raised shape wears. It starts at the colour of the part, what you pick is remembered, and a face of the part that was painted keeps its paint.</li>
+      <li>An engraving needs no colour of its own: the wall and the floor of the pocket are the material they are cut from, so that field is only there for a relief.</li>
+    </ul>
+    <ul lang="nl">
+      <li><b>Selecteer eerst één vlak van een onderdeel</b>; het venster zegt het als het een heel onderdeel, twee vlakken of een krom vlak ziet.</li>
+      <li><b>Tekst</b> gebruikt de letters van <i>3D-tekst</i>: je tekst in elk lettertype op je computer, met meerdere regels, vet als je dat wilt.</li>
+      <li><b>Tekening (SVG of DXF)</b> wordt geschaald naar de <b>Breedte</b> die je intypt; de hoogte schaalt mee en de gaten in de tekening blijven gaten, dus een o uit een logo houdt zijn midden.</li>
+      <li>De vorm gaat naar het <b>midden van het vlak</b> en leest zoals dat vlak leest: over x op een deksel, langs de lange rand van een wand, en altijd rechtop en nooit gespiegeld.</li>
+      <li><b>Rotatie</b> draait de vorm in het vlak, <b>Verschuiven langs</b> en <b>Verschuiven omhoog</b> schuiven eroverheen; niets ervan beweegt door het onderdeel heen.</li>
+      <li><b>Verhoogd</b> zet de vorm <b>Reliëf</b> millimeter boven het vlak en maakt het onderdeel zo veel groter; <b>Gegraveerd</b> snijdt <b>Diepte</b> millimeter in het onderdeel en laat de buitenkant waar die was.</li>
+      <li>Terwijl je typt, staat wat je gaat maken als spookbeeld in het model: lichtblauw voor reliëf, een andere kleur voor een kuil.</li>
+      <li>Het venster zegt het als de vorm buiten de rand van het vlak uitsteekt, maar verbiedt het niet; het onderdeel wordt gesneden en aangevuld waar de vorm komt.</li>
+      <li>Afgeslagen wordt een gravure dieper dan het onderdeel dik is onder dat vlak, want een kuil boven een gat door het onderdeel heeft niets onder zich, en een vorm die het hele onderdeel opetert.</li>
+      <li><b>Kleur</b> is de filamentkleur die de verhoogde vorm draagt. Hij begint bij de kleur van het onderdeel, wat je kiest wordt onthouden en een geverfd vlak van het onderdeel houdt zijn verf.</li>
+      <li>Een gravure heeft geen eigen kleur nodig: de wand en de bodem van de kuil zijn het materiaal waaruit ze gesneden zijn, dus dat veld is er alleen bij een verhoging.</li>
+    </ul>
+    <p class="note" lang="en">What you chose last is remembered, on a big part the shape is built in the background, and one undo takes the shape off the face again.</p>
+    <p class="note" lang="nl">Wat je het laatst koos wordt onthouden, op een groot onderdeel wordt de vorm op de achtergrond gemaakt, en met één keer ongedaan maken is de vorm weer van het vlak af.</p>
     <h3><span lang="en">Outer shell</span><span lang="nl">Buitenschil</span></h3>
     <p lang="en">Turns loose or overlapping parts into one solid, without the walls inside.</p>
     <p lang="nl">Maakt van losse of overlappende delen één volume, zonder de wanden binnenin.</p>

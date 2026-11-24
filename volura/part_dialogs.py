@@ -4,25 +4,32 @@ The spur gear, the project box, the knob, the standoff, the label plate, the 3D 
 clip, the print-in-place hinge, the snap-fit clip, the battery holder, the storage bin and its
 wall rack. Each one starts at the values of Settings and remembers the new ones; the actions that
 open them and the models they build live in `volura/app.py`.
+
+The dialog of the text or the logo that goes on a face of a part lives here too: it is not a part
+of its own, but it is built the same way, with the same fields for the letters and the same way of
+remembering what was chosen.
 """
 from __future__ import annotations
 
 import os
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QImage, QPixmap
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-                               QFileDialog, QFontComboBox, QFormLayout, QHBoxLayout, QLabel,
-                               QLineEdit, QPlainTextEdit, QPushButton, QSpinBox)
+from PySide6.QtGui import QColor, QFont, QImage, QPixmap
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QColorDialog, QDialog, QDialogButtonBox,
+                               QDoubleSpinBox, QFileDialog, QFontComboBox, QFormLayout,
+                               QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton,
+                               QSpinBox, QWidget)
 
 from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
                cable_comb, cable_winder, card_holder, coaster, desk_hook, door_wedge,
-               drawer_organizer, enclosure, fan_guard, filament_clip, fonts, gears, gridfinity,
-               grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
-               pegboard, pen_cup, phone_stand, plant_label, plant_pot, screw_jar, snap_fit,
-               soap_dish, spool_adapter, standoff, storage_bin, text3d, theme, threads,
-               tie_mount, wall_hook)
+               drawer_organizer, enclosure, face_text, fan_guard, filament_clip, fonts, gears,
+               gridfinity, grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate,
+               lithophane, pegboard, pen_cup, phone_stand, plant_label, plant_pot, screw_jar,
+               snap_fit, soap_dish, spool_adapter, standoff, storage_bin, text3d, theme, threads,
+               tie_mount, vector_import, wall_hook)
+from .geom import MeshData
 from .i18n import tr
+from .panels import swatch
 
 
 class SpurGearDialog(QDialog):
@@ -579,9 +586,224 @@ class Text3DDialog(QDialog):
                 "inside": bool(self.inside.isChecked())}
 
 
+#: the ghost of the shape over the model: blue when it stands on the face, red when it goes in
+RAISED_COLOR, ENGRAVED_COLOR = (0.35, 0.6, 1.0), (0.95, 0.3, 0.25)
+
+
+class FaceTextDialog(QDialog):
+    """The "Text or Logo on Face…" dialog: letters or a drawing on a face that is already there.
+
+    Here the text is not the part: it goes on one flat face of a part that is already in the model,
+    so the dialog asks where the shape comes from - the letters of a text, or the filled shapes of
+    an SVG or DXF drawing scaled to the width that is asked for - and whether it stands `relief`
+    millimetres on the face or is cut `relief` millimetres into it. The two are read differently: a
+    relief is a height that catches the light, an engraving may not go past the surface, so the same
+    field is called "Relief" or "Depth" and the ghost above the model is blue or red.
+
+    The rotation and the two offsets place the shape *on* the face: it reads along the reading
+    direction of that face - the way the text of the sheet reads over a horizontal face and the way
+    a box reads over its front - and stands in the middle of it unless it is moved. The ghost is
+    shown over the model while the fields are touched, because whether a logo is big enough and
+    stands where it belongs is judged in the model, not beside the fields. What stands out over the
+    edge of the face is said but not forbidden, because a logo that is cut by the edge is sometimes
+    exactly what was meant; a pocket deeper than the part is thick under that face is refused,
+    because it would come out at the back. A raised shape wears a color of its own, picked here and
+    started at the color of the part, so a name in another filament prints as one part with two
+    colors; an engraving needs no color, because the pocket is the material it is cut in, so that
+    field is only shown for a relief. The values come from Settings, and the text, the font
+    and the height are those of 3D text, because they are the same letters.
+    """
+
+    def __init__(self, win, g, fid):
+        super().__init__(win)
+        self.win, self.g, self.fid = win, g, fid
+        s = win.settings
+        self.setWindowTitle(tr("Text or Logo on Face"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5, suffix=" mm"):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(suffix)
+            sp.setValue(float(value))
+            sp.valueChanged.connect(self._changed)
+            return sp
+
+        self.part = QLabel(str(g.name))
+        self.source = QComboBox()
+        for label, key in ((tr("Text"), "text"), (tr("Drawing (SVG or DXF)"), "drawing")):
+            self.source.addItem(label, key)
+        self.source.setCurrentIndex(max(0, self.source.findData(s.face_text_source)))
+        self.source.setToolTip(tr("Whether the shape is made of letters or comes from a drawing"))
+        self.text = QPlainTextEdit()
+        self.text.setPlainText(s.text3d_text)
+        self.text.setTabChangesFocus(True)
+        self.text.setFixedHeight(56)
+        self.text.setToolTip(tr("The text on the face; Enter starts the next line"))
+        self.family = QFontComboBox()
+        self.family.setCurrentFont(QFont(s.text3d_family or fonts.default_family()))
+        self.family.setToolTip(tr("The font of the letters"))
+        self.height = spin(text3d.HEIGHT_MIN, text3d.HEIGHT_MAX, s.text3d_height, 1.0)
+        self.height.setToolTip(tr("The height of a capital letter, which is what text is read by"))
+        self.bold = QCheckBox(tr("Bold"))
+        self.bold.setChecked(bool(s.text3d_bold))
+        self.bold.setToolTip(tr("Thicker strokes, which read from further away and wear less"))
+        self.file = QLineEdit(str(s.face_text_file))
+        self.file.setPlaceholderText(tr("An SVG or DXF file"))
+        self.file.setToolTip(tr("The drawing to put on the face; the holes in it stay holes"))
+        browse = QPushButton(tr("Browse…"))
+        browse.clicked.connect(self._browse)
+        where = self.drawing_row = QWidget()
+        row = QHBoxLayout(where)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(self.file)
+        row.addWidget(browse)
+        self.width = spin(face_text.WIDTH_MIN, face_text.WIDTH_MAX, s.face_text_width, 1.0)
+        self.width.setToolTip(tr("How wide the drawing becomes on the face; its height scales "
+                                 "along with it"))
+        self.mode = QComboBox()
+        for label, key in ((tr("Raised"), "raised"), (tr("Engraved"), "engraved")):
+            self.mode.addItem(label, key)
+        self.mode.setCurrentIndex(max(0, self.mode.findData(s.face_text_mode)))
+        self.mode.setToolTip(tr("Whether the shape stands on the face or is cut into it"))
+        self.relief = spin(face_text.RELIEF_MIN, face_text.RELIEF_MAX, s.face_text_relief, 0.1)
+        start = QColor(str(s.face_text_color or ""))
+        if not start.isValid():
+            # nothing picked yet: a raised shape starts out wearing the color of the part itself
+            start = QColor(str(g.color or ""))
+        self._color = start.name() if start.isValid() else ""
+        self.color = QPushButton(self._color)
+        self.color.setIcon(swatch(self._color, 20))
+        self.color.setToolTip(tr("The color the raised shape wears; an engraving wears the color "
+                                 "of the part it is cut in"))
+        self.color.clicked.connect(self._choose_color)
+        self.rotation = spin(face_text.ROTATION_MIN, face_text.ROTATION_MAX,
+                             s.face_text_rotation, 5.0, " °")
+        self.rotation.setToolTip(tr("How far the shape turns about the normal of the face; the "
+                                    "letters always hang right way up on the face"))
+        self.offset_x = spin(-1000.0, 1000.0, s.face_text_offset_x)
+        self.offset_x.setToolTip(tr("How far the shape moves over the face, along the direction "
+                                    "it reads in"))
+        self.offset_y = spin(-1000.0, 1000.0, s.face_text_offset_y)
+        self.offset_y.setToolTip(tr("How far the shape moves over the face, up that face"))
+        self.info = QLabel()
+        self.info.setWordWrap(True)
+        lay.addRow(tr("Part"), self.part)
+        lay.addRow(tr("Shape"), self.source)
+        lay.addRow(tr("Text"), self.text)
+        lay.addRow(tr("Font"), self.family)
+        lay.addRow(tr("Text height"), self.height)
+        lay.addRow("", self.bold)
+        lay.addRow(tr("Drawing file"), where)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Style"), self.mode)
+        lay.addRow(tr("Relief"), self.relief)
+        lay.addRow(tr("Color"), self.color)
+        lay.addRow(tr("Rotation"), self.rotation)
+        lay.addRow(tr("Offset along"), self.offset_x)
+        lay.addRow(tr("Offset up"), self.offset_y)
+        lay.addRow("", self.info)
+        self.bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.bb.accepted.connect(self.accept)
+        self.bb.rejected.connect(self.reject)
+        lay.addRow(self.bb)
+        self.source.currentIndexChanged.connect(self._changed)
+        self.mode.currentIndexChanged.connect(self._changed)
+        self.text.textChanged.connect(self._changed)
+        self.file.textChanged.connect(self._changed)
+        self.bold.toggled.connect(self._changed)
+        self._changed()
+
+    def _browse(self):
+        """The two formats a drawing comes in, the same ones an import takes."""
+        path, _filter = QFileDialog.getOpenFileName(
+            self, tr("Drawing file"), os.path.dirname(self.file.text().strip()),
+            tr("Vector drawings") + " (" + " ".join("*" + ext
+                                                    for ext in vector_import.VECTOR_EXTENSIONS)
+            + ")")
+        if path:
+            self.file.setText(path)
+
+    def _choose_color(self):
+        """The color of the raised shape, with the picker the Materials panel uses too."""
+        c = QColorDialog.getColor(QColor(self._color), self, tr("Color of the shape"))
+        if c.isValid():
+            self.pick_color(c.name())
+
+    def pick_color(self, color):
+        """Wear `color` on the raised shape; nothing at all means the color of the part itself."""
+        c = QColor(str(color or ""))
+        self._color = c.name() if c.isValid() else ""
+        self.color.setIcon(swatch(self._color, 20))
+        self.color.setText(self._color)
+
+    def spec(self) -> face_text.Spec:
+        """What goes on the face now, as the core of the feature reads it."""
+        return face_text.Spec(source=str(self.source.currentData()),
+                              mode=str(self.mode.currentData()),
+                              text=self.text.toPlainText(),
+                              family=str(self.family.currentFont().family()),
+                              height=round(self.height.value(), 6),
+                              bold=bool(self.bold.isChecked()),
+                              file=self.file.text().strip(),
+                              width=round(self.width.value(), 6),
+                              relief=round(self.relief.value(), 6),
+                              rotation=round(self.rotation.value(), 6),
+                              offset_x=round(self.offset_x.value(), 6),
+                              offset_y=round(self.offset_y.value(), 6),
+                              color=self._color)
+
+    def _changed(self, *_):
+        """The ghost of the shape over the model, and what the dialog has to say about it.
+
+        A shape that cannot be built at all - no text, a file that is not there, a drawing with
+        nothing closed in it - is said in the same line as a shape that hangs over the edge of the
+        face, and takes OK away; the first is nothing to press OK with and the second is only
+        something to know. Whether an engraving is deeper than the part is thick under the face is
+        not asked here: that is asked of the part, which can be work, so OK answers it and the
+        window says it in the status bar.
+        """
+        spec = self.spec()
+        text = spec.source == "text"
+        for w in (self.text, self.family, self.height, self.bold):
+            self.layout().setRowVisible(w, text)
+        for w in (self.drawing_row, self.width):
+            self.layout().setRowVisible(w, not text)
+        self.layout().setRowVisible(self.color, spec.mode != "engraved")
+        self.layout().labelForField(self.relief).setText(
+            tr("Depth") if spec.mode == "engraved" else tr("Relief"))
+        try:
+            check = face_text.preview(self.g, self.fid, spec)
+        except ValueError as exc:
+            self.win.view.clear_overlay_solid()
+            self._note(str(exc), True)
+            self.bb.button(QDialogButtonBox.Ok).setEnabled(False)
+            return
+        self.win.view.set_overlay_solid(
+            None if check.shape.is_empty() else MeshData(check.shape),
+            ENGRAVED_COLOR if spec.mode == "engraved" else RAISED_COLOR)
+        self._note("" if check.on_face else
+                   tr("The shape stands out over the edge of the face."), not check.on_face)
+        self.bb.button(QDialogButtonBox.Ok).setEnabled(True)
+
+    def _note(self, text, bad):
+        """A line under the fields: amber when something is off, plain when it is gone again."""
+        self.info.setStyleSheet(f"color: {theme.color('warn')};" if bad else "")
+        self.info.setText(text)
+
+    def done(self, result):
+        self.win.view.clear_overlay_solid()
+        super().done(result)
+
+    def closeEvent(self, event):
+        self.win.view.clear_overlay_solid()
+        super().closeEvent(event)
+
+
 class CableClipDialog(QDialog):
     """The "Cable Clip…" dialog: a printable clip that holds a cable against a wall or a desk.
-
     A clip is made for one cable, so the dialog starts with what it has to hold: the diameter of
     the cable or the bundle. The width is how high the clip stands, since it prints lying on its
     side, and the wall is the ring that springs back behind the cable. The opening is the mouth as

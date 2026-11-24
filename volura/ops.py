@@ -196,9 +196,12 @@ def simplify_group(doc: Document, g: Group, tolerance):
     return before, after
 
 
-def closed_manifold(g: Group):
-    """The Manifold of `g`; a ValueError with its name when it is not a closed volume."""
-    m = g.ents.to_manifold()
+def closed_manifold(g: Group, face_ids=None):
+    """The Manifold of `g`; a ValueError with its name when it is not a closed volume.
+
+    `face_ids` ({face: int}) tags the triangles like `Entities.to_manifold` does, for a caller
+    that wants to know afterwards which face a triangle of a boolean came from."""
+    m = g.ents.to_manifold(face_ids=face_ids)
     if m.status() != mf.Error.NoError or m.is_empty():
         raise ValueError(tr("{name} is not a closed volume.").format(name=g.name))
     return m

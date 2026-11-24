@@ -29,7 +29,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                cable_chain, cable_clip, cable_comb, cable_winder, calibrations, cam, card_holder,
                coaster,
                desk_hook, door_wedge, drawer_organizer,
-               dxf, enclosure, errors, fan_guard, filament_clip,
+               dxf, enclosure, errors, face_text, fan_guard, filament_clip,
                fileio, gcode, gcode_mill, gcode_thumbnail, gears, gridfinity, grommet,
                hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar, snap_fit,
@@ -811,6 +811,43 @@ class Settings:
         self.text3d_radius = max(text3d.RADIUS_MIN,
                                  min(text3d.RADIUS_MAX, self.text3d_radius))
         self.text3d_inside = self._bool("text3d_inside", False)
+        self.face_text_source = str(self.q.value("face_text_source", "text"))
+        if self.face_text_source not in face_text.SOURCES:
+            self.face_text_source = "text"
+        self.face_text_mode = str(self.q.value("face_text_mode", "raised"))
+        if self.face_text_mode not in face_text.MODES:
+            self.face_text_mode = "raised"
+        self.face_text_file = str(self.q.value("face_text_file", "")).strip()
+        try:
+            self.face_text_width = float(self.q.value("face_text_width", face_text.WIDTH_START))
+        except (TypeError, ValueError):
+            self.face_text_width = face_text.WIDTH_START
+        self.face_text_width = max(face_text.WIDTH_MIN,
+                                   min(face_text.WIDTH_MAX, self.face_text_width))
+        try:
+            self.face_text_relief = float(self.q.value("face_text_relief", 0.8))
+        except (TypeError, ValueError):
+            self.face_text_relief = 0.8
+        self.face_text_relief = max(face_text.RELIEF_MIN,
+                                    min(face_text.RELIEF_MAX, self.face_text_relief))
+        try:
+            self.face_text_rotation = float(self.q.value("face_text_rotation", 0.0))
+        except (TypeError, ValueError):
+            self.face_text_rotation = 0.0
+        self.face_text_rotation = max(face_text.ROTATION_MIN,
+                                      min(face_text.ROTATION_MAX, self.face_text_rotation))
+        try:
+            self.face_text_offset_x = float(self.q.value("face_text_offset_x", 0.0))
+        except (TypeError, ValueError):
+            self.face_text_offset_x = 0.0
+        try:
+            self.face_text_offset_y = float(self.q.value("face_text_offset_y", 0.0))
+        except (TypeError, ValueError):
+            self.face_text_offset_y = 0.0
+        self.face_text_color = str(self.q.value("face_text_color", "")).strip()
+        # empty means: the color of the part itself, which is only known when the dialog opens
+        if self.face_text_color and not QColor(self.face_text_color).isValid():
+            self.face_text_color = ""
         try:
             self.clip_cable_d = float(self.q.value("clip_cable_d", 6.0))
         except (TypeError, ValueError):
@@ -1774,6 +1811,15 @@ class Settings:
         self.q.setValue("text3d_path", self.text3d_path)
         self.q.setValue("text3d_radius", self.text3d_radius)
         self.q.setValue("text3d_inside", self.text3d_inside)
+        self.q.setValue("face_text_source", self.face_text_source)
+        self.q.setValue("face_text_mode", self.face_text_mode)
+        self.q.setValue("face_text_file", self.face_text_file)
+        self.q.setValue("face_text_width", self.face_text_width)
+        self.q.setValue("face_text_relief", self.face_text_relief)
+        self.q.setValue("face_text_rotation", self.face_text_rotation)
+        self.q.setValue("face_text_offset_x", self.face_text_offset_x)
+        self.q.setValue("face_text_offset_y", self.face_text_offset_y)
+        self.q.setValue("face_text_color", self.face_text_color)
         self.q.setValue("clip_cable_d", self.clip_cable_d)
         self.q.setValue("clip_width", self.clip_width)
         self.q.setValue("clip_wall", self.clip_wall)
@@ -2604,6 +2650,12 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           "text3d", False,
                           tr("Add a part made of letters to the model: your text in the font, "
                              "the height and the depth you choose, standing on the bed"))
+        # ---- text or a logo on a face of a part
+        self.a_face_text = A(tr("Text or Logo on &Face…"),
+                             lambda checked=False: self.face_text_dialog(), None,
+                             "face_text", False,
+                             tr("Raise text or an SVG or DXF drawing on a flat face of a part, or "
+                                "engrave it in that face: select one flat face of a part first"))
 
         self.a_extents = A(tr("Zoom Extents"), self.zoom_extents, ["Ctrl+Shift+E", "Shift+Z"],
                            "zoom_extents")
@@ -3415,6 +3467,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         threads_menu = sub(tr("&Screw Threads"), m,
                            (self.a_thread, self.a_thread_ext, self.a_thread_int,
                             self.a_thread_bolt, self.a_thread_nut))
+        modify = sub(tr("&Modify"), m, (self.a_face_text,))
         align = sub(tr("&Align"), m, tuple(self.sheet_align_actions.values()))
         distribute = sub(tr("&Distribute"), m, tuple(self.sheet_distribute_actions.values()))
         self.fill(m, only("3d", T["select"], T["eraser"], T["paint"], None,
@@ -3422,7 +3475,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           T["pushpull"], self.a_follow_me, T["offset"], None,
                           self.a_fillet, self.a_chamfer, None,
                           solids, cut_faces, self.a_shell, self.a_simplify, None,
-                          threads_menu, self.a_screw_hole, None,
+                          threads_menu, self.a_screw_hole, modify, None,
                           T["tape"], self.a_protractor, None,
                           T["text"], None,
                           self.a_to_sheet, self.a_to_laser)

@@ -15,6 +15,10 @@ Several **lines** go in one part: `\n` in the text starts the next line and the 
 each other: at the same left edge, centred, or at the same right edge; the whole block is centred
 on the origin, because that is where a part is placed.
 
+`plan` gives those same lines as closed outlines lying in the plane, centred on the origin, for
+someone who does not want a part of letters but letters on a face of another part; `text3d` is
+then nothing more than those outlines, extruded.
+
 On an **arc** the text follows a circle instead of a straight line. `radius` is the circle the
 letters stand on, their baseline; every letter is placed on its own and turned so that its baseline
 touches that circle in the middle of the room it takes, and the room of all letters together is
@@ -226,6 +230,44 @@ def _arc_text(s, face, h, d, bold, radius, inside):
     return mf.Manifold.batch_boolean(parts, mf.OpType.Add)
 
 
+def plan(text, family=None, height=10.0, bold=False, align="left",
+         line_spacing=LINE_SPACING) -> list[np.ndarray]:
+    """The lines of `text` as closed outlines lying in the plane, centred on the origin.
+
+    These are the same outlines `text3d` extrudes into a part, here without a thickness: every
+    outline is an (n, 2) array of millimetres and the holes of o, a and 8 are outlines too, so
+    whoever joins them into a cross section with the non-zero rule gets letters with holes in
+    them. `height` is the cap height of the letters, `bold` asks the font for its bold face,
+    `line_spacing` is the baseline distance of two lines as a multiple of that cap height and
+    `align` (one of `ALIGNMENTS`) says how the lines stand under each other. Text that draws
+    nothing, and a computer without a font, are refused the way `text3d` refuses them.
+    """
+    s = str(text or "")
+    if not s.strip():
+        raise ValueError(tr("3D text needs text"))
+    if align not in ALIGNMENTS:
+        raise ValueError(tr("unknown text alignment {align}").format(align=align))
+    h = min(HEIGHT_MAX, max(HEIGHT_MIN, float(height)))
+    sp = min(SPACING_MAX, max(SPACING_MIN, float(line_spacing)))
+    face = _face(family)
+    if not face:
+        raise ValueError(tr("No font found for the text."))
+    rows = _rows(s, face, h, bool(bold))
+    if not any(rows):
+        raise ValueError(tr("No font found for the text."))
+
+    # the lines as wide as the widest one, so align has something to line the lines up against
+    wide = [float(np.concatenate(row)[:, 0].max()) if row else 0.0 for row in rows]
+    block = max(wide) if wide else 0.0
+    edge = {"left": lambda w: 0.0, "centre": lambda w: 0.5 * (block - w),
+            "right": lambda w: block - w}[align]
+    loops = [np.ascontiguousarray(L + np.array([edge(w), -i * sp * h]), dtype=float)
+             for i, (row, w) in enumerate(zip(rows, wide)) for L in row]
+    ink = np.concatenate(loops)
+    mid = 0.5 * (ink.min(axis=0) + ink.max(axis=0))
+    return [np.ascontiguousarray(L - mid, dtype=float) for L in loops]
+
+
 def text3d(text, family=None, height=10.0, depth=3.0, bold=False, align="left",
            line_spacing=LINE_SPACING, path="straight", radius=RADIUS_START,
            inside=False) -> mf.Manifold:
@@ -247,31 +289,16 @@ def text3d(text, family=None, height=10.0, depth=3.0, bold=False, align="left",
     s = str(text or "")
     if not s.strip():
         raise ValueError(tr("3D text needs text"))
-    h = min(HEIGHT_MAX, max(HEIGHT_MIN, float(height)))
-    d = min(DEPTH_MAX, max(DEPTH_MIN, float(depth)))
     if align not in ALIGNMENTS:
         raise ValueError(tr("unknown text alignment {align}").format(align=align))
     if path not in PATHS:
         raise ValueError(tr("unknown text path {path}").format(path=path))
-    sp = min(SPACING_MAX, max(SPACING_MIN, float(line_spacing)))
-
-    face = _face(family)
-    if not face:
-        raise ValueError(tr("No font found for the text."))
+    d = min(DEPTH_MAX, max(DEPTH_MIN, float(depth)))
     if path == "arc":
+        face = _face(family)
+        if not face:
+            raise ValueError(tr("No font found for the text."))
+        h = min(HEIGHT_MAX, max(HEIGHT_MIN, float(height)))
         return _arc_text(s, face, h, d, bool(bold), radius, bool(inside))
-    rows = _rows(s, face, h, bool(bold))
-    if not any(rows):
-        raise ValueError(tr("No font found for the text."))
-
-    # the lines as wide as the widest one, so align has something to line the lines up against
-    wide = [float(np.concatenate(row)[:, 0].max()) if row else 0.0 for row in rows]
-    block = max(wide) if wide else 0.0
-    edge = {"left": lambda w: 0.0, "centre": lambda w: 0.5 * (block - w),
-            "right": lambda w: block - w}[align]
-    loops = [np.ascontiguousarray(L + np.array([edge(w), -i * sp * h]), dtype=float)
-             for i, (row, w) in enumerate(zip(rows, wide)) for L in row]
-    ink = np.concatenate(loops)
-    mid = 0.5 * (ink.min(axis=0) + ink.max(axis=0))
-    loops = [np.ascontiguousarray(L - mid, dtype=float) for L in loops]
+    loops = plan(s, family, height, bold, align, line_spacing)
     return mf.Manifold.extrude(mf.CrossSection(loops, mf.FillRule.NonZero), d)

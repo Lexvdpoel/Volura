@@ -319,6 +319,7 @@ class Viewport(QOpenGLWidget):
         self.hover = None               # ("face", obj, rid) | ("object", obj) | ("region", r) | ...
         self.preview_transform = None   # (ids, 4x4, keep_original)
         self.overlay_lines = []         # (pts, color, width) a dialog draws over the model
+        self.overlay_solid = None       # (MeshData, color, alpha) a dialog draws over the model
         self.problem_items = []         # items the Print Check panel marks in red
         self.labels = []                # (screen QPointF, text)
         self.markers = []               # (screen QPointF, inference kind)
@@ -473,6 +474,7 @@ class Viewport(QOpenGLWidget):
             self._draw_axes()
         self._draw_hover()
         self._draw_problems()
+        self._draw_overlay_solid()
         self._draw_overlay_lines()
         self.labels = []
         self.markers = []
@@ -1543,6 +1545,33 @@ class Viewport(QOpenGLWidget):
     def clear_overlay_lines(self):
         """What `set_overlay_lines` put over the model is gone again."""
         self.set_overlay_lines(())
+
+    def set_overlay_solid(self, md, color=(0.35, 0.6, 1.0), alpha=0.45):
+        """One see-through solid a dialog wants to see over the model, until it asks for nothing
+        again.
+
+        The shape "Text or Logo on Face…" puts on a face is shown this way: whether a logo is big
+        enough and stands where it should is judged in the model, not in a picture beside the
+        fields, and the user keeps turning the model round while they choose. It is drawn over the
+        model, so the engraving that is cut *in* the part is visible too.
+        """
+        self.overlay_solid = None if md is None else (md, tuple(color), float(alpha))
+        self.update()
+
+    def clear_overlay_solid(self):
+        """What `set_overlay_solid` put over the model is gone again."""
+        self.set_overlay_solid(None)
+
+    def _draw_overlay_solid(self):
+        """The see-through shape of a dialog: the ghost of a shape on a face of the model."""
+        if self.overlay_solid is None:
+            return
+        md, color, alpha = self.overlay_solid
+        gl.glDisable(gl.GL_DEPTH_TEST)        # also the part in front of it must let it through
+        try:
+            self.draw_solid_preview(md, color, alpha)
+        finally:
+            gl.glEnable(gl.GL_DEPTH_TEST)
 
     def _draw_overlay_lines(self):
         """The lines of a dialog: the toolpaths of the 3D mill and the like."""

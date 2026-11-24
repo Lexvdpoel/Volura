@@ -278,6 +278,15 @@ gets for free.
   on the outside they read clockwise over the top, the way a name stands on the lid of a round
   box, and on the inside they turn round with their feet outward and read counter clockwise under
   the bottom, the way text stands in a ring
+- **Text or Logo on Face** (Tools > Modify): letters or a drawing on a face of a part. Select one
+  flat face and the shape stands on it as a relief, or is engraved as deep into it. It lands in the
+  middle of the face and reads the way that face reads: along x on a lid, along the long edge of a
+  wall, and always upright and never mirrored. Turn it, slide it over the face, and watch it as a
+  ghost in the model before you accept; one undo takes it off again. A drawing comes from an SVG or
+  DXF file, scaled to the width you type, holes and all. Engraving deeper than the part is thick
+  under that face is refused. A raised shape wears a colour you pick — the colour of the part by
+  default — so a name in another filament prints as one part with two colours, and a face of the
+  part that was painted keeps its paint
 - **Cable Clip** (Draw > Parts): a printable clip that keeps a cable, a hose or a bundle
   where it belongs: a ring of the cable diameter with a mouth narrower than the cable, so you push
   the cable in and it stays, on a foot you screw to a wall or under a desk. The clip prints lying
