@@ -606,6 +606,7 @@ def slice_all(win, monkeypatch, sd, folder, stacks=None, real=False):
     return fake
 
 
+@needs_engine      # the slice dialog reads the printers from the Cura resources
 def test_slice_all_plates_writes_one_file_per_plate(win, monkeypatch, tmp_path):
     import volura.slice_dialog as sd
     add_cube(win.doc, (10.0, 10.0, 0.0), name="near")
@@ -631,6 +632,7 @@ def test_slice_all_plates_writes_one_file_per_plate(win, monkeypatch, tmp_path):
             "a plate went to the engine on its own bed"
 
 
+@needs_engine      # the slice dialog reads the printers from the Cura resources
 def test_slice_all_plates_skips_a_plate_without_parts(win, monkeypatch, tmp_path):
     import volura.slice_dialog as sd
     add_cube(win.doc, (10.0, 10.0, 0.0), name="near")
