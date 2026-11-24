@@ -3,6 +3,24 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.80 — 2026-11-24
+
+### New
+- **Support blockers and support enforcers**: under *Tools > Print Tools*, *Add Support Blocker*
+  puts a see-through red cube where support may not go, and *Add Support Enforcer* a green one where
+  support must go, also when support is off in *File > Slice*. Move and scale them like any part,
+  or give any group that role in *Entity Info*. They are never printed or exported.
+- **Text or a logo on a face** (*Tools > Modify > Text or Logo on Face…*): put text or an SVG or
+  DXF drawing on any flat face, raised in a colour of its own (for multicolour printing) or
+  engraved, with a live preview, a rotation and an offset.
+
+### Changed
+- **Every release lists the SHA-256 checksum** of each file in its release notes and in
+  `SHA256SUMS.txt`, so you can check that a download is the genuine build (thanks to @el-rayo-ex,
+  discussion #4).
+- **Volura.exe and the Windows installer carry a product name, version and publisher**
+  (*Properties > Details*), which antivirus reputation systems look at.
+
 ## 0.2.79 — 2026-11-22
 
 The build of 0.2.78 stopped on two of its own tests that were too quick for a busy build
