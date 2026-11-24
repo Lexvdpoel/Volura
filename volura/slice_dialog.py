@@ -29,11 +29,12 @@ from PySide6.QtCore import QSize, QStandardPaths, Qt
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
                                QFormLayout, QGroupBox, QHBoxLayout, QHeaderView, QInputDialog,
                                QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
-                               QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QWidget)
+                               QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout,
+                               QWidget)
 
-from . import (__version__, calibrations, cura_profiles, gcode_thumbnail, slice_presets,
-               slicer)
-from .i18n import tr, tr_noop
+from . import (__version__, calibrations, cura_profiles, gcode_thumbnail, plates,
+               slice_presets, slicer)
+from .i18n import tr, tr_noop, trn
 from .panels import swatch
 
 #: one library per resources folder, kept for the session: reading it takes a while
@@ -215,6 +216,11 @@ class SliceDialog(QDialog):
     the dialog turns them into the filament plan of `multicolor()`. `parts` is how many parts the
     print has, which is of interest to vase mode alone: Cura spirals every one of them.
 
+    A model that stands over more than one bed is sliced one bed at a time (see
+    `volura.plates`): `slice_plates` names the plates that hold parts and `slice_plate` is the
+    one chosen now. The dialog shows a row "Plate 2 of 3" above the Preset row, but only when
+    there is more than one plate to choose from; `slice_plate()` gives the choice back.
+
     The last choice is restored when the dialog opens and a choice you come back to is saved
     under a name above the Maker row (see `volura.slice_presets`); both go over the dialog
     through `apply_choice()`.
@@ -225,11 +231,17 @@ class SliceDialog(QDialog):
     #: in Settings: the presets of the user, and the name of the one chosen last
     PRESETS, PRESET = "slice_presets", "slice_preset"
 
-    def __init__(self, win, lib: cura_profiles.Library, colors=(), parts=1):
+    def __init__(self, win, lib: cura_profiles.Library, colors=(), parts=1,
+                 slice_plates=(), slice_plate=plates.FIRST):
         super().__init__(win)
         self.lib = lib
         self.colors = list(colors)
         self.parts = max(1, int(parts))
+        # the plates this model is spread over, and the one being sliced now
+        self._plate_list = sorted({plates.plate_number(one) for one in slice_plates}) or \
+            [plates.FIRST]
+        want = plates.plate_number(slice_plate)
+        self._plate = want if want in self._plate_list else self._plate_list[0]
         self.went_3mf = False
         self._boxes = []                        # the extruder box of every row of the table
         self._capped = {}                       # the speeds a calibration's maximum flow lowered
@@ -251,6 +263,13 @@ class SliceDialog(QDialog):
         line.addWidget(self.preset, 1)
         line.addWidget(self.b_preset_save)
         line.addWidget(self.b_preset_delete)
+        self.plate = QComboBox()          # which plate of the model this slice is for
+        self.plate_note = QLabel(tr("Plate"))
+        for one in self._plate_list:
+            self.plate.addItem(plates.label(one, len(self._plate_list)), one)
+        self.plate.setCurrentIndex(max(0, self._plate_list.index(self._plate)))
+        self.plate.setToolTip(tr("One plate is one bed of the printer; a printer prints one "
+                                 "plate after the other, so a slice is one plate too"))
         self.maker = QComboBox()
         self.printer_box = QComboBox()
         self.nozzle = QComboBox()
@@ -405,6 +424,7 @@ class SliceDialog(QDialog):
         self.change_cmd.setToolTip(tr("The G-code that asks the printer to change its filament"))
         self.info = QLabel()
         self.info.setWordWrap(True)
+        lay.addRow(self.plate_note, self.plate)
         lay.addRow(tr("Preset"), self.preset_row)
         lay.addRow(tr("Maker"), self.maker)
         lay.addRow(tr("Printer"), self.printer_box)
@@ -437,6 +457,9 @@ class SliceDialog(QDialog):
         bb.rejected.connect(self.reject)
         lay.addRow(bb)
         self._form = lay
+        # a model of one plate has nothing to choose from: the row says nothing then
+        self._form.setRowVisible(self.plate_note, len(self._plate_list) > 1)
+        self._form.setRowVisible(self.plate, len(self._plate_list) > 1)
         self.printer = None
         self._remembered = {}         # what the cascade picks back up of the choice applied
         self._preset = None           # the preset that stands in the combo box, None on "—"
@@ -480,6 +503,12 @@ class SliceDialog(QDialog):
         self._set_changes(parse_heights(getattr(s, "slice_changes", "")))
         self.apply_choice(self._last_choice())
         self._fill_presets(self._matching_preset())
+
+    # ---- the plate this slice is for
+    def slice_plate(self) -> int:
+        """The plate the user chose to slice; the first when the dialog has nothing to choose."""
+        data = self.plate.currentData()
+        return plates.plate_number(data if data is not None else self._plate)
 
     # ---- the whole choice: the one of the last slice, and presets of the user
     def _last_choice(self) -> dict:
@@ -1090,3 +1119,57 @@ class SliceDialog(QDialog):
             float(g.get("machine_width") or 0.0), float(g.get("machine_depth") or 0.0)))
         self._cap_speeds(st)
         return st
+
+
+class PlateSummaryDialog(QDialog):
+    """The table at the end of File > Slice all Plates…: what every plate took.
+
+    One row per plate: its number, how many parts went on it, how long the print takes, what it
+    costs in filament and where its G-code was written. `queued` says whether the user asked to
+    let every one of those prints wait for a free printer (volura.print_queue); the queue itself
+    is the window's work, because it also has to ask which printer they are meant for.
+    """
+
+    def __init__(self, win, rows, price: float = 0.0):
+        super().__init__(win)
+        self.setWindowTitle(tr("Sliced Plates"))
+        self.queued = False
+        lay = QVBoxLayout(self)
+        lay.addWidget(QLabel(trn("{n} plate was sliced, one after the other:",
+                                 "{n} plates were sliced, one after the other:",
+                                 len(rows)).format(n=len(rows))))
+        table = QTableWidget(len(rows), 5)
+        table.setHorizontalHeaderLabels([tr("Plate"), tr("Parts"), tr("Time"), tr("Filament"),
+                                         tr("File")])
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setAccessibleName(tr("Sliced Plates"))
+        for k, (plate, parts, path, seconds, grams) in enumerate(rows):
+            hours, rest = divmod(int(round(float(seconds))), 3600)
+            cost = float(grams) / 1000.0 * float(price or 0.0)
+            one = (str(plate), str(parts), tr("{h} h {m:02d} min").format(h=hours, m=rest // 60),
+                   tr("{g:.0f} g (≈ {c:.2f})").format(g=float(grams), c=cost),
+                   os.path.basename(str(path)))
+            for c, text in enumerate(one):
+                table.setItem(k, c, QTableWidgetItem(text))
+        table.resizeColumnsToContents()
+        table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
+        lay.addWidget(table, 1)
+        whole = sum(float(one[3]) for one in rows), sum(float(one[4]) for one in rows)
+        hours, rest = divmod(int(round(whole[0])), 3600)
+        lay.addWidget(QLabel(tr("Together: {h} h {m:02d} min, {g:.0f} g filament").format(
+            h=hours, m=rest // 60, g=whole[1])))
+        bb = QDialogButtonBox(QDialogButtonBox.Close)
+        self.b_queue = bb.addButton(tr("Add all to the print queue"), QDialogButtonBox.ActionRole)
+        self.b_queue.setToolTip(tr("Let every plate wait for a free printer, first plate 1 and "
+                                   "the plates after it behind it"))
+        self.b_queue.clicked.connect(self._queue_all)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addWidget(bb)
+
+    def _queue_all(self):
+        """Add all to the print queue: the window asks which printer and writes the queue."""
+        self.queued = True
+        self.accept()

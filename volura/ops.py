@@ -13,7 +13,7 @@ from .geom import (Plane, default_u, extrude_cs, manifold_from_mesh, mesh_arrays
 from .i18n import tr, tr_noop, trn
 from .model import ROOT, Document, Group
 from .vector2d import VPath, polygon_area
-from . import fillet, joints, linking, nesting, workers
+from . import fillet, joints, linking, nesting, plates, workers
 
 DEFAULT_COLOR = "#f2f2f2"
 
@@ -565,8 +565,43 @@ def footprint_part(ents) -> nesting.Part | None:
                         area=abs(polygon_area(hull)))
 
 
-def arrange_placements(doc: Document, items, bed, gap=BED_GAP, margin=BED_MARGIN):
-    """The move per group that lays the parts side by side on the bed: `(gid, M3, t)`.
+#: the most plates `arrange_on_plates` will fill before it says that the model is too big
+MAX_PLATES = nesting.MAX_SHEETS
+
+
+def _nest_parts(doc: Document, items, bed, gap, margin, plate=plates.ALL):
+    """The parts to nest of `items`, and the group every part came from.
+
+    Locked groups, groups without geometry and - with a plate given - groups that stand on
+    another bed are left out, so arranging one plate leaves the rest of the model alone."""
+    parts, owners, seen = [], {}, set()
+    for k, _ctx, i in items:
+        g = doc.group(i) if k == "g" else None
+        if g is None or g.locked or g.id in seen:
+            continue
+        if plate != plates.ALL and plates.plate_of_group(g, bed) != plate:
+            continue
+        part = footprint_part(g.ents)
+        if part is None:
+            continue
+        seen.add(g.id)
+        parts.append(part)
+        owners[id(part)] = g
+    return parts, owners
+
+
+def _turns_fit(part, bed, margin) -> bool:
+    """Whether a part fits a bed of `bed` in some turn of a quarter: length for width counts."""
+    usable_w, usable_h = float(bed[0]) - 2 * margin, float(bed[1]) - 2 * margin
+    shape = nesting.part_shape(part)
+    span = shape.max(axis=0) - shape.min(axis=0)
+    w, h = float(span[0]), float(span[1])
+    return ((w <= usable_w + 1e-9 and h <= usable_h + 1e-9) or
+            (h <= usable_w + 1e-9 and w <= usable_h + 1e-9))
+
+
+def arrange_placements(doc: Document, items, bed, gap=BED_GAP, margin=BED_MARGIN, plate=1):
+    """The move per group that lays the parts side by side on one bed: `(gid, M3, t)`.
 
     Every group is one part: the convex hull of its vertices projected on XY. The parts
     are placed with the same nesting as the worksheet (largest first, in the lowest and
@@ -575,19 +610,12 @@ def arrange_placements(doc: Document, items, bed, gap=BED_GAP, margin=BED_MARGIN
     their own footprint. Locked groups and groups without geometry are left out, and the
     height is not touched: `arrange_on_bed` drops the parts on the bed afterwards.
 
-    Nothing is moved here; a `ValueError` is raised when the parts do not fit on one bed.
+    `plate` is the bed this lays out: the groups that stand on another bed are left out, and
+    the places of the nest are moved to that bed, whose corner stands `plate - 1` bed widths
+    plus its gap along +X (see `volura.plates`). Nothing is moved here; a `ValueError` is
+    raised when the parts do not fit on one bed.
     """
-    parts, owners, seen = [], {}, set()
-    for k, _ctx, i in items:
-        g = doc.group(i) if k == "g" else None
-        if g is None or g.locked or g.id in seen:
-            continue
-        part = footprint_part(g.ents)
-        if part is None:
-            continue
-        seen.add(g.id)
-        parts.append(part)
-        owners[id(part)] = g
+    parts, owners = _nest_parts(doc, items, bed, gap, margin, plate=plate)
     if not parts:
         return []
     try:
@@ -596,16 +624,18 @@ def arrange_placements(doc: Document, items, bed, gap=BED_GAP, margin=BED_MARGIN
     except ValueError:
         raise ValueError(tr("The parts do not fit on one bed of {w:.0f} × {h:.0f} mm.").format(
             w=float(bed[0]), h=float(bed[1])))
+    off = plates.origin(plate, bed)
     moves = []
     for part, _sheet, angle, dx, dy in placements:
         M = nesting.place_transform(part, angle, dx, dy)
         M3 = np.eye(3)
         M3[:2, :2] = M[:2, :2]           # turn about the vertical axis, keep the height
-        moves.append((owners[id(part)].id, M3, np.array([M[0, 2], M[1, 2], 0.0])))
+        moves.append((owners[id(part)].id, M3,
+                      np.array([M[0, 2], M[1, 2], 0.0]) + off))
     return moves
 
 
-def arrange_on_bed(doc: Document, items, bed, gap=BED_GAP, margin=BED_MARGIN):
+def arrange_on_bed(doc: Document, items, bed, gap=BED_GAP, margin=BED_MARGIN, plate=1):
     """Arrange on Bed: lay the groups side by side on the print bed, like a slicer.
 
     See `arrange_placements` for the search for a place; here every group is turned to
@@ -613,15 +643,76 @@ def arrange_on_bed(doc: Document, items, bed, gap=BED_GAP, margin=BED_MARGIN):
     The caller takes the checkpoint, so one undo brings the old places back. Returns how
     many groups did not get a place; when the bed is too small nothing moves and a
     `ValueError` tells so.
+
+    A model that stands over more than one bed is arranged one bed at a time: `plate` is the
+    bed this works on and the groups that stand on another bed stay where they are.
     """
-    wanted = {i for k, _ctx, i in items if k == "g" and doc.group(i) is not None
-              and not doc.group(i).locked}
-    moves = arrange_placements(doc, items, bed, gap=gap, margin=margin)
+    parts, _owners = _nest_parts(doc, items, bed, gap, margin, plate=plate)
+    moves = arrange_placements(doc, items, bed, gap=gap, margin=margin, plate=plate)
     for gid, M3, t in moves:
         sel = [("g", gid, gid)]
         transform_selection(doc, M3, t, items=sel)
         drop_to_bed(doc, sel)
-    return max(0, len(wanted) - len(moves))
+    return max(0, len(parts) - len(moves))
+
+
+def arrange_plate_placements(doc: Document, items, bed, gap=BED_GAP, margin=BED_MARGIN):
+    """The move per group that spreads the parts over as many beds as they need:
+    `(gid, M3, t, plate)`.
+
+    The same nesting as `arrange_placements`, but a part that finds no free place on the bed
+    it is looking at moves to the next one, and that one takes as many parts as it can hold -
+    what a slicer cannot fit on one plate, a printer prints on the next. The parts of every
+    bed keep `margin` mm from its edge and `gap` mm from each other, and every bed lies where
+    `volura.plates` says it does, so the parts of plate 2 stand on the bed of plate 2.
+
+    Nothing is moved here. A `ValueError` names the parts that do not fit a bed even when they
+    have one for themselves alone; a model that needs more beds than `MAX_PLATES` says so too.
+    """
+    parts, owners = _nest_parts(doc, items, bed, gap, margin)
+    if not parts:
+        return []
+    too_big = sorted(owners[id(part)].name for part in parts
+                     if not _turns_fit(part, bed, margin))
+    if too_big:
+        raise ValueError(trn("{name} does not fit a plate of {w:.0f} × {h:.0f} mm, even turned "
+                             "90 degrees.",
+                             "{names} do not fit a plate of {w:.0f} × {h:.0f} mm, even turned "
+                             "90 degrees.", len(too_big)).format(
+            name=too_big[0], names=", ".join(too_big), w=float(bed[0]), h=float(bed[1])))
+    try:
+        placements = nesting.nest(parts, float(bed[0]), float(bed[1]), margin, gap,
+                                  rotations=(0, 90, 180, 270), max_sheets=MAX_PLATES)
+    except ValueError:
+        raise ValueError(tr("More than {n} plates are needed to lay this model out. Take some "
+                            "parts away, or make them smaller.").format(n=MAX_PLATES))
+    moves = []
+    for part, sheet, angle, dx, dy in placements:
+        plate = sheet + 1
+        M = nesting.place_transform(part, angle, dx, dy)
+        M3 = np.eye(3)
+        M3[:2, :2] = M[:2, :2]
+        moves.append((owners[id(part)].id, M3,
+                      np.array([M[0, 2], M[1, 2], 0.0]) + plates.origin(plate, bed), plate))
+    return moves
+
+
+def arrange_on_plates(doc: Document, items, bed, gap=BED_GAP, margin=BED_MARGIN):
+    """Arrange on Plates: spread the groups over as many beds as they need, one undo step.
+
+    Like `arrange_on_bed`, but what does not fit on the first bed goes to the second, and so
+    on, each bed filled with the same nesting. Every part ends up on a bed of its own with the
+    margin and the gap free, and stands on it. The caller takes the checkpoint. Returns
+    `(parts moved, plates used)`; see `arrange_plate_placements` for what raises.
+    """
+    moves = arrange_plate_placements(doc, items, bed, gap=gap, margin=margin)
+    used = set()
+    for gid, M3, t, plate in moves:
+        sel = [("g", gid, gid)]
+        transform_selection(doc, M3, t, items=sel)
+        drop_to_bed(doc, sel)
+        used.add(plate)
+    return len(moves), max(used, default=1)
 
 
 # The default chamfer of Tools > Print Tools > Elephant Foot Chamfer. The first layer of a
@@ -1202,18 +1293,24 @@ class Part:
         self.mesh_settings = {}
 
 
-def parts(doc: Document, only_selected=False):
+def parts(doc: Document, only_selected=False, plate=None, bed=None):
     """Printed parts: every visible group that prints and every closed shell of loose geometry.
 
     A group may carry per-mesh slicing settings in `g.meta["mesh_settings"]`; they are handed to the
     part as `mesh_settings`, and the slice keeps only those a single mesh accepts (see
     `slicer.per_mesh_settings`). A group with another role in the print - a support blocker or
-    enforcer - is no part and is left out here; `role_parts` gives those."""
+    enforcer - is no part and is left out here; `role_parts` gives those.
+
+    With `plate` (see `volura.plates`) only the groups that stand on that bed are parts, which
+    is what a slice of one plate works on, and `bed` is the size of one bed that says where a
+    bed ends. Loose geometry of the model itself has no group to stand on a bed, so it belongs
+    to the first plate and is only looked at when `plate` is nothing or 1."""
     groups = [g for g in (doc.selected_groups() if only_selected else doc.visible_groups())
-              if group_role(g) == ROLE_PART]
+              if group_role(g) == ROLE_PART and plates.on_plate(g, plate, bed)]
     items = [(g.name, g.color, g.ents, list(g.ents.F)) for g in groups]
     metas = [g.meta for g in groups]
-    if not only_selected:
+    loose = plate is None or plate == plates.ALL or plates.plate_number(plate) == plates.FIRST
+    if not only_selected and loose:
         for k, shell in enumerate(doc.root.shells(), 1):
             colors = Counter(doc.root.F[f].color for f in shell if doc.root.F[f].color)
             color = colors.most_common(1)[0][0] if colors else DEFAULT_COLOR
@@ -1225,16 +1322,17 @@ def parts(doc: Document, only_selected=False):
     return out
 
 
-def role_parts(doc: Document, only_selected=False):
+def role_parts(doc: Document, only_selected=False, plate=None, bed=None):
     """The support blockers and enforcers of the model, as `parts` gives its parts.
 
     Every one of them carries the settings of its role on its own mesh, above what the group itself
     asks for (see `ROLE_SETTINGS`), and slices with those: a blocker is a volume the support of the
     print may not enter and an enforcer is a volume that becomes support. Neither is ever exported
     or counted as a part, so a print that hangs over a blocker gets no support there and one under
-    an enforcer gets it even when support is off in File > Slice."""
+    an enforcer gets it even when support is off in File > Slice. Like `parts`, `plate` and `bed`
+    leave out the volumes that stand on another bed."""
     groups = [g for g in (doc.selected_groups() if only_selected else doc.visible_groups())
-              if group_role(g) != ROLE_PART]
+              if group_role(g) != ROLE_PART and plates.on_plate(g, plate, bed)]
     out = build_parts([(g.name, g.color, g.ents, list(g.ents.F)) for g in groups])
     for part, g in zip(out, groups):
         part.role = group_role(g)

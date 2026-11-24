@@ -34,7 +34,7 @@ from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_
                hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar, snap_fit,
                nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
-               printer_link, print_history, print_queue, print_watch,
+               plates, printer_link, print_history, print_queue, print_watch,
                sheet3d, sheettools, slice_presets, svg,
                spacemouse, spool_adapter, spools, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers, workspaces)
@@ -2183,6 +2183,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.setAcceptDrops(True)
         self.clipboard = []
         self._busy = False          # a background job is reading the model: keep it still
+        self.plate_choice = plates.ALL   # the plate the view shows; ALL is every plate at once
         self._mill3d_dialog = None   # the 3D mill dialog, open beside the model
         self._printer_status = None   # what the printers on the network are doing
         self._bed_mesh = None         # how flat the bed of a Klipper printer is
@@ -2239,6 +2240,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         """Autosave: every 5 minutes, only when something has changed."""
         if not self.doc.dirty:
             return False
+        self.stamp_plates()
         try:
             fileio.save_document(self.doc, autosave_path())
         except Exception as e:
@@ -2424,6 +2426,11 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             self.printing_toolbar().show()
         elif getattr(self, "tb_printing", None) is not None:
             self.tb_printing.hide()
+        if not printing and self.plate_choice != plates.ALL:
+            # the plate chooser belongs to the Print tab: the other tabs show the whole model
+            self.plate_choice = plates.ALL
+            self.view.plate = plates.ALL
+            self.refresh_plate_box()
         self._show_layers_panel(self.mode == "2d")
         self._show_workspace_toolbars()
         if hasattr(self, "_menu_modes"):
@@ -2447,7 +2454,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         """The toolbar of the Print tab: the printer, the check, the bed and the slicers.
 
         The commands are the ones of the 3D Printing menu; the buttons carry their names,
-        because a slicer has no picture that says which one it is.
+        because a slicer has no picture that says which one it is. The plate chooser beside them
+        says which plate of the model is on the screen (see `volura.plates`).
         """
         bar = getattr(self, "tb_printing", None)
         if bar is None:
@@ -2456,13 +2464,89 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             bar.setIconSize(QSize(20, 20))
             bar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
             for a in (self.a_print_setup, self.a_check, None,
-                      self.a_orient_print, self.a_drop, self.a_center, self.a_arrange, None,
+                      self.a_orient_print, self.a_drop, self.a_center, self.a_arrange,
+                      self.a_arrange_plates, None,
                       self.a_elephant, self.a_mouse_ears, None,
-                      self.a_slice, self.a_slice_resin, self.a_print):
+                      self.a_slice, self.a_slice_all, self.a_slice_resin, self.a_print):
                 bar.addSeparator() if a is None else bar.addAction(a)
+            bar.addSeparator()
+            self.plate_label = QLabel(tr("Plate:"))
+            bar.addWidget(self.plate_label)
+            self.plate_box = QComboBox()
+            self.plate_box.setToolTip(tr("Look at one plate of the model, or at all of them; "
+                                         "a plate is one bed of the printer, and one slice"))
+            self.plate_box.setAccessibleName(tr("Plate"))
+            self.plate_box.currentIndexChanged.connect(self._plate_box_chosen)
+            bar.addWidget(self.plate_box)
             self.addToolBarBreak(Qt.TopToolBarArea)
             self.addToolBar(Qt.TopToolBarArea, bar)
+            self.refresh_plate_box()
         return bar
+
+    # ------------------------------------------------------------ plates
+    def current_plate(self) -> int:
+        """The plate to work on: the one the Print tab shows, or the first when all are shown."""
+        return plates.FIRST if self.plate_choice == plates.ALL else self.plate_choice
+
+    def set_plate(self, plate) -> bool:
+        """Look at one plate of the model (`plates.ALL` is every plate at once).
+
+        The parts of the other plates go off the screen and the camera frames this one, so a big
+        project is worked on one bed at a time. Returns whether the view changed."""
+        want = plates.plate_choice(plate)
+        if want == self.plate_choice:
+            return False
+        self.plate_choice = want
+        self.view.set_plate(want)
+        self.refresh_plate_box()
+        self.view.zoom_extents()
+        return True
+
+    def refresh_plate_box(self) -> None:
+        """The plate chooser: one row for every plate the model needs, then "All plates"."""
+        box = getattr(self, "plate_box", None)
+        if box is None:
+            return
+        bed = self.settings.bed_size
+        top = plates.plate_count(self.doc, bed)
+        if self.plate_choice != plates.ALL:
+            top = max(top, self.plate_choice)
+        box.blockSignals(True)
+        box.clear()
+        for plate in range(plates.FIRST, top + 1):
+            box.addItem(str(plate), plate)
+        box.addItem(tr("All plates"), plates.ALL)
+        at = box.count() - 1 if self.plate_choice == plates.ALL else max(
+            0, min(box.count() - 2, self.plate_choice - plates.FIRST))
+        box.setCurrentIndex(at)
+        self.plate_choice = box.itemData(at)
+        self.view.plate = self.plate_choice
+        box.blockSignals(False)
+        box.setVisible(plates.plate_count(self.doc, bed) > plates.FIRST)
+        if hasattr(self, "plate_label"):
+            self.plate_label.setVisible(box.isVisible())
+
+    def _plate_box_chosen(self, _index) -> None:
+        """The plate chooser picked another plate (or "All plates")."""
+        box = getattr(self, "plate_box", None)
+        if box is not None:
+            self.set_plate(box.currentData())
+
+    def sync_plates(self) -> None:
+        """Keep `g.meta["plate"]` in step with where the groups stand, and the chooser with them.
+
+        A plate follows from where a part stands, so nothing here can go out of sync: this only
+        refreshes the cache a file keeps and the rows of the chooser. Undo says `changed` too, so
+        a part that moves back by undo takes its plate number back with it."""
+        plates.sync_meta(self.doc, self.settings.bed_size)
+        self.refresh_plate_box()
+
+    def stamp_plates(self) -> None:
+        """Write the plate every group stands on into its meta, just before a file is written.
+
+        A change through a command does this already (`sync_plates`); this is the net underneath
+        the saves, so a file can never hold a plate that disagrees with where the part stands."""
+        plates.sync_meta(self.doc, self.settings.bed_size)
 
     def mill3d_toolbar(self):
         """The toolbar of 3D milling: only in the CNC tab, and only with the model on the
@@ -2632,6 +2716,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_slice_resin = A(tr("Slice for &Resin…"),
                                lambda checked=False: self.resin_slice_dialog(), None, None, False,
                                tr("Supports and layer images for a resin (MSLA) printer"))
+        self.a_slice_all = A(tr("Slice all &Plates…"),
+                             lambda checked=False: self.slice_all_dialog(), None, None, False,
+                             tr("One G-code for every plate of the model, in a folder, with a "
+                                "table of what each plate takes"))
         self.a_quit = A(tr("E&xit"), self.close, "Ctrl+Q")
 
         self.a_undo = A(tr("&Undo"), self.undo, ["Alt+Backspace", "Ctrl+Z"], "undo")
@@ -2783,6 +2871,10 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_center = A(tr("Center on Bed"), self.center_on_bed)
         self.a_arrange = A(tr("Arrange on Bed"), self.arrange_on_bed, None, None, False,
                            tr("Lay the groups side by side on the print bed, without overlapping"))
+        self.a_arrange_plates = A(tr("Arrange on Plates"), self.arrange_on_plates, None, None,
+                                  False,
+                                  tr("Spread the groups over as many print beds as they need, "
+                                     "without overlapping"))
 
         self.a_thread = A(tr("Thread..."), lambda checked=False: self.thread_dialog(), None, "thread",
                           False, tr("Add a screw thread or make a bolt or nut (ISO metric)"))
@@ -3442,7 +3534,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                       self.a_import)
                   + only("2d", self.a_import_picture)
                   + (export, None)
-                  + only("3d", self.a_print, self.a_slice, self.a_slice_resin) + (None, self.a_quit))
+                  + only("3d", self.a_print, self.a_slice, self.a_slice_all, self.a_slice_resin)
+                  + (None, self.a_quit))
 
         # ---- Edit
         m = mb.addMenu(tr("&Edit"))
@@ -3538,7 +3631,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         only("3d", m)
         self.print_tools_menu = m
         self.fill(m, (self.a_print_setup, self.a_check, None,
-                      self.a_orient_print, self.a_drop, self.a_center, self.a_arrange, None,
+                      self.a_orient_print, self.a_drop, self.a_center, self.a_arrange,
+                      self.a_arrange_plates, None,
                       self.a_cutplane, self.a_cut_join, None,
                       self.a_support_blocker, self.a_support_enforcer,
                       self.a_elephant, self.a_mouse_ears, None,
@@ -4329,6 +4423,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
     def file_save(self):
         if not self.doc.path:
             return self.file_save_as()
+        self.stamp_plates()
         try:
             fileio.save_document(self.doc, self.doc.path)
         except Exception as e:
@@ -4359,6 +4454,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             return False
         if not path.lower().endswith(".volura"):
             path += ".volura"
+        self.stamp_plates()
         try:
             fileio.save_document(self.doc, path)
         except Exception as e:
@@ -5184,13 +5280,23 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
             elif what == "3mf":
                 lines = "\n".join(tr("  extruder {e}: {name}").format(e=e, name=n)
                                   for n, e in value)
+                note = ""
+                top = plates.plate_count(self.doc, self.settings.bed_size)
+                if top > plates.FIRST:
+                    # a 3MF has no word for a second bed: what is not on plate 1 keeps the place
+                    # it has in the model, which is beside the bed of the slicer
+                    note = "\n\n" + tr(
+                        "This model stands on {n} plates, and a 3MF carries no plates: every part "
+                        "keeps the place it has in Volura, so everything of the plates after the "
+                        "first stands beside the bed of your slicer. Slice those plates here with "
+                        "File > Slice all Plates…, or move them onto the bed first.").format(n=top)
                 QMessageBox.information(self, tr("3MF Exported"),
                                         tr("{path}\n\nColors per filament:\n{lines}\n\n"
                                            "Open the file in PrusaSlicer, OrcaSlicer or Bambu Studio; "
                                            "every color is already on the right filament. The slicer "
                                            "shows its own filament colors: give its filaments these "
                                            "colors to see the model as in Volura.").format(
-                                            path=path, lines=lines))
+                                            path=path, lines=lines) + note)
             else:
                 QMessageBox.information(self, tr("STL per Color"),
                                         tr("Written:\n{files}\n\nLoad them together in your slicer as "
@@ -5575,12 +5681,13 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         items = [("g", gid, gid) for gid in self._target_groups()]
         if not items:
             return
+        plate = self.arrange_plate(items)
 
         def work(report):
             # looking for a place for every part is the slow part: seconds for a pile of
             # parts, so it happens here and the window keeps responding
             report(0.1, tr("Arranging parts…"))
-            return ops.arrange_placements(self.doc, items, self.settings.bed_size)
+            return ops.arrange_placements(self.doc, items, self.settings.bed_size, plate=plate)
 
         def done(moves):
             # a part that already stands exactly where the nest puts it (no turn, no move,
@@ -5602,6 +5709,58 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
 
         def failed(exc):
             QMessageBox.warning(self, "Volura", str(exc))    # nothing moved, so no undo either
+
+        background.run(self, work, text=tr("Arranging…"), on_done=done, on_error=failed)
+
+    def arrange_plate(self, items) -> int:
+        """The bed Arrange on Bed lays its parts out on: the one the given groups stand on.
+
+        A project spread over several plates is arranged one plate at a time, so the parts of
+        the plate you are looking at are nested together and the parts of the other plates stay
+        where they are. With nothing to go by - empty groups, or none at all - the plate the
+        Print tab shows wins."""
+        for gid in [i for _k, _c, i in items]:
+            g = self.doc.group(gid)
+            if g is not None and g.bbox() is not None:
+                return plates.plate_of_group(g, self.settings.bed_size)
+        return self.current_plate()
+
+    def arrange_on_plates(self):
+        """Tools > Arrange on Plates: spread the groups over as many beds as they need.
+
+        The same nesting as Arrange on Bed, but what does not fit on the first bed goes to the
+        second and so on, each bed filled the same way. One undo step takes the whole spread
+        back, and every part ends up standing on a bed of its own."""
+        items = [("g", gid, gid) for gid in self._target_groups()]
+        if not items:
+            return
+
+        def work(report):
+            report(0.1, tr("Arranging parts…"))
+            return ops.arrange_plate_placements(self.doc, items, self.settings.bed_size)
+
+        def done(moves):
+            # as in Arrange on Bed: a part that already stands where its plate puts it is no
+            # reason for an undo step
+            real = [one for one in moves
+                    if not np.allclose(one[1], np.eye(3)) or not np.allclose(one[2], 0.0)
+                    or abs(float(self.doc.group(one[0]).bbox()[0][2])) > 1e-6]
+            if not real:
+                return
+            self.doc.checkpoint()             # one undo brings all the old places back
+            used = set()
+            for gid, M3, t, plate in real:
+                sel = [("g", gid, gid)]
+                ops.transform_selection(self.doc, M3, t, items=sel)
+                ops.drop_to_bed(self.doc, sel)
+                used.add(plate)
+            self.doc.notify()
+            self.hint.setText(trn("Arranged {n} part on {p} plate.",
+                                  "Arranged {n} parts on {p} plates.", len(real))
+                              .format(n=len(real), p=max(used, default=1)))
+
+        def failed(exc):
+            QMessageBox.warning(self, "Volura", str(exc))
 
         background.run(self, work, text=tr("Arranging…"), on_done=done, on_error=failed)
 

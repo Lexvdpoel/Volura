@@ -34,6 +34,8 @@ from .vector2d import (SHEET_SPACING, Drawing, VPath, _point_in_poly, polygon_ar
 
 EPS = 1e-9            # touching boxes do not count as overlap
 AREA_EPS = 1e-6       # an intersection smaller than this (mm²) is not an overlap
+#: the most sheets `nest` will fill before it says that the parts do not fit
+MAX_SHEETS = 20
 
 
 # --------------------------------------------------------------------------
@@ -311,7 +313,7 @@ def _templates(part: Part, rotations, usable_w, usable_h, gap):
 
 
 def nest(parts, sheet_w, sheet_h, margin, gap, rotations=(0, 90, 180, 270),
-         max_sheets=20) -> list[tuple]:
+         max_sheets=MAX_SHEETS) -> list[tuple]:
     """Arrange the parts over as many sheets as needed, largest first.
 
     Returns `(part, sheet_index, angle, dx, dy)` per part. A part that is larger than

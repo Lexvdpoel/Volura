@@ -491,6 +491,7 @@ class UiMixin:
 
     def on_doc_changed(self):
         self.update_title()
+        self.sync_plates()
         self.materials.refresh()
         if hasattr(self, "colors_panel"):
             self.colors_panel.refresh()
