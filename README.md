@@ -469,6 +469,22 @@ gets for free.
   top is cut out to the plate up to 3 mm inside the edge, which leaves that edge standing as a rim,
   and the grooves are cut 0.8 mm deep and stop 2 mm before the wall of the recess. It prints lying
   flat, so every face is horizontal or vertical and nothing needs support
+- **Cookie Cutter** (Draw > Parts): a wall that follows an outline you choose yourself and that you
+  press through dough, marzipan, clay or soap. The outline comes from the closed shapes you selected
+  on the worksheet, from an SVG or DXF drawing or from letters of any font, also bold. You enter how
+  wide the whole source becomes (10 to 300 mm), how thick the wall is (0.6 to 3 mm), how high the
+  cutter stands (8 to 40 mm), how far the flange reaches past the wall (0 to 10 mm) and how thick it
+  is (1 to 5 mm); the dialog says how big the cutters lie on the bed and how high they stand. The
+  wall is built outside the outline instead of around it, because the dough inside the outline is the
+  cookie and has to stay free, and its joins are round so a sharp corner stays a corner instead of a
+  needle that bends away while you press. The flange is the grip you press against and the only part
+  that touches the bed, so the cutter prints flange down and cuts with its top; over the top 2 mm the
+  wall thins to half its thickness, which is what cuts instead of wedging. With the stamp on, the
+  holes and details within the outlines become ridges that mark the dough instead of cutting it,
+  bridged to the flange with spokes so they cannot break off; a ridge no spoke reaches is left out.
+  Everything scales together to the width you ask, so several outlines keep their sizes to one
+  another and stand side by side as several cutters. It prints standing on its own flange with the
+  edge up, so nothing overhangs and nothing needs support
 - **Filament Clip** (Draw > Parts): a small clip that pushes onto the rim of a filament spool and
   holds the loose end of the thread, so the spool does not unwind. You enter how thick the rim of
   the spool is (1 to 6 mm), which filament it holds (1.75 or 2.85 mm), how many holes the clip has

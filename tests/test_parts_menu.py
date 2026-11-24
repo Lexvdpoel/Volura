@@ -1,4 +1,4 @@
-"""Draw > Parts: 39 parts in four category submenus.
+"""Draw > Parts: 40 parts in four category submenus.
 
 `app.PART_CATEGORIES` is the one place that says in which category a part stands: Mechanical,
 Cables, Storage and Home and Desk, in that order, each sorted by the English name of its parts.
@@ -33,7 +33,8 @@ PARTS = ("a_bracket", "a_grommet", "a_fan_guard", "a_filament_clip", "a_hose_ada
          "a_battery_holder", "a_bin_rack", "a_bit_holder", "a_drawer_organizer", "a_gridfinity",
          "a_hex_key_holder", "a_card_holder", "a_pegboard", "a_project_box", "a_screw_jar",
          "a_storage_bin",
-         "a_bag_clip", "a_coaster", "a_desk_hook", "a_door_wedge", "a_label_plate",
+         "a_bag_clip", "a_coaster", "a_cookie_cutter", "a_desk_hook", "a_door_wedge",
+         "a_label_plate",
          "a_lithophane", "a_pen_cup", "a_phone_stand", "a_plant_label", "a_plant_pot",
          "a_soap_dish", "a_wall_hook")
 CATEGORIES = ("&Mechanical", "&Cables", "&Storage", "&Home and Desk")
@@ -73,7 +74,7 @@ def test_every_part_stands_in_exactly_one_category(win):
     """The table holds every part once, and the menu shows the table."""
     named = [name for _title, names in PART_CATEGORIES for name in names]
     assert sorted(named) == sorted(PARTS), "a part is missing from a category or in two of them"
-    assert len(named) == len(set(named)) == len(PARTS) == 39
+    assert len(named) == len(set(named)) == len(PARTS) == 40
     for title, names in PART_CATEGORIES:
         actions = win.parts_category(clean_text(title)).actions()
         assert [getattr(win, name) for name in names] == actions, f"{title} is not the table"

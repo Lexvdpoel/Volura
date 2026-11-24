@@ -465,6 +465,13 @@ SVG = {
                f'<circle cx="12" cy="12" r="7.4" {N} stroke="#3b7dd8" stroke-width="1.3"/>'
                f'<circle cx="12" cy="12" r="4.6" {N} stroke="#3b7dd8" stroke-width="1.3"/>'
                f'<circle cx="12" cy="12" r="1.8" {N} stroke="#3b7dd8" stroke-width="1.3"/>',
+    # cookie cutter: a star of thin wall with a flange standing under it to press on
+    "cookie_cutter": f'<path d="M12 2.9 L14 7.8 L19.2 8.2 L15.2 11.6 L16.5 16.7 L12 13.9 '
+                     f'L7.5 16.7 L8.8 11.6 L4.8 8.2 L10 7.8 Z" fill="#eef2f7" {S()}/>'
+                     f'<path d="M12 5.8 L13.2 8.8 L16.5 9 L14 11.2 L14.8 14.3 L12 12.6 '
+                     f'L9.2 14.3 L10 11.2 L7.5 9 L10.8 8.8 Z" fill="#fff" {S(w=1.1)}/>'
+                     f'<rect x="2.6" y="18.2" width="18.8" height="3.2" rx="1.5" fill="#cfe0f5" '
+                     f'{S(w=1.3)}/>',
     # filament clip: a clip that straddles the rim of a spool, the thread pushed in sideways
     "filament_clip": f'<path d="M2.5 15 L2.5 4 L19.6 4 A1.4 1.4 0 0 1 21 5.4 L21 8.6 '
                      f'A1.4 1.4 0 0 1 19.6 10 L10 10 L10 15 L7.6 15 L7.6 6.4 L4.9 6.4 L4.9 15 Z" '
