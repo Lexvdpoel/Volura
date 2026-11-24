@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
 
 from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_holder, boxgen, bracket,
                cable_chain, cable_clip, cable_comb, cable_winder, calibrations, cam, card_holder,
-               coaster,
+               coaster, cookie_cutter,
                desk_hook, door_wedge, drawer_organizer,
                dxf, enclosure, errors, face_text, fan_guard, filament_clip,
                fileio, gcode, gcode_mill, gcode_thumbnail, gears, gridfinity, grommet,
@@ -198,9 +198,10 @@ PART_CATEGORIES = (
                            "a_drawer_organizer", "a_gridfinity", "a_hex_key_holder",
                            "a_card_holder", "a_pegboard", "a_project_box", "a_screw_jar",
                            "a_storage_bin")),
-    (tr_noop("&Home and Desk"), ("a_bag_clip", "a_coaster", "a_desk_hook", "a_door_wedge",
-                                 "a_label_plate", "a_lithophane", "a_pen_cup", "a_phone_stand",
-                                 "a_plant_label", "a_plant_pot", "a_soap_dish", "a_wall_hook")),
+    (tr_noop("&Home and Desk"), ("a_bag_clip", "a_coaster", "a_cookie_cutter", "a_desk_hook",
+                                 "a_door_wedge", "a_label_plate", "a_lithophane", "a_pen_cup",
+                                 "a_phone_stand", "a_plant_label", "a_plant_pot", "a_soap_dish",
+                                 "a_wall_hook")),
 )
 
 
@@ -1483,6 +1484,30 @@ class Settings:
             except (TypeError, ValueError):
                 value = default
             setattr(self, key, max(lo, min(hi, value)))
+        self.cookie_cutter_source = str(self.q.value("cookie_cutter_source",
+                                                     cookie_cutter.DEFAULT_SOURCE))
+        if self.cookie_cutter_source not in cookie_cutter.SOURCES:
+            self.cookie_cutter_source = cookie_cutter.DEFAULT_SOURCE
+        self.cookie_cutter_text = str(self.q.value("cookie_cutter_text", "Volura") or "")
+        self.cookie_cutter_family = str(self.q.value("cookie_cutter_family", "") or "")
+        self.cookie_cutter_bold = self._bool("cookie_cutter_bold", False)
+        self.cookie_cutter_file = str(self.q.value("cookie_cutter_file", "") or "")
+        self.cookie_cutter_edge = self._bool("cookie_cutter_edge", True)
+        self.cookie_cutter_stamp = self._bool("cookie_cutter_stamp", False)
+        for key, default, lo, hi in (
+                ("cookie_cutter_width", 70.0, cookie_cutter.WIDTH_MIN, cookie_cutter.WIDTH_MAX),
+                ("cookie_cutter_wall", 0.8, cookie_cutter.WALL_MIN, cookie_cutter.WALL_MAX),
+                ("cookie_cutter_height", 15.0, cookie_cutter.HEIGHT_MIN,
+                 cookie_cutter.HEIGHT_MAX),
+                ("cookie_cutter_flange", 4.0, cookie_cutter.FLANGE_MIN,
+                 cookie_cutter.FLANGE_MAX),
+                ("cookie_cutter_flange_thickness", 2.0, cookie_cutter.RIM_MIN,
+                 cookie_cutter.RIM_MAX)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
         self.filament_clip_filament = str(
             self.q.value("filament_clip_filament", filament_clip.FILAMENTS[0]))
         if self.filament_clip_filament not in filament_clip.FILAMENTS:
@@ -1943,6 +1968,12 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("coaster_shape", "coaster_size", "coaster_thickness", "coaster_rim",
                     "coaster_pattern"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("cookie_cutter_source", "cookie_cutter_text", "cookie_cutter_family",
+                    "cookie_cutter_bold", "cookie_cutter_file", "cookie_cutter_width",
+                    "cookie_cutter_wall", "cookie_cutter_height", "cookie_cutter_flange",
+                    "cookie_cutter_flange_thickness", "cookie_cutter_edge",
+                    "cookie_cutter_stamp"):
             self.q.setValue(key, getattr(self, key))
         for key in ("filament_clip_flange", "filament_clip_filament", "filament_clip_count",
                     "filament_clip_thickness"):
@@ -3272,6 +3303,15 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                            tr("Add a flat coaster with a rim that catches what runs down a glass: "
                               "round, hexagonal or square, with rings or a grid grooved into the "
                               "top for grip; it prints lying flat without support"))
+        # ---- cookie cutter
+        self.a_cookie_cutter = A(tr("Cookie Cutter…"),
+                                 lambda checked=False: self.cookie_cutter_dialog(), None,
+                                 "cookie_cutter", False,
+                                 tr("Add a cutter you press through dough, fondant or clay, made of "
+                                    "a closed outline of the worksheet, a drawing or a word: a thin "
+                                    "wall that follows the outline, sharp on top to cut and standing "
+                                    "on a wide flange you press on, so it prints lying flat without "
+                                    "support"))
         # ---- filament clip
         self.a_filament_clip = A(tr("Filament Clip…"),
                                  lambda checked=False: self.filament_clip_dialog(), None,

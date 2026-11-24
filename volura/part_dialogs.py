@@ -21,14 +21,14 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QColorDialog, QDialog, QDia
                                QSpinBox, QWidget)
 
 from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
-               cable_comb, cable_winder, card_holder, coaster, desk_hook, door_wedge,
-               drawer_organizer, enclosure, face_text, fan_guard, filament_clip, fonts, gears,
-               gridfinity, grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate,
-               lithophane, pegboard, pen_cup, phone_stand, plant_label, plant_pot, screw_jar,
-               snap_fit, soap_dish, spool_adapter, standoff, storage_bin, text3d, theme, threads,
-               tie_mount, vector_import, wall_hook)
+               cable_comb, cable_winder, card_holder, coaster, cookie_cutter, desk_hook,
+               door_wedge, drawer_organizer, enclosure, face_text, fan_guard, filament_clip,
+               fonts, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, knob,
+               label_plate, lithophane, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
+               screw_jar, snap_fit, soap_dish, spool_adapter, standoff, storage_bin, text3d,
+               theme, threads, tie_mount, vector_import, wall_hook)
 from .geom import MeshData
-from .i18n import tr
+from .i18n import tr, trn
 from .panels import swatch
 
 
@@ -2889,6 +2889,204 @@ class PlantLabelDialog(QDialog):
                 "head": round(self.head.value(), 6), "stake": round(self.stake.value(), 6),
                 "thickness": round(self.thickness.value(), 6),
                 "raised": round(self.raised.value(), 6)}
+
+
+class CookieCutterDialog(QDialog):
+    """The "Cookie Cutter…" dialog: a closed outline turned into a cutter you press.
+
+    One outline makes one cutter, so the dialog first asks where that outline comes from: the closed
+    shapes that are selected on the worksheet - which can only be picked while there are some, and a
+    greyed-out choice says so - a drawing off your computer, or letters. The width is what the whole
+    source becomes, so several outlines keep their sizes to one another instead of every one of them
+    growing to the same width.
+
+    The wall is what cuts and the height how high the cutter stands; the sharp edge keeps the top of
+    the wall at half its thickness, which is what presses through dough instead of wedging it apart.
+    The flange is what the cutter stands on while you press: how far it reaches past the wall and how
+    thick it is. The stamp turns the lines within the outlines into thin ridges that the flange
+    bridges to. Under the fields the cutter lies on the bed in figures, because that is what the bed
+    has to agree to, and OK waits until the source really has something closed in it. The values come
+    from Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Cookie cutter"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=1.0, decimals=1):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(decimals)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        #: the closed shapes of the worksheet selection, as they stood when the dialog opened
+        self.sheet_paths = tuple(p for p in win.sheet_view.selected_paths()
+                                 if p.closed and len(p.pts) >= 3)
+        self.source = QComboBox()
+        for label, key in ((tr("Selected shapes on the worksheet"), "sheet"),
+                           (tr("An SVG or DXF file"), "file"), (tr("Text"), "text")):
+            self.source.addItem(label, key)
+        self.source.setToolTip(tr("Where the outline of the cutter comes from"))
+        self._allow_source("sheet", bool(self.sheet_paths),
+                           tr("Select one or more closed shapes on the worksheet first."))
+        start = self.source.findData(str(s.cookie_cutter_source))
+        if start < 0 or not self.source.model().item(start).isEnabled():
+            start = self.source.findData(cookie_cutter.DEFAULT_SOURCE)  # nothing to offer now
+        self.source.setCurrentIndex(max(0, start))
+
+        self.text = QPlainTextEdit(str(s.cookie_cutter_text))
+        self.text.setTabChangesFocus(True)
+        self.text.setFixedHeight(56)
+        self.text.setToolTip(tr("The word the cutter is made of; Enter starts the next line"))
+        self.family = QFontComboBox()
+        self.family.setCurrentFont(QFont(s.cookie_cutter_family or fonts.default_family()))
+        self.family.setToolTip(tr("The font of the letters, the same one 3D text uses"))
+        self.bold = QCheckBox(tr("Bold"))
+        self.bold.setChecked(bool(s.cookie_cutter_bold))
+        self.bold.setToolTip(tr("Thicker strokes, which make a cutter that does not bend"))
+        self.file = QLineEdit(str(s.cookie_cutter_file))
+        self.file.setPlaceholderText(tr("An SVG or DXF file"))
+        self.file.setToolTip(tr("The drawing the cutter is made of; every closed shape in it "
+                                "becomes a cutter of its own"))
+        browse = QPushButton(tr("Browse…"))
+        browse.setToolTip(tr("Look for the drawing on your computer"))
+        browse.clicked.connect(self._browse)
+        where = self.drawing_row = QWidget()
+        row = QHBoxLayout(where)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(self.file)
+        row.addWidget(browse)
+        self.width = spin(cookie_cutter.WIDTH_MIN, cookie_cutter.WIDTH_MAX,
+                          s.cookie_cutter_width, 5.0)
+        self.width.setToolTip(tr("How wide the whole source becomes; the height and the places of "
+                                 "the outlines scale along with it"))
+        self.wall = spin(cookie_cutter.WALL_MIN, cookie_cutter.WALL_MAX, s.cookie_cutter_wall,
+                         0.1, 2)
+        self.wall.setToolTip(tr("How thick the cutting wall is: thin enough to cut clean and thick "
+                                "enough to press without bending"))
+        self.height = spin(cookie_cutter.HEIGHT_MIN, cookie_cutter.HEIGHT_MAX,
+                           s.cookie_cutter_height)
+        self.height.setToolTip(tr("How high the cutter stands: deep enough to cut through thick "
+                                  "dough, low enough to press by hand"))
+        self.edge = QCheckBox(tr("Sharp edge"))
+        self.edge.setChecked(bool(s.cookie_cutter_edge))
+        self.edge.setToolTip(tr("Thin the top 2 millimetres of the wall to half its thickness, so "
+                                "the cutter cuts instead of wedging; the flange is at the bottom, "
+                                "so that top is the edge that points up"))
+        self.flange = spin(cookie_cutter.FLANGE_MIN, cookie_cutter.FLANGE_MAX,
+                           s.cookie_cutter_flange)
+        self.flange.setToolTip(tr("How far the flange reaches past the wall: it is what you grip "
+                                  "and what the cutter stands on, and 0 leaves nothing but the wall"))
+        self.thick = spin(cookie_cutter.RIM_MIN, cookie_cutter.RIM_MAX,
+                          s.cookie_cutter_flange_thickness, 0.5)
+        self.thick.setToolTip(tr("How thick the flange is; it holds the wall, and the spokes that "
+                                 "hold a stamped ridge are as thick as it is"))
+        self.stamp = QCheckBox(tr("Stamp the inner lines"))
+        self.stamp.setChecked(bool(s.cookie_cutter_stamp))
+        self.stamp.setToolTip(tr("The holes and details within the outlines become thin ridges that "
+                                 "mark the dough instead of cutting it; the flange bridges to them "
+                                 "so they cannot break off"))
+        self.info = QLabel()
+        self.info.setWordWrap(True)
+        lay.addRow(tr("Source"), self.source)
+        lay.addRow(tr("Text"), self.text)
+        lay.addRow(tr("Font"), self.family)
+        lay.addRow("", self.bold)
+        lay.addRow(tr("Drawing file"), where)
+        lay.addRow(tr("Width"), self.width)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Height"), self.height)
+        lay.addRow("", self.edge)
+        lay.addRow(tr("Flange width"), self.flange)
+        lay.addRow(tr("Flange thickness"), self.thick)
+        lay.addRow("", self.stamp)
+        lay.addRow("", self.info)
+        self.source.currentIndexChanged.connect(self._changed)
+        for w in (self.width, self.wall, self.height, self.flange, self.thick):
+            w.valueChanged.connect(self._changed)
+        self.text.textChanged.connect(self._changed)
+        self.file.textChanged.connect(self._changed)
+        self.bold.toggled.connect(self._changed)
+        self.edge.toggled.connect(self._changed)
+        self.stamp.toggled.connect(self._changed)
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        lay.addRow(self.buttonBox)
+        self._changed()
+
+    def _allow_source(self, key, allowed, why):
+        """Grey out a source that has nothing to offer, and say why in the tooltip of its entry."""
+        item = self.source.model().item(self.source.findData(key))
+        item.setEnabled(bool(allowed))
+        item.setToolTip("" if allowed else why)
+
+    def _browse(self):
+        """The two formats a drawing comes in, the same ones an import takes."""
+        path, _filter = QFileDialog.getOpenFileName(
+            self, tr("Drawing file"), os.path.dirname(self.file.text().strip()),
+            tr("Vector drawings") + " (" + " ".join("*" + ext
+                                                    for ext in vector_import.VECTOR_EXTENSIONS)
+            + ")")
+        if path:
+            self.file.setText(path)
+
+    def _note(self, text, bad):
+        """A line under the fields: amber when something is off, plain when it is gone again."""
+        self.info.setStyleSheet(f"color: {theme.color('warn')};" if bad else "")
+        self.info.setText(text)
+
+    def spec(self) -> cookie_cutter.Spec:
+        """What the cutter is made of now, as the core of the feature reads it."""
+        return cookie_cutter.Spec(source=str(self.source.currentData()),
+                                  text=self.text.toPlainText(),
+                                  family=str(self.family.currentFont().family()),
+                                  bold=bool(self.bold.isChecked()),
+                                  file=self.file.text().strip(), sheet=self.sheet_paths,
+                                  width=round(self.width.value(), 6),
+                                  wall=round(self.wall.value(), 6),
+                                  height=round(self.height.value(), 6),
+                                  flange=round(self.flange.value(), 6),
+                                  flange_thickness=round(self.thick.value(), 6),
+                                  edge=bool(self.edge.isChecked()),
+                                  stamp=bool(self.stamp.isChecked()))
+
+    def _changed(self, *_):
+        """The rows the source needs, the cutter these figures make, and OK when there is one.
+
+        A source with nothing closed in it - the worksheet selection gone again, a file that is not
+        there, a word that draws nothing - is said in the same line as the figures of a cutter are,
+        and takes OK away: there would be nothing to build.
+        """
+        spec = self.spec()
+        for w in (self.text, self.family, self.bold):      # a word brings its own fields
+            self.layout().setRowVisible(w, spec.source == "text")
+        self.layout().setRowVisible(self.drawing_row, spec.source == "file")
+        try:
+            s = cookie_cutter.sizes(spec)
+        except ValueError as exc:
+            self._note(str(exc), True)
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
+            return
+        self._note(trn("{n} cutter stands {x:.1f} by {y:.1f} mm on the bed, {h:.1f} mm high.",
+                       "{n} cutters stand {x:.1f} by {y:.1f} mm on the bed, {h:.1f} mm high.",
+                       s["cutters"]).format(n=s["cutters"], x=s["size_x"], y=s["size_y"],
+                                            h=s["height"]), False)
+        self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(True)
+
+    def options(self) -> dict:
+        """What was picked, together with the worksheet shapes the dialog was opened on."""
+        spec = self.spec()
+        return {"source": spec.source, "text": spec.text, "family": spec.family,
+                "bold": spec.bold, "file": spec.file, "shapes": spec.sheet,
+                "width": spec.width, "wall": spec.wall, "height": spec.height,
+                "flange": spec.flange, "flange_thickness": spec.flange_thickness,
+                "edge": spec.edge, "stamp": spec.stamp}
 
 
 class DeskHookDialog(QDialog):

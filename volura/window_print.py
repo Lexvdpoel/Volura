@@ -28,8 +28,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
 
 from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,
                cable_chain, cable_clip, cable_comb, cable_winder, calibration_cube, card_holder,
-               coaster, desk_hook, door_wedge, drawer_organizer, enclosure, face_text, fan_guard,
-               fileio, filament_clip, first_layer_test, flow_rate_test,
+               coaster, cookie_cutter, desk_hook, door_wedge, drawer_organizer, enclosure,
+               face_text, fan_guard, fileio, filament_clip, first_layer_test, flow_rate_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
                label_plate, lithophane, max_speed_test, ops, paint_split, pegboard, pen_cup,
                phone_stand, plant_label, plant_pot, pressure_advance_test, retraction_test,
@@ -46,9 +46,9 @@ from .model import ROOT
 from .part_dialogs import (BagClipDialog, BatteryHolderDialog, BinRackDialog,
                            BitHolderDialog, BracketDialog,
                            CableChainDialog, CableClipDialog, CableCombDialog, CableWinderDialog,
-                           CardHolderDialog, CoasterDialog, DeskHookDialog, DoorWedgeDialog,
-                           DrawerOrganizerDialog, FaceTextDialog, FanGuardDialog,
-                           FilamentClipDialog,
+                           CardHolderDialog, CoasterDialog, CookieCutterDialog, DeskHookDialog,
+                           DoorWedgeDialog, DrawerOrganizerDialog, FaceTextDialog,
+                           FanGuardDialog, FilamentClipDialog,
                            GridfinityDialog, GrommetDialog, HexKeyHolderDialog,
                            HingeDialog, HoseAdapterDialog, KnobDialog, LabelPlateDialog,
                            LithophaneDialog, PegboardDialog, PenCupDialog, PhoneStandDialog,
@@ -2465,6 +2465,72 @@ class PrintMixin:
             self.view.set_status(tr("Plant label failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the plant label…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ cookie cutter
+    def cookie_cutter_dialog(self):
+        """Draw > Parts > Home and Desk > Cookie Cutter…: a closed outline turned into a cutter you
+           press."""
+        dlg = CookieCutterDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("source", "text", "family", "bold", "file", "width", "wall", "height",
+                    "flange", "flange_thickness", "edge", "stamp"):
+            setattr(self.settings, "cookie_cutter_" + key, options[key])
+        self.settings.save()
+        made = self.make_cookie_cutter_model(options)
+        self.setFocus()
+        return made
+
+    def make_cookie_cutter_model(self, options):
+        """The cutter standing on its flange as it prints: one undo step, the middle of the bed.
+
+        The outline of a drawing is thousands of points and a cutter is two offsets of every one of
+        them, so the cutter is built in the background like the plant label and the window keeps
+        responding. The drawing is read there too, while the shapes of the worksheet were taken when
+        the dialog opened, so nothing of the model is read while the cutter is built and the
+        worksheet can go on being edited. The cutter stands in the middle of the bed with its flange
+        down, because that is how it prints and how it is pressed. Without closed shapes there is no
+        worksheet source to make a cutter of, which is why that choice stands greyed out in the
+        dialog; a command that is handed that source anyway says so and leaves the model alone.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        if str(options["source"]) == "sheet" and not options["shapes"]:
+            self.view.set_status(tr("The cookie cutter needs closed shapes selected on the "
+                                    "worksheet."))
+            return None
+        spec = cookie_cutter.Spec(source=str(options["source"]), text=str(options["text"]),
+                                  family=str(options["family"]), bold=bool(options["bold"]),
+                                  file=str(options["file"]), sheet=tuple(options["shapes"]),
+                                  width=float(options["width"]), wall=float(options["wall"]),
+                                  height=float(options["height"]), flange=float(options["flange"]),
+                                  flange_thickness=float(options["flange_thickness"]),
+                                  edge=bool(options["edge"]), stamp=bool(options["stamp"]))
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the cookie cutter…"))
+            m = cookie_cutter.cookie_cutter(spec)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            return m.translate((0.5 * bx - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the cutter away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, tr("Cookie cutter"))
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Cookie cutter added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Cookie cutter failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the cookie cutter…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ desk hook

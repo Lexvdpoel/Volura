@@ -27,7 +27,8 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,  # noqa: E402
                     cable_chain, cable_clip, cable_comb, cable_winder, calibration_cube,
-                    card_holder, coaster, desk_hook, door_wedge, drawer_organizer, enclosure,
+                    card_holder, coaster, cookie_cutter, desk_hook, door_wedge, drawer_organizer,
+                    enclosure,
                     fan_guard, filament_clip, first_layer_test,
                     fonts, gears, gridfinity,
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
@@ -39,6 +40,7 @@ from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, bri
                     text3d, tie_mount, wall_hook)
 from volura import ops  # noqa: E402
 from volura.model import Document  # noqa: E402
+from volura.vector2d import VPath  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])     # the letters need Qt
 
@@ -136,6 +138,25 @@ def first_layer(**kw):
     """A first layer test: five thin squares on the bed, four in its corners and one in the
     middle."""
     return first_layer_test.first_layer_test(**kw)
+
+
+def cutter(**kw):
+    """A cookie cutter of a square on the worksheet, which is the source that needs no fonts."""
+    kw.setdefault("source", "sheet")
+    kw.setdefault("sheet", (VPath(np.array([[0.0, 0.0], [40.0, 0.0], [40.0, 40.0], [0.0, 40.0]]),
+                                  True),))
+    return [cookie_cutter.cookie_cutter(cookie_cutter.Spec(**kw))]
+
+
+def stamped(**kw):
+    """A cookie cutter of a ring that stamps its hole: the spokes of that stamp end exactly on the
+    wall they are welded into, which is where a round trip finds a sliver."""
+    t = np.linspace(0.0, 2.0 * np.pi, 65)[:-1]
+    kw.setdefault("source", "sheet")
+    kw.setdefault("stamp", True)
+    kw["sheet"] = (VPath(np.c_[30.0 * np.cos(t), 30.0 * np.sin(t)], True, rule="evenodd", src=1),
+                   VPath(np.c_[12.0 * np.cos(t), 12.0 * np.sin(t)], True, rule="evenodd", src=1))
+    return [cookie_cutter.cookie_cutter(cookie_cutter.Spec(**kw))]
 
 
 CASES = [
@@ -368,6 +389,11 @@ CASES = [
     ("plant label long name on a large head", lambda: [plant_label.plant_label(
         text="ROSEMARY FOR THE KITCHEN WINDOW", width=120.0, head=40.0, stake=200.0,
         thickness=4.0, raised=2.0)]),
+
+    ("cookie cutter default", lambda: cutter()),
+    ("cookie cutter without a flange and without a sharp edge", lambda: cutter(
+        flange=0.0, edge=False)),
+    ("cookie cutter of a ring that stamps its hole", lambda: stamped()),
 
     ("desk hook default", lambda: [desk_hook.desk_hook()]),
     ("desk hook thin wall on a thin desk", lambda: [desk_hook.desk_hook(

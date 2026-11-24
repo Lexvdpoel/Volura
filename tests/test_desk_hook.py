@@ -327,7 +327,7 @@ def test_the_dialog_builds_a_hook_and_remembers_it(monkeypatch, tmp_path):
             30.0, 55.0, 70.0, 45.0, 8.0, 35.0)
         labels = [a.text().replace("&", "").replace("…", "")
                   for a in w.flat_actions(w.parts_category("Home and Desk"))]
-        assert labels.index("Desk Hook") == labels.index("Coaster") + 1
+        assert labels.index("Desk Hook") == labels.index("Cookie Cutter") + 1
     finally:
         for key, value in (("desk_hook_desk", 25.0), ("desk_hook_grip", 40.0),
                            ("desk_hook_drop", 50.0), ("desk_hook_hook", 30.0),
