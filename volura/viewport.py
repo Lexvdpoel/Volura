@@ -8,7 +8,7 @@ from PySide6.QtCore import QEvent, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QSurfaceFormat
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
-from . import background, clearance, errors, icons, ops, section, theme, thin_walls
+from . import background, clearance, errors, icons, ops, plates, section, theme, thin_walls
 from .camera import Camera, horizon_line
 from .i18n import tr, trn
 from .inference import InferenceEngine
@@ -66,6 +66,39 @@ GUIDE_COLOR = (0.52, 0.52, 0.58, 1)
 # the print bed: fill, fine and coarse grid lines; light lines on the dark background
 BED_LIGHT = ((0.55, 0.60, 0.55, 0.13), (0.45, 0.48, 0.45, 0.25), (0.35, 0.38, 0.35, 0.40))
 BED_DARK = ((0.85, 0.88, 0.85, 0.08), (0.86, 0.89, 0.86, 0.16), (0.90, 0.92, 0.90, 0.32))    # guides: dashed light grey, like SketchUp
+# The bed of the plates after the first: an outline and a big number, so a project that is
+# spread over several beds shows which part belongs to which print. The number is drawn from
+# seven segments instead of a font, because it stands flat on the bed and grows with the view.
+PLATE_BED_COLOR = (0.30, 0.36, 0.30, 0.85)
+PLATE_NUMBER_COLOR = (0.34, 0.40, 0.34, 0.75)
+PLATE_NUMBER_HIGH = 0.34       # of the depth of the bed
+PLATE_NUMBER_WIDE = 0.20       # of the depth of the bed, per digit
+PLATE_NUMBER_GAP = 0.07        # between two digits, of the depth of the bed
+#: which of the seven segments a digit lights up
+DIGIT_SEGMENTS = {"0": "abcdef", "1": "bc", "2": "abged", "3": "abgcd", "4": "fgbc",
+                  "5": "afgcd", "6": "afgedc", "7": "abc", "8": "abcdefg", "9": "abcfgd"}
+#: the two ends of a segment in a cell of one by one: x to the right, y up
+SEGMENT_ENDS = {"a": ((0.0, 1.0), (1.0, 1.0)), "b": ((1.0, 0.5), (1.0, 1.0)),
+                "c": ((1.0, 0.0), (1.0, 0.5)), "d": ((0.0, 0.0), (1.0, 0.0)),
+                "e": ((0.0, 0.0), (0.0, 0.5)), "f": ((0.0, 0.5), (0.0, 1.0)),
+                "g": ((0.0, 0.5), (1.0, 0.5))}
+
+
+def number_segments(plate) -> list:
+    """The plate number as line segments: `(x0, y0, x1, y1)` per segment.
+
+    A digit is one by one and the row of digits stands on y = 0, centred on x = 0, so the
+    caller has only to scale it and put it on the bed."""
+    digits = str(plates.plate_number(plate))
+    step = 1.0 + PLATE_NUMBER_GAP
+    total = len(digits) * step - PLATE_NUMBER_GAP
+    out = []
+    for k, char in enumerate(digits):
+        x = k * step - 0.5 * total
+        for seg in DIGIT_SEGMENTS.get(char, ""):
+            (ax, ay), (bx, by) = SEGMENT_ENDS[seg]
+            out.append((x + ax, ay, x + bx, by))
+    return out
 
 
 def hex_rgb(h):
@@ -321,6 +354,7 @@ class Viewport(QOpenGLWidget):
         self.overlay_lines = []         # (pts, color, width) a dialog draws over the model
         self.overlay_solid = None       # (MeshData, color, alpha) a dialog draws over the model
         self.problem_items = []         # items the Print Check panel marks in red
+        self.plate = plates.ALL         # the plate the view shows; plates.ALL is every plate
         self.labels = []                # (screen QPointF, text)
         self.markers = []               # (screen QPointF, inference kind)
         self._rcache = {}
@@ -591,7 +625,54 @@ class Viewport(QOpenGLWidget):
             major += [(0, y, 0), (bx, y, 0)]
         self.draw_lines(major, major_col, 1.0)
         self.draw_loop([(0, 0, 0), (bx, 0, 0), (bx, by, 0), (0, by, 0)], (0.2, 0.25, 0.2, 0.8), 1.6)
+        self._draw_plate_beds(bx, by)
         gl.glDepthMask(gl.GL_TRUE)
+
+    def _plate_beds(self) -> list:
+        """The plates after the first whose bed is on the screen.
+
+        As many as the model needs, and at least the one the plate chooser is looking at, so a
+        plate that is still empty is a bed you can already put parts on."""
+        if getattr(self, "doc", None) is None:
+            return []
+        need = plates.plate_count(self.doc, self.settings.bed_size)
+        if self.plate != plates.ALL:
+            # the chosen plate, and the empty bed after it: where the parts go when this one fills up
+            need = max(need, self.plate + 1)
+        return list(range(plates.FIRST + 1, need + 1))
+
+    def _draw_plate_beds(self, bx, by):
+        """The beds of the plates after the first: the same bed, next to the real one along +X,
+        drawn as an outline with a big number on it. Only plate 1 is the bed of the printer;
+        the others are places on the same machine for the parts that did not fit on it."""
+        for plate in self._plate_beds():
+            ox = float(plates.origin(plate, self.settings.bed_size)[0])
+            self.draw_loop([(ox, 0.0, 0.0), (ox + bx, 0.0, 0.0), (ox + bx, by, 0.0),
+                            (ox, by, 0.0)], PLATE_BED_COLOR, 1.6)
+            wide = PLATE_NUMBER_WIDE * by
+            high = PLATE_NUMBER_HIGH * by
+            cx, y0 = ox + 0.5 * bx, 0.5 * (by - high)
+            lines = []
+            for x0, y0s, x1, y1 in number_segments(plate):
+                lines += [(cx + x0 * wide, y0 + y0s * high, 0.05),
+                          (cx + x1 * wide, y0 + y1 * high, 0.05)]
+            self.draw_lines(lines, PLATE_NUMBER_COLOR, 2.5 * self.settings.line_scale)
+
+    def set_plate(self, plate) -> None:
+        """Look at one plate of the model, or at all of them (`plates.ALL`)."""
+        self.plate = plates.plate_choice(plate)
+        self.update()
+
+    def _plate_shown(self, g) -> bool:
+        """Whether this group is on the plate the view is looking at.
+
+        Loose geometry of the model itself has no group to stand on a bed, so it belongs to the
+        first plate; it is only hidden when the view picked another plate."""
+        if self.plate == plates.ALL:
+            return True
+        if g is None:
+            return self.plate == plates.FIRST
+        return plates.on_plate(g, self.plate, self.settings.bed_size)
 
     def _draw_axes(self):
         L = 100000.0
@@ -693,14 +774,23 @@ class Viewport(QOpenGLWidget):
         self._rcache[id(ents)] = rc
         return rc
 
+    def _plate_contexts(self, hiding_rest):
+        """(ctx, ents, group) of everything on the plate the view is looking at.
+
+        The heart of the plate chooser: the parts of the other plates are simply not drawn, so
+        one plate at a time is what you see and what you pick."""
+        for ctx, ents, g in self.doc.contexts():
+            if hiding_rest and ctx != self.doc.active:
+                continue
+            if not self._plate_shown(g):
+                continue
+            yield ctx, ents, g
+
     def _draw_contexts(self, hiding_rest):
         """(ctx, ents, group, render data, matrices) of everything to draw, with the preview applied."""
-        doc = self.doc
         pt = self.preview_transform
         moving = {i for k, _, i in pt[0] if k == "g"} if pt else set()
-        for ctx, ents, g in doc.contexts():
-            if hiding_rest and ctx != doc.active:
-                continue
+        for ctx, ents, g in self._plate_contexts(hiding_rest):
             mats = [None]
             if ctx in moving:
                 mats = [pt[1]] + ([None] if pt[2] else [])
@@ -1965,8 +2055,26 @@ class Viewport(QOpenGLWidget):
         self.commit_camera()
         self.update()
 
+    def visible_bbox(self):
+        """The box of everything this view draws: the visible groups of the plate it shows.
+
+        `Document.model_bbox` knows every group, but the plate chooser takes the other plates off
+        the screen, and Zoom Selection frames what you see - otherwise the plate you picked would
+        stay in a corner of the view."""
+        pts = []
+        for _ctx, ents, _g in self._plate_contexts(False):
+            bb = ents.bbox()
+            if bb is not None:
+                pts.extend(bb)
+        if not pts:
+            return None
+        P = np.asarray(pts, dtype=float)
+        return np.array([P.min(axis=0), P.max(axis=0)])
+
     def zoom_extents(self):
-        bb = self.doc.model_bbox()
+        bb = self.visible_bbox()
+        if bb is None:
+            bb = self.doc.model_bbox()
         if bb is None:
             bx, by, bz = self.settings.bed_size
             bb = np.array([[0, 0, 0], [bx, by, 0]], dtype=float)

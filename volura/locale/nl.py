@@ -3576,4 +3576,67 @@ TRANSLATIONS = {
     '{printer} is waiting': '{printer} wacht',
     '{printer} is waiting: {file} paused': '{printer} wacht: {file} staat stil',
     '{printer} no longer answers': '{printer} antwoordt niet meer',
+    # More than one build plate: the plate a part stands on, Tools > Arrange on Plates and the
+    # plates of File > Slice all Plates… (volura/plates.py, volura/window_print.py)
+    'Plate:': 'Plaat:',
+    'Look at one plate of the model, or at all of them; a plate is one bed of the printer, and one slice':
+        'Kijk naar één plaat van het model, of naar ze allemaal; een plaat is één bed van de '
+        'printer, en één slice',
+    'All plates': 'Alle platen',
+    'Plate {n} of {total}': 'Plaat {n} van {total}',
+    'One plate is one bed of the printer; a printer prints one plate after the other, so a slice '
+    'is one plate too':
+        'Eén plaat is één bed van de printer; een printer print één plaat na de andere, dus een '
+        'slice is ook één plaat',
+    'Arrange on Plates': 'Verdelen over platen',
+    'Spread the groups over as many print beds as they need, without overlapping':
+        'Verpreid de groepen over zoveel printbedden als ze nodig hebben, zonder elkaar te raken',
+    'Arranged {n} part on {p} plate.': '{n} onderdeel over {p} plaat geschikt.',
+    'Arranged {n} parts on {p} plates.': '{n} onderdelen over {p} platen geschikt.',
+    '{name} does not fit a plate of {w:.0f} × {h:.0f} mm, even turned 90 degrees.':
+        '{name} past niet op een plaat van {w:.0f} × {h:.0f} mm, ook niet als je hem 90° draait.',
+    '{names} do not fit a plate of {w:.0f} × {h:.0f} mm, even turned 90 degrees.':
+        '{names} passen niet op een plaat van {w:.0f} × {h:.0f} mm, ook niet als je ze 90° draait.',
+    'More than {n} plates are needed to lay this model out. Take some parts away, or make them '
+    'smaller.':
+        'Dit model heeft meer dan {n} platen nodig. Haal er wat onderdelen af, of maak ze kleiner.',
+    'Slice all &Plates…': 'Alle &platen slicen…',
+    'One G-code for every plate of the model, in a folder, with a table of what each plate takes':
+        'Eén G-code voor elke plaat van het model, in een map, met een tabel van wat elke plaat kost',
+    'Reading the parts of every plate…': 'De onderdelen van elke plaat lezen…',
+    'Folder for the G-code of every plate': 'Map voor de G-code van elke plaat',
+    'Slicing plate {n} of {total}…': 'Plaat {n} van {total} slicen…',
+    'Slicing all plates…': 'Alle platen slicen…',
+    'Plate {n}: the parts ({x:.0f} × {y:.0f} × {z:.0f} mm) do not fit the build volume of '
+    '{w:.0f} × {d:.0f} × {h:.0f} mm':
+        'Plaat {n}: de onderdelen ({x:.0f} × {y:.0f} × {z:.0f} mm) passen niet in het bouwvolume '
+        'van {w:.0f} × {d:.0f} × {h:.0f} mm',
+    'Sliced {n} plates into {folder}: {h} h {m:02d} min, {g:.0f} g filament in total':
+        '{n} platen gesliced naar {folder}: {h} u {m:02d} min, in totaal {g:.0f} g filament',
+    'Sliced Plates': 'Overzicht van de platen',
+    '{n} plate was sliced, one after the other:': '{n} plaat is gesliced, één na de andere:',
+    '{n} plates were sliced, one after the other:':
+        '{n} platen zijn gesliced, één na de andere:',
+    'Parts': 'Onderdelen',
+    'File': 'Bestand',
+    '{h} h {m:02d} min': '{h} u {m:02d} min',
+    '{g:.0f} g (≈ {c:.2f})': '{g:.0f} g (≈ {c:.2f})',
+    'Together: {h} h {m:02d} min, {g:.0f} g filament':
+        'Samen: {h} u {m:02d} min, {g:.0f} g filament',
+    'Add all to the print queue': 'Allemaal in de printwachtrij',
+    'Let every plate wait for a free printer, first plate 1 and the plates after it behind it':
+        'Laat elke plaat op een vrije printer wachten: eerst plaat 1, daarna de platen erachter',
+    'Add a printer under Window > Preferences > Printers first; a queued print waits for a '
+    'printer.':
+        'Maak eerst een printer onder Venster > Voorkeuren > Printers; een print in de wachtrij '
+        'wacht op een printer.',
+    '{name} — plate {n}': '{name} — plaat {n}',
+    'This model stands on {n} plates, and a 3MF carries no plates: every part keeps the place it '
+    'has in Volura, so everything of the plates after the first stands beside the bed of your '
+    'slicer. Slice those plates here with File > Slice all Plates…, or move them onto the bed '
+    'first.':
+        'Dit model staat op {n} platen, en een 3MF kent geen platen: elk onderdeel houdt de plek '
+        'die het in Volura heeft, dus alles van de platen na de eerste staat naast het bed van je '
+        'slicer. Slice die platen hier met Bestand > Alle platen slicen…, of zet ze eerst op het '
+        'bed.',
 }

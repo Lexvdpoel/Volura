@@ -158,6 +158,12 @@ gets for free.
 - **Arrange on Bed** (Tools or right-click): lay the selected groups, or all groups when nothing is
   selected, side by side on the print bed without overlapping, like a slicer does; parts are turned
   0, 90, 180 or 270 degrees and stand on the bed, 5 mm from the edge and from each other
+- **Several build plates** (3D Printing > Arrange on Plates, the **Plate** box in the Print tab):
+  a project bigger than one bed is spread over plates 1, 2, 3 and so on, identical beds lying next
+  to each other along X; the plate of a part is the bed under its middle, so a move can never put a
+  part on the wrong plate. Arrange on Plates fills one bed and sends the rest to the next, the plate
+  box shows one plate at a time, File > Slice slices that plate as if it stood on the real bed, and
+  **File > Slice all Plates…** writes one G-code per plate with a table of what each took
 - **Lay Flat on This Face** (right-click a face of a group): turn that part about its own centre until
   the face you clicked lies on the print bed, like "place on face" of a slicer
 - **Screw Hole** (Tools): turn a circle you drew on a part into a printable hole

@@ -32,7 +32,8 @@ from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, brack
                face_text, fan_guard, fileio, filament_clip, first_layer_test, flow_rate_test,
                gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
                label_plate, lithophane, max_speed_test, ops, paint_split, pegboard, pen_cup,
-               phone_stand, plant_label, plant_pot, pressure_advance_test, retraction_test,
+               phone_stand, plant_label, plant_pot, plates, pressure_advance_test, print_queue,
+               retraction_test,
                screw_jar, snap_fit,
                soap_dish, slicer, spool_adapter, standoff, storage_bin, stringing_test,
                temperature_tower, text3d, theme, threads, tie_mount, wall_hook)
@@ -1126,8 +1127,18 @@ class PrintMixin:
                        on_error=failed)
 
     # ------------------------------------------------------------ slicing
+    def plate_bed(self):
+        """The size of one bed, which is also the size of one plate (Preferences > Print)."""
+        return tuple(self.settings.bed_size)
+
     def slice_dialog(self):
-        """File > Slice…: slice the printable parts with CuraEngine, preview it, save the G-code."""
+        """File > Slice…: slice the printable parts with CuraEngine, preview it, save the G-code.
+
+        A model that stands over more than one bed slices ONE plate: the one the Print tab shows,
+        and the dialog says which plate that is and how many there are. The parts of that plate go
+        to the slicer as if they stood on the real bed, so the G-code of plate 3 is exactly what
+        the same parts would give on plate 1 (see `volura.plates`).
+        """
         from . import slice_dialog as sd
         engine, resources = slicer.find_engine(), slicer.find_resources()
         if not engine or not resources:
@@ -1141,6 +1152,9 @@ class PrintMixin:
                                                       "computer:\n{problem}").format(problem=problem))
             return
         only = bool(self.doc.selected_groups())
+        bed = self.plate_bed()
+        used = plates.plates_used(self.doc, bed)
+        want = self.current_plate() if self.current_plate() in used else plates.FIRST
         # reading the profiles the first time takes a while; after that they are kept
         reading = (tr("Preparing…") if sd.is_loaded(resources) else
                    tr("Reading the printer profiles… The first time this can take a few minutes."))
@@ -1149,15 +1163,18 @@ class PrintMixin:
             report(0.0, reading)
             lib = sd.library(resources)
             report(0.6, tr("Reading the colours of the model…"))
-            part_list = ops.parts(self.doc, only_selected=only)
-            return (lib, part_list, ops.role_parts(self.doc, only_selected=only),
-                    fileio.model_colors(part_list, self.doc.materials))
+            # every plate gets its own list now, so the dialog can still pick another one
+            return (lib,
+                    {p: ops.parts(self.doc, only_selected=only, plate=p, bed=bed) for p in used},
+                    {p: ops.role_parts(self.doc, only_selected=only, plate=p, bed=bed)
+                     for p in used})
 
         def prepared(result):
-            lib, part_list, role_list, colors = result
-            part_list = self._validated_parts(part_list)
+            lib, parts_by_plate, roles_by_plate = result
+            part_list = self._validated_parts(parts_by_plate[want])
             if part_list is None:
                 return
+            role_list = roles_by_plate[want]
             # a support volume that is no closed volume blocks nothing and becomes no support, so it
             # is said before the slice instead of quietly doing nothing in the corner of the bed
             broken = [p.name for p in role_list if p.manifold is None]
@@ -1172,7 +1189,9 @@ class PrintMixin:
                         != QMessageBox.Yes:
                     self.setFocus()
                     return
-            dlg = sd.SliceDialog(self, lib, colors, len(part_list))
+            dlg = sd.SliceDialog(self, lib, fileio.model_colors(
+                [one for lst in parts_by_plate.values() for one in lst], self.doc.materials),
+                len(part_list), slice_plates=used, slice_plate=want)
             if dlg.exec() != QDialog.Accepted:
                 self.setFocus()
                 if dlg.went_3mf:
@@ -1181,8 +1200,13 @@ class PrintMixin:
             if dlg.printer is None:
                 self.setFocus()
                 return
-            choice = dlg.choice()
-            for key, value in choice.items():
+            plate = dlg.slice_plate()
+            if plate != want:               # another plate was chosen: its parts need checking
+                part_list = self._validated_parts(parts_by_plate[plate])
+                if part_list is None:
+                    return
+                role_list = roles_by_plate[plate]
+            for key, value in dlg.choice().items():
                 setattr(self.settings, "slice_" + key, value)
             self.settings.save()
             try:
@@ -1190,19 +1214,30 @@ class PrintMixin:
                 # that would run past the speed limit at this slice is refused before it starts; a
                 # calibration is one command for the first layer, set by the chosen firmware
                 height_commands = self._bed_height_commands(only, dlg.stacks(),
-                                                            dlg.calibration_command())
+                                                            dlg.calibration_command(),
+                                                            plate=plate, bed=bed)
             except ValueError as exc:
                 QMessageBox.warning(self, tr("Slice"), str(exc))
                 self.setFocus()
                 return
             self._slice_async(dlg.stacks(), part_list, engine, dlg.printer.name,
                               dlg.multicolor(), height_commands,
-                              self._bed_retraction_bands(only), role_list)
+                              self._bed_retraction_bands(only, plate=plate, bed=bed), role_list,
+                              plate=plate, bed=bed)
 
         background.run(self, prepare, text=reading, on_done=prepared,
                        on_error=self._export_failed)
 
-    def _bed_temperature_steps(self, only) -> tuple | None:
+    def _plate_groups(self, only, plate=None, bed=None):
+        """The groups a slice looks at: the selected ones or the visible ones, of one plate.
+
+        `plate` (see `volura.plates`) is the bed that is being sliced; the plans the parts carry
+        reach the whole bed by height, so a tower that stands on another plate asks for nothing
+        here. `ALL` or nothing at all is every group of the model."""
+        here = self.doc.selected_groups() if only else self.doc.visible_groups()
+        return [g for g in here if plates.on_plate(g, plate, bed)]
+
+    def _bed_temperature_steps(self, only, plate=None, bed=None) -> tuple | None:
         """``(print_temperature, [(z_from, temperature), ...])`` of the towers on the bed.
 
         A part made by Temperature Tower carries its plan in `g.meta`. The hottest first
@@ -1211,7 +1246,7 @@ class PrintMixin:
         to other parts changes the temperature for the whole bed. None when nothing on the bed
         carries a temperature plan.
         """
-        groups = self.doc.selected_groups() if only else self.doc.visible_groups()
+        groups = self._plate_groups(only, plate, bed)
         plans = [g.meta.get("temperature_steps") for g in groups
                  if g.meta.get("temperature_steps")]
         if not plans:
@@ -1236,7 +1271,8 @@ class PrintMixin:
         except (AttributeError, TypeError, ValueError):
             return defaults
 
-    def _bed_height_commands(self, only, stacks=None, calibration=None) -> tuple | None:
+    def _bed_height_commands(self, only, stacks=None, calibration=None,
+                             plate=None, bed=None) -> tuple | None:
         """``(print temperature or None, [(z_from mm, command line), ...])`` of the tests on the bed.
 
         A Temperature Tower carries its plan as temperatures and a Pressure Advance Test as finished
@@ -1254,9 +1290,9 @@ class PrintMixin:
         tests, because at one and the same height the last line in the G-code is the one the printer
         ends up with, and a Pressure Advance Test standing on the bed sets its own values from that
         height on."""
-        temp = self._bed_temperature_steps(only)
+        temp = self._bed_temperature_steps(only, plate, bed)
         changes = [(z, f"M104 S{t}") for z, t in temp[1]] if temp else []
-        groups = self.doc.selected_groups() if only else self.doc.visible_groups()
+        groups = self._plate_groups(only, plate, bed)
         flows = []
         for g in groups:
             for one in (g.meta.get("height_commands") or []):
@@ -1285,7 +1321,7 @@ class PrintMixin:
             return None
         return (temp[0] if temp else None), sorted(head + changes, key=lambda one: one[0])
 
-    def _bed_retraction_bands(self, only) -> list:
+    def _bed_retraction_bands(self, only, plate=None, bed=None) -> list:
         """``[(z_from mm, z_to mm, length mm), ...]`` of the retraction tests on the bed.
 
         A part made by Retraction Test carries its plan of lengths in `g.meta["retraction_bands"]`.
@@ -1299,7 +1335,7 @@ class PrintMixin:
         `slicer.rewrite_retractions` takes the first band that covers a height. Empty when nothing on
         the bed carries a plan.
         """
-        groups = self.doc.selected_groups() if only else self.doc.visible_groups()
+        groups = self._plate_groups(only, plate, bed)
         out = []
         for g in groups:
             for one in (g.meta.get("retraction_bands") or []):
@@ -1309,8 +1345,66 @@ class PrintMixin:
                     continue          # a meta of a hand-written file that is no band
         return sorted(out, key=lambda one: one[0])
 
+    def _plate_meshes(self, stacks, part_list, plan, role_list, report):
+        """One mesh per extruder: a part in one colour, or its painted skins and the rest.
+
+        The second list is what the thumbnail on the printer's screen is drawn from: the same
+        meshes, each in the colour of the part that prints with it. The number says how many
+        parts carry slice settings of their own, which is what the summary of the print tells.
+        The last list holds the support volumes of the model: they slice with the settings of
+        their role, lay no plastic of their own and are therefore in neither of the first two.
+        """
+        meshes, pictures, volumes = [], [], []
+        own_parts = 0                  # how many of them slice with settings of their own
+        parts = [p for p in part_list if p.manifold is not None]
+        for i, p in enumerate(parts):
+            report(0.05 + 0.1 * i / max(1, len(parts)), tr("Colouring the parts…"))
+            pieces = [(p.manifold, p.color)]
+            colors = fileio.triangle_colors(p.manifold)
+            own = plan.extruder(p.color)
+            # only a painted color on another extruder splits the part: pieces on the same
+            # extruder would only print walls inside it
+            if any(plan.extruder(c) != own
+                   for c in paint_split.painted_colors(colors, p.color)):
+                try:
+                    pieces = paint_split.split_painted(p.manifold, colors, p.color,
+                                                       plan.depth)
+                except ValueError as exc:
+                    raise ValueError(tr("The painted faces of {part} do not become a volume: "
+                                        "make the colour depth bigger or paint a closed "
+                                        "area. ({error})").format(part=p.name,
+                                                                  error=exc)) from exc
+            per = {}                   # the pieces of one extruder print as one volume
+            for man, color in pieces:
+                per.setdefault(plan.extruder(color), []).append((man, color))
+            # a part may slice with settings of its own (a pad of a flow rate test); every
+            # mesh made of it gets them, so it prints with them all over
+            part_settings = slicer.per_mesh_settings(stacks, p.mesh_settings)
+            own_parts += 1 if part_settings else 0
+            for extruder, group in per.items():
+                mans = [man for man, _color in group]
+                man = (mans[0] if len(mans) == 1
+                       else mf.Manifold.batch_boolean(mans, mf.OpType.Add))
+                mesh = man.to_mesh()
+                verts = np.asarray(mesh.vert_properties)[:, :3]
+                tris = np.asarray(mesh.tri_verts)
+                meshes.append((verts, tris, extruder, part_settings))
+                pictures.append((verts, tris, group[0][1]))
+        if not meshes:
+            raise ValueError(tr("There is nothing to slice. Draw a face and use Push/Pull (P)."))
+        for p in (role_list or []):
+            if p.manifold is None:
+                continue               # `prepared` told you what is wrong with this volume
+            mesh = p.manifold.to_mesh()
+            # a support volume lays nothing, so the filament of its colour has nothing to say
+            volumes.append((np.asarray(mesh.vert_properties)[:, :3],
+                            np.asarray(mesh.tri_verts), 0,
+                            slicer.per_mesh_settings(stacks, p.mesh_settings)))
+        return meshes, pictures, own_parts, volumes
+
     def _slice_async(self, stacks, part_list, engine, printer_name="", plan=None,
-                     height_commands=None, retraction_bands=None, role_list=None):
+                     height_commands=None, retraction_bands=None, role_list=None,
+                     plate=plates.ALL, bed=None):
         """Slice `part_list` with `stacks` in the background, then show the print preview.
 
         The G-code goes to a temporary file first; the preview reads it back layer by layer
@@ -1330,6 +1424,14 @@ class PrintMixin:
         """
         from . import slice_dialog as sd
         plan = plan or sd.Multicolor()
+        pbed = bed if bed is not None else self.plate_bed()
+        if plate != plates.ALL:
+            # the parts of one plate go to the slicer as if they stood on the real bed: plate 3
+            # sliced is exactly what the same parts would give on plate 1
+            off = -plates.origin(plate, pbed)
+            for one in [*(part_list or ()), *(role_list or ())]:
+                if one.manifold is not None:
+                    one.manifold = one.manifold.translate(tuple(off))
         import tempfile
         fd, path = tempfile.mkstemp(prefix="volura-", suffix=".gcode")
         os.close(fd)
@@ -1339,61 +1441,7 @@ class PrintMixin:
         sizes = gcode_thumbnail.sizes(self.settings.slice_thumbnail)
 
         def made_meshes(report):
-            """One mesh per extruder: a part in one colour, or its painted skins and the rest.
-
-            The second list is what the thumbnail on the printer's screen is drawn from: the same
-            meshes, each in the colour of the part that prints with it. The number says how many
-            parts carry slice settings of their own, which is what the summary of the print tells.
-            The last list holds the support volumes of the model: they slice with the settings of
-            their role, lay no plastic of their own and are therefore in neither of the first two.
-            """
-            meshes, pictures, volumes = [], [], []
-            own_parts = 0                  # how many of them slice with settings of their own
-            parts = [p for p in part_list if p.manifold is not None]
-            for i, p in enumerate(parts):
-                report(0.05 + 0.1 * i / max(1, len(parts)), tr("Colouring the parts…"))
-                pieces = [(p.manifold, p.color)]
-                colors = fileio.triangle_colors(p.manifold)
-                own = plan.extruder(p.color)
-                # only a painted color on another extruder splits the part: pieces on the same
-                # extruder would only print walls inside it
-                if any(plan.extruder(c) != own
-                       for c in paint_split.painted_colors(colors, p.color)):
-                    try:
-                        pieces = paint_split.split_painted(p.manifold, colors, p.color,
-                                                           plan.depth)
-                    except ValueError as exc:
-                        raise ValueError(tr("The painted faces of {part} do not become a volume: "
-                                            "make the colour depth bigger or paint a closed "
-                                            "area. ({error})").format(part=p.name,
-                                                                      error=exc)) from exc
-                per = {}                   # the pieces of one extruder print as one volume
-                for man, color in pieces:
-                    per.setdefault(plan.extruder(color), []).append((man, color))
-                # a part may slice with settings of its own (a pad of a flow rate test); every
-                # mesh made of it gets them, so it prints with them all over
-                part_settings = slicer.per_mesh_settings(stacks, p.mesh_settings)
-                own_parts += 1 if part_settings else 0
-                for extruder, group in per.items():
-                    mans = [man for man, _color in group]
-                    man = (mans[0] if len(mans) == 1
-                           else mf.Manifold.batch_boolean(mans, mf.OpType.Add))
-                    mesh = man.to_mesh()
-                    verts = np.asarray(mesh.vert_properties)[:, :3]
-                    tris = np.asarray(mesh.tri_verts)
-                    meshes.append((verts, tris, extruder, part_settings))
-                    pictures.append((verts, tris, group[0][1]))
-            if not meshes:
-                raise ValueError(tr("There is nothing to slice. Draw a face and use Push/Pull (P)."))
-            for p in (role_list or []):
-                if p.manifold is None:
-                    continue               # `prepared` told you what is wrong with this volume
-                mesh = p.manifold.to_mesh()
-                # a support volume lays nothing, so the filament of its colour has nothing to say
-                volumes.append((np.asarray(mesh.vert_properties)[:, :3],
-                                np.asarray(mesh.tri_verts), 0,
-                                slicer.per_mesh_settings(stacks, p.mesh_settings)))
-            return meshes, pictures, own_parts, volumes
+            return self._plate_meshes(stacks, part_list, plan, role_list, report)
 
         def work(report):
             print_temp, by_height = height_commands or (None, [])
@@ -1522,6 +1570,199 @@ class PrintMixin:
         return [(tr("Filament {n}").format(n=i + 1), FILAMENT_STYLE[i % len(FILAMENT_STYLE)],
                  float(shares[i]), result.grams * float(shares[i]) / total)
                 for i in range(preview.materials)]
+
+    # ------------------------------------------------------------ every plate in turn
+    def slice_all_dialog(self):
+        """File > Slice all Plates…: one G-code for every plate, written in a folder.
+
+        A model spread over several beds is printed plate after plate, so this slices them all in
+        one go: the same printer, the same filament and the same quality for every plate, each one
+        as if it stood on the real bed, written as `name_plate1.gcode`, `name_plate2.gcode` and so
+        on in the folder you choose. A table at the end says what every plate took, and offers to
+        let all of them wait for a free printer in the order they are printed.
+        """
+        from . import slice_dialog as sd
+        engine, resources = slicer.find_engine(), slicer.find_resources()
+        if not engine or not resources:
+            QMessageBox.information(self, tr("Slice"), tr(
+                "The slicer is not part of this copy of Volura. The downloads on the releases "
+                "page include it."))
+            return
+        problem = slicer.engine_problem(engine)
+        if problem:
+            QMessageBox.warning(self, tr("Slice"), tr("The slicer does not start on this "
+                                                      "computer:\n{problem}").format(problem=problem))
+            return
+        only = bool(self.doc.selected_groups())
+        bed = self.plate_bed()
+        used = plates.plates_used(self.doc, bed)
+        stem = self._print_stem()
+        reading = (tr("Preparing…") if sd.is_loaded(resources) else
+                   tr("Reading the printer profiles… The first time this can take a few minutes."))
+
+        def prepare(report):
+            report(0.0, reading)
+            lib = sd.library(resources)
+            report(0.5, tr("Reading the parts of every plate…"))
+            return (lib,
+                    {p: ops.parts(self.doc, only_selected=only, plate=p, bed=bed) for p in used},
+                    {p: ops.role_parts(self.doc, only_selected=only, plate=p, bed=bed)
+                     for p in used})
+
+        def prepared(result):
+            lib, parts_by_plate, roles_by_plate = result
+            for plate in used:
+                got = self._validated_parts(parts_by_plate[plate])
+                if got is None:
+                    return                     # a plate that is no closed volume stops everything
+                parts_by_plate[plate] = got
+            # one choice for all of them, so the dialog has no plate to pick: the plates follow
+            dlg = sd.SliceDialog(self, lib, fileio.model_colors(
+                [one for lst in parts_by_plate.values() for one in lst], self.doc.materials),
+                sum(len(one) for one in parts_by_plate.values()))
+            if dlg.exec() != QDialog.Accepted or dlg.printer is None:
+                self.setFocus()
+                return
+            for key, value in dlg.choice().items():
+                setattr(self.settings, "slice_" + key, value)
+            self.settings.save()
+            folder = QFileDialog.getExistingDirectory(self, tr("Folder for the G-code of every "
+                                                               "plate"), self.last_dir())
+            if not folder:
+                self.setFocus()
+                return
+            stacks, plan, jobs = dlg.stacks(), dlg.multicolor(), []
+            for plate in sorted(used):
+                if not [one for one in parts_by_plate[plate] if one.manifold is not None]:
+                    continue        # an empty plate has nothing to print
+                try:
+                    # every plate asks for the commands its own parts carry, like a slice of one
+                    commands = self._bed_height_commands(only, stacks, None, plate=plate, bed=bed)
+                except ValueError as exc:
+                    QMessageBox.warning(self, tr("Slice"), str(exc))
+                    self.setFocus()
+                    return
+                jobs.append((plate, parts_by_plate[plate], roles_by_plate[plate], commands,
+                             self._bed_retraction_bands(only, plate=plate, bed=bed),
+                             os.path.join(folder, plates.file_name(stem, plate) + ".gcode")))
+            if not jobs:
+                QMessageBox.information(self, tr("Slice"),
+                                        tr("There is nothing to slice. Draw a face and use "
+                                           "Push/Pull (P)."))
+                self.setFocus()
+                return
+            self._slice_all_async(stacks, jobs, engine, plan, bed, folder)
+            self.setFocus()
+
+        background.run(self, prepare, text=reading, on_done=prepared,
+                       on_error=self._export_failed)
+
+    def _slice_all_async(self, stacks, jobs, engine, plan, bed, folder):
+        """Slice every plate of `jobs` in the background, the first plate first.
+
+        Each job is `(plate, parts, support volumes, height commands, retraction bands, path)`, the
+        paths all in `folder`, which is only in the hint at the end. The parts of a plate move to
+        the real bed before they go to the slicer, so the G-code of plate 3 is exactly what the
+        same parts would give on plate 1. What the plates took comes back in a row per plate:
+        `(plate, parts, path, seconds, grams)`.
+        """
+        sizes = gcode_thumbnail.sizes(self.settings.slice_thumbnail)
+        from . import slice_dialog as sd
+        glob = stacks.glob
+        machine = [float(glob.get(k) or 0) for k in ("machine_width", "machine_depth",
+                                                     "machine_height")]
+        total = len(jobs)
+
+        def work(report):
+            rows = []
+            for k, (plate, part_list, role_list, commands, bands, path) in enumerate(jobs):
+                low, high = k / total, (k + 1) / total
+                report(low, tr("Slicing plate {n} of {total}…").format(n=plate, total=total))
+                off = -plates.origin(plate, bed)
+                for one in [*(part_list or ()), *(role_list or ())]:
+                    if one.manifold is not None:
+                        one.manifold = one.manifold.translate(tuple(off))
+                print_temp, by_height = commands or (None, [])
+                if print_temp is not None:
+                    slicer.set_print_temperature(stacks, print_temp)
+                meshes, pictures, _own, volumes = self._plate_meshes(
+                    stacks, part_list, plan, role_list,
+                    lambda f, text, a=low, b=high: report(a + (b - a) * 0.2 * f, text))
+                lo = np.min([m[0].min(axis=0) for m in meshes], axis=0)
+                hi = np.max([m[0].max(axis=0) for m in meshes], axis=0)
+                size = hi - lo
+                if any(w > 0 and s > w + 1e-6 for s, w in zip(size, machine)):
+                    raise ValueError(tr("Plate {n}: the parts ({x:.0f} × {y:.0f} × {z:.0f} mm) do "
+                                        "not fit the build volume of {w:.0f} × {d:.0f} × {h:.0f} mm")
+                                     .format(n=plate, x=size[0], y=size[1], z=size[2],
+                                             w=machine[0], d=machine[1], h=machine[2]))
+                result = slicer.slice_meshes(
+                    stacks, meshes, path, engine, helpers=volumes,
+                    on_progress=lambda f, a=low, b=high: report(
+                        a + (b - a) * (0.2 + 0.75 * f),
+                        tr("Slicing plate {n} of {total}…").format(n=plate, total=total)))
+                if plan.changes:
+                    slicer.insert_filament_changes(path, plan.changes, plan.command)
+                if by_height:
+                    slicer.insert_commands(path, by_height)
+                if bands:
+                    slicer.insert_retractions(path, bands)
+                if sizes:
+                    gcode_thumbnail.insert(path, [gcode_thumbnail.block(
+                        gcode_thumbnail.render(pictures, w, h), w, h) for w, h in sizes])
+                rows.append((plate, len([one for one in part_list if one.manifold is not None]),
+                             path, result.seconds, result.grams))
+            report(1.0, tr("Slicing…"))
+            return rows
+
+        def done(rows):
+            dlg = sd.PlateSummaryDialog(self, rows, self.settings.filament_price)
+            dlg.exec()
+            if dlg.queued:
+                self._queue_plates(rows)
+            hours, rest = divmod(int(round(sum(one[3] for one in rows))), 3600)
+            self.hint.setText(tr("Sliced {n} plates into {folder}: {h} h {m:02d} min, "
+                                 "{g:.0f} g filament in total")
+                              .format(n=len(rows), folder=folder,
+                                      h=hours, m=rest // 60, g=sum(one[4] for one in rows)))
+
+        def failed(exc):
+            QMessageBox.critical(self, tr("Slicing Failed"), str(exc))
+
+        background.run(self, work, text=tr("Slicing all plates…"), on_done=done, on_error=failed)
+
+    def _queue_plates(self, rows):
+        """Add all to the print queue: every plate waits for the same printer, in printing order.
+
+        Nothing starts here: the queue only starts a print the user resumed, on a printer whose
+        bed was said clear (volura.print_queue). The G-code is copied into the folder of the print
+        history, so the queue keeps its prints even when the folder is cleaned out.
+        """
+        printers = list(getattr(self.settings, "printers", None) or [])
+        if not printers:
+            QMessageBox.information(self, tr("Print Queue"), tr(
+                "Add a printer under Window > Preferences > Printers first; a queued print waits "
+                "for a printer."))
+            return
+        from .print_preview import QueueDialog
+        dlg = QueueDialog(self, printers)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        name, stem = dlg.printer_name(), self._print_stem()
+        for plate, _parts, path, seconds, grams in rows:
+            item = print_queue.QueueItem(name=tr("{name} — plate {n}").format(name=stem, n=plate),
+                                         printer=name, grams=grams, minutes=seconds / 60.0)
+            print_queue.store(self.settings, item, source=path)
+        self.hint.setText(print_queue.added_text(
+            len(print_queue.records(getattr(self.settings, "print_queue", None)))))
+
+    def _print_stem(self) -> str:
+        """What the G-codes of this model are called: the name of its file, or "model".
+
+        The same name `export_name` gives an unsaved model, because these names end up in file
+        names and those are not translated."""
+        path = getattr(self.doc, "path", None)
+        return os.path.splitext(os.path.basename(path))[0] if path else "model"
 
     # ------------------------------------------------------------ resin
     def resin_slice_dialog(self):
