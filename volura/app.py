@@ -2293,6 +2293,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.coords = QLabel()
         self.coords.setObjectName("sheetCoords")
         self.coords.setToolTip(tr("Position of the cursor on the 2D worksheet"))
+        self.coords.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)   # no wider than its text
         self.vcb_label = QLabel(tr("Measurements"))
         self.vcb = QLineEdit()
         self.vcb.setAccessibleName(tr("Measurements"))
@@ -2301,11 +2302,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.mode_button = ModeSwitch()
         self.mode_button.clicked.connect(lambda checked=False: self.toggle_sheet_mode())
         self._update_mode_button()
-        self.workspace_bar = workspaces.WorkspaceBar(self.mode_button, hint=self.hint)
+        # the cursor position of the worksheet stands in the row of the switch, left of it: as a
+        # permanent widget of the status bar it lay over the switch, because that row is as wide
+        # as the viewer above it and the status bar had no room left to give it
+        self.workspace_bar = workspaces.WorkspaceBar(self.mode_button, hint=self.hint,
+                                                     before_switch=(self.coords,))
         self.workspace_bar.changed.connect(self.set_workspace)
         sb.addWidget(self.workspace_bar)
         self.workspace_bar.follow(self.central)   # the switch ends where the viewer ends
-        sb.addPermanentWidget(self.coords)
         sb.addPermanentWidget(self.vcb_label)
         sb.addPermanentWidget(self.vcb)
         self.coords.hide()

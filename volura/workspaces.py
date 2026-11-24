@@ -60,8 +60,10 @@ class WorkspaceBar(QWidget):
     #: the user chose another tab; the key of the workspace
     changed = Signal(str)
 
-    def __init__(self, mode_switch=None, parent=None, hint=None, extras=()):
+    def __init__(self, mode_switch=None, parent=None, hint=None, extras=(), before_switch=()):
         """`hint` is the text of the window, beside the tabs and taking the free room;
+        `before_switch` stand just left of the 3D | 2D switch and take their room from the hint,
+        so they can never cover the switch (the cursor position of the worksheet);
         `extras` stand at the right end, after the 3D | 2D switch, all on the one row."""
         super().__init__(parent)
         self.setObjectName("workspaceBar")
@@ -84,6 +86,8 @@ class WorkspaceBar(QWidget):
             lay.addWidget(hint, 1)
         else:
             lay.addStretch(1)
+        for w in before_switch:
+            lay.addWidget(w)
         self.mode_switch = mode_switch
         if mode_switch is not None:
             lay.addWidget(mode_switch)

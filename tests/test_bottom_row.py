@@ -56,3 +56,24 @@ def test_the_switch_follows_the_viewer_when_the_window_changes(win):
 def test_the_measurements_stand_right_of_the_viewer(win):
     settle()
     assert win.vcb.mapTo(win, QPoint(0, 0)).x() >= right(win, win.central)
+
+
+@pytest.mark.parametrize("width", [1280, 1000, 800])
+def test_the_cursor_position_of_the_worksheet_never_covers_the_switch(win, width):
+    """In 2D the cursor position appears in the bottom row; it stood over the 3D | 2D switch,
+    so the switch could not be clicked to go back to the 3D model."""
+    win.resize(width, 800)
+    settle()
+    win.toggle_sheet_mode()
+    try:
+        win.sheet_view.coords_changed.emit("X 1234.56 mm   Y 1234.56 mm")
+        settle()
+        assert win.coords.isVisible()
+        coords_right = right(win, win.coords)
+        switch_left = win.mode_button.mapTo(win, QPoint(0, 0)).x()
+        assert coords_right <= switch_left, "the cursor position covers the 3D | 2D switch"
+        middle = win.mode_button.rect().center()
+        assert win.childAt(win.mode_button.mapTo(win, middle)) is win.mode_button, \
+            "something else is under the middle of the switch"
+    finally:
+        win.toggle_sheet_mode()
