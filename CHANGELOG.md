@@ -3,6 +3,17 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.82 — 2026-11-25
+
+### New
+- **More than one build plate**: *Arrange on Plates* spreads parts that do not fit on one bed over
+  extra plates next to it. Pick a plate to look at it on its own, slice one plate, or slice all of
+  them one after the other into separate files and send them all to the print queue.
+- **Voronoi cells and slots** in *Vent Pattern* on the 2D worksheet: an organic mosaic of cells
+  (the same seed always gives the same pattern, *Shuffle* draws a new one) or rows of rounded slots
+  in a brick bond at 0°, 45° or 90°. The web between the holes stays as wide as you set it, also
+  through a linked 3D face.
+
 ## 0.2.81 — 2026-11-24
 
 ### New
