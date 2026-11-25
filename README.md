@@ -660,6 +660,11 @@ gets for free.
   with the download. The print preview then shows the G-code in 3D, layer by layer, every line as
   wide as it prints (turn, move and zoom it with the mouse), with a virtual printer that plays each layer as the printer will
   print it, the print time and the filament; save the G-code from there
+  - **What every part costs**: under the preview a table lists every part of the print with the
+    time and the filament it took and how much of the print that is; the travel between the parts,
+    the skirt and the support stand there together as *Other*, so the rows add up to the totals
+    above. Clicking a row lights that part up in the print and selects it in the model. A print of
+    one part has nothing to choose between and shows no table
   - **Your own presets**: the combination you come back to - "PETG functional", "PLA quick
     draft" - is saved under a name in the **Preset** box at the top of the dialog. *Save…* keeps
     the choice that stands in the dialog under a name of your own (asking before it replaces a

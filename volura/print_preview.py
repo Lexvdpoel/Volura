@@ -6,12 +6,16 @@ and in the colour of what they print (outer wall, inner wall, top and bottom, in
 skirt), the layers below it dimmed, the travel moves of the chosen layer as thin lines when you
 want them, and the nozzle where it is. A print that goes over more than one filament colours its
 lines with those filaments instead, and the legend under the view names every filament with how
-much of it the print used. Drag with
-the left mouse button to turn the view, with the right or middle button (or Shift and the left) to
-move it; the wheel zooms towards the mouse and a double-click shows the whole print again. Top and
-3D switch the view; Only this layer hides the layers below. Play moves the nozzle through the layer
-at the speed of the real print times a factor and goes on to the next layer; the slider and the
-arrow keys pick a layer. Save G-code… writes the file, and Send to printer… hands it to
+much of it the print used. A print of more than one part has a table of those parts under the view:
+what every part took in time and filament and how much of the print it is, the longest first, with
+everything that prints no part of the model - the travel between the parts, the skirt, the support -
+together under "Other". Clicking a row lights that part up in the view and selects it in the model,
+so you can see which part takes three of the five hours and leave it for a print of its own. Drag
+with the left mouse button to turn the view, with the right or middle button (or Shift and the left)
+to move it; the wheel zooms towards the mouse and a double-click shows the whole print again. Top
+and 3D switch the view; Only this layer hides the layers below. Play moves the nozzle through the
+layer at the speed of the real print times a factor and goes on to the next layer; the slider and
+the arrow keys pick a layer. Save G-code… writes the file, and Send to printer… hands it to
 OctoPrint, Klipper (Moonraker) or PrusaLink over the network (see volura/printer_link.py). Add to
 Queue puts the same G-code on the queue of Window > Print Queue… (volura/print_queue.py), where
 it waits for the first printer that is free - and starts on nothing before the user said that
@@ -36,8 +40,9 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
-                               QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
-                               QPushButton, QSlider, QVBoxLayout)
+                               QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+                               QMessageBox, QPushButton, QSlider, QTableWidget,
+                               QTableWidgetItem, QVBoxLayout)
 
 from . import (background, errors, printer_link, print_history, print_queue, spools, theme)
 from . import gcode_preview as gp
@@ -145,6 +150,7 @@ class _Lines:
 
     `filaments` is what the print prints with (see `filament_color`): with more than one the
     lines are drawn in the colour of the filament they print with, instead of the kind of line.
+    `part[i]` says which mesh of the print lays line `i`, a code into `Preview.mesh_names`.
     """
 
     def __init__(self, preview: gp.Preview, colour_blind=False, filaments=()):
@@ -158,6 +164,7 @@ class _Lines:
             base = len(style)
         shade = np.repeat(np.array([p[2] for p in PROFILE], dtype=np.float32), 2)[:, None]
         pos, col, travel, start, tstart, done = [], [], [], [0], [0], []
+        part = []                      # which mesh of the print lays every line
         for layer in preview.layers:
             printed = layer.kind != gp.TRAVEL
             seg = layer.seg[printed]
@@ -168,6 +175,8 @@ class _Lines:
             if by_filament and layer.material is not None:
                 style_of = np.asarray(layer.material[printed], dtype=np.int64)
             col.append((colours[base + style_of][:, None, :] * shade).reshape(-1, 3))
+            part.append(layer.mesh[printed] if layer.mesh is not None
+                        else np.full(len(seg), gp.NO_MESH, dtype=np.int16))
             trav = layer.seg[~printed]
             zt = np.full((len(trav), 1), layer.z + 0.02, dtype=np.float32)   # above the tops
             travel.append(np.hstack([trav[:, :2], zt, trav[:, 2:], zt]).reshape(-1, 3))
@@ -179,11 +188,23 @@ class _Lines:
         col = np.vstack(col) if col else empty
         self.col = np.ascontiguousarray(np.round(col * 255), dtype=np.uint8)
         self.dim = np.ascontiguousarray(np.round(col * DIM * 255), dtype=np.uint8)
+        self.part = (np.ascontiguousarray(np.concatenate(part), dtype=np.int16) if part
+                     else np.zeros(0, dtype=np.int16))
         self.travel = np.ascontiguousarray(np.vstack(travel) if travel else empty,
                                            dtype=np.float32)
         self.start, self.tstart, self.done = start, tstart, done
         self.first = np.arange(0, start[-1] * VERTS, VERTS, dtype=np.int32)
         self.count = np.full(start[-1], VERTS, dtype=np.int32)
+
+    def focus(self, codes) -> np.ndarray:
+        """The colours of every line with the lines of the meshes of `codes` in their own colour.
+
+        `codes` are the meshes of one part of the print (see `per_part` and `Preview.mesh_names`);
+        every other line - also of the layers below the chosen one - comes dimmed, so the part
+        stands out of the print the way it does in the "Per part" table.
+        """
+        want = np.repeat(np.isin(self.part, np.asarray(tuple(codes), dtype=np.int16)), VERTS)
+        return np.ascontiguousarray(np.where(want[:, None], self.col, self.dim))
 
     def draw(self, lo: int, hi: int):
         """Draw lines `lo` up to `hi`, with the vertex and colour pointers set already."""
@@ -196,7 +217,9 @@ class LayerView(QOpenGLWidget):
 
     `bed` is (x0, y0, x1, y1): the bed in the coordinates of the G-code. `layer` is the chosen
     layer, `at` the seconds into it the virtual printer is (None: the whole layer). `filaments`
-    is what the print prints with: with more than one, the lines show their filament.
+    is what the print prints with: with more than one, the lines show their filament. `part` is
+    what one row of the "Per part" table stands for: the lines of those meshes stay bright and
+    every other line of the print comes dimmed (see `show_part`).
     """
 
     def __init__(self, preview: gp.Preview, bed, colour_blind=False, filaments=(), parent=None):
@@ -210,6 +233,8 @@ class LayerView(QOpenGLWidget):
         self.at = None
         self.show_travel = False
         self.only_layer = False
+        self.part = None                      # the meshes of the part to light up, nothing at all
+        self._focus = None                    # for the whole print (see `show_part`)
         self.cam = Camera()
         self._drag, self._last = None, None
         self._fitted = False                    # fitted once the view has its real size
@@ -237,6 +262,17 @@ class LayerView(QOpenGLWidget):
             self.cam.set_view(view)
         self.cam.width, self.cam.height = max(1, self.width()), max(1, self.height())
         self.cam.fit(self._box())
+        self.update()
+
+    # ---- one part of the print
+    def show_part(self, codes=None):
+        """Light up the lines the meshes of `codes` lay and dim every other line of the print.
+
+        `codes` are the meshes of one row of the "Per part" table (see `gcode_preview.per_part`);
+        nothing at all shows the whole print in the colours of its kinds of line again.
+        """
+        self.part = tuple(int(code) for code in codes) if codes else None
+        self._focus = None if self.part is None else self.lines.focus(self.part)
         self.update()
 
     # ---- drawing
@@ -301,11 +337,16 @@ class LayerView(QOpenGLWidget):
         gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
         gl.glEnableClientState(gl.GL_COLOR_ARRAY)
         gl.glVertexPointer(3, gl.GL_FLOAT, 0, ln.pos)
-        if first > 0 and not self.only_layer:
-            gl.glColorPointer(3, gl.GL_UNSIGNED_BYTE, 0, ln.dim)
-            ln.draw(0, first)
-        gl.glColorPointer(3, gl.GL_UNSIGNED_BYTE, 0, ln.col)
-        ln.draw(first, end)
+        if self.part is not None:
+            # one part of the print stands out: the table of the parts chose it
+            gl.glColorPointer(3, gl.GL_UNSIGNED_BYTE, 0, self._focus)
+            ln.draw(0, end)
+        else:
+            if first > 0 and not self.only_layer:
+                gl.glColorPointer(3, gl.GL_UNSIGNED_BYTE, 0, ln.dim)
+                ln.draw(0, first)
+            gl.glColorPointer(3, gl.GL_UNSIGNED_BYTE, 0, ln.col)
+            ln.draw(first, end)
         gl.glDisableClientState(gl.GL_COLOR_ARRAY)
         if self.show_travel and ln.tstart[i + 1] > ln.tstart[i]:
             gl.glLineWidth(1.0)
@@ -554,10 +595,19 @@ class PrintPreviewDialog(QDialog):
     (volura.print_history): saved, sent, started or marked as printed, the strongest of
     those. A preview that was only looked at leaves nothing behind - there is nothing to say
     about a print that did not happen.
+
+    `parts` says what every part of the print cost: the rows `gcode_preview.per_part` works out
+    from the G-code, the longest first, with the row of everything that prints no part of the
+    model among them by its own time. With more than one part in them they come under the view as
+    a "Per part" table - part, time, filament, share of the print - and clicking a row lights that
+    part up in the view and gives its group to `on_select`, so the model has it selected the
+    moment this preview closes. A print of one part has nothing to choose between and shows no
+    table.
     """
 
     def __init__(self, win, gcode_path: str, preview: gp.Preview, bed, summary: str,
-                 ask_path=None, filaments=(), grams=0.0, minutes=0.0):
+                 ask_path=None, filaments=(), grams=0.0, minutes=0.0, parts=(),
+                 on_select=None):
         super().__init__(win)
         self.win = win
         self.gcode_path, self.preview = gcode_path, preview
@@ -566,6 +616,10 @@ class PrintPreviewDialog(QDialog):
         self.sent = None                      # what stands on the printer, once it is there
         self._job = None
         self.filaments = list(filaments)
+        # what every part of this print cost, and who wants to know which part a row stands for
+        self.parts = list(parts)
+        self.on_select = on_select
+        self._part = None                     # the row of the table lit up in the view
         # what the slice worked out for this print, for the history (volura.print_history)
         self.grams, self.minutes = grams, minutes
         self._started = self._sent = self._marked = False     # what this print became
@@ -638,6 +692,12 @@ class PrintPreviewDialog(QDialog):
         if self.row_count and not self.by_filament:
             lay.addLayout(self._spool_rows())     # one row, under the colours of the line kinds
 
+        # a print of one part has nothing to choose between: then the totals above say enough
+        self.part_table = None
+        if len([one for one in self.parts if not one.other]) > 1:
+            self.part_table = self._part_table()
+            lay.addWidget(self.part_table)
+
         bb = QDialogButtonBox()
         self.save_button = bb.addButton(tr("Save G-code…"), QDialogButtonBox.AcceptRole)
         self.send_button = bb.addButton(tr("Send to printer…"), QDialogButtonBox.ActionRole)
@@ -672,6 +732,58 @@ class PrintPreviewDialog(QDialog):
         self.top.clicked.connect(lambda: self.view.fit("top"))
         self.iso.clicked.connect(lambda: self.view.fit("iso"))
         self._layer_changed(self.slider.value())
+
+    # ---- what every part of the print cost
+    def _part_table(self):
+        """The parts of the print, longest first: what each took in time and filament, and how
+        much of the print that is. Everything that prints no part of the model - the travel from
+        one part to the next, the skirt, the support - makes a row of its own without a name,
+        which the table shows as "Other", so the rows add up to the whole print."""
+        table = QTableWidget(len(self.parts), 4)
+        table.setHorizontalHeaderLabels([tr("Part"), tr("Time"), tr("Filament"), tr("Share")])
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setSelectionMode(QTableWidget.SingleSelection)
+        table.setAccessibleName(tr("Per part"))
+        table.setToolTip(tr("What every part of this print costs; clicking a row shows which part "
+                            "it is in the print above, and clicking it again shows the whole "
+                            "print"))
+        table.setMaximumHeight(120)
+        for k, one in enumerate(self.parts):
+            for c, text in enumerate((one.name or tr("Other"), _hms(one.seconds),
+                                      tr("{g:.1f} g, {m:.2f} m").format(g=one.grams,
+                                                                        m=one.metres),
+                                      tr("{pct} %").format(pct=100.0 * one.share))):
+                item = QTableWidgetItem(text)
+                if c:
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                table.setItem(k, c, item)
+        table.resizeColumnsToContents()
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        table.cellPressed.connect(self._part_chosen)
+        table.cellActivated.connect(self._part_chosen)      # the same with the keyboard
+        return table
+
+    def _part_chosen(self, row, _column=0):
+        """What choosing a row of the "Per part" table does, with a click or with Enter: the part
+        of that row lights up in the view above, and `on_select` gets its group, so the model has
+        it selected too.
+
+        The lines the part lays keep their colour and every other line of the print dims, which
+        is what makes it to see which part of the bed the row talks about. The row you chose twice
+        shows the whole print again."""
+        if self.part_table is None or not 0 <= row < len(self.parts):
+            return
+        if row == self._part:
+            self._part = None
+            self.view.show_part()
+            self.part_table.clearSelection()
+            return
+        self._part = row
+        self.view.show_part(self.parts[row].codes)
+        if self.on_select is not None:
+            self.on_select(self.parts[row].group_id)
 
     # ---- layers and playback
     def _filament_legend(self, i: int) -> str:
