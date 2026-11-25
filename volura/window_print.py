@@ -1353,8 +1353,14 @@ class PrintMixin:
         parts carry slice settings of their own, which is what the summary of the print tells.
         The last list holds the support volumes of the model: they slice with the settings of
         their role, lay no plastic of their own and are therefore in neither of the first two.
+
+        The fifth list says which part every mesh came off, as `(group id, part name)`, loose
+        geometry of the model itself having no group of its own; that is what turns what the
+        engine printed per mesh into the time and the filament of every part (see
+        `gcode_preview.per_part`).
         """
         meshes, pictures, volumes = [], [], []
+        owners = []                    # the part every mesh came off, in the order of `meshes`
         own_parts = 0                  # how many of them slice with settings of their own
         parts = [p for p in part_list if p.manifold is not None]
         for i, p in enumerate(parts):
@@ -1390,6 +1396,7 @@ class PrintMixin:
                 tris = np.asarray(mesh.tri_verts)
                 meshes.append((verts, tris, extruder, part_settings))
                 pictures.append((verts, tris, group[0][1]))
+                owners.append((p.group_id, p.name))
         if not meshes:
             raise ValueError(tr("There is nothing to slice. Draw a face and use Push/Pull (P)."))
         for p in (role_list or []):
@@ -1400,7 +1407,7 @@ class PrintMixin:
             volumes.append((np.asarray(mesh.vert_properties)[:, :3],
                             np.asarray(mesh.tri_verts), 0,
                             slicer.per_mesh_settings(stacks, p.mesh_settings)))
-        return meshes, pictures, own_parts, volumes
+        return meshes, pictures, own_parts, volumes, owners
 
     def _slice_async(self, stacks, part_list, engine, printer_name="", plan=None,
                      height_commands=None, retraction_bands=None, role_list=None,
@@ -1421,6 +1428,9 @@ class PrintMixin:
         `role_list` is what `ops.role_parts` found: the support blockers and enforcers of the model.
         They slice with the settings of their role and with nothing else: they lay no plastic, so
         they are in neither the picture on the printer's screen nor the measure of the print.
+        Beside the totals the preview shows what every part of this plate cost - its time, its
+        filament and its share of the print - in a table whose rows point back at the part they
+        stand for (see `gcode_preview.per_part`).
         """
         from . import slice_dialog as sd
         plan = plan or sd.Multicolor()
@@ -1448,7 +1458,7 @@ class PrintMixin:
             if print_temp is not None:
                 # the first segment's temperature is the temperature the print starts at
                 slicer.set_print_temperature(stacks, print_temp)
-            meshes, pictures, own_parts, volumes = made_meshes(report)
+            meshes, pictures, own_parts, volumes, owners = made_meshes(report)
             report(0.15, tr("Slicing…"))
             # what has to fit the build volume is the print: a support volume may hang over the
             # edge, it only has to be where the support of the print is
@@ -1478,12 +1488,18 @@ class PrintMixin:
                 gcode_thumbnail.insert(path, [gcode_thumbnail.block(
                     gcode_thumbnail.render(pictures, w, h), w, h) for w, h in sizes])
             report(0.9, tr("Reading the G-code…"))
-            filament = (float(stacks.extruders[0].get("material_diameter") or 1.75)
-                        if stacks.extruders else 1.75)
-            return result, gcode_preview.read_gcode(path, filament), own_parts
+            filament, density = slicer.filament_measure(stacks)
+            preview = gcode_preview.read_gcode(path, filament)
+            # what every part of this plate costs: every move of the G-code knows the mesh that
+            # laid it, and the mesh names of the slice say which part that mesh came off; the
+            # travel between the parts, the skirt and the support gather in the row of "Other",
+            # so the rows add up to the time and the grams of the summary above
+            rows = gcode_preview.per_part(preview, dict(zip(result.mesh_names, owners)),
+                                          density=density, filament=filament)
+            return result, preview, own_parts, rows
 
         def done(made):
-            result, preview, own_parts = made
+            result, preview, own_parts, rows = made
             hours, rest = divmod(int(round(result.seconds)), 3600)
             cost = result.grams / 1000.0 * self.settings.filament_price
             summary = tr("{printer}: {h} h {m:02d} min, {g:.0f} g filament ({l:.2f} m, "
@@ -1508,7 +1524,8 @@ class PrintMixin:
             y0 = -0.5 * bed[1] if g.get("machine_center_is_zero") else 0.0
             dlg = PrintPreviewDialog(self, path, preview, (x0, y0, x0 + bed[0], y0 + bed[1]),
                                      summary, ask, self._filaments(plan, result, preview, stacks),
-                                     grams=result.grams, minutes=result.seconds / 60.0)
+                                     grams=result.grams, minutes=result.seconds / 60.0,
+                                     parts=rows, on_select=self._select_part)
             dlg.exec()
             if dlg.sent:
                 self.hint.setText(dlg.sent)      # which printer it went to says more here
@@ -1532,6 +1549,14 @@ class PrintMixin:
             os.remove(path)
         except OSError:
             pass
+
+    def _select_part(self, group_id):
+        """Select the part a row of the "Per part" table of the preview stands for.
+
+        A row of a part that has no group of its own - the loose geometry of an imported model, or
+        the row of everything that prints no part - has nothing in the model to point at."""
+        if group_id is not None and self.doc.group(group_id) is not None:
+            self.doc.set_selection([("g", group_id, group_id)])
 
     def _filaments(self, plan, result, preview, stacks) -> list:
         """What the print prints with: ``(name, color, mm, grams)`` per filament.
@@ -1685,7 +1710,7 @@ class PrintMixin:
                 print_temp, by_height = commands or (None, [])
                 if print_temp is not None:
                     slicer.set_print_temperature(stacks, print_temp)
-                meshes, pictures, _own, volumes = self._plate_meshes(
+                meshes, pictures, _own, volumes, _owners = self._plate_meshes(
                     stacks, part_list, plan, role_list,
                     lambda f, text, a=low, b=high: report(a + (b - a) * 0.2 * f, text))
                 lo = np.min([m[0].min(axis=0) for m in meshes], axis=0)

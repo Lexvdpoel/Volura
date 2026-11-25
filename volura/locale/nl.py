@@ -3660,4 +3660,14 @@ TRANSLATIONS = {
         'die het in Volura heeft, dus alles van de platen na de eerste staat naast het bed van je '
         'slicer. Slice die platen hier met Bestand > Alle platen slicen…, of zet ze eerst op het '
         'bed.',
+    # What every part of the print cost: the "Per part" table of the print preview after a slice
+    # (volura/gcode_preview.py, volura/print_preview.py)
+    'Per part': 'Per onderdeel',
+    'Share': 'Aandeel',
+    '{g:.1f} g, {m:.2f} m': '{g:.1f} g, {m:.2f} m',
+    '{pct} %': '{pct} %',
+    'What every part of this print costs; clicking a row shows which part it is in the print '
+    'above, and clicking it again shows the whole print':
+        'Wat elk onderdeel van deze print kost; klik op een regel om te zien welk onderdeel het '
+        'hierboven in de print is, en klik nog eens op dezelfde regel voor de hele print',
 }

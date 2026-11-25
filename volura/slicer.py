@@ -117,7 +117,11 @@ def find_resources() -> str | None:
 
 @dataclass
 class SliceResult:
-    """What a slice made: the G-code file and what it says about the print."""
+    """What a slice made: the G-code file and what it says about the print.
+
+    `mesh_names` names every part the way CuraEngine does: the mesh of part `i` of the slice is
+    `mesh_names[i]` in the G-code, which is what the `;MESH:` comments there carry and what maps
+    what the engine printed back to the part it came from."""
 
     path: str
     seconds: float = 0.0
@@ -126,6 +130,7 @@ class SliceResult:
     layers: int = 0
     log: str = ""
     volume_mm3: list = field(default_factory=list)     # per extruder
+    mesh_names: list = field(default_factory=list)
 
 
 def _json_value(v):
@@ -156,6 +161,12 @@ def write_stl(path, verts, tris):
         fh.write(b"Volura".ljust(80, b" "))
         fh.write(np.uint32(len(t)).tobytes())
         fh.write(rec.tobytes())
+
+
+def mesh_name(index) -> str:
+    """The name CuraEngine gives the mesh at `index` of a slice: the STL it is loaded from, minus
+    its extension, which is what the `;MESH:` comments of the G-code carry."""
+    return f"part{index}"
 
 
 def place_on_bed(meshes, settings, also=()) -> list:
@@ -684,6 +695,23 @@ def command_value(value) -> str:
     return str(value)
 
 
+def filament_measure(stacks) -> tuple:
+    """The diameter (mm) and the density (g/cm³) of the filament a print is weighed with.
+
+    That is the diameter the extruder pushes and the density the material of the slice has, and
+    what `slice_meshes` weighs the whole print with - so it is also what the parts of that print
+    are weighed with (see `gcode_preview.per_part`). A stack that says nothing about its filament
+    stands on the defaults: 1.75 mm and 1.24 g/cm³, what generic PLA brings with it."""
+    diameter, density = 1.75, 1.24
+    extruders = getattr(stacks, "extruders", None) or []
+    if extruders:
+        diameter = float(extruders[0].get("material_diameter") or 1.75)
+    material = getattr(stacks, "material", None)
+    if material is not None:
+        density = float((getattr(material, "metadata", None) or {}).get("density") or 1.24)
+    return diameter, density
+
+
 def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progress=None,
                  helpers=None) -> SliceResult:
     """Slice `meshes` - a list of (verts, tris, extruder_nr) in bed millimetres - to `out_path`.
@@ -703,6 +731,11 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
     enforcers of the model, which carry the settings of their role. CuraEngine builds them into the
     support of the print instead of into the print itself; they travel with the print across the bed
     and say nothing about where it stands.
+
+    Every mesh goes to the engine as `part<n>.stl` and comes back in the G-code under that name
+    without its extension (`;MESH:part2`), which is why the result carries `mesh_names`: the name of
+    every part, so what the engine printed maps back to the part it came from (see
+    `gcode_preview.per_part`). The helpers come after the parts and belong to no part.
     """
     engine = engine or find_engine()
     if not engine:
@@ -727,15 +760,16 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
         doc["global"]["material_bed_temp_prepend"] = not codes & {"M140", "M190"}
         doc["global"]["material_print_temp_prepend"] = not codes & {"M104", "M109"}
     with tempfile.TemporaryDirectory(prefix="volura-slice-") as tmp:
+        files = [f"{mesh_name(i)}.stl" for i in range(len(meshes))]
         for i, m in enumerate(meshes):
-            write_stl(os.path.join(tmp, f"part{i}.stl"), m[0], m[1])
+            write_stl(os.path.join(tmp, files[i]), m[0], m[1])
         own = [m[3] if len(m) > 3 and m[3] else {} for m in meshes]
         # a part that wants settings of its own is named on the command line, which is where
         # CuraEngine takes a setting for one mesh alone; the model keys of the document load every
         # part that asks for nothing, so a bed of a thousand plain parts is still a short command
         for i, settings in enumerate(own):
             if not settings:
-                doc[f"part{i}.stl"] = {"extruder_nr": int(meshes[i][2])}
+                doc[files[i]] = {"extruder_nr": int(meshes[i][2])}
         settings_path = os.path.join(tmp, "settings.json")
         with open(settings_path, "w", encoding="utf-8") as fh:
             json.dump(doc, fh)
@@ -747,7 +781,7 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
         for i, settings in enumerate(own):
             if not settings:
                 continue
-            cmd += ["-e" + str(int(meshes[i][2])), "-l", f"part{i}.stl"]
+            cmd += ["-e" + str(int(meshes[i][2])), "-l", files[i]]
             for key, value in settings.items():
                 cmd += ["-s", f"{key}={command_value(value)}"]
         # Windows hands a program its arguments as one string of at most 32767 characters, and the
@@ -776,8 +810,7 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
     with open(out_path, encoding="utf-8", errors="replace") as fh:
         head = fh.read(4096)
     info = parse_header(head)
-    density = stacks.material.metadata["density"] if stacks.material is not None else 1.24
-    diameter = float(stacks.extruders[0].get("material_diameter") or 1.75)
+    diameter, density = filament_measure(stacks)
     area = math.pi * (0.5 * diameter) ** 2                      # mm2
     if info.get("volume_mm3"):
         info["filament_m"] = [v / area / 1000.0 for v in info["volume_mm3"]]
@@ -786,4 +819,4 @@ def slice_meshes(stacks, meshes, out_path, engine=None, timeout=None, on_progres
         info["volume_mm3"] = [m * 1000.0 * area for m in info["filament_m"]]
     grams = sum(info["filament_m"]) * 1000.0 * area * density / 1000.0
     return SliceResult(out_path, info["seconds"], info["filament_m"], grams, info["layers"], text,
-                       info["volume_mm3"])
+                       info["volume_mm3"], [mesh_name(i) for i in range(printed)])

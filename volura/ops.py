@@ -1291,6 +1291,8 @@ class Part:
         self.role = ROLE_PART
         #: CuraEngine settings this part wants on its own mesh, read from g.meta["mesh_settings"]
         self.mesh_settings = {}
+        #: the group this part is, `None` for loose geometry of the model itself, which has none
+        self.group_id = None
 
 
 def parts(doc: Document, only_selected=False, plate=None, bed=None):
@@ -1299,7 +1301,9 @@ def parts(doc: Document, only_selected=False, plate=None, bed=None):
     A group may carry per-mesh slicing settings in `g.meta["mesh_settings"]`; they are handed to the
     part as `mesh_settings`, and the slice keeps only those a single mesh accepts (see
     `slicer.per_mesh_settings`). A group with another role in the print - a support blocker or
-    enforcer - is no part and is left out here; `role_parts` gives those.
+    enforcer - is no part and is left out here; `role_parts` gives those. Every part keeps the id of
+    its group in `group_id`, so a slice can point what it measured back at the group it came from;
+    loose geometry has no group and gets None.
 
     With `plate` (see `volura.plates`) only the groups that stand on that bed are parts, which
     is what a slice of one plate works on, and `bed` is the size of one bed that says where a
@@ -1309,6 +1313,7 @@ def parts(doc: Document, only_selected=False, plate=None, bed=None):
               if group_role(g) == ROLE_PART and plates.on_plate(g, plate, bed)]
     items = [(g.name, g.color, g.ents, list(g.ents.F)) for g in groups]
     metas = [g.meta for g in groups]
+    gids = [g.id for g in groups]
     loose = plate is None or plate == plates.ALL or plates.plate_number(plate) == plates.FIRST
     if not only_selected and loose:
         for k, shell in enumerate(doc.root.shells(), 1):
@@ -1316,9 +1321,11 @@ def parts(doc: Document, only_selected=False, plate=None, bed=None):
             color = colors.most_common(1)[0][0] if colors else DEFAULT_COLOR
             items.append((tr("Loose geometry {k}").format(k=k), color, doc.root, shell))
             metas.append(None)
+            gids.append(None)          # loose geometry has no group to point a slice at
     out = build_parts(items)
-    for part, meta in zip(out, metas):
+    for part, meta, gid in zip(out, metas, gids):
         part.mesh_settings = own_mesh_settings(meta)
+        part.group_id = gid
     return out
 
 
