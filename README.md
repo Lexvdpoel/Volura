@@ -778,9 +778,10 @@ gets for free.
 - **Boxes with finger joints**, on the worksheet or as a 3D preview
 - **Living hinges**: fill a selected rectangle with staggered slits, so plywood or MDF
   bends there when it is cut
-- **Vent pattern**: fill a selected closed contour with a honeycomb of hexagons or a field
-  of circles, for a ventilation grille or a speaker cover, with the web and the edge margin
-  you choose
+- **Vent pattern**: fill a selected closed contour with a honeycomb of hexagons, a field
+  of circles, a mosaic of Voronoi cells that keeps the seed it was scattered with, or rows
+  of slots you can turn, for a ventilation grille or a speaker cover, with the web and the
+  edge margin you choose
 - **Spur gear**: an involute gear for the laser or the printer, from the number of teeth,
   the module and the pressure angle, with a bore and the backlash you choose; in the 3D
   model (Draw > Parts) the same wheel comes out as a printable part of the

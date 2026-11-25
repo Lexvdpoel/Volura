@@ -565,6 +565,21 @@ class Settings:
             self.vent_margin = 3.0
         self.vent_margin = max(0.0, min(50.0, self.vent_margin))
         try:
+            self.vent_seed = int(float(self.q.value("vent_seed", 1)))
+        except (TypeError, ValueError):
+            self.vent_seed = 1
+        self.vent_seed = max(1, min(999999, self.vent_seed))
+        try:
+            self.vent_slot_length = float(self.q.value("vent_slot_length", 0.0))
+        except (TypeError, ValueError):
+            self.vent_slot_length = 0.0
+        self.vent_slot_length = 0.0 if self.vent_slot_length <= 0 else min(500.0, self.vent_slot_length)
+        try:
+            self.vent_angle = float(self.q.value("vent_angle", 0.0))
+        except (TypeError, ValueError):
+            self.vent_angle = 0.0
+        self.vent_angle = min(90.0, max(0.0, self.vent_angle))
+        try:
             self.fit_test_first = float(self.q.value("fit_test_first", -0.2))
         except (TypeError, ValueError):
             self.fit_test_first = -0.2
@@ -1781,6 +1796,9 @@ class Settings:
         self.q.setValue("vent_size", self.vent_size)
         self.q.setValue("vent_web", self.vent_web)
         self.q.setValue("vent_margin", self.vent_margin)
+        self.q.setValue("vent_seed", self.vent_seed)
+        self.q.setValue("vent_slot_length", self.vent_slot_length)
+        self.q.setValue("vent_angle", self.vent_angle)
         self.q.setValue("fit_test_first", self.fit_test_first)
         self.q.setValue("fit_test_step", self.fit_test_step)
         self.q.setValue("fit_test_count", self.fit_test_count)

@@ -45,7 +45,12 @@ good press fit. Again a row of cuts that have to stay in step, so it lives here 
 
 A **vent pattern** (`vent_pattern`) is a field of holes in one closed contour: a grille
 or a speaker cover. Here the grid is a plane instead of a row, but the work is the same —
-cuts that stay in step with each other and that never touch the edge of the panel.
+cuts that stay in step with each other and that never touch the edge of the panel. The
+honeycomb of hexagons and the field of circles stand on a triangular grid; the Voronoi
+cells grow around a jittered grid of seed points, so the walls follow the bisectors
+between the neighbours, and the slots lie in brick-offset rows. None of them needs a
+library beyond numpy and manifold3d: the cells are cut with straight-line clipping
+(Sutherland-Hodgman along the bisectors) and the Boolean intersection with the room.
 """
 from __future__ import annotations
 
@@ -57,7 +62,7 @@ import manifold3d as mf
 
 from . import cam
 from .i18n import tr
-from .vector2d import DEFAULT_LAYERS, TOL, Drawing, VPath, arc_points
+from .vector2d import DEFAULT_LAYERS, TOL, Drawing, VPath, arc_points, polygon_area
 
 MALE = "male"
 FEMALE = "female"
@@ -613,7 +618,22 @@ _HEX = np.array([[math.cos(k * math.pi / 3.0), math.sin(k * math.pi / 3.0)]
                  for k in range(6)], dtype=float)
 
 #: the shapes of the holes of a vent pattern
-VENT_SHAPES = ("hex", "round")
+VENT_SHAPES = ("hex", "round", "voronoi", "slots")
+
+#: how many grid points the Voronoi pattern may jitter at most: a full sheet of cells of
+#: one millimetre would take minutes to clip one by one, and a grille that needs so many
+#: cells is a raster job and not a cut job anyway
+VENT_MAX_CELLS = 20_000
+
+#: the seed points of the Voronoi cells jitter at most a quarter of `size` off their grid
+#: spot: enough to look organic, little enough for the walls between the cells to stay
+#: near the bisectors of neighbours a grid step apart
+VENT_JITTER = 0.25
+
+#: the grid spots a Voronoi neighbour can stand on for a cell: everything within two
+#: steps of the seed's spot - with a jitter of at most a quarter of a step, a cell never
+#: touches the territory of a seed further away than that
+_VENT_NEIGHBOURS = [(a, b) for a in range(-2, 3) for b in range(-2, 3) if (a, b) != (0, 0)]
 
 
 def _inside_points(loops, q) -> np.ndarray:
@@ -657,7 +677,376 @@ def _edge_distances(loops, q) -> np.ndarray:
     return out
 
 
-def vent_pattern(outline, shape="hex", size=6.0, web=2.0, margin=3.0) -> list[np.ndarray]:
+def _clip_halfplane(poly, p0, u):
+    """Keep the side of the line through `p0` with normal `u` where `(p - p0) · u <= 0`.
+
+    A convex polygon stays convex when a straight line cuts it, so one pass along the
+    edges is enough: a point on the wrong side goes and is replaced by the crossing of
+    the edge it lies between (Sutherland-Hodgman against one half-plane). The polygon is
+    a plain list of (x, y) tuples: these cells have half a dozen corners and clipping
+    them one line at a time is a lot of calls, so nothing in here may cost numpy
+    overhead.
+    """
+    x0, y0 = float(p0[0]), float(p0[1])
+    ux, uy = float(u[0]), float(u[1])
+    d = [(px - x0) * ux + (py - y0) * uy for px, py in poly]
+    out = []
+    n = len(poly)
+    for h in range(n):
+        dp, dq = d[h], d[(h + 1) % n]
+        if dp <= 0.0:
+            out.append(poly[h])
+        if dp * dq < 0.0:
+            t = dp / (dp - dq)
+            px, py = poly[h]
+            qx, qy = poly[(h + 1) % n]
+            out.append((px + t * (qx - px), py + t * (qy - py)))
+    return out
+
+
+def _web_shrink(poly, seeds, web) -> list:
+    """Cut `poly` (the cell of `seeds[0]`) by every neighbour, holding back half a web.
+
+    The Voronoi cell of a seed is what a straight cut shares fairly between it and every
+    neighbour: the set of points closer to the seed than to the neighbour. Moving that
+    cut `web / 2` towards the seed is what keeps that much material on its side, so two
+    neighbours that both do this leave `web` of material between their holes. A cell that
+    every neighbour takes away comes back with fewer than three points.
+    """
+    x, y = seeds[0]
+    for point in seeds[1:]:
+        vx, vy = point[0] - x, point[1] - y
+        length = math.hypot(vx, vy)
+        if length < 1e-9:
+            continue
+        ux, uy = vx / length, vy / length
+        poly = _clip_halfplane(poly, (x + (0.5 * length - 0.5 * web) * ux,
+                                      y + (0.5 * length - 0.5 * web) * uy), (ux, uy))
+        if len(poly) < 3:
+            return poly
+    return poly
+
+
+def _pair_dists(holes, pairs, budget=4_000_000) -> list:
+    """The least distance between the edges of each pair of holes in `pairs`.
+
+    The closest points of two hole boundaries always include a corner of one hole seen
+    from an edge of the other, so both ways round are measured and the smaller kept -
+    the same law as `_edge_distances`, but for every pair in one sweep: the two point
+    sets of a pair are laid side by side, their edges crossed, and the two self-
+    comparisons set to a distance too big to mind. Chunks stay under `budget` crossings
+    so a big pattern never allocates one unmanageable table.
+    """
+    out = []
+    start = 0
+    while start < len(pairs):
+        big = len(holes[pairs[start][0]]) + len(holes[pairs[start][1]])
+        stop = start + 1
+        while stop < len(pairs):
+            s = len(holes[pairs[stop][0]]) + len(holes[pairs[stop][1]])
+            if (stop + 1 - start) * max(big, s) ** 2 > budget:
+                break
+            big, stop = max(big, s), stop + 1
+        out.extend(_chunk_dists(holes, pairs[start:stop], big))
+        start = stop
+    return out
+
+
+def _chunk_dists(holes, pairs, span) -> list:
+    """The distances of one chunk of pairs, every point set padded to `span` points."""
+    n = len(pairs)
+    pts = np.zeros((n, span, 2))
+    eds = np.zeros((n, span, 2))
+    dvec = np.zeros((n, span, 2))
+    L2 = np.full((n, span), 1e-30)
+    ni = np.zeros(n, dtype=np.int64)
+    nj = np.zeros(n, dtype=np.int64)
+    for m, (i, j) in enumerate(pairs):
+        vi, vj = np.asarray(holes[i], dtype=float), np.asarray(holes[j], dtype=float)
+        ni[m], nj[m] = len(vi), len(vj)
+        pts[m, :len(vi)] = vi
+        pts[m, len(vi):len(vi) + len(vj)] = vj
+        for q, base in ((vj, 0), (vi, len(vj))):     # j's edges first, then i's
+            d = np.roll(q, -1, axis=0) - q
+            eds[m, base:base + len(q)] = q
+            dvec[m, base:base + len(q)] = d
+            L2[m, base:base + len(q)] = np.maximum(np.sum(d * d, axis=1), 1e-30)
+    w = pts[:, None, :, :] - eds[:, :, None, :]
+    t = np.clip(np.einsum("mepd,med->mep", w, dvec) / L2[:, :, None], 0.0, 1.0)
+    r = w - t[..., None] * dvec[:, :, None, :]
+    dd = np.sqrt(np.einsum("mepd,mepd->mep", r, r))
+    p, e = np.arange(span)[None, None, :], np.arange(span)[None, :, None]
+    ok = (p < (ni + nj)[:, None, None]) & (e < (nj + ni)[:, None, None]) \
+        & ((p < ni[:, None, None]) == (e < nj[:, None, None]))   # never hole against itself
+    return [float(q) for q in np.where(ok, dd, np.inf).min(axis=(1, 2))]
+
+
+def _chord_reach(qs, k) -> np.ndarray:
+    """How far, per hole of the stack `qs`, a corner dropped by taking every k-th point
+    reaches past the chord its two kept neighbours form.
+
+    Every point the copy drops sits on an edge between two kept corners or between two
+    dropped ones, and a straight edge between two points no further than that from a
+    chord is nowhere further from it - so this one number bounds how far the original
+    edge can be from the copy's, which is what the close-pair scan pays back as slack.
+    """
+    L = qs.shape[1]
+    j = np.arange(L)
+    jm = (j // k) * k
+    last = ((L - 1) // k) * k                       # last kept corner; the run past it wraps
+    a, b = qs[:, jm], qs[:, np.where(jm >= last, 0, jm + k)]
+    w = qs - a
+    dv = b - a
+    t = np.clip(np.sum(w * dv, axis=2) / np.maximum(np.sum(dv * dv, axis=2), 1e-30), 0.0, 1.0)
+    r = w - t[:, :, None] * dv
+    d = np.sqrt(np.sum(r * r, axis=2))
+    d[:, j % k == 0] = 0.0                          # kept corners sit on the chord anyway
+    return d.max(axis=1)
+
+
+def _web_proxies(holes, cap=0.25) -> tuple[list, list]:
+    """A thinned copy of every hole for the close-pair scan, with how far it may be.
+
+    A slot with round ends is mostly arc, and its arcs are points of a circle that a
+    chord replaces to within a hair: taking every third point of a smooth hole costs
+    little distance and saves much measuring. Where the corners are real - a Voronoi
+    corner a chord would cut away by more than `cap` - the hole keeps all its points
+    and owes nothing, so the scan never reports a distance the real holes cannot have.
+    """
+    holes = [np.asarray(q, dtype=float) for q in holes]
+    prox, reach = list(holes), [0.0] * len(holes)
+    groups: dict = {}
+    for m, q in enumerate(holes):
+        k = max(1, round(len(q) / 21.0))
+        if k > 1 and len(q[::k]) >= 3:
+            groups.setdefault((k, len(q)), []).append(m)
+    for (k, _), ids in groups.items():
+        heads = np.stack([holes[m] for m in ids])
+        for m, e in zip(ids, _chord_reach(heads, k)):
+            if float(e) <= cap:
+                prox[m], reach[m] = holes[m][::k], float(e)
+    return prox, reach
+
+
+def _keep_whole_webs(holes, web, rounds=200) -> list[np.ndarray]:
+    """The holes with the web kept everywhere: of a pair that stands too close, the
+    smaller goes.
+
+    On a contour with deep notches the room can cut so sharply that a piece of one cell
+    ends up nearer to another hole than the web, without their bisector having said so.
+    The laser may not meet less material than the user asked for, so those holes are
+    dropped - the smaller of the pair first, because it has the least room to be right -
+    and this repeats until every pair keeps the web. A normal pattern changes nothing
+    here, and stops after the first scan.
+
+    Holes that can come within the web of each other share a bin of a grid, so finding
+    the pairs that truly need measuring is a handful of bins and not the square of the
+    number of holes; the measuring itself happens on the thinned copies first, and only
+    the few pairs standing closer than their copies' slack get the exact second look.
+    """
+    d = max(0.0, float(web) - 0.05)
+    holes = [np.asarray(q, dtype=float) for q in holes]
+    prox, reach = _web_proxies(holes)
+    e = d + (2 * max(reach) + 0.01 if reach else 0.0)   # slack any pair of copies can carry
+    for _ in range(rounds):
+        if len(holes) < 2:
+            return holes
+        box = np.array([[q[:, 0].min(), q[:, 0].max(), q[:, 1].min(), q[:, 1].max()]
+                       for q in prox])
+        area = np.array([abs(polygon_area(q)) for q in holes])
+        step = max(d + 0.01, float(np.median(box[:, 1] - box[:, 0] + box[:, 3] - box[:, 2])))
+        bins: dict = {}
+        for m in range(len(prox)):
+            for bi in range(int((box[m, 0] - e) // step), int((box[m, 1] + e) // step) + 1):
+                for bj in range(int((box[m, 2] - e) // step), int((box[m, 3] + e) // step) + 1):
+                    bins.setdefault((bi, bj), []).append(m)
+        seen = set()
+        pairs = []
+        for group in bins.values():
+            for a_ in range(len(group) - 1):
+                for b_ in range(a_ + 1, len(group)):
+                    i, j = group[a_], group[b_]
+                    if (i, j) in seen:
+                        continue
+                    seen.add((i, j))
+                    gap = d + reach[i] + reach[j]
+                    if (box[i, 1] < box[j, 0] - gap or box[j, 1] < box[i, 0] - gap
+                            or box[i, 3] < box[j, 2] - gap or box[j, 3] < box[i, 2] - gap):
+                        continue
+                    pairs.append((i, j))
+        worst = np.zeros(len(prox))
+        hit = np.zeros(len(prox), dtype=bool)
+        near = [(i, j) for (i, j), c in zip(pairs, _pair_dists(prox, pairs))
+                if c < d + reach[i] + reach[j]]
+        for (i, j), m in zip(near, _pair_dists(holes, near)):
+            if m >= d:
+                continue
+            worst[i] = max(worst[i], area[j])         # the larger of the pair stays
+            worst[j] = max(worst[j], area[i])
+            hit[i] = hit[j] = True
+        if not hit.any():
+            return holes
+        drop = hit & (area <= worst + 1e-12)
+        if not drop.any():
+            return holes                                  # cannot resolve, leave them
+        holes = [q for q, gone in zip(holes, drop) if not gone]
+        prox = [q for q, gone in zip(prox, drop) if not gone]
+        reach = [q for q, gone in zip(reach, drop) if not gone]
+    return holes
+
+
+def _section_of(loops) -> mf.CrossSection:
+    """The filled area of closed loops as one cross-section, wound as manifold likes it."""
+    return mf.CrossSection([np.ascontiguousarray(np.asarray(q, dtype=float))
+                            for q in loops], mf.FillRule.NonZero)
+
+
+def _jittered_lattice(loop, room, size, margin, seed):
+    """The seed points of the Voronoi cells and the grid indices they stand on.
+
+    A lattice of `size` millimetres covers the contour (with the margin and a cell of
+    room on every side), and every point shifts a random but repeatable step of at most
+    `VENT_JITTER` away: `seed` is the number that repeats the pattern. Points that end up
+    in the edge margin are no seeds at all; `ii, jj` number the ones that stay so the
+    neighbours of a cell can be looked up by grid spot.
+    """
+    n = int((loop[:, 0].max() - loop[:, 0].min()) / size + 1.0) \
+        + 2 * int(math.ceil(margin / size + 1.0)) + 2
+    m = int((loop[:, 1].max() - loop[:, 1].min()) / size + 1.0) \
+        + 2 * int(math.ceil(margin / size + 1.0)) + 2
+    if n * m > VENT_MAX_CELLS:
+        raise ValueError(tr("There are too many cells for one pattern: make the cells bigger."))
+    rng = np.random.default_rng(int(seed) & 0xFFFFFFFF)
+    ii0, jj0 = np.meshgrid(np.arange(n), np.arange(m))
+    ii, jj = ii0.ravel(), jj0.ravel()
+    jitter = rng.uniform(-VENT_JITTER, VENT_JITTER, (len(ii), 2))
+    x = loop[:, 0].min() - margin - size + (ii + 0.5 + jitter[:, 0]) * size
+    y = loop[:, 1].min() - margin - size + (jj + 0.5 + jitter[:, 1]) * size
+    spot = np.column_stack([x, y])
+    keep = _inside_points(room, spot)
+    return spot[keep], ii[keep], jj[keep]
+
+
+def _voronoi_holes(loop, room, size, web, margin, seed) -> list[np.ndarray]:
+    """Organic cells around the seeds: every cell shrunk by half a web, whole in the room.
+
+    The cell of a seed is clipped against its neighbours on the grid, a step `size`
+    away; two cells that both hold back half a web from their shared bisector leave the
+    whole web between them. A cell at the edge has no neighbours there, so it runs on
+    into the margin, and it is the edge of the margin itself that closes it: the material
+    between such a hole and the outline is exactly the margin. What survives the room is
+    one hole; thin slivers of a cell (less than a tenth of a cell) do not print and do
+    not laser well, so they go.
+    """
+    seeds, ii, jj = _jittered_lattice(loop, room, size, margin, seed)
+    if len(seeds) < 2:
+        return []
+    grid = -np.ones((int(jj.max()) + 5, int(ii.max()) + 5), dtype=np.int64)
+    grid[jj + 2, ii + 2] = np.arange(len(seeds))
+    near_j = np.array([a for a, _b in _VENT_NEIGHBOURS])
+    near_i = np.array([b for _a, b in _VENT_NEIGHBOURS])
+    allp = np.concatenate(room)
+    lo, hi = allp.min(axis=0), allp.max(axis=0)
+    box = [(lo[0] - web, lo[1] - web), (hi[0] + web, lo[1] - web),
+           (hi[0] + web, hi[1] + web), (lo[0] - web, hi[1] + web)]
+    spots = seeds.tolist()
+    cells = []
+    for k in range(len(seeds)):
+        near = grid[jj[k] + 2 + near_j, ii[k] + 2 + near_i]
+        cell = _web_shrink(box, [spots[k]] + [spots[h] for h in near if h >= 0], web)
+        if len(cell) >= 3:
+            cells.append(np.ascontiguousarray(np.array(cell, dtype=float)))
+    if not cells:
+        return []
+    # The cells no longer share a wall with each other, so the room they all share is
+    # taken from all of them in one go: a union of the cells and one intersection.
+    got = mf.CrossSection.batch_boolean([_section_of([c]) for c in cells], mf.OpType.Add)
+    got = mf.CrossSection.batch_boolean([got, _section_of(room)], mf.OpType.Intersect)
+    floor = 0.10 * size * size
+    holes = []
+    for q in got.to_polygons():
+        q = np.asarray(q, dtype=float)
+        if len(q) < 3 or abs(polygon_area(q)) < floor:
+            continue
+        # a piece that lies only against the margin is no cell but the whole room: a
+        # seed without a single living neighbour would open a frame in the panel
+        # instead of grilling it
+        mid = 0.5 * (q + np.roll(q, -1, axis=0))
+        if float(_edge_distances(room, mid).max()) <= 1e-4:
+            continue
+        holes.append(np.ascontiguousarray(q))
+    return _keep_whole_webs(holes, web)
+
+
+def _slot_loop(size, length) -> np.ndarray:
+    """One rounded slot of `length` by `size`, centred on the origin along +x: a stadium.
+
+    The ends are the arcs of a circle of `size` across, flattening the same way a drawn
+    circle does; `length` is the whole length, so a slot as long as it is wide is a
+    circle.
+    """
+    r = 0.5 * size
+    a = 0.5 * max(0.0, float(length) - size)
+    right = arc_points(np.array([a, 0.0]), r, -0.5 * math.pi, 0.5 * math.pi, TOL / 4.0)
+    left = arc_points(np.array([-a, 0.0]), r, 0.5 * math.pi, 1.5 * math.pi, TOL / 4.0)
+    return np.ascontiguousarray(np.concatenate([right[:-1], left[:-1]]))
+
+
+def _slots_holes(loop, room, size, web, slot_length, angle) -> list[np.ndarray]:
+    """Rows of rounded slots, every other row half a pitch on, like a brick wall.
+
+    The slots stand `web` apart in both directions: a row is `size + web` higher than the
+    one below it and two slots in a row are `length + web` centres apart. What is turned
+    on the worksheet is the whole grid, so `angle` only turns the grid and the slots
+    around it, and a slot still counts only when it lies whole inside the margin.
+    """
+    length = 4.0 * size if slot_length is None or float(slot_length) <= 0.0 \
+        else float(slot_length)
+    if length + 1e-12 < size:
+        raise ValueError(tr("A slot must be at least as long as it is wide."))
+    unit = _slot_loop(size, max(length, size))
+    pitch_x, pitch_y = max(length, size) + web, size + web
+    allp = np.concatenate(room)
+    lo, hi = allp.min(axis=0), allp.max(axis=0)
+    c = 0.5 * (loop.min(axis=0) + loop.max(axis=0))
+    rot = math.radians(float(angle) % 180.0)
+    co, si = math.cos(rot), math.sin(rot)
+    R = np.array([[co, -si], [si, co]])
+    # the grid works in its own straight frame and is turned with the slots around the
+    # centre of the contour: the room box, seen from that frame, is how much grid to make
+    corner = np.array([[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]])
+    back = c + (corner - c) @ R
+    lo2, hi2 = back.min(axis=0), back.max(axis=0)
+    rows = []
+    for j in range(int(math.floor((lo2[1] - c[1]) / pitch_y)) - 1,
+                   int(math.ceil((hi2[1] - c[1]) / pitch_y)) + 2):
+        y = c[1] + j * pitch_y
+        x0 = c[0] + (0.5 if j % 2 else 0.0) * pitch_x    # every other row, half a slot on
+        i = np.arange(int(math.ceil((lo2[0] - x0) / pitch_x)) - 1,
+                      int(math.floor((hi2[0] - x0) / pitch_x)) + 2)
+        rows.append(np.column_stack([x0 + i * pitch_x, np.full(len(i), y)]))
+    centres = c + (np.concatenate(rows) - c) @ R.T       # turned with the grid
+    # as with the honeycomb, the centre decides most slots at once: one whose centre
+    # lies deeper in the room than the tip of its end arc is in; one whose centre lies
+    # outside, or nearer to the edge than the flat of the row, is out
+    reach, flat = 0.5 * max(length, size), 0.5 * size
+    gap = 1e-9
+    hole_rot = unit @ R.T
+    deep = _edge_distances(room, centres)
+    deep[~_inside_points(room, centres)] = -1.0          # a centre outside the room is no centre
+    keep = deep >= reach - gap
+    for h in np.flatnonzero(~keep & (deep >= flat - gap)):
+        hole = centres[h] + hole_rot
+        ins = _inside_points(room, hole)
+        # an edge exactly on the edge of the margin counts as inside: the edge comes
+        # from an offset, and a slot may stand with its flat right on it
+        keep[h] = bool(np.all(ins | (_edge_distances(room, hole) <= gap)))
+    holes = [np.ascontiguousarray(centres[h] + hole_rot) for h in np.flatnonzero(keep)]
+    return _keep_whole_webs(holes, web)
+
+
+def vent_pattern(outline, shape="hex", size=6.0, web=2.0, margin=3.0, seed=1,
+                 slot_length=None, angle=0.0) -> list[np.ndarray]:
     """The holes of a grille or a speaker cover, filling the closed contour `outline`.
 
     `outline` is a closed contour (n, 2) of any shape: the laser cuts these holes out of
@@ -667,6 +1056,18 @@ def vent_pattern(outline, shape="hex", size=6.0, web=2.0, margin=3.0) -> list[np
     the next hole, so the web of material between two neighbours is `web` wide everywhere.
     Hexagons face each other with a flat on that grid, which is why a honeycomb is the
     tightest way to fill a panel with holes.
+
+    The other two shapes break that grid on purpose. "voronoi" fills the panel with
+    organic cells: seed points on a jittered grid of step `size`, shaken at most a
+    quarter of `size` off their spot by the random number series of `seed` — the same
+    seed always gives the same pattern — and every cell cut by the bisectors with its
+    neighbours and shrunk by half a web, so the walls between the cells are `web` wide
+    while the wall along the margin is the margin itself. Cells of which less than a
+    tenth survives the margin are no holes but slivers and go. "slots" lays rows of
+    rounded slots of `size` wide and `slot_length` long (by default four times as long
+    as wide) in a brick bond: rows a pitch `size + web` apart, every other row half a
+    slot pitch on, the whole grid turned by `angle` degrees. Only whole slots count, as
+    with the other shapes.
 
     The grid is centred on the bounding box of the contour, so the pattern of a rectangle
     or a circle is symmetric on every side. A hole only stays when it lies entirely inside
@@ -688,14 +1089,18 @@ def vent_pattern(outline, shape="hex", size=6.0, web=2.0, margin=3.0) -> list[np
         raise ValueError(tr("The holes must be wider than zero."))
     if web <= 0.0:
         raise ValueError(tr("The material between the holes must be wider than zero."))
+    room = cam.offset_loop(loop, -margin)
+    if not room:
+        return []
+    if shape == "voronoi":
+        return _voronoi_holes(loop, room, size, web, margin, seed)
+    if shape == "slots":
+        return _slots_holes(loop, room, size, web, slot_length, angle)
     if shape == "hex":
         unit = (size / math.sqrt(3.0)) * _HEX      # half a flat is size / 2, so this is the corner
     else:
         # the same flattening as a drawn circle (sheettools.circle_loop, which needs Qt)
         unit = arc_points(np.zeros(2), 0.5 * size, 0.0, 2.0 * math.pi, TOL / 4.0)[:-1]
-    room = cam.offset_loop(loop, -margin)
-    if not room:
-        return []
     allp = np.concatenate(room)
     lo, hi = allp.min(axis=0), allp.max(axis=0)
     c = 0.5 * (loop.min(axis=0) + loop.max(axis=0))

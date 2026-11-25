@@ -944,8 +944,9 @@ class Vent:
 
     A grille is cut for the outline it lies in, so an outline that changes shape leaves
     its holes cut off or sticking out. `src` is the source number of that outline on the
-    worksheet and `shape`, `size`, `web` and `margin` the options the pattern was made
-    with, which are the defaults of `volura/boxgen.py` when a file says nothing.
+    worksheet and `shape`, `size`, `web`, `margin`, `seed`, `slot_length` and `angle` the
+    options the pattern was made with, which are the defaults of `volura/boxgen.py` when
+    a file says nothing. A `slot_length` of 0 means "as long as the pattern likes".
 
     `outline` is the outer loop the pattern was made for and `holes` the holes it gave,
     both in the `sorted_loops` form and in their own plane, never in the placement of the
@@ -959,6 +960,9 @@ class Vent:
     size: float = 6.0
     web: float = 2.0
     margin: float = 3.0
+    seed: int = 1
+    slot_length: float = 0.0
+    angle: float = 0.0
     outline: list = field(default_factory=list)
     holes: list = field(default_factory=list)
 
@@ -968,11 +972,15 @@ class Vent:
                 "size": round(float(self.size), JSON_DECIMALS),
                 "web": round(float(self.web), JSON_DECIMALS),
                 "margin": round(float(self.margin), JSON_DECIMALS),
+                "seed": int(self.seed),
+                "slot_length": round(float(self.slot_length), JSON_DECIMALS),
+                "angle": round(float(self.angle), JSON_DECIMALS),
                 "outline": _loops_json(self.outline), "holes": _loops_json(self.holes)}
 
     @staticmethod
     def from_dict(d) -> "Vent":
         return Vent(int(d.get("src", 0)), str(d.get("shape", "hex")),
                     float(d.get("size", 6.0)), float(d.get("web", 2.0)),
-                    float(d.get("margin", 3.0)),
+                    float(d.get("margin", 3.0)), int(d.get("seed", 1)),
+                    float(d.get("slot_length", 0.0)), float(d.get("angle", 0.0)),
                     _loops_of(d.get("outline")), _loops_of(d.get("holes")))

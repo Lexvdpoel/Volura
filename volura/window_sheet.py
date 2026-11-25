@@ -361,6 +361,9 @@ class SheetMixin:
         self.settings.vent_size = float(options["size"])
         self.settings.vent_web = float(options["web"])
         self.settings.vent_margin = float(options["margin"])
+        self.settings.vent_seed = int(options.get("seed", 1))
+        self.settings.vent_slot_length = float(options.get("slot_length", 0.0))
+        self.settings.vent_angle = float(options.get("angle", 0.0))
         self.settings.save()
         made = self.apply_vent_pattern(options)
         self.setFocus()
@@ -385,7 +388,10 @@ class SheetMixin:
         try:
             holes = boxgen.vent_pattern(outline_pts, shape=options["shape"],
                                         size=options["size"], web=options["web"],
-                                        margin=options["margin"])
+                                        margin=options["margin"],
+                                        seed=int(options.get("seed", 1)),
+                                        slot_length=float(options.get("slot_length", 0.0)),
+                                        angle=float(options.get("angle", 0.0)))
         except Exception as e:                      # the generator must never crash
             return self._box_failure(e, "the vent pattern",
                                      tr("The vent pattern failed: {error}"))
@@ -421,6 +427,9 @@ class SheetMixin:
         """The vent pattern of one contour, kept so it can be made again for a new outline."""
         vent = linking.Vent(src=int(src), shape=str(options["shape"]), size=float(options["size"]),
                             web=float(options["web"]), margin=float(options["margin"]),
+                            seed=int(options.get("seed", 1)),
+                            slot_length=float(options.get("slot_length", 0.0)),
+                            angle=float(options.get("angle", 0.0)),
                             outline=linking.sorted_loops([outline]),
                             holes=linking.sorted_loops(holes))
         self.doc.vents = [v for v in self.doc.vents if int(v.src) != int(src)] + [vent]
@@ -430,7 +439,8 @@ class SheetMixin:
 
         A grille keeps its holes where they were, so a panel that grows or shrinks leaves
         them cut off or sticking out. Here the pattern is made again for the outline as it
-        is now, with the shape, size, web and margin it was made with: the holes of the
+        is now, with all the options it was made with - the seed and the slot shape keep
+        the grille as the user set it up: the holes of the
         pattern go and new ones come, while a hole you drew yourself stays. When the outline
         belongs to a linked plate, the plate is rebuilt from the worksheet too, so the model
         gets the new grille. A vent whose contour left the worksheet is dropped.
@@ -470,7 +480,9 @@ class SheetMixin:
         """One vent pattern made again for `outer`, the outline as it lies on the worksheet."""
         try:
             holes = boxgen.vent_pattern(outer, shape=vent.shape, size=vent.size,
-                                        web=vent.web, margin=vent.margin)
+                                        web=vent.web, margin=vent.margin,
+                                        seed=int(vent.seed), slot_length=float(vent.slot_length),
+                                        angle=float(vent.angle))
         except Exception as e:                      # the generator must never crash
             errors.log_exception(note=f"the vent pattern: {e}")
             return

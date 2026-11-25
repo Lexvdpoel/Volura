@@ -7,6 +7,8 @@ corners and the job estimate. `volura/app.py` builds the actions that open them.
 """
 from __future__ import annotations
 
+import random
+
 from PySide6.QtCore import QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
@@ -634,8 +636,10 @@ class LivingHingeDialog(QDialog):
 class VentPatternDialog(QDialog):
     """The "Vent Pattern…" dialog: the holes of a grille or a speaker cover.
 
-    The holes stand on a triangular grid, `web` millimetres of material between two
-    neighbours, and only holes that lie whole inside the contour survive the edge margin.
+    Hexagons and circles stand on a triangular grid, `web` millimetres of material between
+    two neighbours; Voronoi cells scatter their seeds over the contour, the same scatter
+    for the same seed, and slots are long holes in rows that alternate half a slot; in all
+    of them only holes that lie whole inside the contour survive the edge margin.
     Hexagons pack tightest, circles are the classic speaker cover; the values depend on the
     project and the machine, so the dialog starts where the user left them (Settings) and
     remembers the new ones.
@@ -646,8 +650,8 @@ class VentPatternDialog(QDialog):
         s = win.settings
         self.setWindowTitle(tr("Vent Pattern"))
         lay = QFormLayout(self)
-        intro = QLabel(tr("Fills the selected closed contour with a grid of holes, for a "
-                          "ventilation grille or a speaker cover. The holes go on the cut "
+        intro = QLabel(tr("Fills the selected closed contour with a pattern of holes, for "
+                          "a ventilation grille or a speaker cover. The holes go on the cut "
                           "layer."))
         intro.setWordWrap(True)
         lay.addRow(intro)
@@ -664,30 +668,77 @@ class VentPatternDialog(QDialog):
         self.shape = QComboBox()
         self.shape.addItem(tr("Hexagons"), "hex")
         self.shape.addItem(tr("Circles"), "round")
-        self.shape.setCurrentIndex(0 if s.vent_shape == "hex" else 1)
+        self.shape.addItem(tr("Voronoi cells"), "voronoi")
+        self.shape.addItem(tr("Slots"), "slots")
+        self.shape.setCurrentIndex(max(0, self.shape.findData(s.vent_shape)))
         self.shape.setToolTip(tr("Hexagons pack tightest in the material, circles are the "
-                                 "classic speaker cover"))
+                                 "classic speaker cover, Voronoi cells fill the panel like "
+                                 "a mosaic and slots are the long holes of a machine guard"))
         self.size = spin(1.0, 50.0, s.vent_size, 1.0)
         self.size.setToolTip(tr("Width of one hole: across the flats for a hexagon, the "
-                                "diameter of a circle"))
+                                "diameter of a circle, the width of a slot"))
         self.web = spin(0.5, 20.0, s.vent_web, 0.5)
         self.web.setToolTip(tr("Width of the material between two holes; too thin and it "
                                "warps or tears out"))
         self.margin = spin(0.0, 50.0, s.vent_margin, 0.5)
         self.margin.setToolTip(tr("Material that stays free of holes along the edge, so the "
                                   "grille keeps its place in the panel"))
+        self.seed = QSpinBox()
+        self.seed.setRange(1, 999999)
+        self.seed.setValue(int(s.vent_seed))
+        self.seed.setToolTip(tr("The draw of the scatter: the same seed gives the same "
+                                "pattern, so a pattern can be made again exactly"))
+        shuffle = QPushButton(tr("Shuffle"))
+        shuffle.setToolTip(tr("Pick a new seed at random, for a different draw"))
+        shuffle.clicked.connect(lambda: self.seed.setValue(
+            random.randint(self.seed.minimum(), self.seed.maximum())))
+        seedbox = QWidget()
+        seedrow = QHBoxLayout(seedbox)
+        seedrow.setContentsMargins(0, 0, 0, 0)
+        seedrow.addWidget(self.seed, 1)
+        seedrow.addWidget(shuffle)
+        self.slotlen = QSpinBox()
+        self.slotlen.setRange(0, 500)
+        self.slotlen.setSuffix(" mm")
+        self.slotlen.setSpecialValueText(tr("Automatic"))
+        self.slotlen.setValue(int(round(s.vent_slot_length)) if s.vent_slot_length > 0 else 0)
+        self.slotlen.setToolTip(tr("Length of a slot from end to end; automatic is four "
+                                   "times the width of the hole"))
+        self.angle = QComboBox()
+        self.angle.addItem(tr("0°"), 0.0)
+        self.angle.addItem(tr("45°"), 45.0)
+        self.angle.addItem(tr("90°"), 90.0)
+        self.angle.setCurrentIndex(max(0, self.angle.findData(float(s.vent_angle))))
+        self.angle.setToolTip(tr("Turn the rows of slots; the slots keep their length along "
+                                 "the turn, so 90° stands the rows upright"))
         lay.addRow(tr("Shape"), self.shape)
         lay.addRow(tr("Hole size"), self.size)
         lay.addRow(tr("Web"), self.web)
         lay.addRow(tr("Edge margin"), self.margin)
+        lay.addRow(tr("Seed"), seedbox)
+        lay.addRow(tr("Slot length"), self.slotlen)
+        lay.addRow(tr("Angle"), self.angle)
+
+        def sync(_=None):
+            key = self.shape.currentData()
+            lay.setRowVisible(seedbox, key == "voronoi")
+            lay.setRowVisible(self.slotlen, key == "slots")
+            lay.setRowVisible(self.angle, key == "slots")
+
+        self.shape.currentIndexChanged.connect(sync)
+        sync()
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         lay.addRow(bb)
 
     def options(self) -> dict:
-        return {"shape": str(self.shape.currentData()), "size": round(self.size.value(), 6),
-                "web": round(self.web.value(), 6), "margin": round(self.margin.value(), 6)}
+        key = str(self.shape.currentData())
+        return {"shape": key, "size": round(self.size.value(), 6),
+                "web": round(self.web.value(), 6), "margin": round(self.margin.value(), 6),
+                "seed": int(self.seed.value()),
+                "slot_length": float(self.slotlen.value()) if key == "slots" else 0.0,
+                "angle": float(self.angle.currentData()) if key == "slots" else 0.0}
 
 
 class FitTestDialog(QDialog):
