@@ -3,6 +3,16 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.83 — 2026-11-25
+
+### New
+- **Print time and filament per part**: after *File > Slice*, the print preview shows a table with
+  the time, grams, metres and share of every part on the plate, longest first, plus a row for the
+  skirt, travel and support. Click a row to select that part. The rows add up to the totals.
+- **Print-in-Place Ball Joint** (*Draw > Parts > Mechanical*): a ball on a stem in a socket that
+  prints assembled without support, swings to the angle you set and holds its pose thanks to
+  springy slits in the rim. For lamp arms, figures and phone or camera mounts.
+
 ## 0.2.82 — 2026-11-25
 
 ### New
