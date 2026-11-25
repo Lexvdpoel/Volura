@@ -357,7 +357,9 @@ def test_an_arc_takes_one_line_of_text(text):
 def test_the_empty_lines_rounding_one_line_are_not_lines(text):
     need_fonts()
     assert text3d.arc_lines(text) == 1
-    assert arc(text=text).volume() == pytest.approx(arc(text="Tools").volume(), rel=1e-9)
+    # letters that touch on the arc are joined by a multithreaded union, which can round a
+    # hair differently from run to run (seen on Linux: 0.01 %); a lost or extra letter is ~20 %
+    assert arc(text=text).volume() == pytest.approx(arc(text="Tools").volume(), rel=1e-3)
 
 
 @pytest.mark.parametrize("text, lines", (("Tools", 1), ("Tools\n", 1), ("\n\nTools\n\n", 1),
