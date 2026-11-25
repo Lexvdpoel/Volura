@@ -1,9 +1,9 @@
 """The dialogs of the printable parts: the gear, the box and the small hardware.
 
 The spur gear, the project box, the knob, the standoff, the label plate, the 3D text, the cable
-clip, the print-in-place hinge, the snap-fit clip, the battery holder, the storage bin and its
-wall rack. Each one starts at the values of Settings and remembers the new ones; the actions that
-open them and the models they build live in `volura/app.py`.
+clip, the print-in-place hinge and ball joint, the snap-fit clip, the battery holder, the storage
+bin and its wall rack. Each one starts at the values of Settings and remembers the new ones; the
+actions that open them and the models they build live in `volura/app.py`.
 
 The dialog of the text or the logo that goes on a face of a part lives here too: it is not a part
 of its own, but it is built the same way, with the same fields for the letters and the same way of
@@ -20,13 +20,14 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QColorDialog, QDialog, QDia
                                QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton,
                                QSpinBox, QWidget)
 
-from . import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, cable_chain, cable_clip,
-               cable_comb, cable_winder, card_holder, coaster, cookie_cutter, desk_hook,
-               door_wedge, drawer_organizer, enclosure, face_text, fan_guard, filament_clip,
-               fonts, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, knob,
-               label_plate, lithophane, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
-               screw_jar, snap_fit, soap_dish, spool_adapter, standoff, storage_bin, text3d,
-               theme, threads, tie_mount, vector_import, wall_hook)
+from . import (bag_clip, ball_joint, battery_holder, bin_rack, bit_holder, bracket, cable_chain,
+               cable_clip, cable_comb, cable_winder, card_holder, coaster, cookie_cutter,
+               desk_hook, door_wedge, drawer_organizer, enclosure, face_text, fan_guard,
+               filament_clip, fonts, gears, gridfinity, grommet, hex_key_holder, hinge,
+               hose_adapter, knob, label_plate, lithophane, pegboard, pen_cup, phone_stand,
+               plant_label, plant_pot, screw_jar, snap_fit, soap_dish, spool_adapter,
+               standoff, storage_bin, text3d, theme, threads, tie_mount, vector_import,
+               wall_hook)
 from .geom import MeshData
 from .i18n import tr, trn
 from .panels import swatch
@@ -939,6 +940,128 @@ class HingeDialog(QDialog):
                 "knuckles": int(self.knuckles.value()),
                 "clearance": round(self.clearance.value(), 6),
                 "pin_d": round(self.pin_d.value(), 6)}
+
+
+class BallJointDialog(QDialog):
+    """The "Print-in-Place Ball Joint…" dialog: a ball in its socket that prints in one piece.
+
+    A ball joint is made for something that has to point any way it is put, so the dialog starts
+    with the ball: how big it is and how much play it has in its seat. The stem is the rod that
+    comes out of the ball and that you turn by hand, and the swing is how far it tilts to either
+    side of upright; a thick stem needs a wide opening in the neck of the socket, and a wide
+    opening leaves little of the ball to hide behind it, so the stem is what sets how far a joint
+    of these sizes can turn. Under the fields stands what the joint really becomes: how far it
+    turns, how deep the ball is caught and how tall it prints; when the stem or the swing asked for
+    leaves nothing to hold the ball, or when a big ball stands too high for the floor asked for, the
+    label says in the warning colour what the joint then becomes instead. The grip slits sawn in the
+    wall of the socket are what makes the joint stay where it is moved to. The values come from
+    Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Print-in-place ball joint"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.ball = spin(ball_joint.BALL_MIN, ball_joint.BALL_MAX, s.ball_joint_ball)
+        self.ball.setToolTip(tr("The ball that turns in its socket; it stands on a slender foot "
+                               "that you break off after printing"))
+        self.clearance = spin(ball_joint.CLEARANCE_MIN, ball_joint.CLEARANCE_MAX,
+                              s.ball_joint_clearance, 0.05)
+        self.clearance.setToolTip(tr("The play between the ball and its seat: too little freezes "
+                                    "the joint, too much makes it rattle"))
+        self.stem = spin(ball_joint.STEM_MIN, ball_joint.STEM_MAX, s.ball_joint_stem)
+        self.stem.setToolTip(tr("The rod that comes out of the ball and that you turn: a thick "
+                               "stem needs a wide opening, and then little of the ball is left to "
+                               "hold it"))
+        self.swing = QDoubleSpinBox()
+        self.swing.setRange(ball_joint.SWING_MIN, ball_joint.SWING_MAX)
+        self.swing.setDecimals(1)
+        self.swing.setSingleStep(5.0)
+        self.swing.setSuffix(" °")
+        self.swing.setValue(float(s.ball_joint_swing))
+        self.swing.setToolTip(tr("How far the stem tilts to either side of upright before the "
+                                "neck of the socket stops it"))
+        self.wall = spin(ball_joint.WALL_MIN, ball_joint.WALL_MAX, s.ball_joint_wall, 0.1)
+        self.wall.setToolTip(tr("How thick the wall of the socket is"))
+        self.base = spin(ball_joint.BASE_MIN, ball_joint.BASE_MAX, s.ball_joint_base)
+        self.base.setToolTip(tr("How thick the floor under the ball is: a big ball stands higher "
+                               "and needs a thicker floor to reach the bed at a printable slope"))
+        self.stem_len = spin(ball_joint.STEM_LEN_MIN, ball_joint.STEM_LEN_MAX,
+                             s.ball_joint_stem_len)
+        self.stem_len.setToolTip(tr("How far the stem stands above the neck of the socket"))
+        self.grip = QSpinBox()
+        self.grip.setRange(ball_joint.GRIP_MIN, ball_joint.GRIP_MAX)
+        self.grip.setValue(int(s.ball_joint_grip))
+        self.grip.setToolTip(tr("How many slots are sawn in the wall of the socket, so it presses "
+                               "its neck around the ball and the joint stays where you put it: 0 "
+                               "leaves the joint loose"))
+        self.info = QLabel()
+        lay.addRow(tr("Ball diameter"), self.ball)
+        lay.addRow(tr("Clearance"), self.clearance)
+        lay.addRow(tr("Stem diameter"), self.stem)
+        lay.addRow(tr("Swing"), self.swing)
+        lay.addRow(tr("Wall"), self.wall)
+        lay.addRow(tr("Floor"), self.base)
+        lay.addRow(tr("Stem length"), self.stem_len)
+        lay.addRow(tr("Grip slits"), self.grip)
+        lay.addRow(self.info)
+        for w in (self.ball, self.clearance, self.stem, self.swing, self.wall, self.base,
+                  self.stem_len, self.grip):
+            w.valueChanged.connect(self._check)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addRow(bb)
+        self._check()
+
+    def _check(self, *_):
+        """What a joint of these numbers really becomes, and what is taken from what was asked."""
+        n = ball_joint.sizes(**self.options())
+        parts = [tr("The stem turns {deg:.0f}° to either side and {cap:.1f} mm of the ball hides "
+                    "behind an opening of {opening:.1f} mm; the joint prints {tall:.1f} mm tall on "
+                    "a base of {wide:.1f} mm.")
+                 .format(deg=n["swing"], cap=n["capture"], opening=n["opening"],
+                         tall=n["height"], wide=n["base_d"])]
+        warned = False
+        if n["swing"] < self.swing.value() - 1e-6:
+            warned = True
+            parts.append(tr("A stem of {stem:.1f} mm at a swing of {ask:g}° leaves too little of "
+                            "the ball behind the neck: this joint turns {deg:.0f}° at most.")
+                         .format(stem=n["stem"], ask=self.swing.value(), deg=n["swing"]))
+        if n["stem"] < self.stem.value() - 1e-6:
+            warned = True
+            parts.append(tr("A stem of {want:g} mm is too thick for a ball of {ball:g} mm: the "
+                            "neck would hold nothing of the ball, so the stem becomes {stem:.1f} "
+                            "mm.").format(want=self.stem.value(), ball=n["ball"], stem=n["stem"]))
+        if n["floor"] > self.base.value() + 1e-6:
+            warned = True
+            parts.append(tr("A ball of {ball:g} mm stands too high above the bed for a floor of "
+                            "{base:g} mm, so the floor becomes {floor:.1f} mm to keep the tip of "
+                            "the ball printable.").format(ball=n["ball"], base=self.base.value(),
+                                                          floor=n["floor"]))
+        self.info.setStyleSheet(f"color: {theme.color('warn')};" if warned else "")
+        self.info.setText("<i>" + " ".join(parts) + "</i>")
+
+    def options(self) -> dict:
+        return {"ball_d": round(self.ball.value(), 6),
+                "clearance": round(self.clearance.value(), 6),
+                "stem_d": round(self.stem.value(), 6),
+                "swing": round(self.swing.value(), 6),
+                "wall": round(self.wall.value(), 6),
+                "base": round(self.base.value(), 6),
+                "stem_len": round(self.stem_len.value(), 6),
+                "grip": int(self.grip.value())}
 
 
 class SnapFitDialog(QDialog):

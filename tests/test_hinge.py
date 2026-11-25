@@ -152,9 +152,10 @@ def test_the_hinge_lies_on_the_bed_next_to_the_model(win):
     assert second[0][0] - first[1][0] == pytest.approx(10.0), "the hinges are not 10 mm apart"
 
 
-def test_the_hinge_follows_the_knob_in_parts(win):
+def test_the_hinge_follows_the_ball_joint_in_parts(win):
     labels = [clean(a.text()) for a in win.flat_actions(win.parts_category("Mechanical"))]
-    assert labels.index("Print-in-Place Hinge") == labels.index("Knob") + 1
+    assert labels.index("Print-in-Place Hinge") == labels.index("Print-in-Place Ball Joint") + 1
+    assert labels.index("Print-in-Place Ball Joint") == labels.index("Knob") + 1
 
 
 def test_the_dialog_starts_at_the_last_values_and_remembers_the_new_ones(win, monkeypatch):

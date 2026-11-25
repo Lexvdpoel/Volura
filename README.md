@@ -298,6 +298,15 @@ gets for free.
   the cable in and it stays, on a foot you screw to a wall or under a desk. The clip prints lying
   on its side, so the ring needs no support. Up to twelve clips print in one row that you break
   apart afterwards, on the bed to the right of your model as one undo step
+- **Print-in-Place Ball Joint** (Draw > Parts): a printable ball joint that comes off the
+  printer ready to turn: a ball in a socket with a floor, a wall and a neck that catches the ball,
+  and a stem you turn by hand. The ball stands on a slender foot while it prints, which you break
+  off afterwards with a twist, and the room under it is swept from the room the foot takes when the
+  stem tilts, so the joint turns to the swing you enter and then stops against the neck. Every face
+  is a curve about the middle of the ball, so nothing leans past 45 degrees and the joint prints
+  without a single strand of support; slits sawn in the wall of the socket press its neck around
+  the ball, so the joint stays where you put it. The socket and the ball with its stem come as two
+  groups in one undo step, so one of them can have another colour
 - **Print-in-Place Hinge** (Draw > Parts): a printable hinge that comes off the printer
   already assembled: two leaves that lie flat on the bed beside each other, joined by a row of
   barrels around one pin. Half of the barrels carry the pin, the other half have a hole around it

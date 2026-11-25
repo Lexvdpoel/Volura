@@ -346,6 +346,14 @@ SVG = {
                    f'<circle cx="18" cy="12" r="2.5" fill="#b8c9de" {S(w=1.2)}/>'
                     f'<path d="M3 12 L21 12" {N} stroke="#d23b3b" stroke-width="1.3" '
                     f'stroke-linecap="round"/>',
+    # print-in-place ball joint: a ball in its socket, caught by the neck, with a stem to turn
+    "print_ball_joint": f'<rect x="3.5" y="11" width="17" height="9.5" rx="1.5" fill="#cfe0f5" '
+                        f'{S()}/>'
+                        f'<circle cx="12" cy="11" r="5.5" fill="#b8c9de" {S(w=1.2)}/>'
+                        f'<rect x="10.2" y="2" width="3.6" height="6.5" rx="1" fill="#e8c897" '
+                        f'{S(w=1.2)}/>'
+                        f'<path d="M8.2 9.5 L8.2 7 M15.8 9.5 L15.8 7" {N} stroke="#d23b3b" '
+                        f'stroke-width="1.3" stroke-linecap="round"/>',
     # battery holder: a block with open cradles and a cell that presses in from above
     "battery_holder": f'<rect x="2.5" y="12" width="19" height="8.5" rx="1.5" fill="#cfe0f5" {S()}/>'
                       f'<path d="M4.5 12 A3.25 3.25 0 0 0 11 12 M13 12 A3.25 3.25 0 0 0 19.5 12" '

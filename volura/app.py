@@ -25,7 +25,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QTextBrowser, QWidget,
                                QToolBar, QToolButton, QVBoxLayout)
 
-from . import (__version__, background, bag_clip, battery_holder, bin_rack, bit_holder, boxgen, bracket,
+from . import (__version__, background, bag_clip, ball_joint, battery_holder, bin_rack,
+               bit_holder, boxgen, bracket,
                cable_chain, cable_clip, cable_comb, cable_winder, calibrations, cam, card_holder,
                coaster, cookie_cutter,
                desk_hook, door_wedge, drawer_organizer,
@@ -190,7 +191,8 @@ PANELS = (PANEL_INFO, PANEL_COLORS, PANEL_MATERIALS, PANEL_OUTLINER, PANEL_PRINT
 # shortcut paths and the tests of tests/test_parts_menu.py follow from the table.
 PART_CATEGORIES = (
     (tr_noop("&Mechanical"), ("a_bracket", "a_grommet", "a_fan_guard", "a_filament_clip",
-                              "a_hose_adapter", "a_knob", "a_print_hinge", "a_snap_fit",
+                              "a_hose_adapter", "a_knob", "a_print_ball_joint", "a_print_hinge",
+                              "a_snap_fit",
                               "a_spool_adapter", "a_spur_gear_3d", "a_standoff")),
     (tr_noop("&Cables"), ("a_cable_chain", "a_cable_clip", "a_cable_comb", "a_cable_winder",
                           "a_tie_mount")),
@@ -933,6 +935,56 @@ class Settings:
         except (TypeError, ValueError):
             self.hinge_pin_d = 3.0
         self.hinge_pin_d = max(hinge.PIN_MIN, min(hinge.PIN_MAX, self.hinge_pin_d))
+        try:
+            self.ball_joint_ball = float(self.q.value("ball_joint_ball", 12.0))
+        except (TypeError, ValueError):
+            self.ball_joint_ball = 12.0
+        self.ball_joint_ball = max(ball_joint.BALL_MIN,
+                                   min(ball_joint.BALL_MAX, self.ball_joint_ball))
+        try:
+            self.ball_joint_clearance = float(self.q.value("ball_joint_clearance", 0.3))
+        except (TypeError, ValueError):
+            self.ball_joint_clearance = 0.3
+        self.ball_joint_clearance = max(ball_joint.CLEARANCE_MIN,
+                                        min(ball_joint.CLEARANCE_MAX,
+                                            self.ball_joint_clearance))
+        try:
+            self.ball_joint_stem = float(self.q.value("ball_joint_stem", 3.0))
+        except (TypeError, ValueError):
+            self.ball_joint_stem = 3.0
+        self.ball_joint_stem = max(ball_joint.STEM_MIN,
+                                   min(ball_joint.STEM_MAX, self.ball_joint_stem))
+        try:
+            self.ball_joint_swing = float(self.q.value("ball_joint_swing", 35.0))
+        except (TypeError, ValueError):
+            self.ball_joint_swing = 35.0
+        self.ball_joint_swing = max(ball_joint.SWING_MIN,
+                                    min(ball_joint.SWING_MAX, self.ball_joint_swing))
+        try:
+            self.ball_joint_wall = float(self.q.value("ball_joint_wall", 2.5))
+        except (TypeError, ValueError):
+            self.ball_joint_wall = 2.5
+        self.ball_joint_wall = max(ball_joint.WALL_MIN,
+                                   min(ball_joint.WALL_MAX, self.ball_joint_wall))
+        try:
+            self.ball_joint_base = float(self.q.value("ball_joint_base", 3.0))
+        except (TypeError, ValueError):
+            self.ball_joint_base = 3.0
+        self.ball_joint_base = max(ball_joint.BASE_MIN,
+                                   min(ball_joint.BASE_MAX, self.ball_joint_base))
+        try:
+            self.ball_joint_stem_len = float(self.q.value("ball_joint_stem_len", 12.0))
+        except (TypeError, ValueError):
+            self.ball_joint_stem_len = 12.0
+        self.ball_joint_stem_len = max(ball_joint.STEM_LEN_MIN,
+                                       min(ball_joint.STEM_LEN_MAX, self.ball_joint_stem_len))
+        try:
+            self.ball_joint_grip = int(float(self.q.value("ball_joint_grip",
+                                                          ball_joint.GRIP_DEFAULT)))
+        except (TypeError, ValueError):
+            self.ball_joint_grip = ball_joint.GRIP_DEFAULT
+        self.ball_joint_grip = max(ball_joint.GRIP_MIN,
+                                   min(ball_joint.GRIP_MAX, self.ball_joint_grip))
         self.snap_material = str(self.q.value("snap_material", "PLA"))
         if self.snap_material not in snap_fit.MATERIALS:
             self.snap_material = "PLA"
@@ -1876,6 +1928,14 @@ class Settings:
         self.q.setValue("hinge_knuckles", self.hinge_knuckles)
         self.q.setValue("hinge_clearance", self.hinge_clearance)
         self.q.setValue("hinge_pin_d", self.hinge_pin_d)
+        self.q.setValue("ball_joint_ball", self.ball_joint_ball)
+        self.q.setValue("ball_joint_clearance", self.ball_joint_clearance)
+        self.q.setValue("ball_joint_stem", self.ball_joint_stem)
+        self.q.setValue("ball_joint_swing", self.ball_joint_swing)
+        self.q.setValue("ball_joint_wall", self.ball_joint_wall)
+        self.q.setValue("ball_joint_base", self.ball_joint_base)
+        self.q.setValue("ball_joint_stem_len", self.ball_joint_stem_len)
+        self.q.setValue("ball_joint_grip", self.ball_joint_grip)
         for key in ("snap_material", "snap_length", "snap_thickness", "snap_width",
                     "snap_undercut", "snap_releasable"):
             self.q.setValue(key, getattr(self, key))
@@ -3224,6 +3284,14 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                               tr("Add printable cable clips to the model: a ring that snaps "
                                  "round a cable and a foot to screw against a wall or under a "
                                  "desk"))
+        # ---- print-in-place ball joint
+        self.a_print_ball_joint = A(tr("Print-in-Place Ball Joint…"),
+                                    lambda checked=False: self.ball_joint_dialog(), None,
+                                    "print_ball_joint", False,
+                                    tr("Add a printable ball joint to the model: a ball in its "
+                                       "socket with a stem to turn, printed in one piece on a "
+                                       "slender foot that you break off, with slits in the wall of "
+                                       "the socket that hold the position"))
         # ---- print-in-place hinge
         self.a_print_hinge = A(tr("Print-in-Place Hinge…"),
                                lambda checked=False: self.hinge_dialog(), None, "print_hinge",

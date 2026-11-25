@@ -26,17 +26,16 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
                                QSpinBox, QTextBrowser, QVBoxLayout)
 
-from . import (background, bag_clip, battery_holder, bin_rack, bit_holder, bracket, bridge_test,
-               cable_chain, cable_clip, cable_comb, cable_winder, calibration_cube, card_holder,
-               coaster, cookie_cutter, desk_hook, door_wedge, drawer_organizer, enclosure,
-               face_text, fan_guard, fileio, filament_clip, first_layer_test, flow_rate_test,
-               gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter, joints, knob,
-               label_plate, lithophane, max_speed_test, ops, paint_split, pegboard, pen_cup,
-               phone_stand, plant_label, plant_pot, plates, pressure_advance_test, print_queue,
-               retraction_test,
-               screw_jar, snap_fit,
-               soap_dish, slicer, spool_adapter, standoff, storage_bin, stringing_test,
-               temperature_tower, text3d, theme, threads, tie_mount, wall_hook)
+from . import (background, bag_clip, ball_joint, battery_holder, bin_rack, bit_holder, bracket,
+               bridge_test, cable_chain, cable_clip, cable_comb, cable_winder, calibration_cube,
+               card_holder, coaster, cookie_cutter, desk_hook, door_wedge, drawer_organizer,
+               enclosure, face_text, fan_guard, fileio, filament_clip, first_layer_test,
+               flow_rate_test, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter,
+               joints, knob, label_plate, lithophane, max_speed_test, ops, paint_split, pegboard,
+               pen_cup, phone_stand, plant_label, plant_pot, plates, pressure_advance_test,
+               print_queue, retraction_test, screw_jar, snap_fit, soap_dish, slicer, spool_adapter,
+               standoff, storage_bin, stringing_test, temperature_tower, text3d, theme, threads,
+               tie_mount, wall_hook)
 from . import gcode_preview, gcode_thumbnail
 from .print_preview import FILAMENT_STYLE, PrintPreviewDialog
 from .app_dialogs import SimplifyDialog
@@ -44,7 +43,7 @@ from .brep import Entities
 from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
-from .part_dialogs import (BagClipDialog, BatteryHolderDialog, BinRackDialog,
+from .part_dialogs import (BagClipDialog, BallJointDialog, BatteryHolderDialog, BinRackDialog,
                            BitHolderDialog, BracketDialog,
                            CableChainDialog, CableClipDialog, CableCombDialog, CableWinderDialog,
                            CardHolderDialog, CoasterDialog, CookieCutterDialog, DeskHookDialog,
@@ -727,6 +726,75 @@ class PrintMixin:
             self.view.set_status(tr("Print-in-place hinge failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the hinge…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ print-in-place ball joint
+    def ball_joint_dialog(self):
+        """Draw > Parts > Mechanical > Print-in-Place Ball Joint…: a ball in its socket that prints
+           in one piece and turns as soon as it is off the bed."""
+        dlg = BallJointDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.ball_joint_ball = float(options["ball_d"])
+        self.settings.ball_joint_clearance = float(options["clearance"])
+        self.settings.ball_joint_stem = float(options["stem_d"])
+        self.settings.ball_joint_swing = float(options["swing"])
+        self.settings.ball_joint_wall = float(options["wall"])
+        self.settings.ball_joint_base = float(options["base"])
+        self.settings.ball_joint_stem_len = float(options["stem_len"])
+        self.settings.ball_joint_grip = int(options["grip"])
+        self.settings.save()
+        made = self.make_ball_joint_model(options)
+        self.setFocus()
+        return made
+
+    def make_ball_joint_model(self, options):
+        """The socket and the ball with its stem as printed parts: one undo step, on the bed next to
+        the model.
+
+        The seat, the neck and the relief are booleans around a sphere, so the joint is built in the
+        background, like the hinge, and the window keeps responding. The two parts come back where
+        they print — the ball in its seat, both standing on the bed — and are moved over the bed
+        together, so the ball still fits its socket after it is broken off its foot. Socket and ball
+        are two groups, so one of them can be given another colour.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("ball_d", "clearance", "stem_d", "swing", "wall", "base",
+                                        "stem_len", "grip")}
+        ball = float(options["ball_d"])
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the ball joint…"))
+            socket, moving = ball_joint.ball_joint(**size)
+            for m in (socket, moving):
+                if m.status() != mf.Error.NoError or m.is_empty():
+                    raise ValueError(tr("the result is not a valid volume"))
+            both = socket + moving
+            lo, hi = np.asarray(both.bounding_box()[:3]), np.asarray(both.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            step = (x - mid[0], 0.5 * by - mid[1], -lo[2])
+            return socket.translate(step), moving.translate(step)
+
+        def done(parts):
+            doc.checkpoint()                # one undo takes the socket and the ball away
+            color = self.settings.current_color
+            new = [ops.group_from_manifold(doc, parts[0], color, tr("Ball socket")),
+                   ops.group_from_manifold(doc, parts[1], color, tr("Ball and stem"))]
+            doc.set_selection([("g", g.id, g.id) for g in new])
+            doc.notify()
+            self.view.set_status(tr("Print-in-place ball joint with a ball of {mm} mm added.")
+                                 .format(mm=f"{ball:g}"))
+
+        def failed(exc):
+            self.view.set_status(tr("Ball joint failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the ball joint…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ snap-fit clip
