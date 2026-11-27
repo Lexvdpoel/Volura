@@ -278,6 +278,12 @@ gets for free.
 - **Label Plate** (Draw > Parts): a printable tag for a drawer, a box or a keyring:
   up to four lines of text, raised on the plate or engraved into it, on a plate with rounded
   corners and, if you like, a hole for a ring or a screw
+- **Braille Label** (Draw > Parts): a printable label that is read with a fingertip: the text in
+  raised dots of the Marburg Medium sizes - 1.5 mm across and 0.6 mm high, 2.5 mm apart in a cell,
+  6 mm from cell to cell and 10 mm from line to line - in uncontracted Braille with the capital,
+  number and letter signs, left aligned because a reader's hand starts at the left edge. The same
+  text stands in letters above the dots, so sighted people read the label too, and the dots are
+  caps on the plate, so the label prints without support
 - **3D Text** (Draw): a part made of letters: your text in any font of your computer, several
   lines, as thick as you like, standing on the bed with the holes of o, a and 8 in it. On an
   **arc** the letters follow a circle of the radius you enter, each letter turned to that circle:

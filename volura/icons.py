@@ -518,6 +518,17 @@ SVG = {
                   f'<circle cx="5.4" cy="12.6" r="1.5" fill="#fff" {S(w=1.1)}/>'
                   f'<path d="M2 20.6 L22 20.6" {N} stroke="#2b2b2b" stroke-width="1.4" '
                   f'stroke-linecap="round"/>',
+    # Braille label: raised dot cells on a plate, with the hole to hang it up at the left
+    "braille_label": f'<rect x="2.2" y="6.4" width="19.6" height="11.2" rx="2.2" '
+                     f'fill="#eef2f7" {S()}/>'
+                     f'<circle cx="4.9" cy="12" r="1.5" fill="#fff" {S(w=1.1)}/>'
+                     f'<circle cx="8.6" cy="9.2" r="1.3" fill="#2f6fd6"/>'
+                     f'<circle cx="8.6" cy="12" r="1.3" fill="#2f6fd6"/>'
+                     f'<circle cx="11.4" cy="12" r="1.3" fill="#2f6fd6"/>'
+                     f'<circle cx="14.6" cy="9.2" r="1.3" fill="#2f6fd6"/>'
+                     f'<circle cx="14.6" cy="14.8" r="1.3" fill="#2f6fd6"/>'
+                     f'<circle cx="17.4" cy="12" r="1.3" fill="#2f6fd6"/>'
+                     f'<circle cx="17.4" cy="14.8" r="1.3" fill="#2f6fd6"/>',
     # soap dish: a bar of soap on ribs, over a floor the water runs through
     "soap_dish": f'<path d="M2.6 12.6 L21.4 12.6 L21.4 19 L2.6 19 Z" fill="#eef2f7" {S()}/>'
                  f'<path d="M6.6 15.4 L6.6 18.4 M10.2 15.4 L10.2 18.4 M13.8 15.4 L13.8 18.4 '

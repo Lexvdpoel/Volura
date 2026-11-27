@@ -296,7 +296,7 @@ def test_the_dialog_builds_a_coaster_and_remembers_it(monkeypatch, tmp_path):
             "hexagon", 120.0, 5.0, 2.0, "grid")
         labels = [a.text().replace("&", "").replace("…", "")
                   for a in w.flat_actions(w.parts_category("Home and Desk"))]
-        assert labels.index("Coaster") == labels.index("Bag Clip") + 1
+        assert labels.index("Coaster") == labels.index("Braille Label") + 1
     finally:
         for key, value in (("coaster_shape", "round"), ("coaster_size", 95.0),
                            ("coaster_thickness", 4.0), ("coaster_rim", 1.5),

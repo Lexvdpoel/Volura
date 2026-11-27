@@ -1,6 +1,7 @@
 """The dialogs of the printable parts: the gear, the box and the small hardware.
 
-The spur gear, the project box, the knob, the standoff, the label plate, the 3D text, the cable
+The spur gear, the project box, the knob, the standoff, the label plate, the Braille label, the
+3D text, the cable
 clip, the print-in-place hinge and ball joint, the snap-fit clip, the battery holder, the storage
 bin and its wall rack, the timing pulley and its idler. Each one starts at the values of Settings
 and remembers the new ones; the actions that open them and the models they build live in
@@ -21,14 +22,14 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QColorDialog, QDialog, QDia
                                QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton,
                                QSpinBox, QWidget)
 
-from . import (bag_clip, ball_joint, battery_holder, bin_rack, bit_holder, bracket, cable_chain,
-               cable_clip, cable_comb, cable_winder, card_holder, coaster, cookie_cutter,
-               desk_hook, door_wedge, drawer_organizer, enclosure, face_text, fan_guard,
-               filament_clip, fonts, gears, gridfinity, grommet, hex_key_holder, hinge,
-               hose_adapter, knob, label_plate, lithophane, pegboard, pen_cup, phone_stand,
-               plant_label, plant_pot, pulley, screw_jar, snap_fit, soap_dish, spool_adapter,
-               standoff, storage_bin, text3d, theme, threads, tie_mount, vector_import,
-               wall_hook)
+from . import (bag_clip, ball_joint, battery_holder, bin_rack, bit_holder, bracket, braille,
+               cable_chain, cable_clip, cable_comb, cable_winder, card_holder, coaster,
+               cookie_cutter, desk_hook, door_wedge, drawer_organizer, enclosure, face_text,
+               fan_guard, filament_clip, fonts, gears, gridfinity, grommet, hex_key_holder,
+               hinge, hose_adapter, knob, label_plate, lithophane, pegboard, pen_cup,
+               phone_stand, plant_label, plant_pot, pulley, screw_jar, snap_fit, soap_dish,
+               spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
+               vector_import, wall_hook)
 from .geom import MeshData
 from .i18n import tr, trn
 from .panels import swatch
@@ -677,6 +678,92 @@ class LabelPlateDialog(QDialog):
                 "margin": round(self.margin.value(), 6),
                 "radius": round(self.radius.value(), 6),
                 "hole": round(self.hole.value(), 6)}
+
+
+class BrailleLabelDialog(QDialog):
+    """The "Braille Label…" dialog: a label of raised dots that is read with a fingertip.
+
+    What a fingertip reads is the distance between the dots, and those sizes are set by the
+    fingers, not by the user, so this dialog asks for the text and for the plate around it: the
+    band of margin, the thickness of the plate, the rounding of its corners and the hole to hang
+    it up. The dots need nothing else, but a label is often read by sighted people too, so the
+    same text in letters above the Braille stands on by default. The text is checked while it is
+    typed, because not every character has a Braille cell: one that has none is said, the field
+    stands out in red and OK waits, because a label that reads wrong is worse than no label at
+    all. The values come from Settings and are remembered, the text too.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Braille Label"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.text = QPlainTextEdit()
+        self.text.setPlainText(s.braille_text)
+        self.text.setTabChangesFocus(True)
+        self.text.setToolTip(tr("The text in Braille dots and, above them, in letters; Enter "
+                                "starts the next line"))
+        self.thickness = spin(braille.THICKNESS_MIN, braille.THICKNESS_MAX, s.braille_thickness)
+        self.thickness.setToolTip(tr("How thick the plate is"))
+        self.margin = spin(braille.MARGIN_MIN, braille.MARGIN_MAX, s.braille_margin)
+        self.margin.setToolTip(tr("The band of plate around the dots"))
+        self.radius = spin(0.0, 20.0, s.braille_radius)
+        self.radius.setToolTip(tr("The rounding of the corners of the plate"))
+        self.hole = spin(0.0, braille.HOLE_MAX, s.braille_hole)
+        self.hole.setToolTip(tr("A round hole through the plate, left of the dots, to hang the "
+                                "label up; 0 leaves it out"))
+        self.letters = QCheckBox(tr("Letters above the Braille"))
+        self.letters.setChecked(bool(s.braille_letters))
+        self.letters.setToolTip(tr("The same text in raised letters, so sighted people read the "
+                                   "label too"))
+        self.info = QLabel()
+        self.info.setWordWrap(True)
+        lay.addRow(tr("Text"), self.text)
+        lay.addRow(tr("Thickness"), self.thickness)
+        lay.addRow(tr("Margin"), self.margin)
+        lay.addRow(tr("Corner radius"), self.radius)
+        lay.addRow(tr("Hole"), self.hole)
+        lay.addRow("", self.letters)
+        lay.addRow("", self.info)
+        self.text.textChanged.connect(self._check)
+        self.bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.bb.accepted.connect(self.accept)
+        self.bb.rejected.connect(self.reject)
+        lay.addRow(self.bb)
+        self._check()
+
+    def _check(self, *_):
+        """Whether every character of this text has a Braille cell; if not, OK waits."""
+        try:
+            braille.cells(self.text.toPlainText())
+        except ValueError as exc:
+            self.text.setStyleSheet(f"border: 1px solid {theme.color('invalid')};")
+            self.info.setStyleSheet(f"color: {theme.color('warn')};")
+            self.info.setText(str(exc))
+            self.bb.button(QDialogButtonBox.Ok).setEnabled(False)
+            return
+        self.text.setStyleSheet("")
+        self.info.setStyleSheet("")
+        self.info.setText("")
+        self.bb.button(QDialogButtonBox.Ok).setEnabled(True)
+
+    def options(self) -> dict:
+        return {"text": self.text.toPlainText(),
+                "margin": round(self.margin.value(), 6),
+                "thickness": round(self.thickness.value(), 6),
+                "radius": round(self.radius.value(), 6),
+                "hole": round(self.hole.value(), 6),
+                "letters": bool(self.letters.isChecked())}
 
 
 class Text3DDialog(QDialog):

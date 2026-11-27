@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QSpinBox, QTextBrowser, QVBoxLayout)
 
 from . import (background, bag_clip, ball_joint, battery_holder, bin_rack, bit_holder, bracket,
+               braille,
                bridge_test, cable_chain, cable_clip, cable_comb, cable_winder, calibration_cube,
                card_holder, coaster, cookie_cutter, desk_hook, door_wedge, drawer_organizer,
                enclosure, face_text, fan_guard, fileio, filament_clip, first_layer_test,
@@ -45,7 +46,7 @@ from .i18n import tr, tr_noop, trn
 from .inference import GeoCache
 from .model import ROOT
 from .part_dialogs import (BagClipDialog, BallJointDialog, BatteryHolderDialog, BinRackDialog,
-                           BitHolderDialog, BracketDialog,
+                           BitHolderDialog, BrailleLabelDialog, BracketDialog,
                            CableChainDialog, CableClipDialog, CableCombDialog, CableWinderDialog,
                            CardHolderDialog, CoasterDialog, CookieCutterDialog, DeskHookDialog,
                            DoorWedgeDialog, DrawerOrganizerDialog, FaceTextDialog,
@@ -448,6 +449,66 @@ class PrintMixin:
             self.view.set_status(tr("Label plate failed: {error}").format(error=exc))
 
         background.run(self, work, text=tr("Building the label plate…"), on_done=done,
+                       on_error=failed)
+
+    # ------------------------------------------------------------ braille label
+    def braille_label_dialog(self):
+        """Draw > Parts > Home and Desk > Braille Label…: a label that is read with a fingertip."""
+        dlg = BrailleLabelDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        self.settings.braille_text = str(options["text"]).strip()
+        self.settings.braille_margin = float(options["margin"])
+        self.settings.braille_thickness = float(options["thickness"])
+        self.settings.braille_radius = float(options["radius"])
+        self.settings.braille_hole = float(options["hole"])
+        self.settings.braille_letters = bool(options["letters"])
+        self.settings.save()
+        made = self.make_braille_label_model(options)
+        self.setFocus()
+        return made
+
+    def make_braille_label_model(self, options):
+        """The Braille label as a printed part: one undo step, on the bed next to the model.
+
+        Every dot is a sphere cut on the plate and the letters above them are hundreds of
+        contours, so the label is built in the background, like the label plate, and the window
+        keeps responding. It stands on the bed in the middle of the free bed, or on the free
+        place 10 mm to the right of what is already in the model, so a second label does not land
+        in the first one. The group is named after the first line of the text, because that is
+        what the user typed; the dots of a blind reader and the letters above it say the same.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        size = {k: options[k] for k in ("text", "margin", "thickness", "radius", "hole",
+                                        "letters")}
+        name = str(options["text"]).split("\n")[0].strip() or tr("Braille Label")
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, tr("Building the Braille label…"))
+            m = braille.braille_label(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the label away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, name)
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(tr("Braille label added."))
+
+        def failed(exc):
+            self.view.set_status(tr("Braille label failed: {error}").format(error=exc))
+
+        background.run(self, work, text=tr("Building the Braille label…"), on_done=done,
                        on_error=failed)
 
     # ------------------------------------------------------------ 3D text

@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox,
                                QToolBar, QToolButton, QVBoxLayout)
 
 from . import (__version__, background, bag_clip, ball_joint, battery_holder, bin_rack,
-               bit_holder, boxgen, bracket,
+               bit_holder, boxgen, bracket, braille,
                cable_chain, cable_clip, cable_comb, cable_winder, calibrations, cam, card_holder,
                coaster, cookie_cutter,
                desk_hook, door_wedge, drawer_organizer,
@@ -51,8 +51,9 @@ from .app_dialogs import (FILAMENT_MATERIALS, ModelInfoDialog, PageDialog,
                           PreferencesDialog, PRINTERS, ShortcutsPanel, SimplifyDialog)
 from .panels import (ColorsPanel, EntityInfoPanel, LayerParamsDialog, LayersPanel, MaterialsPanel,
                      OutlinerPanel, PrintCheckPanel, SectionPanel, note, swatch)
-from .part_dialogs import (CableClipDialog, HingeDialog, KnobDialog, LabelPlateDialog,
-                           ProjectBoxDialog, SpurGearDialog, StandoffDialog, Text3DDialog)
+from .part_dialogs import (BrailleLabelDialog, CableClipDialog, HingeDialog, KnobDialog,
+                           LabelPlateDialog, ProjectBoxDialog, SpurGearDialog, StandoffDialog,
+                           Text3DDialog)
 from .mill3d_dialog import Mill3DDialog
 from .settings import qsettings
 from .sheet_dialogs import (AutoArrangeDialog, BoxJointDialog, DogboneCornersDialog, EXPORT_EXT,
@@ -201,10 +202,10 @@ PART_CATEGORIES = (
                            "a_drawer_organizer", "a_gridfinity", "a_hex_key_holder",
                            "a_card_holder", "a_pegboard", "a_project_box", "a_screw_jar",
                            "a_storage_bin")),
-    (tr_noop("&Home and Desk"), ("a_bag_clip", "a_coaster", "a_cookie_cutter", "a_desk_hook",
-                                 "a_door_wedge", "a_label_plate", "a_lithophane", "a_pen_cup",
-                                 "a_phone_stand", "a_plant_label", "a_plant_pot", "a_soap_dish",
-                                 "a_wall_hook")),
+    (tr_noop("&Home and Desk"), ("a_bag_clip", "a_braille_label", "a_coaster", "a_cookie_cutter",
+                                 "a_desk_hook", "a_door_wedge", "a_label_plate", "a_lithophane",
+                                 "a_pen_cup", "a_phone_stand", "a_plant_label", "a_plant_pot",
+                                 "a_soap_dish", "a_wall_hook")),
 )
 
 
@@ -803,6 +804,30 @@ class Settings:
         except (TypeError, ValueError):
             self.label_hole = 0.0
         self.label_hole = max(0.0, min(label_plate.HOLE_MAX, self.label_hole))
+        self.braille_text = str(self.q.value("braille_text", "Volura")).strip() or "Volura"
+        try:
+            self.braille_margin = float(self.q.value("braille_margin", 4.0))
+        except (TypeError, ValueError):
+            self.braille_margin = 4.0
+        self.braille_margin = max(braille.MARGIN_MIN,
+                                  min(braille.MARGIN_MAX, self.braille_margin))
+        try:
+            self.braille_thickness = float(self.q.value("braille_thickness", 2.0))
+        except (TypeError, ValueError):
+            self.braille_thickness = 2.0
+        self.braille_thickness = max(braille.THICKNESS_MIN,
+                                     min(braille.THICKNESS_MAX, self.braille_thickness))
+        try:
+            self.braille_radius = float(self.q.value("braille_radius", 2.0))
+        except (TypeError, ValueError):
+            self.braille_radius = 2.0
+        self.braille_radius = max(0.0, min(20.0, self.braille_radius))
+        try:
+            self.braille_hole = float(self.q.value("braille_hole", 0.0))
+        except (TypeError, ValueError):
+            self.braille_hole = 0.0
+        self.braille_hole = max(0.0, min(braille.HOLE_MAX, self.braille_hole))
+        self.braille_letters = self._bool("braille_letters", True)
         self.text3d_text = str(self.q.value("text3d_text", "Volura")).strip() or "Volura"
         self.text3d_family = str(self.q.value("text3d_family", "")).strip()
         try:
@@ -1926,6 +1951,12 @@ class Settings:
         self.q.setValue("label_margin", self.label_margin)
         self.q.setValue("label_radius", self.label_radius)
         self.q.setValue("label_hole", self.label_hole)
+        self.q.setValue("braille_text", self.braille_text)
+        self.q.setValue("braille_margin", self.braille_margin)
+        self.q.setValue("braille_thickness", self.braille_thickness)
+        self.q.setValue("braille_radius", self.braille_radius)
+        self.q.setValue("braille_hole", self.braille_hole)
+        self.q.setValue("braille_letters", self.braille_letters)
         self.q.setValue("text3d_text", self.text3d_text)
         self.q.setValue("text3d_family", self.text3d_family)
         self.q.setValue("text3d_height", self.text3d_height)
@@ -3311,6 +3342,13 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                False,
                                tr("Add a printable name tag or drawer label to the model: your "
                                   "text raised or engraved on a plate, with a hole to hang it up"))
+        # ---- Braille label
+        self.a_braille_label = A(tr("Braille Label…"),
+                                 lambda checked=False: self.braille_label_dialog(), None,
+                                 "braille_label", False,
+                                 tr("Add a printable Braille label to the model: the text in "
+                                    "raised dots in the sizes a fingertip reads, with the same "
+                                    "text in letters above the dots and a hole to hang it up"))
         # ---- cable clip
         self.a_cable_clip = A(tr("Cable Clip…"),
                               lambda checked=False: self.cable_clip_dialog(), None, None,
