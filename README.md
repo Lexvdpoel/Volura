@@ -423,6 +423,13 @@ gets for free.
   a rod of 5 to 30 mm or ask for a pocket that a 608 bearing presses into with the axle through
   under it; spokes hold the hub together where there is plastic to save. It prints flat on its
   flange, so the pockets are open at the top and nothing needs support
+- **Spring** (Draw > Parts): a flat part that gives under a load and pushes back when the load goes
+  away, as a zigzag that presses straight or as a spiral that turns round its hub. The zigzag has 2
+  to 30 beams joined alternately at their ends and optional screw holes through its pads; its
+  stiffness comes from `E h t³ / (n L³)`, so twice the thickness makes it eight times as stiff. The
+  spiral winds 1 to 15 turns outward from a D-bored hub to a lug with a screw hole, and the dialog
+  measures its strip and gives the force needed to turn it one degree. Both stand straight on the
+  bed and need no support
 - **Timing Pulley** (Draw > Parts): a wheel a toothed belt runs in, cut for GT2, GT3 or HTD 3M
   with 10 to 120 grooves, so a printed wheel can drive a moulded belt without a pulley of metal.
   Its size comes from the belt: teeth times pitch over π is the pitch circle the belt runs on

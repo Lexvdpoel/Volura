@@ -28,7 +28,7 @@ from . import (bag_clip, ball_joint, battery_holder, bin_rack, bit_holder, brack
                fan_guard, filament_clip, fonts, gears, gridfinity, grommet, hex_key_holder,
                hinge, hose_adapter, knob, label_plate, lithophane, pegboard, pen_cup,
                phone_stand, plant_label, plant_pot, pulley, screw_jar, snap_fit, soap_dish,
-               spool_adapter, standoff, storage_bin, text3d, theme, threads, tie_mount,
+               spool_adapter, spring, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_import, wall_hook)
 from .geom import MeshData
 from .i18n import tr, trn
@@ -1479,6 +1479,162 @@ class SnapFitDialog(QDialog):
                 "w": round(self.width.value(), 6),
                 "undercut": round(self.undercut.value(), 6),
                 "releasable": self.releasable.isChecked()}
+
+
+class SpringDialog(QDialog):
+    """The "Spring…" dialog: a zigzag spring that gives under compression, or a spiral one that
+    gives when its hub is turned.
+
+    Both springs start with the same strip: how thick it is and how tall it stands on the bed. The
+    gap is the room the strip leaves to itself, so the turns can move without sticking together. A
+    zigzag spring then needs the number of beams and their length; a spiral needs its turns and the
+    radius where its middle line starts. The hole of a zigzag is the screw hole in each end pad; the
+    bore of a spiral goes through its hub and is filed flat on one side, so a shaft filed to match
+    turns with it; the lug hole fastens the outer end of the spiral. The material says how stiff the
+    spring is, which the dialog works out and shows under the fields. Values that cannot be printed
+    are changed into those that can, and the warning colour says what was changed; a spiral that
+    would fold its own strip into the middle cannot be made at all. The values come from Settings and
+    are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Spring"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(2)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.kind = QComboBox()
+        self.kind.addItem(tr("Zigzag spring"), "zigzag")
+        self.kind.addItem(tr("Spiral spring"), "spiral")
+        self.kind.setCurrentIndex(max(0, self.kind.findData(str(s.spring_kind))))
+        self.kind.setToolTip(tr("A zigzag spring is folded back and forth and takes compression; a "
+                                "spiral spring is wound flat on the bed and takes turning"))
+        self.material = QComboBox()
+        for name in spring.MATERIALS:
+            self.material.addItem(name, name)
+        self.material.setCurrentIndex(max(0, self.material.findData(str(s.spring_material))))
+        self.material.setToolTip(tr("The tensile modulus of the material says how hard the spring "
+                                    "presses or turns back"))
+        self.folds = QSpinBox()
+        self.folds.setRange(spring.FOLDS_MIN, spring.FOLDS_MAX)
+        self.folds.setValue(int(s.spring_folds))
+        self.folds.setToolTip(tr("How many straight beams the strip is folded into"))
+        self.length = spin(spring.LENGTH_MIN, spring.LENGTH_MAX, s.spring_length)
+        self.length.setToolTip(tr("How long one straight beam of the zigzag is"))
+        self.thickness = spin(spring.THICKNESS_MIN, spring.THICKNESS_MAX, s.spring_thickness, 0.1)
+        self.thickness.setToolTip(tr("How thick the strip is: twice the thickness makes a spring "
+                                     "eight times as stiff"))
+        self.gap = spin(spring.GAP_MIN, spring.GAP_MAX, s.spring_gap)
+        self.gap.setToolTip(tr("The room between two turns of the strip, so they can move apart"))
+        self.height = spin(spring.HEIGHT_MIN, spring.HEIGHT_MAX, s.spring_height)
+        self.height.setToolTip(tr("How tall the strip stands on the bed"))
+        self.hole = spin(0.0, spring.HOLE_MAX, s.spring_hole)
+        self.hole.setToolTip(tr("The screw hole in each end pad; zero leaves the pads solid"))
+        self.turns = QSpinBox()
+        self.turns.setRange(spring.TURNS_MIN, spring.TURNS_MAX)
+        self.turns.setValue(int(s.spring_turns))
+        self.turns.setToolTip(tr("How often the strip winds round the hub"))
+        self.inner = spin(spring.INNER_MIN, spring.INNER_MAX, s.spring_inner)
+        self.inner.setToolTip(tr("The radius of the middle line where the spiral begins"))
+        self.bore = spin(0.0, spring.BORE_MAX, s.spring_bore)
+        self.bore.setToolTip(tr("The shaft the hub turns on; zero leaves the hub solid"))
+        self.lug = spin(0.0, spring.LUG, s.spring_lug)
+        self.lug.setToolTip(tr("The screw hole in the square lug at the outer end; zero leaves no "
+                               "lug"))
+        self.info = QLabel()
+        self.info.setWordWrap(True)
+        lay.addRow(tr("Spring"), self.kind)
+        lay.addRow(tr("Material"), self.material)
+        lay.addRow(tr("Folds"), self.folds)
+        lay.addRow(tr("Beam length"), self.length)
+        lay.addRow(tr("Strip thickness"), self.thickness)
+        lay.addRow(tr("Gap"), self.gap)
+        lay.addRow(tr("Height"), self.height)
+        lay.addRow(tr("Screw hole"), self.hole)
+        lay.addRow(tr("Turns"), self.turns)
+        lay.addRow(tr("Inner radius"), self.inner)
+        lay.addRow(tr("D bore"), self.bore)
+        lay.addRow(tr("Lug hole"), self.lug)
+        lay.addRow(self.info)
+        for w in (self.length, self.thickness, self.gap, self.height, self.hole, self.inner,
+                  self.bore, self.lug):
+            w.valueChanged.connect(self._changed)
+        for w in (self.kind, self.material):
+            w.currentIndexChanged.connect(self._changed)
+        for w in (self.folds, self.turns):
+            w.valueChanged.connect(self._changed)
+        self.bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.bb.accepted.connect(self.accept)
+        self.bb.rejected.connect(self.reject)
+        lay.addRow(self.bb)
+        self._changed()
+
+    def _changed(self, *_):
+        """The size and stiffness of the spring in the fields, and what has had to be changed."""
+        zigzag = self.kind.currentData() == "zigzag"
+        for w in (self.folds, self.length, self.hole):
+            w.setEnabled(zigzag)
+        for w in (self.turns, self.inner, self.bore, self.lug):
+            w.setEnabled(not zigzag)
+        try:
+            n = spring.sizes(**self.options())
+        except ValueError as exc:
+            self.info.setStyleSheet(f"color: {theme.color('warn')};")
+            self.info.setText("<i>" + str(exc) + "</i>")
+            self.bb.button(QDialogButtonBox.Ok).setEnabled(False)
+            return
+        self.bb.button(QDialogButtonBox.Ok).setEnabled(True)
+        parts = [tr("The spring stands {w:.1f} by {d:.1f} mm on the bed and is {h:.1f} mm tall; "
+                    "the strip is {t:.2f} mm thick with {g:.2f} mm between its turns.")
+                 .format(w=n["width"], d=n["height"], h=n["h"], t=n["t"], g=n["g"])]
+        warned = False
+        if zigzag:
+            parts.append(tr("{n} beams of {l:g} mm press back with {k:.2f} N/mm; {mat} lets them "
+                            "give {x:.1f} mm before they are worked hard, a force of {f:.1f} N.")
+                         .format(n=n["folds"], l=n["L"], k=n["k"], mat=n["material"],
+                                 x=n["travel"], f=n["force"]))
+        else:
+            parts.append(tr("{z} turns of {mat} strip, {len:.1f} mm long, resist turning with "
+                            "{kt:.2f} N·mm per degree.")
+                         .format(z=n["turns"], mat=n["material"], len=n["length"],
+                                 kt=n["kt_deg"]))
+            if self.bore.value() > 0.0 and n["bore"] <= 0.0:
+                warned = True
+                parts.append(tr("The hub of these numbers has no room for a bore, so it is made "
+                                "solid."))
+            elif n["bore"] < self.bore.value() - 1e-6:
+                warned = True
+                parts.append(tr("A bore of Ø{ask:.2f} mm leaves less than {wall:g} mm of hub, so "
+                                "it becomes Ø{got:.2f} mm.").format(
+                                    ask=self.bore.value(), wall=spring.HUB_WALL,
+                                    got=n["bore"]))
+            if n["lug"] < self.lug.value() - 1e-6:
+                warned = True
+                parts.append(tr("A lug hole of {ask:g} mm leaves less than {wall:g} mm in a lug of "
+                                "{lug:g} mm, so it becomes {got:.2f} mm.").format(
+                                    ask=self.lug.value(), wall=spring.LUG_WALL,
+                                    lug=spring.LUG, got=n["lug"]))
+        self.info.setStyleSheet(f"color: {theme.color('warn')};" if warned else "")
+        self.info.setText("<i>" + " ".join(parts) + "</i>")
+
+    def options(self) -> dict:
+        return {"kind": str(self.kind.currentData()),
+                "material": str(self.material.currentData()),
+                "folds": int(self.folds.value()), "length": round(self.length.value(), 6),
+                "thickness": round(self.thickness.value(), 6),
+                "gap": round(self.gap.value(), 6), "height": round(self.height.value(), 6),
+                "hole": round(self.hole.value(), 6), "turns": int(self.turns.value()),
+                "inner": round(self.inner.value(), 6), "bore": round(self.bore.value(), 6),
+                "lug": round(self.lug.value(), 6)}
 
 
 class BatteryHolderDialog(QDialog):

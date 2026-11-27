@@ -36,7 +36,7 @@ from . import (background, bag_clip, ball_joint, battery_holder, bin_rack, bit_h
                part_favourites, pegboard,
                pen_cup, phone_stand, plant_label, plant_pot, plates, pressure_advance_test,
                print_queue, pulley, retraction_test, screw_jar, snap_fit, soap_dish, slicer,
-               spool_adapter,
+               spool_adapter, spring,
                standoff, storage_bin, stringing_test, temperature_tower, text3d, theme, threads,
                tie_mount, wall_hook)
 from . import gcode_preview, gcode_thumbnail
@@ -57,8 +57,8 @@ from .part_dialogs import (BagClipDialog, BallJointDialog, BatteryHolderDialog, 
                            LithophaneDialog, PegboardDialog, PenCupDialog, PhoneStandDialog,
                            PlantLabelDialog, PlantPotDialog, ProjectBoxDialog, PulleyDialog,
                            ScrewJarDialog,
-                           SnapFitDialog, SoapDishDialog, SpoolAdapterDialog, StandoffDialog,
-                           StorageBinDialog,
+                           SnapFitDialog, SoapDishDialog, SpoolAdapterDialog, SpringDialog,
+                           StandoffDialog, StorageBinDialog,
                            Text3DDialog, TieMountDialog, WallHookDialog)
 
 
@@ -989,6 +989,70 @@ class PrintMixin:
 
         background.run(self, work, text=tr("Building the snap-fit clip…"), on_done=done,
                        on_error=failed)
+
+    # ------------------------------------------------------------ spring
+    def spring_dialog(self):
+        """Draw > Parts > Mechanical > Spring…: a zigzag spring, or a spiral one with a D bore."""
+        dlg = SpringDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("kind", "material", "folds", "length", "thickness", "gap", "height", "hole",
+                    "turns", "inner", "bore", "lug"):
+            setattr(self.settings, "spring_" + key, options[key])
+        self.settings.save()
+        made = self.make_spring_model(options)
+        self.setFocus()
+        return made
+
+    def make_spring_model(self, options):
+        """The spring on the bed as it prints: one undo step, next to the model.
+
+        The joints of a zigzag and the turns of a spiral are booleans, and a coil of fifteen turns is
+        built from many small prisms, so the part is built in the background, like the pulley. It is
+        centred on the middle of the free bed, or ten millimetres to the right of what is already
+        there, and it comes back lying flat on the bed at the height the strip was asked for.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        kind = str(options["kind"])
+        zigzag = kind == "zigzag"
+        size = dict(options)
+        if zigzag:
+            name = tr("Zigzag spring")
+            build = tr("Building the zigzag spring…")
+            added = tr("Zigzag spring of {n} beams added.").format(n=int(options["folds"]))
+            failed = tr("Zigzag spring failed: {error}")
+        else:
+            name = tr("Spiral spring")
+            build = tr("Building the spiral spring…")
+            added = tr("Spiral spring of {z} turns added.").format(z=int(options["turns"]))
+            failed = tr("Spiral spring failed: {error}")
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, build)
+            m = spring.spring(**size)
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the spring away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, name)
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(added)
+
+        def gone(exc):
+            self.view.set_status(failed.format(error=exc))
+
+        background.run(self, work, text=build, on_done=done, on_error=gone)
 
     # ------------------------------------------------------------ battery holder
     def battery_holder_dialog(self):

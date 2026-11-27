@@ -434,6 +434,11 @@ SVG = {
                      f'<path d="M12 6 L12 18 M6.8 9 L17.2 15 M6.8 15 L17.2 9" {N} '
                      f'stroke="#3b7dd8" stroke-width="1.6" stroke-linecap="round"/>'
                      f'<circle cx="12" cy="12" r="2.4" fill="#fff" {S(w=1.2)}/>',
+    # spring: a compressed coil between two end plates, with its zigzag middle line
+    "spring": f'<path d="M3.5 7.5 L20.5 7.5 M3.5 16.5 L20.5 16.5" {N} stroke="#9a9a9a" '
+              f'stroke-width="1.6" stroke-linecap="round"/>'
+              f'<path d="M3.5 12 L6.5 8.5 L9 15.5 L11.5 8.5 L14 15.5 L16.5 8.5 L20.5 12" {N} '
+              f'stroke="#3b7dd8" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>',
     # timing pulley: the toothed wheel with its grooves, its hub and the bore with a flat
     "timing_pulley": f'<circle cx="12" cy="12" r="9.5" fill="#eef2f7" {S()}/>'
                      f'<path d="M12 2.6 L12 5.2 M12 18.8 L12 21.4 M2.6 12 L5.2 12 M18.8 12 '

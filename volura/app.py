@@ -37,7 +37,7 @@ from . import (__version__, background, bag_clip, ball_joint, battery_holder, bi
                nesting, ops, part_favourites, pegboard, pen_cup, phone_stand, plant_label, plant_pot, pulley,
                plates, printer_link, print_history, print_queue, print_watch,
                sheet3d, sheettools, slice_presets, svg,
-               spacemouse, spool_adapter, spools, standoff, storage_bin, text3d, theme, threads, tie_mount,
+               spacemouse, spool_adapter, spools, spring, standoff, storage_bin, text3d, theme, threads, tie_mount,
                vector_export, vector_import, wall_hook, workers, workspaces)
 from .brep import Entities
 from .inference import GeoCache
@@ -194,7 +194,7 @@ PART_CATEGORIES = (
     (tr_noop("&Mechanical"), ("a_bracket", "a_grommet", "a_fan_guard", "a_filament_clip",
                               "a_hose_adapter", "a_knob", "a_print_ball_joint", "a_print_hinge",
                               "a_snap_fit",
-                              "a_spool_adapter", "a_spur_gear_3d", "a_standoff",
+                              "a_spool_adapter", "a_spring", "a_spur_gear_3d", "a_standoff",
                               "a_timing_pulley")),
     (tr_noop("&Cables"), ("a_cable_chain", "a_cable_clip", "a_cable_comb", "a_cable_winder",
                           "a_tie_mount")),
@@ -1038,6 +1038,34 @@ class Settings:
                                  min(snap_fit.UNDERCUT_MAX, self.snap_undercut,
                                      snap_fit.UNDERCUT_MAX_OF_T * self.snap_thickness))
         self.snap_releasable = self._bool("snap_releasable", False)
+        self.spring_kind = str(self.q.value("spring_kind", "zigzag"))
+        if self.spring_kind not in spring.KINDS:
+            self.spring_kind = "zigzag"
+        self.spring_material = str(self.q.value("spring_material", "PLA"))
+        if self.spring_material not in spring.MATERIALS:
+            self.spring_material = "PLA"
+        for key, default, lo, hi in (
+                ("spring_length", 20.0, spring.LENGTH_MIN, spring.LENGTH_MAX),
+                ("spring_thickness", 1.2, spring.THICKNESS_MIN, spring.THICKNESS_MAX),
+                ("spring_gap", 2.5, spring.GAP_MIN, spring.GAP_MAX),
+                ("spring_height", 5.0, spring.HEIGHT_MIN, spring.HEIGHT_MAX),
+                ("spring_hole", 3.2, 0.0, spring.HOLE_MAX),
+                ("spring_inner", 4.0, spring.INNER_MIN, spring.INNER_MAX),
+                ("spring_bore", 5.0, 0.0, spring.BORE_MAX),
+                ("spring_lug", 3.2, 0.0, spring.LUG)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        for key, default, lo, hi in (
+                ("spring_folds", 6, spring.FOLDS_MIN, spring.FOLDS_MAX),
+                ("spring_turns", 4, spring.TURNS_MIN, spring.TURNS_MAX)):
+            try:
+                value = int(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
         self.battery_cell = str(self.q.value("battery_cell", "AA"))
         if self.battery_cell not in battery_holder.CELLS:
             self.battery_cell = "AA"
@@ -2002,6 +2030,10 @@ class Settings:
         self.q.setValue("ball_joint_grip", self.ball_joint_grip)
         for key in ("snap_material", "snap_length", "snap_thickness", "snap_width",
                     "snap_undercut", "snap_releasable"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("spring_kind", "spring_material", "spring_folds", "spring_length",
+                    "spring_thickness", "spring_gap", "spring_height", "spring_hole",
+                    "spring_turns", "spring_inner", "spring_bore", "spring_lug"):
             self.q.setValue(key, getattr(self, key))
         self.q.setValue("battery_cell", self.battery_cell)
         self.q.setValue("battery_count", self.battery_count)
@@ -3499,6 +3531,13 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                     "turns true on a thin rod or the 608 bearing of a spool "
                                     "holder; it stands on a flange that keeps it from sliding in "
                                     "and spokes hold it together where there is plastic to save"))
+        # ---- spring
+        self.a_spring = A(tr("Spring…"),
+                          lambda checked=False: self.spring_dialog(), None, "spring", False,
+                          tr("Add a printable spring to the model: a zigzag strip folded on the "
+                             "bed that gives when it is compressed, or a spiral strip that gives "
+                             "when its hub is turned; both are printed lying flat, with holes for "
+                             "the screws that hold them and a stiffness estimate for the material"))
         # ---- timing pulley and belt idler
         self.a_timing_pulley = A(tr("Timing Pulley…"),
                                  lambda checked=False: self.pulley_dialog(), None,
