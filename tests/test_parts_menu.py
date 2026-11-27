@@ -4,7 +4,8 @@
 Cables, Storage and Home and Desk, in that order, each sorted by the English name of its parts.
 The menu is built from that table, so a part that is added to the window without being added to
 the table is missing from the menu - which is exactly what these tests catch, together with a
-part that stands in two categories or in none.
+part that stands in two categories or in none. Above the categories stands Favourites, the parts
+a maker keeps to place again (tests/test_part_favourites.py).
 
 Also checked: the mnemonics of a menu do not clash, the Parts menu is only there in 3D, and the
 command search of Preferences > Shortcuts still finds every part by its name.
@@ -40,6 +41,9 @@ PARTS = ("a_bracket", "a_grommet", "a_fan_guard", "a_filament_clip", "a_hose_ada
          "a_soap_dish", "a_wall_hook")
 CATEGORIES = ("&Mechanical", "&Cables", "&Storage", "&Home and Desk")
 
+#: the submenu of the parts a maker keeps to place again, above the categories
+FAVOURITES = "&Favourites"
+
 
 @pytest.fixture(scope="module")
 def win():
@@ -54,8 +58,8 @@ def labels(menu):
     return [clean_text(a.text()) for a in menu.actions() if not a.isSeparator()]
 
 
-def test_the_parts_menu_has_the_four_categories_in_order(win):
-    assert labels(win.parts_menu) == [clean_text(c) for c in CATEGORIES]
+def test_the_parts_menu_has_the_favourites_and_the_categories_in_order(win):
+    assert labels(win.parts_menu) == [clean_text(FAVOURITES)] + [clean_text(c) for c in CATEGORIES]
 
 
 @pytest.mark.parametrize("title", CATEGORIES)

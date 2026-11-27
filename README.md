@@ -255,6 +255,11 @@ gets for free.
 - **Ready-made parts** (Draw > Parts): the parts below stand in four submenus - **Mechanical**,
   **Cables**, **Storage** and **Home and Desk** - and each submenu is in alphabetical order, so
   the part you are after is a short click away
+- **Part favourites** (Draw > Parts > Favourites): the part you made last, with the numbers you
+  entered in its dialog, kept under a name of your own; the favourite stands above the categories
+  and one click places that part again, in one undo step, exactly as it came from its dialog.
+  **Manage Favourites…** renames them, takes some off and puts the others in the order you want.
+  Up to thirty stand in the menu and they are back when you start Volura again
 - **Project Box** (Draw > Parts): an enclosure with a lid that fits into it: enter the
   inside length, width and height that your electronics need, with the wall, the floor, the
   rounding of the corners and the clearance between the lip of the lid and the wall. With a

@@ -34,7 +34,7 @@ from . import (__version__, background, bag_clip, ball_joint, battery_holder, bi
                fileio, gcode, gcode_mill, gcode_thumbnail, gears, gridfinity, grommet,
                hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar, snap_fit,
-               nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot, pulley,
+               nesting, ops, part_favourites, pegboard, pen_cup, phone_stand, plant_label, plant_pot, pulley,
                plates, printer_link, print_history, print_queue, print_watch,
                sheet3d, sheettools, slice_presets, svg,
                spacemouse, spool_adapter, spools, standoff, storage_bin, text3d, theme, threads, tie_mount,
@@ -47,7 +47,7 @@ from .geom import Plane
 from .i18n import tr, tr_noop, trn
 from .icons import icon
 from .model import ROOT, LOCKED_MSG, Document
-from .app_dialogs import (FILAMENT_MATERIALS, ModelInfoDialog, PageDialog,
+from .app_dialogs import (FILAMENT_MATERIALS, FavouritesDialog, ModelInfoDialog, PageDialog,
                           PreferencesDialog, PRINTERS, ShortcutsPanel, SimplifyDialog)
 from .panels import (ColorsPanel, EntityInfoPanel, LayerParamsDialog, LayersPanel, MaterialsPanel,
                      OutlinerPanel, PrintCheckPanel, SectionPanel, note, swatch)
@@ -1769,6 +1769,10 @@ class Settings:
         self.recent = list(self.q.value("recent", []) or [])
         if isinstance(self.recent, str):
             self.recent = [self.recent]
+        # the parts a maker keeps to make again in one click: one JSON string
+        # (volura.part_favourites), edited by Draw > Parts > Favourites > Manage Favourites…
+        self.part_favourites = part_favourites.load(
+            self.q.value(part_favourites.SETTINGS_KEY, ""))
         # the printers a slice can go straight to: one line of JSON each (volura.printer_link)
         self.printers = []
         saved = self.q.value("printers", []) or []
@@ -2149,6 +2153,8 @@ class Settings:
         self.q.setValue("corner_radius", self.corner_radius)
         self.q.setValue("dogbone_tool_d", self.dogbone_tool_d)
         self.q.setValue("recent", self.recent[:8])
+        self.q.setValue(part_favourites.SETTINGS_KEY,
+                        part_favourites.save(self.part_favourites))
         self.q.setValue("printers", [printer_link.to_json(conn) for conn in self.printers])
         self.q.setValue("print_notifications", self.print_notifications)
         self.q.setValue("printer_cameras_on", self.printer_cameras_on)
@@ -3754,10 +3760,21 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                                    self.a_sphere, self.a_torus))
         categories = tuple(sub(tr(title), m, tuple(getattr(self, name) for name in names))
                            for title, names in PART_CATEGORIES)
-        parts_menu = sub(tr("&Parts"), m, categories)
+        self.favourites_menu = QMenu(tr("&Favourites"), m)
+        self.a_fav_add = self.act(tr("Add Last Part to Favourites…"), self.add_part_favourite)
+        self.a_fav_manage = self.act(tr("Manage Favourites…"), self.manage_part_favourites)
+        self.a_fav_none = self.act(tr("No favourites yet"), lambda checked=False: None)
+        self.a_fav_none.setEnabled(False)
+        self.update_favourites_menu()
+        parts_menu = sub(tr("&Parts"), m, (self.favourites_menu,) + categories)
         self.parts_menu = parts_menu
         self._parts_categories = {clean_text(title): menu
                                   for (title, _), menu in zip(PART_CATEGORIES, categories)}
+        for menu in categories:
+            for a in self.flat_actions(menu):
+                # the command tells the window under which name it stands, so the part it made
+                # can be remembered with that name (this slot runs after the command itself)
+                a.triggered.connect(lambda checked=False, t=a.text(): self.note_part_title(t))
         self.fill(m, only("3d", lines, arcs, shapes, None, primitives, parts_menu,
                           self.a_text3d)
                   + only("2d", S["line"], S["rectangle"], S["roundrect"], S["circle"],
@@ -3869,6 +3886,78 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         """The submenu of one category of Draw > Parts, by its English name without the
         mnemonic (`PART_CATEGORIES`); None when this window has no such category."""
         return getattr(self, "_parts_categories", {}).get(title)
+
+    # ------------------------------------------------------------ part favourites
+    def note_part_title(self, text):
+        """Slot on every command of Draw > Parts: when that command just made a part, the
+        part stands under this menu text, so `Add Last Part to Favourites…` can name it.
+
+        The commands themselves were connected before this slot, so they have run when it is
+        called; `_part_titled` keeps one part from being counted twice."""
+        made = getattr(self, "_part_made", 0)
+        part = getattr(self, "_last_part", None)
+        if part is None or made == getattr(self, "_part_titled", -1):
+            return
+        part["title"] = clean_text(text)
+        self._part_titled = made
+        self.a_fav_add.setEnabled(True)
+
+    def update_favourites_menu(self):
+        """Draw > Parts > Favourites: the parts that were kept, in the order of the manage
+        dialog, under the two commands that add and manage them. An empty list says so in
+        words, so the submenu is never a dead end."""
+        menu = self.favourites_menu
+        menu.clear()
+        self.a_fav_add.setEnabled(getattr(self, "_last_part", None) is not None)
+        menu.addAction(self.a_fav_add)
+        if self.settings.part_favourites:
+            menu.addSeparator()
+            for item in self.settings.part_favourites:
+                a = QAction(item["name"].replace("&", "&&"), menu)
+                self.tool_tip(a, tr("Make the {part} again, with the settings of this favourite")
+                              .format(part=item["title"] or item["name"]))
+                a.triggered.connect(lambda checked=False, it=item: self.place_part_favourite(it))
+                menu.addAction(a)
+        else:
+            menu.addAction(self.a_fav_none)
+        menu.addSeparator()
+        menu.addAction(self.a_fav_manage)
+
+    def add_part_favourite(self, checked=False):
+        """Draw > Parts > Favourites > Add Last Part to Favourites…: keep the part that was
+        made last, with the settings it was made with, under a name of the maker's own."""
+        part = getattr(self, "_last_part", None)
+        if part is None:
+            return
+        if len(self.settings.part_favourites) >= part_favourites.MAX_FAVOURITES:
+            QMessageBox.information(
+                self, tr("Favourites"),
+                tr("{n} favourites is the most there can be. Take one off with Manage "
+                   "Favourites… first.").format(n=part_favourites.MAX_FAVOURITES))
+            return
+        what = part["title"] or part_favourites.part_name(part["method"])
+        name, ok = QInputDialog.getText(self, tr("Add to Favourites"),
+                                        tr("Name of this favourite"), text=what)
+        self.setFocus()
+        name = name.strip()[:part_favourites.MAX_NAME]
+        if not ok or not name:
+            return
+        item = part_favourites.copy(part)
+        item["name"] = name
+        self.settings.part_favourites.append(item)
+        self.settings.save()
+        self.update_favourites_menu()
+        self.view.set_status(tr("{name} is added to the favourites.").format(name=name))
+
+    def manage_part_favourites(self, checked=False):
+        """Draw > Parts > Favourites > Manage Favourites…: rename the parts that are kept,
+        take some off and put the others in the order you want."""
+        dlg = FavouritesDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        self.settings.part_favourites = dlg.favourites()
+        self.settings.save()
+        self.update_favourites_menu()
 
     def _build_toolbars(self):
         self._dropdown_buttons = {}

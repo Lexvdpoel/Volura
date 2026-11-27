@@ -173,9 +173,14 @@ def test_the_window_and_its_docks_have_named_controls(win, mode):
 
 
 def test_the_dialogs_of_draw_parts_have_named_controls(win, monkeypatch):
-    """Every dialog of Draw > Parts, opened the way the window opens it."""
+    """Every dialog of Draw > Parts, opened the way the window opens it.
+
+    The Favourites submenu above the categories is left out: its commands add, place and manage
+    favourites and open no part dialog (tests/test_part_favourites.py)."""
     parts = menu_named(menu_named(win.menuBar(), "Draw"), "Parts")
-    actions = win.flat_actions(parts) if parts is not None else []   # the parts of every category
+    categories = [a.menu() for a in (parts.actions() if parts is not None else [])
+                  if a.menu() is not None and clean(a.text()) != "Favourites"]
+    actions = [a for menu in categories for a in win.flat_actions(menu)]
     assert len(actions) > 10, "Draw > Parts is not there"
     opened, problems = [], []
 

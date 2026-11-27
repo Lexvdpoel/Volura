@@ -13,12 +13,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QDoubleSpinBox, QFormLayout, QGroupBox, QHBoxLayout,
-                               QHeaderView, QLabel, QLineEdit, QKeySequenceEdit,
+                               QHeaderView, QInputDialog, QLabel, QLineEdit, QKeySequenceEdit,
                                QListWidget, QListWidgetItem, QPushButton, QSlider,
                                QSpinBox, QStackedWidget, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
 
-from . import background, i18n, keyschemes, ops, printer_link, theme
+from . import background, i18n, keyschemes, ops, part_favourites, printer_link, theme
 from .i18n import tr, tr_noop
 from .panels import note
 from .tools import format_length, set_length_precision
@@ -874,3 +874,110 @@ class ShortcutsPanel(QWidget):
             head = self.tree.topLevelItem(i)
             found = any(not head.child(j).isHidden() for j in range(head.childCount()))
             head.setHidden(bool(text) and not found)
+
+
+class FavouritesDialog(QDialog):
+    """Draw > Parts > Favourites > Manage Favourites…: the parts that are kept for later,
+    with the commands to rename them, take them off and put them in another order.
+
+    The list is worked on as a copy (volura.part_favourites), so Cancel leaves the menu exactly
+    as it was; `favourites()` is what the window writes back in the settings on OK.
+    """
+
+    def __init__(self, win):
+        super().__init__()
+        self.win = win
+        self.setWindowTitle(tr("Manage Favourites"))
+        self.resize(440, 380)
+        self.items = [part_favourites.copy(i) for i in win.settings.part_favourites]
+
+        lay = QVBoxLayout(self)
+        lay.addWidget(note(tr("The parts you make often stand here, in the order the Favourites "
+                              "menu shows them. Making one places it again with the settings it "
+                              "was saved with; a part Volura does not know anymore stays on the "
+                              "list until you take it off.")))
+        row = QHBoxLayout()
+        self.list = QListWidget()
+        self.list.setAccessibleName(tr("Favourites"))
+        self.list.currentRowChanged.connect(self._buttons)
+        self.list.itemDoubleClicked.connect(lambda *_ignored: self._rename())
+        row.addWidget(self.list, 1)
+        side = QVBoxLayout()
+        self.btn_rename = QPushButton(tr("Rename"))
+        self.btn_rename.setToolTip(tr("The name the part stands under in the Favourites menu"))
+        self.btn_rename.clicked.connect(self._rename)
+        self.btn_up = QPushButton(tr("Up"))
+        self.btn_up.setToolTip(tr("One place higher in the Favourites menu"))
+        self.btn_up.clicked.connect(lambda: self._move(-1))
+        self.btn_down = QPushButton(tr("Down"))
+        self.btn_down.setToolTip(tr("One place lower in the Favourites menu"))
+        self.btn_down.clicked.connect(lambda: self._move(1))
+        self.btn_remove = QPushButton(tr("Remove"))
+        self.btn_remove.setToolTip(tr("Take the chosen part off the favourites"))
+        self.btn_remove.clicked.connect(self._remove)
+        for b in (self.btn_rename, self.btn_up, self.btn_down, self.btn_remove):
+            side.addWidget(b)
+        side.addStretch(1)
+        row.addLayout(side)
+        lay.addLayout(row, 1)
+
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        lay.addWidget(bb)
+        self._reload(-1)
+
+    def favourites(self) -> list:
+        """The favourites in the order of the list, as copies of their own."""
+        return [part_favourites.copy(i) for i in self.items]
+
+    @staticmethod
+    def _line(item) -> str:
+        """One favourite on the list: the name it stands under, with the kind of part beside it.
+        A favourite of a part Volura does not know anymore only shows its name."""
+        what = item["title"] or part_favourites.part_name(item["method"])
+        return f"{item['name']}  ({what})" if what else item["name"]
+
+    def _reload(self, row):
+        """Fill the list with the names again and choose `row`."""
+        row = max(-1, min(int(row), len(self.items) - 1))
+        self.list.blockSignals(True)
+        self.list.clear()
+        for item in self.items:
+            QListWidgetItem(self._line(item), self.list)
+        self.list.setCurrentRow(row)
+        self.list.blockSignals(False)
+        self._buttons(row)
+
+    def _buttons(self, row):
+        """Which commands make sense with the part at `row` chosen - none of them without one."""
+        chosen = 0 <= row < len(self.items)
+        self.btn_rename.setEnabled(chosen)
+        self.btn_remove.setEnabled(chosen)
+        self.btn_up.setEnabled(0 < row < len(self.items))
+        self.btn_down.setEnabled(0 <= row < len(self.items) - 1)
+
+    def _rename(self, *_ignored):
+        row = self.list.currentRow()
+        if not 0 <= row < len(self.items):
+            return
+        name, ok = QInputDialog.getText(self, tr("Rename Favourite"), tr("New name"),
+                                        QLineEdit.Normal, self.items[row]["name"])
+        name = name.strip()[:part_favourites.MAX_NAME]
+        if ok and name:
+            self.items[row]["name"] = name
+            self._reload(row)
+
+    def _move(self, step):
+        row = self.list.currentRow()
+        to = row + step
+        if not (0 <= row < len(self.items) and 0 <= to < len(self.items)):
+            return
+        self.items[row], self.items[to] = self.items[to], self.items[row]
+        self._reload(to)
+
+    def _remove(self):
+        row = self.list.currentRow()
+        if 0 <= row < len(self.items):
+            del self.items[row]
+            self._reload(row - 1)

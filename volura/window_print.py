@@ -32,7 +32,8 @@ from . import (background, bag_clip, ball_joint, battery_holder, bin_rack, bit_h
                card_holder, coaster, cookie_cutter, desk_hook, door_wedge, drawer_organizer,
                enclosure, face_text, fan_guard, fileio, filament_clip, first_layer_test,
                flow_rate_test, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter,
-               joints, knob, label_plate, lithophane, max_speed_test, ops, paint_split, pegboard,
+               joints, knob, label_plate, lithophane, max_speed_test, ops, paint_split,
+               part_favourites, pegboard,
                pen_cup, phone_stand, plant_label, plant_pot, plates, pressure_advance_test,
                print_queue, pulley, retraction_test, screw_jar, snap_fit, soap_dish, slicer,
                spool_adapter,
@@ -5469,3 +5470,69 @@ class PrintMixin:
         tb.setHtml(html)
         lay.addWidget(tb)
         dlg.exec()
+
+    # ------------------------------------------------------------ favourites
+    def place_part_favourite(self, item) -> bool:
+        """Draw > Parts > Favourites: the part of a favourite again, with the very settings
+        it was saved with, so it comes out as it did from its dialog and in one undo step.
+
+        False when the favourite does not work - Volura does not know that part anymore, or
+        the settings do not fit it - and nothing is added to the model then; the favourite
+        stays on the list, so Manage Favourites… can still take it off.
+        """
+        name = part_favourites.text_of(item, "name")
+        method = part_favourites.text_of(item, "method")
+        options = item.get("options") if isinstance(item, dict) else None
+        if not part_favourites.is_part_method(method) or not callable(getattr(self, method, None)):
+            self.view.set_status(
+                tr("{name} is no longer a part that Volura knows.").format(name=name))
+            return False
+        try:
+            getattr(self, method)(dict(options) if isinstance(options, dict) else {})
+        except Exception as e:               # the part makers say in the status bar what went wrong
+            self.view.set_status(tr("{name} failed: {error}").format(name=name, error=e))
+            return False
+        part = getattr(self, "_last_part", None)
+        if part is not None and part["method"] == method:
+            # the favourite just placed is the last part too: its name travels on
+            part["title"] = part_favourites.text_of(item, "title") or name
+        return True
+
+
+def _remember_part(win, method, options):
+    """The part of `method` made with `options` is the last one this window made.
+
+    The title is still empty: the command in Draw > Parts that ran adds it afterwards, with
+    the text of its menu item (`note_part_title` in volura/app.py, connected after the
+    command itself)."""
+    win._part_made = getattr(win, "_part_made", 0) + 1
+    win._last_part = {"method": method, "title": "",
+                      "options": part_favourites.jsonable(options)}
+
+
+def _remember_every_part(cls):
+    """Wrap every `make_..._model` of the mixin, so a part is remembered in one place and not
+    in the forty-odd dialogs that call these methods.
+
+    A part that its own settings refuse right away raises and is not remembered; what is kept
+    are the settings as JSON holds them, so a favourite outlives this run of Volura. The makers
+    themselves are not changed, they only run one call deeper.
+    """
+    for name in [n for n in dir(cls) if n.startswith("make_") and n.endswith("_model")]:
+        make = getattr(cls, name)
+        if not callable(make):
+            continue
+
+        def remembered(self, options, _make=make, _name=name):
+            made = _make(self, options)
+            _remember_part(self, _name, options)
+            return made
+
+        remembered.__name__ = name
+        remembered.__qualname__ = f"{cls.__name__}.{name}"
+        remembered.__doc__ = make.__doc__
+        setattr(cls, name, remembered)
+    return cls
+
+
+_remember_every_part(PrintMixin)
