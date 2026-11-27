@@ -8,7 +8,7 @@ from PySide6.QtCore import QEvent, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QSurfaceFormat
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
-from . import background, clearance, errors, icons, ops, plates, section, theme, thin_walls
+from . import background, clearance, collisions, errors, icons, ops, plates, section, theme, thin_walls
 from .camera import Camera, horizon_line
 from .i18n import tr, trn
 from .inference import InferenceEngine
@@ -115,9 +115,18 @@ def _role_of(g):
     """The role a group takes in the print, or None when it is a printed part.
 
     A support blocker or enforcer is drawn in the see-through colour of its role and is no part of
-    the print: its faces are never counted among its overhangs, thin walls or tight fits."""
+    the print: its faces are never counted among its overhangs, thin walls, tight fits or
+    collisions."""
     role = ops.group_role(g) if g is not None else None
     return role if role in ROLE_COLORS else None
+
+
+def _boxes_touch(a, b):
+    """Whether the boxes `a` and `b` of two parts touch at all.
+
+    A box is what ``Entities.bbox()`` gives back: ``[[min], [max]]``. Boxes that only touch at
+    a face or at an edge do touch: the parts they stand for may still stand in one another."""
+    return bool(np.all(a[0] <= b[1]) and np.all(b[0] <= a[1]))
 
 
 def _tint(col, on):
@@ -328,6 +337,10 @@ class Viewport(QOpenGLWidget):
 
     CAM_HISTORY_MAX = 50
     CAM_SCROLL_SETTLE_MS = 500
+    #: how long the model may keep changing before its collisions are looked at again
+    COLLISION_SETTLE_MS = 300
+    #: a model of more parts than this is only measured near the selection (see _collision_near)
+    COLLISION_PARTS = 60
 
     def __init__(self, doc, settings, parent=None):
         super().__init__(parent)
@@ -369,6 +382,12 @@ class Viewport(QOpenGLWidget):
         self._tight_answer = None     # (key, {id(ents): (ents, bool per triangle)}) of one check
         self._tight_busy = None       # that same key while the check of the model is running
         self._tight_landed = {}       # id(ents) -> answers landed; see _tight_context
+        self._collision_answer = None  # (key, overlaps, parts measured) of one check of the model
+        self._collision_busy = None    # that same key while the check of the model is running
+        self._collision_timer = QTimer(self)
+        self._collision_timer.setSingleShot(True)
+        self._collision_timer.setInterval(self.COLLISION_SETTLE_MS)
+        self._collision_timer.timeout.connect(self._check_collisions)
         self._cap_cache = {}          # (id(ents), version, axis, pos) -> triangles of the cut
         self._cap_solids = {}         # id(ents) -> (ents, version, manifold) to cut in
         self._cap_busy = {}           # id(ents) -> that same key while its solid is being made
@@ -384,6 +403,8 @@ class Viewport(QOpenGLWidget):
         doc.changed.connect(self.update)
         doc.selection_changed.connect(self.update)
         doc.changed.connect(self.update_view_status)
+        doc.changed.connect(self.collisions_changed)
+        doc.selection_changed.connect(self.collisions_changed)
 
     # ------------------------------------------------------------- tools
     def set_tool(self, name):
@@ -508,6 +529,7 @@ class Viewport(QOpenGLWidget):
             self._draw_axes()
         self._draw_hover()
         self._draw_problems()
+        self._draw_collisions()
         self._draw_overlay_solid()
         self._draw_overlay_lines()
         self.labels = []
@@ -1161,6 +1183,204 @@ class Viewport(QOpenGLWidget):
             total += int(len(np.unique(self.engine.cache.get(e)["tri_fid"][mask])))
         return total
 
+    # ------------------------------------------------------------- collisions
+    def _collision_on(self):
+        """Whether View > Face Style > Collisions asks about the model at all."""
+        return bool(getattr(self.settings, "show_collisions", False))
+
+    def _collision_parts(self):
+        """(entities, group) of every part the view measures: everything that is drawn, the
+        support volumes left out, because those are made to touch the parts (see
+        :meth:`_role_of`). The loose geometry of the model itself is a part like any other."""
+        return [(e, g) for _c, e, g in self.doc.contexts() if _role_of(g) is None]
+
+    def _collision_key(self):
+        """What one check of the model belongs to: every part of it at the version it was
+        measured at, and - for a model that is too big to measure whole - the groups that were
+        selected when it was measured.
+
+        Two parts only collide in respect to one another, so one part that is moved asks for
+        the whole model again: the part it stood in may have moved away by now."""
+        parts = self._collision_parts()
+        key = tuple((id(e), e.version) for e, _g in parts)
+        if len(parts) > self.COLLISION_PARTS:
+            key += tuple(sorted(i for k, _c, i in self.doc.selection if k == "g"))
+        return key
+
+    def _collision_near(self):
+        """The parts to measure and, when the model was too big to measure whole, how many
+        parts there were to measure - ``None`` when all of them were.
+
+        More than :data:`COLLISION_PARTS` parts is a boolean for every pair of them, and the
+        one who selected a part wants to know about that part: then only the selected parts and
+        the parts whose box touches a selected one are measured, and the bar says how much of
+        the model that was. Nothing selected says nothing about where to look, so then the
+        whole model is measured as well."""
+        parts = self._collision_parts()
+        if len(parts) <= self.COLLISION_PARTS:
+            return parts, None
+        sel = {i for k, _c, i in self.doc.selection if k == "g"}
+        boxes = [e.bbox() for e, g in parts if g is not None and g.id in sel]
+        boxes = [b for b in boxes if b is not None]
+        if not boxes:
+            return parts, None
+        chosen = [(e, g) for e, g in parts
+                  if e.bbox() is not None and any(_boxes_touch(e.bbox(), b) for b in boxes)]
+        return chosen, len(parts)
+
+    def _collision_names(self):
+        """id(entities) -> what that part is called in the bar; the loose geometry of the model
+        itself has no name of its own."""
+        return {id(e): (g.name if g else tr("Loose geometry"))
+                for e, g in self._collision_parts()}
+
+    def collisions_changed(self):
+        """The model changed, the selection changed, or the view was switched on: the model is
+        measured again, but only once the work that changes it has come to rest.
+
+        Moving a part with the Move tool changes the model at every snap of a step and at every
+        press of an arrow key; asking for a boolean of the whole model at each of those is what
+        a big model cannot pay. The timer starts again at every change, so the model is
+        measured after it has been left alone for :data:`COLLISION_SETTLE_MS` - which is why the
+        red shapes of an overlap follow a part a moment after it is put down."""
+        if self._collision_on():
+            self._collision_timer.start()
+
+    def forget_collisions(self):
+        """View > Face Style > Collisions off: the red shapes go at once, and with them the
+        answer of a check that is still on its way (see :meth:`_forget_caps`)."""
+        self._collision_timer.stop()
+        self._collision_busy = None
+        self._collision_answer = None
+        self.update()
+
+    def _check_collisions(self):
+        """What the timer of :meth:`collisions_changed` waits for: the check, but only when
+        there is something new to check.
+
+        A click in the model changes the selection without changing a part, and the view is
+        switched on for a model that was measured a moment ago; those calls end here, because
+        the key of the model has not moved and the answer of the last check still stands."""
+        if not self._collision_on():
+            return
+        key = self._collision_key()
+        if self._collision_busy == key:
+            return
+        if self._collision_answer is not None and self._collision_answer[0] == key:
+            return
+        chosen, of_model = self._collision_near()
+        self._collision_busy = key
+        self._run_collision_job(key, chosen, len(chosen) if of_model is not None else None)
+
+    def _run_collision_job(self, key, parts, measured):
+        """Every part against every other one, off the GUI thread (see :meth:`_run_tight_job`).
+
+        The parts are gathered before the job starts, on the GUI thread, because the window
+        takes no input while a job runs and the model cannot change under it; their solids and
+        their booleans are made in the worker, which is what costs seconds on a big model.
+        `measured` is how many parts of the model were measured, ``None`` when all of them
+        were; a check too late for the model it was made for is thrown away, which is why a
+        check too late for this frame costs nothing."""
+        ents = [e for e, _g in parts]
+        checking = tr("Checking for collisions…")
+
+        def work(report):
+            found = collisions.collisions([(id(e), e.to_manifold()) for e in ents])
+            for hit in found:             # the triangles of the overlap, as one draw wants them
+                verts, tris = hit.pop("mesh")
+                hit["pts"] = np.asarray(verts, dtype=np.float32)[
+                    np.asarray(tris, dtype=np.int32)].reshape(-1, 3)
+            return found
+
+        def told():
+            """The bar showed what it was waiting for; now it says what was found, or - when
+            there is nothing to say - the instruction of the tool again."""
+            if self._status_note == checking:
+                self._status_note = None
+            self._view_hint = ""            # so the count comes back even when it is the same
+            self.update_view_status()
+            self.refresh_status()
+            if self._status_shown == checking:
+                # nothing to say and a tool without an instruction: the wait is over all the same
+                self._status_shown = ""
+                self.status_changed.emit("")
+
+        def stored(found):
+            if not background.alive(self) or self._collision_busy != key:
+                return                     # another file, another model, another selection
+            self._collision_busy = None
+            self._collision_answer = (key, list(found), measured)
+            told()
+            self.update()
+
+        def failed(_exc):
+            # nothing to show: the model stays as it is, and the next change asks again
+            if self._collision_busy == key:
+                self._collision_busy = None
+                told()
+
+        background.run(self.window(), work, text=checking, can_cancel=False,
+                       show_dialog=False, on_done=stored, on_error=failed)
+        self.set_status(checking)
+
+    def _collision_hits(self):
+        """The pairs of parts that stand in one another, the biggest overlap first, or [] when
+        that is not known - or when the view is off.
+
+        An answer belongs to one version of every part of the model, so a check that came in
+        too late for the model it was made for is never shown (see :meth:`_tight_mask_of`)."""
+        if not self._collision_on():
+            return []
+        got = self._collision_answer
+        if got is None or got[0] != self._collision_key():
+            return []
+        return got[1]
+
+    def _collision_hint(self):
+        """What the collision view has to say in the bar: the pairs that stand in one another,
+        the biggest first and three at most, or that none does. "" when the view has nothing
+        to say - off, or a model that is being looked at.
+
+        The volume of an overlap is said in cm³, as the print tools do: 420 mm³ of plastic that
+        should not be there is a lot, and reads as nothing in the millimetres a model is
+        measured in."""
+        if not self._collision_on():
+            return ""
+        got = self._collision_answer
+        if got is None or got[0] != self._collision_key():
+            return ""                    # the wait: the bar already says what it waits for
+        hits = got[1]
+        if not hits:
+            text = tr("No collisions")
+        else:
+            names = self._collision_names()
+            listed = ", ".join(
+                tr("{a} and {b} ({vol} cm³)").format(
+                    a=names.get(h["a"], tr("Loose geometry")),
+                    b=names.get(h["b"], tr("Loose geometry")),
+                    vol=f"{h['volume'] / 1000.0:.2f}")
+                for h in hits[:3])
+            if len(hits) > 3:
+                listed += ", …"          # the three biggest are enough to find the trouble
+            text = trn("{n} collision: {list}", "{n} collisions: {list}",
+                       len(hits)).format(n=len(hits), list=listed)
+        if got[2] is not None:
+            # a big model is only measured near the selection; the bar says how much of the
+            # model the answer is about, so it is never taken for the whole of it
+            text += " " + trn("(only the {n} part near the selection was checked)",
+                              "(only the {n} parts near the selection were checked)",
+                              got[2]).format(n=got[2])
+        return text
+
+    def _draw_collisions(self):
+        """View > Face Style > Collisions: the solid that two parts have in common, in red.
+
+        The overlap stands inside both parts, so the depth test of the model would hide every
+        bit of it: the red is painted over the model the way the shape of Text or Logo on a Face
+        is, and gives the depth buffer back as it was (see :meth:`_draw_overlay_solid`)."""
+        for hit in self._collision_hits():
+            self.draw_tris(hit["pts"], (*theme.rgb("collision"), 1.0), on_top=True)
+
     # ------------------------------------------------------------- section
     def _start_section(self, eq):
         """View > Section: the model pass cuts with the plane, so what stands behind it is gone.
@@ -1310,9 +1530,9 @@ class Viewport(QOpenGLWidget):
         """The status bar hint of the face style views: what the colours in the model mean.
 
         All of them in one line, the overhang count first, then the thin walls and the tight
-        places, and the place of the section plane last. Off, or nothing to see: the hint
-        goes away and the instruction of the current tool comes back, so the bar never keeps
-        a count that is no longer true."""
+        places, then what the collision view found, and the place of the section plane last. Off,
+        or nothing to see: the hint goes away and the instruction of the current tool comes back,
+        so the bar never keeps a count that is no longer true."""
         parts = []
         info = self._overhang_faces()
         if info and info[1]:
@@ -1330,6 +1550,9 @@ class Viewport(QOpenGLWidget):
                              "Tight fits: {n} faces closer than {mm} mm to another part",
                              tight).format(n=tight,
                                            mm=f"{self.settings.screw_hole_clearance:g}"))
+        collide = self._collision_hint()
+        if collide:
+            parts.append(collide)
         cut = self.engine.section_cut()
         if cut is not None:
             # where the plane stands is otherwise invisible: the panel is often closed and the

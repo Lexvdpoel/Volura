@@ -629,7 +629,8 @@ gets for free.
   also when the print has support switched off (`support_mesh` and `support_mesh_drop_down`). The
   3D view draws them see-through red and green, they travel in the .volura file with the role of
   the group, and they are no part: an export as STL, OBJ, STEP or 3MF holds only the parts, and
-  Print Check, the print time and the overhang, thin wall and tight fit views make nothing of them
+  Print Check, the print time and the overhang, thin wall, tight fit and collision views make
+  nothing of them
 - **Orient for Printing** (3D Printing): turn the selected groups, or all visible ones, so
   that each stands on the face that needs the least support, like the auto-orient of a slicer; the
   flat sides of the convex hull are tried at the overhang limit, the largest face wins a tie, a part
@@ -651,6 +652,11 @@ gets for free.
   of another part, where it touches it and where it runs into it, the status bar counts the faces
   that are tight, and two parts that stand far apart cost the check nothing. The whole model is
   checked in the background, so a big model stays on screen while it is searched
+- **Collisions view** (View > Face Style > Collisions): draws in red the solid material that two
+  parts of the model have in common, so pieces that stand in one another are found before the
+  model leaves the screen; the status bar counts the collisions, names the parts and gives the
+  volume of what they share, while parts whose boxes are apart cost the check nothing. The model
+  is checked in the background, and a model of more than 60 parts is searched near the selection
 - **Model Info** (Window) with the pages Units (length rounding and the number of decimals of the
   Measurements box), Statistics (groups, loose edges and faces, total volume) and Print Bed
 - **Filament** (3D Printing > Printer Setup > Print Bed): the material (PLA, PETG, ABS, ASA, TPU, Nylon

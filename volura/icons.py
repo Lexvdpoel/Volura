@@ -144,6 +144,10 @@ SVG = {
     "view_back": f'<rect x="4" y="4" width="16" height="16" fill="#b8c9de" {S()}/><path d="M4 4 L20 20" stroke="#888" stroke-width="1"/>',
     "view_left": f'<rect x="4" y="4" width="16" height="16" fill="#8fa6c3" {S()}/><path d="M20 4 L4 20" stroke="#888" stroke-width="1"/>',
     "xray": f'<rect x="4" y="4" width="16" height="16" fill="#cfe0f5" fill-opacity="0.5" {S()}/><rect x="8" y="8" width="8" height="8" {N} {S()} stroke-dasharray="2 1.5"/>',
+    # two parts that stand in one another (View > Collisions): what they share is filled red
+    "collisions": f'<rect x="9.5" y="10.5" width="5" height="5" fill="#d23b3b"/>'
+                  f'<rect x="3.5" y="6.5" width="11" height="11" {N} {S()}/>'
+                  f'<rect x="9.5" y="10.5" width="11" height="11" {N} {S()}/>',
     "thread": f'<path d="M10 2.5 L14 2.5 L14 21.5 L10 21.5 Z" {F} {S()}/>'
               f'<path d="M10 5.5 L14 7.5 M10 9 L14 11 M10 12.5 L14 14.5 M10 16 L14 18" {N} stroke="#d23b3b" stroke-width="1.5"/>',
     "thread_ext": f'<path d="M4 9 L20 9 L20 15 L4 15 Z" {F} {S()}/>'

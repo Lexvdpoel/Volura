@@ -1503,6 +1503,25 @@ volura</code></pre>
       <li>Waar een vlak ook dun is, wint de dunne kleur, en waar het ook overhangt wint de overhangkleur: een nozzle die dat dunne plastic niet kan neerleggen en support die er niet is, zijn de ergere problemen.</li>
       <li>De controle is van het hele model tegelijk en loopt op de achtergrond: het model houdt zijn eigen kleuren tot het antwoord er is, en twee onderdelen die ver uit elkaar staan kosten helemaal niets.</li>
     </ul>
+    <h3 id="collisions"><span lang="en">Collisions view</span><span lang="nl">Botsingenweergave</span></h3>
+    <p lang="en">Draws in red the solid material that two parts of the model have in common, so pieces that stand in one another are found before the model leaves the screen for the printer or the cutter.</p>
+    <p lang="nl">Tekent in het rood het vaste materiaal dat twee onderdelen van het model gemeen hebben, zodat onderdelen die in elkaar staan gevonden worden voordat het model het scherm verlaat voor de printer of de snijder.</p>
+    <p class="where" lang="en">Where: <b>View &gt; Face Style &gt; Collisions</b></p>
+    <p class="where" lang="nl">Waar: <b>Beeld &gt; Vlakstijl &gt; Botsingen</b></p>
+    <ul lang="en">
+      <li>The red shape is not a drawing of an outline: it is the overlap itself, the material that has to move. The bar counts the collisions, names the two parts and gives their overlap in cm³.</li>
+      <li>Two parts that only touch at a face are a fit and not a collision; parts whose boxes are apart are never even asked what they have in common.</li>
+      <li>The model is searched in the background and keeps its own colours until the answer is there. Turning a part, hiding it or turning the view off asks for a new answer at once.</li>
+      <li>A model of more than 60 parts is searched near what you have selected, together with the parts that touch it. The bar says how many parts were measured; with nothing selected, the whole model is measured.</li>
+      <li>Hidden groups, loose faces that are no solid and the invisible support volumes are not parts in this check.</li>
+    </ul>
+    <ul lang="nl">
+      <li>De rode vorm is geen tekening van een omtrek: het is de overlapping zelf, het materiaal dat weg moet. De balk telt de botsingen, noemt de twee onderdelen en geeft hun overlap in cm³.</li>
+      <li>Twee onderdelen die elkaar alleen op een vlak raken, zijn een passing en geen botsing; onderdelen waarvan de dozen elkaar niet kunnen bereiken, worden niet eens gevraagd wat ze gemeen hebben.</li>
+      <li>Het model wordt op de achtergrond doorzocht en houdt zijn eigen kleuren tot het antwoord er is. Een onderdeel draaien, verbergen of de weergave uitzetten vraagt meteen een nieuw antwoord.</li>
+      <li>Van een model met meer dan 60 onderdelen wordt gezocht bij wat je hebt geselecteerd, samen met de onderdelen eraan toe. De balk zegt hoeveel onderdelen zijn gemeten; zonder selectie wordt het hele model gemeten.</li>
+      <li>Verborgen groepen, losse vlakken die geen vast lichaam zijn en de onzichtbare supportvolumes zijn hier geen onderdelen.</li>
+    </ul>
     <h3><span lang="en">Orient for printing</span><span lang="nl">Oriënteren voor printen</span></h3>
     <p lang="en">Turns parts so that each one stands on the face that needs the least support, like the auto-orient of a slicer.</p>
     <p lang="nl">Draait onderdelen zodat elk op het vlak staat dat de minste support nodig heeft, zoals de auto-orient van een slicer.</p>
@@ -1637,7 +1656,7 @@ volura</code></pre>
       <li>A <b>support enforcer</b> is a volume that becomes support where it touches a part and drops down to whatever stands under it, so a thin bridge or a spot your slicer was too clever about gets support even when the print has support switched off.</li>
       <li>The 3D view draws a blocker see-through red and an enforcer see-through green, in every workspace, so a volume is never mistaken for a part of your model.</li>
       <li>The <b>Role</b> row of <b>Entity Info</b> says what the selected group is - Part, Support blocker or Support enforcer - and turns it into another one there; one undo turns it back.</li>
-      <li>Such a volume is no part: it is in no export (STL, OBJ, STEP and 3MF hold only the parts), <b>Print Check</b> says nothing about it, the print time and the filament are those of the parts alone and the <b>Overhangs</b>, <b>Thin Walls</b> and <b>Tight Fits</b> views make nothing of it.</li>
+      <li>Such a volume is no part: it is in no export (STL, OBJ, STEP and 3MF hold only the parts), <b>Print Check</b> says nothing about it, the print time and the filament are those of the parts alone and the <b>Overhangs</b>, <b>Thin Walls</b>, <b>Tight Fits</b> and <b>Collisions</b> views make nothing of it.</li>
       <li>The role travels in the <code>.volura</code> file, so someone who opens your model later slices it with the same volumes.</li>
     </ul>
     <ul lang="nl">
@@ -1646,7 +1665,7 @@ volura</code></pre>
       <li>Een <b>supportmaker</b> is een volume dat support wordt waar het een onderdeel raakt en die tot op wat eronder staat naar beneden laat zakken, dus een dunne brug of een plek waar je slicer te slim van was krijgt support ook als de print support uit heeft.</li>
       <li>De 3D-view tekent een blokkade doorzichtig rood en een maker doorzichtig groen, in elke werkruimte, dus een volume wordt nooit voor een onderdeel van je model aangezien.</li>
       <li>De rij <b>Rol</b> in <b>Entiteitsinfo</b> zegt wat de geselecteerde groep is - Onderdeel, Supportblokkade of Supportmaker - en zet hem daar om; één keer ongedaan maken zet hem terug.</li>
-      <li>Zo'n volume is geen onderdeel: het zit in geen enkele export (STL, OBJ, STEP en 3MF bevatten alleen de onderdelen), <b>Printcontrole</b> zegt er niets over, de printtijd en het filament zijn die van de onderdelen alleen en de views <b>Overhang</b>, <b>Dunne wanden</b> en <b>Nauwe passingen</b> maken er niets van.</li>
+      <li>Zo'n volume is geen onderdeel: het zit in geen enkele export (STL, OBJ, STEP en 3MF bevatten alleen de onderdelen), <b>Printcontrole</b> zegt er niets over, de printtijd en het filament zijn die van de onderdelen alleen en de views <b>Overhang</b>, <b>Dunne wanden</b>, <b>Nauwe passingen</b> en <b>Botsingen</b> maken er niets van.</li>
       <li>De rol gaat mee in het <code>.volura</code>-bestand, dus wie jouw model later opent, slicet het met dezelfde volumes.</li>
     </ul>
     <p class="note" lang="en">A volume that is no closed volume - one open face, for instance - blocks nothing and becomes no support, so Volura asks first before it slices without it.</p>
@@ -2658,14 +2677,14 @@ volura</code></pre>
     <p class="where" lang="en">Where: <b>View</b></p>
     <p class="where" lang="nl">Waar: <b>Beeld</b></p>
     <ul lang="en">
-      <li><b>Face Style</b>: Wireframe, Hidden Line, Shaded and Monochrome, plus <a href="#overhangs">Overhangs</a>, <a href="#thin-walls">Thin Walls</a> and <a href="#tight-fits">Tight Fits</a>.</li>
+      <li><b>Face Style</b>: Wireframe, Hidden Line, Shaded and Monochrome, plus <a href="#overhangs">Overhangs</a>, <a href="#thin-walls">Thin Walls</a>, <a href="#tight-fits">Tight Fits</a> and <a href="#collisions">Collisions</a>.</li>
       <li><b>Edge Style</b>: the profile edges and the back edges (<kbd>K</kbd>).</li>
       <li>X-ray (<kbd>Alt</kbd>+<kbd>X</kbd>), hidden geometry, guides, the axes and the grid of the print bed.</li>
       <li><a href="#section">Section</a>: a plane you slide through the model to look inside it.</li>
       <li>On the worksheet here you also switch the grid and the <a href="#laser">layers</a> of the worksheet.</li>
     </ul>
     <ul lang="nl">
-      <li><b>Vlakstijl</b>: draadmodel, verborgen lijnen, gearceerd en monochroom, plus <a href="#overhangs">Overhang</a>, <a href="#thin-walls">Dunne wanden</a> en <a href="#tight-fits">Nauwe passingen</a>.</li>
+      <li><b>Vlakstijl</b>: draadmodel, verborgen lijnen, gearceerd en monochroom, plus <a href="#overhangs">Overhang</a>, <a href="#thin-walls">Dunne wanden</a>, <a href="#tight-fits">Nauwe passingen</a> en <a href="#collisions">Botsingen</a>.</li>
       <li><b>Randstijl</b>: de profielranden en de achterliggende randen (<kbd>K</kbd>).</li>
       <li>Röntgen (<kbd>Alt</kbd>+<kbd>X</kbd>), verborgen geometrie, hulplijnen, de assen en het raster van het printbed.</li>
       <li><a href="#section">Doorsnede</a>: een vlak dat je door het model schuift om erin te kijken.</li>

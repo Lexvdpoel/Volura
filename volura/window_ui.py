@@ -877,6 +877,20 @@ class UiMixin:
         self.view.update()
         self.view.update_view_status()
 
+    def toggle_collisions(self, on):
+        """View > Face Style > Collisions: draw in red what two parts of the model have in
+        common, so the material that has to move is easy to find. The model is measured in the
+        background, a moment after it stopped changing (see
+        :meth:`Viewport.collisions_changed`), and a model of many parts only near the
+        selection (see :meth:`Viewport._collision_near`)."""
+        self.settings.show_collisions = bool(on)
+        self.settings.save()
+        if on:
+            self.view.collisions_changed()     # the first look at this model
+        else:
+            self.view.forget_collisions()      # the red shapes leave with the view
+        self.view.update_view_status()
+
     def toggle_section(self, on):
         """View > Section: cut the view open with a plane you can move (see SectionPanel).
 

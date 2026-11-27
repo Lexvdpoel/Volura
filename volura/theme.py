@@ -70,6 +70,7 @@ COLORS = {
     "overhang": ("#e0491f", "#ff7043"),        # a face that needs support (View > Overhangs)
     "thin": ("#a03cc9", "#c77dff"),            # a face of a wall too thin to print
     "tight": ("#00838f", "#4dd0e1"),           # a face too close to another part to print
+    "collision": ("#c1121f", "#ff5c5c"),      # what two parts have in common (View > Collisions)
     "blocker": ("#d1242f", "#ff6b6b"),         # a support blocker, see 3D Printing
     "enforcer": ("#1a7f37", "#51cf66"),        # a support enforcer, see 3D Printing
     "section": ("#7f8b9e", "#9aa5b8"),         # the cut surface of View > Section
