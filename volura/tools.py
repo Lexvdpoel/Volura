@@ -10,7 +10,7 @@ import manifold3d as mf
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainterPath, QPen
 
-from . import fillet, icons, ops, vector_import
+from . import background, fillet, icons, ops, vector_import, wall_probe
 from .background import BackgroundCancelled
 from .brep import Entities
 from .i18n import tr, trn
@@ -3023,6 +3023,124 @@ class ProtractorTool(Tool):
         view.draw_inference(self.inf)
 
 
+# ------------------------------------------------------------------ wall thickness
+
+WALL_LINE = (0.1, 0.1, 0.1, 1)      # the wall straight through the clicked face
+LOCAL_LINE = (0.85, 0.25, 0.2, 1)   # the wall as the material feels it: the one to print
+LOCAL_MARK = 0.05                   # mm: under this the second line would say nothing new
+
+
+def fmt_wall(v):
+    """A wall thickness as the probe shows it: two decimals, the way a caliper reads.
+
+    The tape measure rounds to the precision of Model Info > Units, which for a wall of
+    0.9 mm would leave one digit where a printer needs two."""
+    return f"{float(v):.2f} mm"
+
+
+class WallProbeTool(Tool):
+    """Tools > Wall Thickness: click a face and read how thick the material is there.
+
+    One line runs straight through the part, from the click to the far side of the wall;
+    when the wall as the material feels it is thinner - the ball of material that fits at
+    that spot - a second dashed line shows it, for a wall that leans away from the click is
+    thinner than the line through it suggests. The rays run in the background (see
+    wall_probe), so a part with a million triangles never stops the window."""
+
+    name = "wall_probe"
+    status = tr("Click a face of a part to measure its wall thickness.")
+    measure_label = ""
+    cursor_icon = "wall_probe"
+
+    def reset(self):
+        super().reset()
+        self.point = None         # the point that was clicked, on the surface
+        self.wall = None          # (distance, exit) of the wall straight through
+        self.local = None         # (diameter, centre) of the ball of material that fits
+        self.job = None           # the probe that is still on its way
+        self.seq = 0              # which click the answer of a probe still belongs to
+
+    def cancel(self):
+        """Esc leaves the probe: a measurement is never half finished."""
+        super().cancel()
+        self.view.set_tool("select")
+
+    def status_text(self):
+        if self.wall is None or self.local is None:
+            return self.status
+        return tr("Straight through {wall} · wall {local}.").format(
+            wall=fmt_wall(self.wall[0]), local=fmt_wall(self.local[0]))
+
+    def mesh(self, ents):
+        """The triangles of `ents` as wall_probe reads a mesh: the corners of every
+        triangle of the pick cache, so a click does not triangulate a big part again."""
+        T = self.engine.cache.get(ents)["T"]
+        return T.reshape(-1, 3), np.arange(3 * len(T), dtype=np.int64).reshape(-1, 3)
+
+    def mouse_move(self, e, x, y):
+        self.inf = self.engine.infer(x, y)
+
+    def mouse_press(self, e, x, y):
+        self.mouse_move(e, x, y)
+        self.probe(x, y)
+
+    def probe(self, x, y):
+        """Send the rays of the face under the cursor; `measured` answers for them."""
+        self.point, self.wall, self.local = None, None, None
+        self.seq += 1               # a probe still on its way answers an earlier click
+        seq = self.seq
+        hit = self.engine.pick_face(*self.view.cam.ray(x, y))
+        ents = None if hit is None else self.doc.ents(hit[1])
+        if ents is None or hit[2] not in ents.F:
+            # empty space, the ground or a flat sketch: there is no part to measure here
+            self.view.set_status(tr("Click a face of a part"))
+            return None
+        _t, ctx, fid, point = hit
+        normal = np.asarray(ents.face_plane(fid).n, dtype=float)
+        verts, tris = self.mesh(ents)
+        self.point = np.asarray(point, dtype=float)
+        measuring = tr("Measuring the wall…")
+
+        def work(report):
+            return wall_probe.thickness(verts, tris, self.point, normal)
+
+        def measured(answer):
+            if not background.alive(self.view) or self.view.tool is not self or self.seq != seq:
+                return                    # the answer belongs to a click that has moved on
+            self.job = None
+            self.wall, self.local = answer["along_normal"], answer["local"]
+            # a sketch face and an open shell give nothing: there is no wall there
+            self.view.set_status(self.status_text() if self.wall is not None else
+                                 tr("Click a face of a part"))
+            self.view.update()
+
+        def failed(exc):
+            if background.alive(self.view) and self.view.tool is self and self.seq == seq:
+                self.job = None
+                self.view.set_status(tr("Operation failed: {error}").format(error=exc))
+
+        self.job = background.run(self.view.window(), work, text=measuring, can_cancel=False,
+                                  show_dialog=False, on_done=measured, on_error=failed)
+        self.view.set_status(measuring)
+        return self.job
+
+    def draw(self, view):
+        if self.point is not None and self.wall is not None:
+            end = np.asarray(self.wall[1], dtype=float)
+            view.draw_lines([self.point, end], WALL_LINE, 1.8, on_top=True)
+            view.draw_points([self.point, end], WALL_LINE, 6)
+            view.add_label((self.point + end) / 2, fmt_wall(self.wall[0]))
+            if self.local is not None and abs(self.wall[0] - self.local[0]) > LOCAL_MARK:
+                # the ball touches the surface at the click, so its far side lies as far
+                # under the click again as its centre does
+                far = np.asarray(self.local[1], dtype=float) * 2.0 - self.point
+                view.draw_lines([self.point, far], LOCAL_LINE, 1.5, stipple=True, on_top=True)
+                view.add_label((self.point + far) / 2,
+                               tr("wall {local}").format(local=fmt_wall(self.local[0])),
+                               offset=(10, 12))
+        view.draw_inference(self.inf)
+
+
 # ------------------------------------------------------------------ cut plane
 
 class CutPlaneTool(Tool):
@@ -3253,4 +3371,5 @@ TOOL_CLASSES = [SelectTool, EraserTool, PaintTool, LineTool, FreehandTool, Recta
                 PolygonTool, Arc2Tool, ArcTool, Arc3Tool, PieTool, TextTool, VectorPlaceTool,
                 PushPullTool,
                 FollowMeTool, OffsetTool, MoveTool, RotateTool, ScaleTool, TapeTool, ProtractorTool,
-                CutPlaneTool, FilletTool, ChamferTool, OrbitTool, PanTool, ZoomTool, ZoomWindowTool]
+                WallProbeTool, CutPlaneTool, FilletTool, ChamferTool, OrbitTool, PanTool, ZoomTool,
+                ZoomWindowTool]

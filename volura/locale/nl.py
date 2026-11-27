@@ -127,6 +127,7 @@ TRANSLATIONS = {
     'Voronoi cells': 'Voronoi-cellen',
     '&View': 'Beel&d',
     'Web': 'Tussenwand',
+    '&Wall Thickness': '&Wanddikte',
     '&Welcome to Volura': '&Welkom bij Volura',
     'Width of one hole: across the flats for a hexagon, the diameter of a circle, the width '
     'of a slot': 'Breedte van één gat: de sleutelwijdte bij een zeshoek, de diameter bij een '
@@ -332,6 +333,10 @@ TRANSLATIONS = {
     'Click a center and type an angle in degrees': 'Middelpunt klikken en een hoek in graden typen',
     'Click a closed contour to offset it.': 'Klik een gesloten contour om die te verschuiven.',
     'Click a closed contour you want to offset': 'Klik een gesloten contour die je wilt verschuiven',
+    'Click a face and read how thick the material is there': 'Een vlak klikken en lezen hoe dik het materiaal daar is',
+    'Click a face of a part': 'Klik een vlak van een onderdeel',
+    'Click a face of a part to measure its wall thickness.':
+        'Klik een vlak van een onderdeel om de wanddikte daar te meten.',
     'Click a corner of the polygon, or type a radius': 'Klik een hoekpunt van de veelhoek, of typ een straal',
     'Click a line or drag a box': 'Klik een lijn of sleep een kader',
     'Click a line to select it, or drag a selection window': 'Klik een lijn om te selecteren, of sleep een kader',
@@ -768,6 +773,7 @@ TRANSLATIONS = {
     'Materials': 'Materialen',
     'Maximum deviation: {tol} mm': 'Maximale afwijking: {tol} mm',
     'Measurements': 'Maatinvoer',
+    'Measuring the wall…': 'Wanddikte meten…',
     'Middle': 'Midden',
     'Middle of the model': 'Midden van het model',
     'middle': 'midden',
@@ -1235,6 +1241,7 @@ TRANSLATIONS = {
     'The print bed and the printer are on the Print Bed page.': 'Het printbed en de printer staan op de pagina Printbed.',
     'the result is not a valid volume': 'het resultaat is geen geldig volume',
     'the thinnest wall must be greater than 0 mm': 'de dunste wand moet groter dan 0 mm zijn',
+    'wall {local}': 'wand {local}',
     'the width, length and wall of an overhang test must be positive': 'de breedte, lengte en wand van een overhangtest moeten positief zijn',
     'The reference {ref} of <use> is not in the file.': 'De verwijzing {ref} van <use> staat niet in het bestand.',
     'The selected closed outlines as one shape': 'De geselecteerde gesloten contouren als één vorm',
@@ -1359,6 +1366,7 @@ TRANSLATIONS = {
     'Volura Help': 'Volura help',
     'Volura model (*.volura)': 'Volura-model (*.volura)',
     'Volura {version} is available.': 'Volura {version} is beschikbaar.',
+    'Straight through {wall} · wall {local}.': 'Recht door {wall} · wand {local}.',
     'Wall thickness around hole': 'Wanddikte rond gat',
     'Walls and top/bottom': 'Wanden en boven/onder',
     'Weight': 'Gewicht',

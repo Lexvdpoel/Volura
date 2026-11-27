@@ -96,6 +96,14 @@ SVG = {
              f'<path d="M12 12 L20 4 M15 4 L20 4 L20 9" {N} stroke="#d23b3b" stroke-width="1.8" stroke-linecap="round"/>',
     "tape": f'<circle cx="10" cy="12" r="7" fill="#f2c230" {S()}/><circle cx="10" cy="12" r="2.2" fill="#fff" {S()}/>'
             f'<path d="M10 19 L22 19 L22 16 L17 16" fill="#f2e5a0" {S()}/>',
+    # wall thickness: a plate with a red measure through its wall, the click on its face
+    "wall_probe": f'<path d="M3 8 L12 3.5 L21 8 L12 12.5 Z" fill="#e8eef7" {S()}/>'
+                  f'<path d="M3 8 L12 12.5 L12 20.5 L3 16 Z" fill="#b8c9de" {S()}/>'
+                  f'<path d="M21 8 L12 12.5 L12 20.5 L21 16 Z" fill="#8fa6c3" {S()}/>'
+                  f'<path d="M7.5 10.6 L7.5 18.1" {N} stroke="#d23b3b" stroke-width="1.7" stroke-linecap="round"/>'
+                  f'<path d="M5.9 12.2 L7.5 10.4 L9.1 12.2 M5.9 16.5 L7.5 18.3 L9.1 16.5" {N} '
+                  f'stroke="#d23b3b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
+                  f'<circle cx="12" cy="8" r="1.5" fill="#d23b3b" stroke="#d23b3b" stroke-width="0.8"/>',
     # orbit (camera): globe with a red orbit around it
     "orbit": f'<g transform="rotate(-18 12 12)">'
              f'<path d="M22.5 12 A10.5 4.2 0 0 0 1.5 12" {N} stroke="#d23b3b" stroke-width="1.2" stroke-dasharray="1.8 1.6"/></g>'

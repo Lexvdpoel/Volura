@@ -3055,6 +3055,8 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
         self.a_simplify = A(tr("Simplify &Model…"), self.simplify_model, None, None,
                             False, tr("Fewer triangles on the selected groups, within a chosen deviation"))
         self.a_protractor = self.tool_act(tr("&Protractor"), "protractor")
+        self.a_wall_probe = self.tool_act(tr("&Wall Thickness"), "wall_probe", None, "wall_probe",
+                                          tr("Click a face and read how thick the material is there"))
         self.a_drop = A(tr("Drop to Bed"), self.drop_to_bed, "Ctrl+B", "bed")
         self.a_center = A(tr("Center on Bed"), self.center_on_bed)
         self.a_arrange = A(tr("Arrange on Bed"), self.arrange_on_bed, None, None, False,
@@ -3844,7 +3846,7 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                           self.a_fillet, self.a_chamfer, None,
                           solids, cut_faces, self.a_shell, self.a_simplify, None,
                           threads_menu, self.a_screw_hole, modify, None,
-                          T["tape"], self.a_protractor, None,
+                          T["tape"], self.a_protractor, self.a_wall_probe, None,
                           T["text"], None,
                           self.a_to_sheet, self.a_to_laser)
                   + only("2d", S["select"], S["move"], S["rotate"], S["scale"], None,

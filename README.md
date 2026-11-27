@@ -645,6 +645,13 @@ gets for free.
   where no circle of that diameter fits in the material any more, measured in all three directions,
   and the status bar counts the faces that are thin. The cut of the model runs in the background,
   so a big model stays on screen while it is searched
+- **Wall Thickness** (Tools): click a face of a part and read how thick the material is there —
+  the distance straight through to the far side of the wall, and the wall as the material feels
+  it: the diameter of the largest ball that fits in the material at that spot, which says how
+  strong the place is. A dashed second line shows that ball where a wall leans away from the
+  click — through the side of a 3 mm plate you measure 20 mm of plate — and the two numbers stand
+  in the status bar; the rays run in the background, so a part with a million triangles keeps
+  turning smoothly
 - **Tight Fits view** (View > Face Style > Tight Fits): marks every face that comes closer to
   another part than the clearance your printer proved (the one of *3D Printing > Clearance
   Test*), so lids in their boxes, pins in their holes and hinges that have to move are easy to
