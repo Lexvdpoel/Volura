@@ -2,8 +2,9 @@
 
 The spur gear, the project box, the knob, the standoff, the label plate, the 3D text, the cable
 clip, the print-in-place hinge and ball joint, the snap-fit clip, the battery holder, the storage
-bin and its wall rack. Each one starts at the values of Settings and remembers the new ones; the
-actions that open them and the models they build live in `volura/app.py`.
+bin and its wall rack, the timing pulley and its idler. Each one starts at the values of Settings
+and remembers the new ones; the actions that open them and the models they build live in
+`volura/app.py`.
 
 The dialog of the text or the logo that goes on a face of a part lives here too: it is not a part
 of its own, but it is built the same way, with the same fields for the letters and the same way of
@@ -25,7 +26,7 @@ from . import (bag_clip, ball_joint, battery_holder, bin_rack, bit_holder, brack
                desk_hook, door_wedge, drawer_organizer, enclosure, face_text, fan_guard,
                filament_clip, fonts, gears, gridfinity, grommet, hex_key_holder, hinge,
                hose_adapter, knob, label_plate, lithophane, pegboard, pen_cup, phone_stand,
-               plant_label, plant_pot, screw_jar, snap_fit, soap_dish, spool_adapter,
+               plant_label, plant_pot, pulley, screw_jar, snap_fit, soap_dish, spool_adapter,
                standoff, storage_bin, text3d, theme, threads, tie_mount, vector_import,
                wall_hook)
 from .geom import MeshData
@@ -111,6 +112,215 @@ class SpurGearDialog(QDialog):
         if self.solid:
             o["thickness"] = round(self.thickness.value(), 6)
         return o
+
+
+class PulleyDialog(QDialog):
+    """The "Timing Pulley…" dialog: a wheel a toothed belt runs in, or the smooth wheel it runs over.
+
+    The belt and the number of teeth together say how big the wheel is, because a belt runs on its
+    pitch line: 20 teeth of GT2 make a circle of 12.73 mm on that line and 12.22 mm over the teeth,
+    which is what a supplier's table gives. The width is the width of the belt and the print
+    clearance is what a printed groove gives a moulded belt tooth, so the wheel keeps the diameter
+    of the table and only its grooves are cut wider and deeper. The collars keep the belt on the
+    wheel, and the hub is what a toothed wheel is built around: it carries the bore for the axle,
+    the flat that keeps the wheel from turning on a shaft that is filed flat and the set screw that
+    clamps it there, whose nut is captured in a slot that is open at the top. An idler is the same
+    wheel without teeth, smooth on the circle the back of its belt stands on, and bored for a 625
+    bearing or for a bush.
+
+    Under the fields the wheel stands in figures, and what is left of what was asked is said in the
+    warning colour: a hub that had to grow around the bore, a flat the bore cannot carry, a hub too
+    thin for the nut of a set screw and an idler that had to grow around its bearing. A belt whose
+    grooves do not fit between their neighbours, and a bore that would eat the bottom of the
+    grooves, cannot be made at all: the message says so and the dialog waits. The values come from
+    Settings and are remembered.
+    """
+
+    def __init__(self, win):
+        super().__init__(win)
+        s = win.settings
+        self.setWindowTitle(tr("Timing Pulley"))
+        lay = QFormLayout(self)
+
+        def spin(lo, hi, value, step=0.5, dec=1):
+            sp = QDoubleSpinBox()
+            sp.setRange(lo, hi)
+            sp.setDecimals(dec)
+            sp.setSingleStep(step)
+            sp.setSuffix(" mm")
+            sp.setValue(float(value))
+            return sp
+
+        self.kind = QComboBox()
+        self.kind.addItem(tr("Toothed pulley"), "pulley")
+        self.kind.addItem(tr("Smooth idler"), "idler")
+        self.kind.setCurrentIndex(1 if s.pulley_idler else 0)
+        self.kind.setToolTip(tr("A pulley has grooves the belt runs in; an idler is the smooth "
+                                "wheel the belt runs over, against the side that has no teeth"))
+        self.belt = QComboBox()
+        for key, label in (("gt2", tr("GT2 (2 mm)")), ("gt3", tr("GT3 (3 mm)")),
+                           ("htd3m", tr("HTD 3M (3 mm)"))):
+            self.belt.addItem(label, key)
+        self.belt.setCurrentIndex(max(0, self.belt.findData(str(s.pulley_profile))))
+        self.belt.setToolTip(tr("The profile of the belt: its pitch, the shape of a tooth and the "
+                                "depth of the groove belong together"))
+        self.teeth = QSpinBox()
+        self.teeth.setRange(pulley.TEETH_MIN, pulley.TEETH_MAX)
+        self.teeth.setValue(int(s.pulley_teeth))
+        self.teeth.setToolTip(tr("How many grooves the wheel is cut with, or how many teeth of the "
+                                 "belt it runs over: this is what sets its diameter"))
+        self.width = spin(pulley.BELT_MIN, pulley.BELT_MAX, s.pulley_width, 1.0)
+        self.width.setToolTip(tr("How wide the belt is; the widths these belts come in are 6, 9, 10 "
+                                 "and 15 mm"))
+        self.clearance = spin(0.0, pulley.CLEAR_MAX, s.pulley_clearance, 0.05, 2)
+        self.clearance.setToolTip(tr("How much wider and deeper a groove is printed, so a moulded "
+                                     "belt tooth runs into it; the wheel keeps its diameter"))
+        self.flanges = QComboBox()
+        for value, label in (("none", tr("None")), ("one", tr("One side")),
+                             ("both", tr("Both sides"))):
+            self.flanges.addItem(label, value)
+        self.flanges.setCurrentIndex(max(0, self.flanges.findData(str(s.pulley_flanges))))
+        self.flanges.setToolTip(tr("The collars that keep the belt on the wheel; a smooth wheel "
+                                   "always has one on each side"))
+        self.flange = spin(pulley.FLANGE_MIN, pulley.FLANGE_MAX, s.pulley_flange)
+        self.flange.setToolTip(tr("How far a collar stands past the teeth or past the smooth "
+                                  "surface"))
+        self.hub = QCheckBox(tr("Hub with a bore"))
+        self.hub.setChecked(bool(s.pulley_hub))
+        self.hub.setToolTip(tr("The boss the wheel is built around, with the hole for the axle in "
+                               "it; without it the wheel is only a ring with collars"))
+        self.hub_d = spin(pulley.HUB_MIN, pulley.HUB_MAX, s.pulley_hub_d, 1.0)
+        self.hub_d.setToolTip(tr("How wide the hub is around the bore"))
+        self.hub_h = spin(pulley.HUBH_MIN, pulley.HUBH_MAX, s.pulley_hub_h, 1.0)
+        self.hub_h.setToolTip(tr("How far the hub stands above the wheel; a screw and its nut need "
+                                 "room in it"))
+        self.bore = spin(0.0, 30.0, s.pulley_bore, 0.5)
+        self.bore.setToolTip(tr("The axle that turns in the middle of the wheel; zero leaves the "
+                                "wheel solid and without a set screw"))
+        self.bearing = QCheckBox(tr("625 bearing (16 mm)"))
+        self.bearing.setChecked(bool(s.pulley_bearing))
+        self.bearing.setToolTip(tr("A pocket for a 625 bearing instead of a plain hole: 16 mm "
+                                   "across and 5 mm wide, open at the top"))
+        self.flat = spin(0.0, 10.0, s.pulley_flat, 0.5, 2)
+        self.flat.setToolTip(tr("How deep one side of the bore is filed flat, for a shaft that is "
+                                "filed to match so the wheel cannot turn on it; 0 keeps it round"))
+        self.screw = QCheckBox(tr("M3 set screw with captive nut"))
+        self.screw.setChecked(bool(s.pulley_nut))
+        self.screw.setToolTip(tr("A screw that runs through the hub into the bore and presses on "
+                                 "the axle, with its nut captured in a slot that is open at the top "
+                                 "and needs no support"))
+        self.info = QLabel()
+        self.info.setWordWrap(True)
+        lay.addRow(tr("Wheel"), self.kind)
+        lay.addRow(tr("Belt"), self.belt)
+        lay.addRow(tr("Teeth"), self.teeth)
+        lay.addRow(tr("Belt width"), self.width)
+        lay.addRow(tr("Print clearance"), self.clearance)
+        lay.addRow(tr("Collars"), self.flanges)
+        lay.addRow(tr("Collar height"), self.flange)
+        lay.addRow("", self.hub)
+        lay.addRow(tr("Hub diameter"), self.hub_d)
+        lay.addRow(tr("Hub height"), self.hub_h)
+        lay.addRow(tr("Bore"), self.bore)
+        lay.addRow("", self.bearing)
+        lay.addRow(tr("D flat"), self.flat)
+        lay.addRow("", self.screw)
+        lay.addRow(self.info)
+        for w in (self.width, self.clearance, self.flange, self.hub_d, self.hub_h, self.bore,
+                  self.flat):
+            w.valueChanged.connect(self._changed)
+        for w in (self.kind, self.belt, self.flanges):
+            w.currentIndexChanged.connect(self._changed)
+        self.teeth.valueChanged.connect(self._changed)
+        for w in (self.hub, self.bearing, self.screw):
+            w.toggled.connect(self._changed)
+        self.bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.bb.accepted.connect(self.accept)
+        self.bb.rejected.connect(self.reject)
+        lay.addRow(self.bb)
+        self._changed()
+
+    def _changed(self, *_):
+        """What a wheel of these numbers really becomes, and what is taken from what was asked."""
+        wheel = self._wheel()
+        bear = self.bearing.isChecked() and not wheel
+        self.flanges.setEnabled(wheel)
+        for w in (self.hub, self.hub_d, self.hub_h, self.screw):
+            w.setEnabled(wheel and (w is self.hub or self.hub.isChecked()))
+        self.bearing.setEnabled(not wheel)
+        self.bore.setEnabled(not bear)
+        self.flat.setEnabled(not bear)
+        try:
+            n = pulley.sizes(**self.options())
+        except ValueError as exc:
+            self.info.setStyleSheet(f"color: {theme.color('warn')};")
+            self.info.setText("<i>" + str(exc) + "</i>")
+            self.bb.button(QDialogButtonBox.Ok).setEnabled(False)
+            return
+        self.bb.button(QDialogButtonBox.Ok).setEnabled(True)
+        if n["idler"]:
+            asked = pulley.idler_diameter(n["teeth"], n["profile"])
+            parts = [tr("The belt runs over a smooth wheel of Ø{d:.2f} mm, which is how far the "
+                        "back of a belt of {z} teeth of {name} stands under its own pitch circle; "
+                        "{w:g} mm wide between collars of Ø{rf:.1f} mm and {tall:.1f} mm tall.")
+                     .format(d=n["surface"], z=n["teeth"], name=n["profile"].upper(),
+                             w=n["width"], rf=n["rf"], tall=n["height"])]
+        else:
+            parts = [tr("The belt runs on a pitch circle of Ø{pd:.2f} mm; the wheel is turned to "
+                        "Ø{od:.2f} mm over its {z} grooves, which reach down to Ø{root:.1f} mm, and "
+                        "is {w:g} mm wide between collars of Ø{rf:.1f} mm; it prints {tall:.1f} mm "
+                        "tall.").format(pd=n["pitch_d"], od=n["od"], z=n["teeth"], root=n["root"],
+                                        w=n["width"], rf=n["rf"], tall=n["height"])]
+        warned = False
+        if n["idler"] and n["bearing"] and n["surface"] > asked + 1e-6:
+            warned = True
+            parts.append(tr("A 625 bearing of 16 mm does not fit in a wheel of Ø{ask:.1f} mm, so "
+                            "the wheel is made Ø{got:.1f} mm wide that the bearing stands in with "
+                            "a wall.").format(ask=asked, got=n["surface"]))
+        if not n["idler"] and n["hub"] and n["hub_d"] > self.hub_d.value() + 1e-6:
+            warned = True
+            if n["nut"] and 2.0 * (n["slot_x"] + pulley.NUT_WALL) > self.hub_d.value() + 1e-6:
+                parts.append(tr("A hub of Ø{ask:g} mm has no room for a bore of Ø{bore:.1f} mm and "
+                                "the nut of an M3 set screw behind a wall, so it is made "
+                                "Ø{hd:.1f} mm.").format(ask=self.hub_d.value(), bore=n["bore"],
+                                                        hd=n["hub_d"]))
+            else:
+                parts.append(tr("A hub of Ø{ask:g} mm leaves nothing around a bore of Ø{bore:.1f} "
+                                "mm, so it is made Ø{hd:.1f} mm.").format(ask=self.hub_d.value(),
+                                                                        bore=n["bore"],
+                                                                        hd=n["hub_d"]))
+        if 0.0 < n["flat"] < self.flat.value() - 1e-6:
+            warned = True
+            parts.append(tr("A flat of {ask:g} mm is more than a bore of Ø{bore:.1f} mm can carry, "
+                            "so it becomes {got:.1f} mm.").format(ask=self.flat.value(),
+                                                                  bore=n["bore"], got=n["flat"]))
+        if self.screw.isChecked() and n["hub"] and n["screw"] <= 0.0:
+            warned = True
+            if n["bore"] <= 0.0:
+                parts.append(tr("A wheel without a bore has nothing for a set screw to press on, "
+                                "so it is made without one."))
+            else:
+                parts.append(tr("A hub of Ø{hd:.1f} mm that is {hh:.1f} mm high has no room under "
+                                "its top for the nut of an M3 set screw: make the hub higher or "
+                                "leave the screw out.").format(hd=n["hub_d"], hh=n["hub_h"]))
+        self.info.setStyleSheet(f"color: {theme.color('warn')};" if warned else "")
+        self.info.setText("<i>" + " ".join(parts) + "</i>")
+
+    def _wheel(self) -> bool:
+        """Whether the fields ask for a toothed wheel rather than for a smooth idler."""
+        return self.kind.currentData() == "pulley"
+
+    def options(self) -> dict:
+        return {"idler": not self._wheel(), "profile": str(self.belt.currentData()),
+                "teeth": int(self.teeth.value()), "width": round(self.width.value(), 6),
+                "clearance": round(self.clearance.value(), 6),
+                "flanges": str(self.flanges.currentData()) if self._wheel() else "both",
+                "flange": round(self.flange.value(), 6),
+                "hub": bool(self.hub.isChecked() and self._wheel()),
+                "hub_d": round(self.hub_d.value(), 6), "hub_h": round(self.hub_h.value(), 6),
+                "bore": round(self.bore.value(), 6), "flat": round(self.flat.value(), 6),
+                "nut": bool(self.screw.isChecked() and self._wheel()),
+                "bearing": bool(self.bearing.isChecked() and not self._wheel())}
 
 
 class ProjectBoxDialog(QDialog):

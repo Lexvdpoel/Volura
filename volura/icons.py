@@ -434,6 +434,14 @@ SVG = {
                      f'<path d="M12 6 L12 18 M6.8 9 L17.2 15 M6.8 15 L17.2 9" {N} '
                      f'stroke="#3b7dd8" stroke-width="1.6" stroke-linecap="round"/>'
                      f'<circle cx="12" cy="12" r="2.4" fill="#fff" {S(w=1.2)}/>',
+    # timing pulley: the toothed wheel with its grooves, its hub and the bore with a flat
+    "timing_pulley": f'<circle cx="12" cy="12" r="9.5" fill="#eef2f7" {S()}/>'
+                     f'<path d="M12 2.6 L12 5.2 M12 18.8 L12 21.4 M2.6 12 L5.2 12 M18.8 12 '
+                     f'L21.4 12 M5.3 5.3 L7.2 7.2 M16.8 16.8 L18.7 18.7 M18.7 5.3 L16.8 7.2 '
+                     f'M7.2 16.8 L5.3 18.7" {N} stroke="#3b7dd8" stroke-width="1.5" '
+                     f'stroke-linecap="round"/>'
+                     f'<circle cx="12" cy="12" r="5.4" fill="#cfe0f5" {S()}/>'
+                     f'<path d="M9.7 13.4 A2.7 2.7 0 1 1 14.3 13.4 Z" fill="#fff" {S(w=1.2)}/>',
     # drawer organizer: a tray with rounded corners, divided into compartments, with finger notches
     "drawer_organizer": f'<rect x="2.5" y="5" width="19" height="14" rx="3" fill="#eef2f7" {S()}/>'
                         f'<path d="M12 5 L12 19 M2.5 12 L21.5 12" {N} stroke="#9a9a9a" '

@@ -34,8 +34,8 @@ from volura import (bag_clip, battery_holder, bin_rack, bit_holder, bracket, bri
                     grommet, hex_key_holder, hinge, hose_adapter, knob, label_plate, lithophane,
                     pegboard, pen_cup,
                     phone_stand, plant_label,
-                    plant_pot, screw_jar, snap_fit, soap_dish, spool_adapter, standoff,
-                    storage_bin,
+                    plant_pot, pulley, screw_jar, snap_fit, soap_dish, spool_adapter,
+                    standoff, storage_bin,
                     stringing_test,
                     text3d, tie_mount, wall_hook)
 from volura import ops  # noqa: E402
@@ -436,6 +436,19 @@ CASES = [
     ("spur gear default", lambda: gear(12)),
     ("spur gear with bore", lambda: gear(20, module=1.5, thickness=6.0, bore=8.0)),
     ("spur gear many teeth", lambda: gear(48, module=1.0, thickness=10.0, backlash=0.2)),
+
+    ("timing pulley default", lambda: [pulley.timing_pulley()]),
+    ("timing pulley one collar bush with a flat", lambda: [pulley.timing_pulley(
+        profile="gt3", teeth=24, clearance=0.15, width=9.0, flanges="one", flange=1.5,
+        hub=True, hub_d=20.0, hub_h=12.0, bore=8.0, flat=1.0, nut=False)]),
+    ("timing pulley set screw and nut", lambda: [pulley.timing_pulley(
+        teeth=40, width=9.0, hub_d=16.0, hub_h=12.0, bore=6.0, flat=1.0, nut=True)]),
+    ("timing pulley many grooves without a hub", lambda: [pulley.timing_pulley(
+        profile="htd3m", teeth=120, clearance=0.2, width=15.0, flanges="both", flange=2.0,
+        hub=False, bore=0.0, nut=False)]),
+    ("belt idler for a bearing", lambda: [pulley.idler()]),
+    ("belt idler for a bush with a flat", lambda: [pulley.idler(
+        profile="gt3", teeth=40, width=9.0, flange=1.5, bore=8.0, bearing=False, flat=1.0)]),
 
     ("calibration cube default", lambda: calib()),
     ("calibration cube small without letters", lambda: calib(

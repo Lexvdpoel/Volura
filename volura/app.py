@@ -34,7 +34,7 @@ from . import (__version__, background, bag_clip, ball_joint, battery_holder, bi
                fileio, gcode, gcode_mill, gcode_thumbnail, gears, gridfinity, grommet,
                hex_key_holder, hinge, hose_adapter, i18n, joints,
                keyschemes, knob, label_plate, linking, lithophane, soap_dish, screw_jar, snap_fit,
-               nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot,
+               nesting, ops, pegboard, pen_cup, phone_stand, plant_label, plant_pot, pulley,
                plates, printer_link, print_history, print_queue, print_watch,
                sheet3d, sheettools, slice_presets, svg,
                spacemouse, spool_adapter, spools, standoff, storage_bin, text3d, theme, threads, tie_mount,
@@ -193,7 +193,8 @@ PART_CATEGORIES = (
     (tr_noop("&Mechanical"), ("a_bracket", "a_grommet", "a_fan_guard", "a_filament_clip",
                               "a_hose_adapter", "a_knob", "a_print_ball_joint", "a_print_hinge",
                               "a_snap_fit",
-                              "a_spool_adapter", "a_spur_gear_3d", "a_standoff")),
+                              "a_spool_adapter", "a_spur_gear_3d", "a_standoff",
+                              "a_timing_pulley")),
     (tr_noop("&Cables"), ("a_cable_chain", "a_cable_clip", "a_cable_comb", "a_cable_winder",
                           "a_tie_mount")),
     (tr_noop("&Storage"), ("a_battery_holder", "a_bin_rack", "a_bit_holder",
@@ -1417,6 +1418,34 @@ class Settings:
         self.spool_adapter_spokes = max(0, min(spool_adapter.SPOKES_MAX, spokes))
         self.spool_adapter_bearing = self._bool("spool_adapter_bearing", False)
         for key, default, lo, hi in (
+                ("pulley_width", 6.0, pulley.BELT_MIN, pulley.BELT_MAX),
+                ("pulley_clearance", pulley.CLEAR_DEFAULT, 0.0, pulley.CLEAR_MAX),
+                ("pulley_flange", 1.0, pulley.FLANGE_MIN, pulley.FLANGE_MAX),
+                ("pulley_hub_d", 16.0, pulley.HUB_MIN, pulley.HUB_MAX),
+                ("pulley_hub_h", 10.0, pulley.HUBH_MIN, pulley.HUBH_MAX),
+                ("pulley_bore", 5.0, 0.0, 30.0),
+                ("pulley_flat", 0.0, 0.0, 10.0)):
+            try:
+                value = float(self.q.value(key, default))
+            except (TypeError, ValueError):
+                value = default
+            setattr(self, key, max(lo, min(hi, value)))
+        try:
+            teeth = int(self.q.value("pulley_teeth", 20))
+        except (TypeError, ValueError):
+            teeth = 20
+        self.pulley_teeth = max(pulley.TEETH_MIN, min(pulley.TEETH_MAX, teeth))
+        self.pulley_profile = str(self.q.value("pulley_profile", "gt2"))
+        if self.pulley_profile not in pulley.PROFILES:
+            self.pulley_profile = "gt2"
+        self.pulley_flanges = str(self.q.value("pulley_flanges", "both"))
+        if self.pulley_flanges not in pulley.FLANGES:
+            self.pulley_flanges = "both"
+        self.pulley_idler = self._bool("pulley_idler", False)
+        self.pulley_hub = self._bool("pulley_hub", True)
+        self.pulley_nut = self._bool("pulley_nut", True)
+        self.pulley_bearing = self._bool("pulley_bearing", True)
+        for key, default, lo, hi in (
                 ("drawer_organizer_length", 200.0, drawer_organizer.LENGTH_MIN,
                  drawer_organizer.LENGTH_MAX),
                 ("drawer_organizer_width", 150.0, drawer_organizer.WIDTH_MIN,
@@ -2017,6 +2046,11 @@ class Settings:
             self.q.setValue(key, getattr(self, key))
         for key in ("spool_adapter_hub", "spool_adapter_depth", "spool_adapter_lip",
                     "spool_adapter_rod", "spool_adapter_bearing", "spool_adapter_spokes"):
+            self.q.setValue(key, getattr(self, key))
+        for key in ("pulley_idler", "pulley_profile", "pulley_teeth", "pulley_width",
+                    "pulley_clearance", "pulley_flanges", "pulley_flange", "pulley_hub",
+                    "pulley_hub_d", "pulley_hub_h", "pulley_bore", "pulley_flat", "pulley_nut",
+                    "pulley_bearing"):
             self.q.setValue(key, getattr(self, key))
         for key in ("drawer_organizer_length", "drawer_organizer_width", "drawer_organizer_height",
                     "drawer_organizer_clearance", "drawer_organizer_cols", "drawer_organizer_rows",
@@ -3421,6 +3455,16 @@ class MainWindow(QMainWindow, SheetMixin, PrintMixin, UiMixin):
                                     "turns true on a thin rod or the 608 bearing of a spool "
                                     "holder; it stands on a flange that keeps it from sliding in "
                                     "and spokes hold it together where there is plastic to save"))
+        # ---- timing pulley and belt idler
+        self.a_timing_pulley = A(tr("Timing Pulley…"),
+                                 lambda checked=False: self.pulley_dialog(), None,
+                                 "timing_pulley", False,
+                                 tr("Add a wheel that takes a toothed belt of GT2, GT3 or HTD 3M, "
+                                    "or the smooth wheel such a belt runs over: the belt and the "
+                                    "number of teeth say its diameter, the collars keep the belt on "
+                                    "it and a hub carries the bore, a flat for the shaft and an M3 "
+                                    "set screw whose nut is captured in a slot that needs no "
+                                    "support; it prints on its collar with nothing hanging over"))
         # ---- drawer organizer
         self.a_drawer_organizer = A(tr("Drawer Organizer…"),
                                     lambda checked=False: self.drawer_organizer_dialog(), None,

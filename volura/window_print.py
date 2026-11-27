@@ -33,7 +33,8 @@ from . import (background, bag_clip, ball_joint, battery_holder, bin_rack, bit_h
                flow_rate_test, gears, gridfinity, grommet, hex_key_holder, hinge, hose_adapter,
                joints, knob, label_plate, lithophane, max_speed_test, ops, paint_split, pegboard,
                pen_cup, phone_stand, plant_label, plant_pot, plates, pressure_advance_test,
-               print_queue, retraction_test, screw_jar, snap_fit, soap_dish, slicer, spool_adapter,
+               print_queue, pulley, retraction_test, screw_jar, snap_fit, soap_dish, slicer,
+               spool_adapter,
                standoff, storage_bin, stringing_test, temperature_tower, text3d, theme, threads,
                tie_mount, wall_hook)
 from . import gcode_preview, gcode_thumbnail
@@ -52,7 +53,8 @@ from .part_dialogs import (BagClipDialog, BallJointDialog, BatteryHolderDialog, 
                            GridfinityDialog, GrommetDialog, HexKeyHolderDialog,
                            HingeDialog, HoseAdapterDialog, KnobDialog, LabelPlateDialog,
                            LithophaneDialog, PegboardDialog, PenCupDialog, PhoneStandDialog,
-                           PlantLabelDialog, PlantPotDialog, ProjectBoxDialog, ScrewJarDialog,
+                           PlantLabelDialog, PlantPotDialog, ProjectBoxDialog, PulleyDialog,
+                           ScrewJarDialog,
                            SnapFitDialog, SoapDishDialog, SpoolAdapterDialog, StandoffDialog,
                            StorageBinDialog,
                            Text3DDialog, TieMountDialog, WallHookDialog)
@@ -796,6 +798,75 @@ class PrintMixin:
 
         background.run(self, work, text=tr("Building the ball joint…"), on_done=done,
                        on_error=failed)
+
+    # ------------------------------------------------------------ timing pulley and belt idler
+    def pulley_dialog(self):
+        """Draw > Parts > Mechanical > Timing Pulley…: a wheel a toothed belt runs in, or the smooth
+           wheel it runs over."""
+        dlg = PulleyDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            self.setFocus()
+            return None
+        options = dlg.options()
+        for key in ("idler", "profile", "teeth", "width", "clearance", "flanges", "flange", "hub",
+                    "hub_d", "hub_h", "bore", "flat", "nut", "bearing"):
+            setattr(self.settings, "pulley_" + key, options[key])
+        self.settings.save()
+        made = self.make_pulley_model(options)
+        self.setFocus()
+        return made
+
+    def make_pulley_model(self, options):
+        """The pulley or the idler on the bed as it prints: one undo step, next to the model.
+
+        The grooves of a wheel and the slot that captures the nut of the set screw are booleans, and
+        a wheel of a hundred and twenty teeth takes a moment, so the part is built in the
+        background, like the hinge. It comes back standing on the collar that is on the bed with its
+        hub in the air, and is named for what it was asked to be: a toothed wheel is a timing
+        pulley, a smooth one a belt idler.
+        """
+        self.set_mode("3d")
+        doc = self.doc
+        wheel = not options["idler"]
+        size = {k: options[k] for k in ("profile", "teeth", "width", "clearance", "flanges",
+                                        "flange", "hub", "hub_d", "hub_h", "bore", "flat", "nut",
+                                        "bearing")}
+        keys = ("profile", "teeth", "clearance", "width", "flanges", "flange", "hub", "hub_d",
+                "hub_h", "bore", "flat", "nut") if wheel else \
+            ("profile", "teeth", "width", "flange", "bore", "flat", "bearing")
+        if wheel:
+            build, name = tr("Building the timing pulley…"), tr("Timing pulley")
+            added = tr("Timing pulley of {z} teeth added.").format(z=options["teeth"])
+            failed = tr("Timing pulley failed: {error}")
+        else:
+            build, name = tr("Building the belt idler…"), tr("Belt idler")
+            added = tr("Belt idler of {z} teeth added.").format(z=options["teeth"])
+            failed = tr("Belt idler failed: {error}")
+        bb = doc.model_bbox()
+        bx, by, _bz = self.settings.bed_size
+
+        def work(report):
+            report(0.1, build)
+            m = (pulley.timing_pulley(**{k: size[k] for k in keys}) if wheel else
+                 pulley.idler(**{k: size[k] for k in keys}))
+            if m.status() != mf.Error.NoError or m.is_empty():
+                raise ValueError(tr("the result is not a valid volume"))
+            lo, hi = np.asarray(m.bounding_box()[:3]), np.asarray(m.bounding_box()[3:])
+            mid = 0.5 * (lo + hi)
+            x = 0.5 * bx if bb is None else float(bb[1][0]) + 10.0 + 0.5 * (hi[0] - lo[0])
+            return m.translate((x - mid[0], 0.5 * by - mid[1], -lo[2]))
+
+        def done(m):
+            doc.checkpoint()                # one undo takes the wheel away again
+            g = ops.group_from_manifold(doc, m, self.settings.current_color, name)
+            doc.set_selection([("g", g.id, g.id)])
+            doc.notify()
+            self.view.set_status(added)
+
+        def gone(exc):
+            self.view.set_status(failed.format(error=exc))
+
+        background.run(self, work, text=build, on_done=done, on_error=gone)
 
     # ------------------------------------------------------------ snap-fit clip
     def snap_fit_dialog(self):

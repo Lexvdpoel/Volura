@@ -412,6 +412,21 @@ gets for free.
   a rod of 5 to 30 mm or ask for a pocket that a 608 bearing presses into with the axle through
   under it; spokes hold the hub together where there is plastic to save. It prints flat on its
   flange, so the pockets are open at the top and nothing needs support
+- **Timing Pulley** (Draw > Parts): a wheel a toothed belt runs in, cut for GT2, GT3 or HTD 3M
+  with 10 to 120 grooves, so a printed wheel can drive a moulded belt without a pulley of metal.
+  Its size comes from the belt: teeth times pitch over π is the pitch circle the belt runs on
+  without slipping, and the wheel is turned twice the pitch line differential under that circle,
+  which is the outside diameter a supplier's table gives - 12.22 mm across the teeth of 20 grooves
+  of GT2. The print clearance goes on the grooves, so a moulded belt tooth runs into them while
+  the wheel keeps its diameter. Collars keep the belt on the wheel; the hub carries the bore for
+  the axle, a flat to file that bore so the wheel cannot spin on a shaft that is filed to match,
+  and an M3 set screw whose nut stands captured in a slot that is open at the top and closed in
+  front by a wall of the hub that only the screw hole pierces - so the screw bears on the nut and
+  presses on the axle, and a hub that is too thin for that nut is made wider instead of losing the
+  screw. The same dialog makes the smooth idler such a belt runs over, bored for a 625 bearing or
+  for a bush; under the pocket of that bearing the hole through the wheel is 10 mm across, wider
+  than the inner ring of the bearing, so the wheel turns on the bearing and not on the axle that
+  stands still. The wheel prints on its collar with its hub in the air and nothing needs support
 - **Drawer Organizer** (Draw > Parts): a tray that drops into a drawer and divides it into
   `cols` by `rows` equal compartments. You enter the inside of the drawer (40 to 300 mm each way)
   and how high the tray stands (15 to 120 mm); it is made a little smaller on every side so it drops
