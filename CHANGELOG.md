@@ -3,6 +3,25 @@
 What changed in each version of Volura. Downloads are on the
 [releases page](https://github.com/Lexvdpoel/Volura/releases).
 
+## 0.2.84 — 2026-11-28
+
+### New
+- **Timing Pulley** (*Draw > Parts > Mechanical*): GT2, GT3 and HTD 3M pulleys with the right tooth
+  profile for the belt, an optional flange, a hub with an M3 set screw and a captive nut, and plain
+  or toothed idlers with a pocket for a bearing.
+- **Braille Label** (*Draw > Parts > Home and Desk*): a plate with Grade 1 Braille in standard dot
+  sizes and spacing, capitals and numbers marked, optionally with the letters raised above it and a
+  hole to hang it.
+- **Favourites** (*Draw > Parts > Favourites*): keep the parts you make often, with their settings,
+  in a list of your own and place them again in one click.
+- **Spring** (*Draw > Parts > Mechanical*): a zigzag spring that pushes or pulls, or a spiral spring
+  that twists, both printed flat without support, with an estimate of the stiffness for the
+  material you print in.
+- **Collisions** (*View > Face Style*): draws in red the material two parts of the model have in
+  common, and updates as you move them, so you see where an assembly does not fit before you print.
+- **Wall Thickness** (*Tools*): click a face and read the wall there, straight through the material
+  and as the largest ball of material that fits at that spot.
+
 ## 0.2.83 — 2026-11-25
 
 ### New
